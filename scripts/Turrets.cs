@@ -47,10 +47,23 @@ public struct TurretSpec
     public float TexScale;               // world units per turret-texture pixel
     public float Barrel, Ring;           // muzzle from the pivot; the radius of the ring it draws
     public Color Tint;
+    // WHAT ITS FLASH IS, when it is point defence: a row of Beam.All -- the line's colour and the
+    // note it is heard at. Beam.Point is 0, so a gun that says nothing is a warship's point
+    // defence; a freighter's dropped turret and the hauler's mount name their own.
+    public int Beam;
     // WHAT A HULL CALLS A BLOW FROM THIS GUN (DamageSource): the FAMILY name, to which Combat.Fire
     // adds the firing body's own identity. Null -- every gun a pilot's ship carries -- keeps the
     // behaviour these all had: the blow is nameless, and the 0.52 s per-source gap does not hold it.
     public string Source;
+    // A ROUND THAT IS MORE THAN A SHELL. All 0 -- every gun a pilot's ship carries -- is a shell's
+    // flight: straight, one size, no hull, fired the moment the host says. A round that HOMES turns
+    // after the target its host names (Turret.Shoot) at Homing rad/s; Size is its drawn size and
+    // its hit radius with it (0: 1, the row's own); Hull is the round's own hull, for a row whose
+    // body is a target (Tag.Hulled); Windup is the seconds of warning its host raises before each
+    // shot (Turret.Warn).
+    public float Homing, Size;
+    public double Hull, Windup;
+    public readonly float RoundSize => Size > 0 ? Size : 1f;
 }
 
 public interface ITurretHost
@@ -103,7 +116,7 @@ public partial class Turret : Node2D
         ZIndex = 5;
         var spec = S;
         // stored barrels-UP; the turret's barrel direction is +X, so turn it a quarter
-        _sprite = new Sprite2D { Texture = GD.Load<Texture2D>(spec.Texture), Rotation = Mathf.Pi / 2f,
+        _sprite = new Sprite2D { Texture = Assets.Load<Texture2D>(spec.Texture), Rotation = Mathf.Pi / 2f,
                                  Scale = Vector2.One * spec.TexScale };
         AddChild(_sprite);
         Recolor();
@@ -156,18 +169,19 @@ public partial class Turret : Node2D
             var spec = S;
             _cd += spec.Interval;
             tgt.TakeDamage(spec.Damage); Host.NoteDealt(spec.Damage, tgt.Position);
-            Combat.Flash(wp + Vector2.Right.Rotated(GlobalRotation) * spec.Barrel, tgt.Position, new Color(0.7f, 0.95f, 1f));
+            Combat.Flash(wp + Vector2.Right.Rotated(GlobalRotation) * spec.Barrel, tgt.Position, spec.Beam);
         }
         QueueRedraw();
     }
 
-    // WHAT A GUN THAT PICKS FOR ITSELF TAKES FIRST: missiles, then small craft (light raiders,
-    // fighters, the practice fighters), then everything else -- a heavy, a boss, a station. WHAT it
-    // may take at all is its own (TurretSpec.Prey): point defence never gets past the small craft
-    // (Targeting.PointDefence), a turret left standing takes them all (Targeting.Sentry). Below
-    // every rank, what its filter takes only as a FALLBACK. Within a rank, the nearest one no
-    // sibling turret has claimed (if all are claimed, the nearest regardless).
-    public static int Rank(IHittable h) => TagExt.Is(h, Tag.Missile) ? 0 : TagExt.Is(h, Tag.Light | Tag.Fighter) ? 1 : 2;
+    // WHAT A GUN THAT PICKS FOR ITSELF TAKES FIRST: what is in flight -- a missile, or a body with
+    // a hull of its own -- then small craft (light raiders, fighters, the practice fighters), then
+    // everything else -- a heavy, a boss, a station. WHAT it may take at all is its own
+    // (TurretSpec.Prey): point defence never gets past the small craft (Targeting.PointDefence), a
+    // turret left standing takes them all (Targeting.Sentry). Below every rank, what its filter
+    // takes only as a FALLBACK. Within a rank, the nearest one no sibling turret has claimed (if
+    // all are claimed, the nearest regardless).
+    public static int Rank(IHittable h) => TagExt.Is(h, Tag.Missile | Tag.Hulled) ? 0 : TagExt.Is(h, Tag.Light | Tag.Fighter) ? 1 : 2;
     private const int FallbackRank = 3;
     // Best by (rank, then distance), preferring one no sibling turret has claimed, falling
     // back to the best claimed one -- in a single pass with no allocation. This used to be a LINQ
@@ -196,18 +210,41 @@ public partial class Turret : Node2D
     }
 
     // One main-gun shot, along the barrel as it points RIGHT NOW: whatever the gun's row FIRES
-    // (TurretSpec.Kind), straight, at the guns' own shell speed, as far as their range, at `mult`
-    // times its damage (a broadside's multiple). It goes through Combat.Fire, the one door
-    // everything that flies comes through, so a gun that fires something else is a field on the
-    // spec rather than a branch here. Host only. (Point defence never comes here: it fires from
-    // Tick, at what it has acquired.)
-    public void Shoot(double mult = 1.0)
+    // (TurretSpec.Kind), at the guns' own shell speed, as far as their range, at `mult` times its
+    // damage (a broadside's multiple) -- straight, or, for a round that homes (TurretSpec.Homing),
+    // turning after `target`; at the round's own size and with its own hull. It goes through
+    // Combat.Fire, the one door everything that flies comes through, so a gun that fires something
+    // else is a field on the spec rather than a branch here. Host only. (Point defence never comes
+    // here: it fires from Tick, at what it has acquired.)
+    public void Shoot(double mult = 1.0, int target = 0)
     {
         if (!Net.Sim) return;
         var spec = S;
         var dir = Vector2.Right.Rotated(GlobalRotation);
         Combat.Fire(spec.Kind, GlobalPosition + dir * spec.Barrel, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult,
-                    source: Host.Credit, hitSource: spec.Source);
+                    targetId: spec.Homing > 0 ? target : 0, turnRate: spec.Homing, source: Host.Credit, hitSource: spec.Source,
+                    size: spec.RoundSize, hull: spec.Hull);
+    }
+
+    // THE WARNING BEFORE A SHOT (TurretSpec.Windup): a red lane from where the round will leave this
+    // barrel -- the muzzle once it has come round onto the target, not where it points while it is
+    // still swinging -- to what the host is about to fire at, as wide as the round, for the
+    // wind-up, on every peer (Fx.Warn). The host raises it when its clock comes due and fires
+    // Windup later (Emplacement.WarnAndFire); a gun with no wind-up raises nothing. It RIDES the
+    // hull whose id the host names (`rides`, an FxRaise.Anchor, in that hull's own frame), so a
+    // launcher brought down takes its warning with it on every peer, as a boss's do; Fx.World
+    // draws it on the ground. It runs to where the target stands: the round is guided onto it, so
+    // that is the line that matters.
+    public void Warn(IHittable at, int rides = Fx.World)
+    {
+        var spec = S;
+        if (spec.Windup <= 0 || at == null) return;
+        var host = Host.AsNode;
+        var muzzle = GlobalPosition + (at.Position - GlobalPosition).Normalized() * spec.Barrel;
+        Fx.Warn(new FxRaise { Id = Fx.WarnLane, Anchor = rides,
+                              At = rides == Fx.World ? muzzle : host.ToLocal(muzzle),
+                              To = rides == Fx.World ? at.Position : host.ToLocal(at.Position),
+                              Size = 2f * Shot.BodyRadius * spec.RoundSize, Time = spec.Windup });
     }
 
     // _angle is a WORLD angle, so it is applied as GlobalRotation; as a local

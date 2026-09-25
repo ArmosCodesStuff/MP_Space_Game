@@ -9,7 +9,7 @@ using System.Linq;
 // Layout, as specified:
 //     small sun + a short asteroid belt ABOVE the base
 //     a salvage wreck to the LEFT
-//     the base in the CENTRE
+//     the base in the CENTRE, and the EQUIPMENT BASE beside it on the right (Landmarks.cs)
 //     the outbound wormhole to the RIGHT  (trade runs, and the way to other systems)
 //
 // Everything that produces is host-owned (Net.Sim). Clients render the same world
@@ -31,6 +31,8 @@ using System.Linq;
 //   Session.cs    what outlives a world: which sector each guest is in, held places, recent
 //                 kills (the only reason this file had statics)
 //   HubNodes.cs   the seven small nodes that touch none of this state
+//   Landmarks.cs  the places at home -- every building and the three fields: where each stands, its
+//                 art, its label, its scope mark, what a click on it opens and what it serves
 // The public names those replaced are kept HERE as one-line faces (SpawnPatrol, HuntWave,
 // CallOff, SpawnRaider, RaiderDown, Drop, DeployedDown, DeployedTaken, Raiders, Deployed,
 // PeerSector, EndSession, SetMyReady, SetMyReturn, IsReady, AllReady, IReturned, ReturnReady,
@@ -82,13 +84,37 @@ public partial class Hub : Node2D
     // Threat Intelligence Operations: south-west of the base, clear of the wreck, the
     // salvage routes, the haul lane and the dummies.
     public static readonly Vector2 TioPos = new(-650, 640);
-    // THE RECYCLER: a smaller yard beside the intelligence office, where a hold is turned back
-    // into salvage.
-    public static readonly Vector2 RecyclerPos = new(-1180, 520);
+    // THE EQUIPMENT BASE, as the owner put it: "its own base", on the RIGHT of the station, with the
+    // recycler on it (Landmarks.cs draws it and gates what is done there). Its 320 x 240 u pad runs
+    // 560 - 880 u east and from 180 u north to 60 u south of the station's centre: 298 u clear of
+    // the station's 262 u edge, and 159 u north of the haul lane's centre line (y 219).
+    public static readonly Vector2 EquipmentPos = new(720, -60);
     public const float TioHeight = 260f;   // on the lane through that pad
-    // three dummies south-east of the base, below the haul lane and far enough apart
-    // that a click is never ambiguous
-    public static readonly Vector2[] DummyPos = { new(600, 670), new(900, 550), new(900, 850) };
+    // THE PRACTICE RANGE: every target the hub builds for testing weapons, ONE ROW EACH -- its
+    // number (its label, and its NetId: NetIds.Dummy + number - 1, the same on every peer), where it
+    // stands, and what it is: ARMED (it fires back inside its ring) or a practice FIGHTER (a light
+    // craft, so point defence has something to train on). They are numbered 1, 3, 4 and 5: 2's place
+    // went to the two fighters. A new target is a row here and nothing in _Ready. REPLACED: three
+    // anchor points here and a second list in _Ready that put the fighters either side of the middle
+    // one and armed whichever target was number 3.
+    //
+    // WHERE, AND WHY THERE: south of the base, on its line, 500 u or more from every leg the hauler
+    // flies -- the lone run both ways and the escort's five, each taken on past its end. The hauler's
+    // own point defence takes any LIGHT craft inside 400 u, a practice fighter included, so a range
+    // inside that had its meters moved by every run that passed; and a hunter's 90 u blast lands where
+    // the hauler will be 12 s on -- on a pilot practising there (the blast takes pilots and the fleet,
+    // never a practice target). On the base's line, 500 u off the lone run (y 219) means south of
+    // y 719, and 500 u off the escort's last leg (the south-west outpost to the portal, crossing x = 0
+    // at y ~973) means north of y 414 or south of y 1533: so a centred range starts at y ~1530. It
+    // keeps 500 u from every lane to an outpost too, where the couriers run. The smoke test's layout
+    // check proves both against this table.
+    public static readonly (int number, Vector2 at, bool armed, bool fighter)[] PracticeTargets =
+    {
+        (1, new Vector2(-150, 1670), false, false),     // a plain hulk, to the west
+        (3, new Vector2(150, 1850),  true,  false),     // the armed hulk, to the south-east
+        (4, new Vector2(112, 1528),  false, true),      // the two practice fighters, to the north-east
+        (5, new Vector2(188, 1572),  false, true),
+    };
     private const float BeltR = 520f;          // a short belt, tight around the sun
     private const int   BeltRocks = 9;
 
@@ -141,7 +167,8 @@ public partial class Hub : Node2D
     // again be pickable with nothing drawn for it. REPLACED: two hand-written lists of the same
     // seven landmarks, one in each half of Radar.cs, which had already drifted -- MISSION PORTAL
     // was clickable with no glyph, so the only way to that waypoint was a click on empty scope.
-    // A NEW MARK IS A ROW HERE and nothing at all in Radar.cs. Which rows exist is decided here
+    // A NEW MARK IS A ROW -- of Landmarks.All if it is a place at home, here if it comes and goes --
+    // and nothing at all in Radar.cs. Which rows exist is decided here
     // too: the home landmarks only at home, the mission portal only while it is open, and a
     // turret a freighter left out in whichever sector it stands in.
     public enum MarkShape { Dot, Box, Diamond, Ring }
@@ -160,16 +187,8 @@ public partial class Hub : Node2D
     public IEnumerable<ScopeMark> ScopeMarks()
     {
         if (!InArena)
-        {   // home's landmarks: the arena has none of them
-            yield return new ScopeMark("BASE", BasePos, 260f, MarkShape.Box, new Vector2(4f, 4f), new Color(0.75f, 0.78f, 0.8f));
-            yield return new ScopeMark("THREAT INTELLIGENCE", TioPos, 140f, MarkShape.Box, new Vector2(3f, 4f), new Color(0.6f, 0.64f, 0.7f));
-            yield return new ScopeMark("RECYCLER", RecyclerPos, 110f, MarkShape.Box, new Vector2(3f, 3f), new Color(0.55f, 0.62f, 0.55f));
-            yield return new ScopeMark("PORTAL", PortalPos, 160f, MarkShape.Ring, new Vector2(5f, 5f), new Color(0.4f, 0.8f, 1f));
-            yield return new ScopeMark("SALVAGE FIELD", WreckPos, 340f, MarkShape.Dot, new Vector2(4f, 4f), new Color(0.5f, 0.35f, 0.25f, 0.9f));
-            // the belt's sun: the rocks ring it, and nothing was drawn at the point the mark picks
-            yield return new ScopeMark("MINING BELT", SunPos, 540f, MarkShape.Ring, new Vector2(4f, 4f), new Color(1f, 0.82f, 0.42f));
-            foreach (var (name, at) in Outposts)
-                yield return new ScopeMark("OUTPOST " + name, at, OutpostHeight * 0.5f, MarkShape.Diamond, new Vector2(3.5f, 4f), new Color(0.55f, 0.72f, 0.85f));
+        {   // home's landmarks, one row each of Landmarks.All: the arena has none of them
+            foreach (var l in Landmarks.All) yield return l.Mark;
             if (Mission == MissionState.PortalOpen)
                 yield return new ScopeMark("MISSION PORTAL", MissionPortalPos, 160f, MarkShape.Ring, new Vector2(5f, 5f), new Color(1f, 0.35f, 0.3f));
         }
@@ -215,7 +234,6 @@ public partial class Hub : Node2D
         _esc = new EscMenu { Hub = this }; AddChild(_esc);
     }
     public System.Collections.Generic.IEnumerable<PlayerShip> Ships => _ships.Values;
-    private Sprite2D _tioSprite;
     private Portal _missionPortal;
     private readonly Dictionary<int, PlayerShip> _ships = new();
     private Camera2D _cam;
@@ -345,13 +363,13 @@ public partial class Hub : Node2D
         if (InArena) BuildArena();                   // registered as a target AFTER Combat.Clear
         else if (Raids.Pending > 0 && Net.IsHost) _raids.Owed(Raids.Pending);
         Raids.Pending = 0;
-        // the dummies live at home: 1 (plain), 3 (armed), and where 2 stood, two PRACTICE
-        // FIGHTERS (4 and 5) -- light-fighter targets for point defence to train on
-        var targets = new (int n, Vector2 at, bool fighter)[] { (1, DummyPos[0], false), (3, DummyPos[2], false),
-                                                                (4, DummyPos[1] + new Vector2(-38, -22), true), (5, DummyPos[1] + new Vector2(38, 22), true) };
-        foreach (var (n, at, fighter) in InArena ? System.Array.Empty<(int, Vector2, bool)>() : targets)
+        // THE PRACTICE RANGE lives at home: one target per row of PracticeTargets, and nothing about
+        // any one of them here. A fighter's node is named for its place among the fighters
+        // (PracticeFighter1, 2, ...), a hulk's for its number (TargetDummy1, 3).
+        int fighters = 0;
+        foreach (var (n, at, armed, fighter) in InArena ? System.Array.Empty<(int, Vector2, bool, bool)>() : PracticeTargets)
         {
-            var d = new TargetDummy { Name = fighter ? $"PracticeFighter{n - 3}" : $"TargetDummy{n}", Number = n, Armed = n == 3, Fighter = fighter, Position = at, ZIndex = 3 };
+            var d = new TargetDummy { Name = fighter ? $"PracticeFighter{++fighters}" : $"TargetDummy{n}", Number = n, Armed = armed, Fighter = fighter, Position = at, ZIndex = 3 };
             AddChild(d); _dummies.Add(d);
             Combat.Hostiles.Add(d);
             d.Published = (last, avg, total) => ToWorld(nameof(NetDummy), n, last, avg, total);
@@ -377,10 +395,10 @@ public partial class Hub : Node2D
     {
         // Flashes are made on the host, where the shots happen. Guests are sent them,
         // or a guest firing at the dummy would see nothing at all.
-        Combat.OnFlash = (a, b, c, snd) =>
+        Combat.OnFlash = (a, b, beam) =>
         {
-            AddFlash(a, b, c, snd);
-            ToWorld(nameof(NetFlash), a, b, c, (int)snd);
+            AddFlash(a, b, beam);
+            ToWorld(nameof(NetFlash), a, b, beam);
         };
         // Shells and torpedoes are born in this world; the host's copy deals damage, and guests
         // get the launch and fly a cosmetic copy (the run is straight and steady, so it lands in
@@ -417,7 +435,7 @@ public partial class Hub : Node2D
     // ── world ────────────────────────────────────────────────────────────────
     private void BuildWorld()
     {
-        var neb = GD.Load<Texture2D>("res://nebula.png");
+        var neb = Assets.Load<Texture2D>("res://nebula.png");
         AddChild(new Sprite2D { Texture = neb, Position = new Vector2(0, -200), Scale = new Vector2(7, 7),
                                 Modulate = new Color(0.30f, 0.42f, 0.72f, 0.28f), ZIndex = -10 });
 
@@ -428,34 +446,31 @@ public partial class Hub : Node2D
         {
             float a = Mathf.Tau * i / BeltRocks;
             var r = new Sprite2D {
-                Texture = GD.Load<Texture2D>(tex[i % 3]),
+                Texture = Assets.Load<Texture2D>(tex[i % 3]),
                 Position = SunPos + new Vector2(Mathf.Cos(a), Mathf.Sin(a) * 0.55f) * BeltR,
                 Scale = new Vector2(0.5f, 0.5f), ZIndex = 1 };
             AddChild(r); _rocks.Add(r);
         }
 
         // the wreck: its edge 1500 u from the base, like the belt's
-        AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://behemoth_wreck.png"),
+        AddChild(new Sprite2D { Texture = Assets.Load<Texture2D>("res://behemoth_wreck.png"),
                                 Position = WreckPos, Scale = new Vector2(0.34f, 0.34f), ZIndex = 1 });
 
-        AddChild(new Sprite2D { Texture = GD.Load<Texture2D>("res://base_station.png"), Name = "Base",
-                                Position = BasePos, Scale = new Vector2(BaseScale, BaseScale), ZIndex = 2 });
-        AddChild(new BaseDefense());                               // the base's own laser and missiles
-        var tio = Sprites.Fit("res://tio_building.png", TioHeight);
-        tio.Name = "TIO"; tio.Position = TioPos; tio.ZIndex = 2;
-        AddChild(tio);
-        _tioSprite = tio;
-        AddChild(new MissionBar { Hub = this, ZIndex = 6 });
-        // its name, drawn in the world like every world label (a UI control here counted
-        // as "off-screen" whenever the camera looked elsewhere)
-        AddChild(new WorldLabel { Text = "THREAT INTELLIGENCE OPERATIONS", Position = TioPos + new Vector2(0, TioHeight / 2 + 16), ZIndex = 2 });
-        foreach (var (name, at) in Outposts)
-        {   // the outposts: permanent, and nothing to replicate -- every peer builds the same four
-            var o = Sprites.Fit("res://outpost.png", OutpostHeight);
-            o.Name = "Outpost" + name; o.Position = at; o.ZIndex = 2;
-            AddChild(o);
-            AddChild(new WorldLabel { Text = "OUTPOST " + name, Position = at + new Vector2(0, OutpostHeight / 2 + 16), ZIndex = 2 });
+        // THE BUILDINGS, one row each (Landmarks.cs): the base, the TIO, the equipment base and the
+        // four outposts. They are permanent, and nothing here is replicated: every peer builds the
+        // same ones. A name is drawn in the world like every world label -- a UI control would count
+        // as "off-screen" whenever the camera looked elsewhere. A row with no Art (the portal, the
+        // field, the belt) is built by this method itself, around this loop.
+        foreach (var l in Landmarks.All)
+        {
+            if (l.Art == null) continue;
+            var art = l.Art(l);
+            art.Name = l.NodeName; art.Position = l.At; art.ZIndex = 2;
+            AddChild(art);
+            if (l.Label != null) AddChild(new WorldLabel { Text = l.Label, Position = l.At + new Vector2(0, l.Half.Y + 16), ZIndex = 2 });
         }
+        AddChild(new BaseDefense());                               // the base's own laser and missiles
+        AddChild(new MissionBar { Hub = this, ZIndex = 6 });
         // THE LANES BETWEEN THEM AND THE BASE -- their couriers and their guns, by row (Lanes.cs).
         // Permanent and deterministic like the outposts themselves, so nothing here is replicated
         // either: what IS decided about a lane is whether it is CUT, and every peer works that out
@@ -808,7 +823,7 @@ public partial class Hub : Node2D
     // the mission portal opens off the TIO's top-right corner
     // From constants, not the TIO's sprite: in the arena, or in the frame a scene is being
     // swapped, there is no sprite -- and asking for this crashed (found by the arena run).
-    private const float TioHalfWidth = TioHeight * 630f / 876f / 2f;     // the art is 630 x 876 px
+    public const float TioHalfWidth = TioHeight * 630f / 876f / 2f;      // the art is 630 x 876 px (and the TIO's footprint: Landmarks)
     public Vector2 MissionPortalPos => TioPos + new Vector2(TioHalfWidth + 110f, -TioHeight / 2f - 70f);
     // the party is everyone in the session, and every pilot whose place is held (reconnecting):
     // one who was not READY keeps the portal shut until it is back, or its place lapses
@@ -819,8 +834,6 @@ public partial class Hub : Node2D
     public string PilotName(int id) => _ships.TryGetValue(id, out var s) && IsInstanceValid(s) ? s.Pilot
                                      : _away.TryGetValue(id, out var n) ? $"{n} (reconnecting)" : $"pilot {id}";
     public bool TioOpen => SideIs<TioWindow>();
-    public bool RecyclerOpen => SideIs<RecyclerPanel>();
-    public void ToggleRecycler() => ToggleSide(() => new RecyclerPanel { Hub = this });
 
     public void OpenTio()
     {
@@ -928,16 +941,21 @@ public partial class Hub : Node2D
         if (quarry) MissionCleared(at);
     }
 
-    // host: the mission's quarry is dead -- a boss, or a pirate base. Its escorts and raiders die
-    // with it -- collecting is not fighting. Every pilot gets its own EXP (its level, its first
-    // clears) and its share of the bounty, then its own crates. Nothing sends anyone home on a
-    // clock: each pilot presses RETURN when it is done. (Was BossDefeated, which was true of the
-    // only mission there was.)
+    // host: the mission's quarry is dead -- a boss, or a pirate base. Its escorts, its raiders and
+    // what it has in the air die with it -- collecting is not fighting. Every pilot gets its own
+    // EXP (its level, its first clears) and its share of the bounty, then its own crates. Nothing
+    // sends anyone home on a clock: each pilot presses RETURN when it is done. (Was BossDefeated,
+    // which was true of the only mission there was.)
     public void MissionCleared(Vector2 at)
     {
         if (!Net.IsHost || MissionWon) return;
         MissionWon = true;
         foreach (var r in Raiders.ToList()) RaiderDown(r);
+        // A cruise missile outlives the base that fired it by half a minute, a seeker its boss by
+        // seconds: every hostile body with an id comes down on every peer (MissileDown), and none of
+        // them counts as shot down (Intercept, not TakeDamage).
+        foreach (var body in GetChildren().OfType<Shot>().Where(x => x.HostileFire && x.NetId != 0 && x.Alive).ToList())
+        { body.Intercept(); MissileDown(body.NetId); }
         AnnounceClear(Missions.Kind, Missions.Level, at);
         _votes[Votes.Return].Clear();
         ToWorld(nameof(NetWon), _ships.Count);               // the party may now RETURN; how many must
@@ -1417,8 +1435,10 @@ public partial class Hub : Node2D
 
     // Tab: ALWAYS the live hostile nearest your ship, at any range. No cycling --
     // pressing it again re-picks the nearest, so it never lands on a far target.
-    // Switch to anything else with a left-click. Never a missile (Combat.Pickable): in the
-    // arena the boss's trident was often nearer than the boss, and Tab took a missile.
+    // Switch to anything else with a left-click. Never a missile point defence alone may have
+    // (Combat.Pickable): in the arena the boss's trident was often nearer than the boss, and Tab
+    // took a missile. A cruise missile (Tag.Hulled) is a target like any hull, and Tab takes it
+    // when it is the nearest.
     private void SelectNearest()
     {
         var me = MyShip;
@@ -1455,10 +1475,10 @@ public partial class Hub : Node2D
     {
         var best = PickAt(world);
         if (best != null) { SelectTarget(best); return true; }
-        // buildings: a left-click on one opens its menu
-        if (IsInstanceValid(_tioSprite) && _tioSprite.GetRect().HasPoint(_tioSprite.ToLocal(world))) { OpenTio(); return true; }
-        if (!InArena && world.DistanceTo(BasePos) < 200f) { if (!SideIs<BasePanel>()) ToggleBase(); return true; }
-        if (!InArena && world.DistanceTo(RecyclerPos) < 110f) { if (!RecyclerOpen) ToggleRecycler(); return true; }
+        // BUILDINGS: a left-click on one opens its window. The building is the row whose footprint
+        // holds the click and that has a window to open (Landmarks.cs). This happens at home only,
+        // because the arena builds none of them.
+        if (!InArena && Landmarks.All.FirstOrDefault(l => l.Opens != null && l.Covers(world)) is { } hit) { hit.Opens(this); return true; }
         return false;
     }
 
@@ -1726,11 +1746,17 @@ public partial class Hub : Node2D
     public void FxTo(int peer, FxRaise r) =>
         RpcId(peer, nameof(NetFx), r.Id, r.At, r.To, r.Size, r.Time, r.Hold, r.Since, r.Anchor, r.Cue ?? "", r.Strike ?? "");
 
+    // A FLASH BY ITS ROW. Its colour and its note are the row's (Beam.All), so the wire carries the
+    // row's index and nothing else about it; Beam.Of reads an index this build has no row for as
+    // point defence rather than throwing on a guest.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetFlash(Vector2 a, Vector2 b, Color c, int snd)
-        => AddFlash(a, b, c, System.Enum.IsDefined(typeof(ShotSound), snd) ? (ShotSound)snd : ShotSound.Light);
-    public const double FlashLife = 0.10;                            // a laser shot's flash, seconds
-    private void AddFlash(Vector2 a, Vector2 b, Color c, ShotSound snd) { _flashes.Add((a, b, c, FlashLife)); Sfx.Laser(a, b, snd); }
+    private void NetFlash(Vector2 a, Vector2 b, int beam) => AddFlash(a, b, beam);
+    public const double FlashLife = 0.10;                            // a beam's flash, seconds
+    private void AddFlash(Vector2 a, Vector2 b, int beam)
+    {
+        var row = Beam.Of(beam);
+        _flashes.Add((a, b, row.Tint, FlashLife)); Sfx.Beam(a, b, row);
+    }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void NetDummy(int number, double last, double avg, double total)
@@ -1741,9 +1767,9 @@ public partial class Hub : Node2D
         foreach (var d in _dummies) if (d.Number == number) { d.SetReadout(last, avg, total); return; }
     }
 
-    // THE SIDE WINDOW. BASE, PILOT, EQUIPMENT and the TIO all sit in one spot, so at most one is
-    // open: opening one closes whichever held the spot, and asking for the one that is open
-    // closes it. Four fields with four hand-written "close the others" lists used to disagree --
+    // THE SIDE WINDOW. BASE, PILOT, EQUIPMENT, the RECYCLER and the TIO all sit in one spot, so at
+    // most one is open: opening one closes whichever held the spot, and asking for the one that is
+    // open closes it. Four fields with four hand-written "close the others" lists used to disagree --
     // the TIO opened over BASE or PILOT drew one window on top of another.
     private Control _side;
     private bool SideIs<T>() where T : Control => _side is T && IsInstanceValid(_side);
@@ -1754,6 +1780,10 @@ public partial class Hub : Node2D
         CloseSide();
         if (!open) { _side = make(); _hudLayer.AddChild(_side); }
     }
+    // ...and OPEN one, leaving it alone if it is already up: what a click on a building does
+    // (Landmarks), and what EQUIPMENT's RECYCLER button does. A toggle there would shut the window a
+    // second click on the same building meant to keep open.
+    public void OpenSide<T>(System.Func<T> make) where T : Control { if (!SideIs<T>()) ToggleSide(make); }
     private void ToggleBase() { if (!InArena) ToggleSide(() => new BasePanel { Hub = this }); }   // the arena: no base to open
     public void ToggleEquipment() => ToggleSide(() => new EquipmentWindow { Hub = this });
     public void TogglePilot() => ToggleSide(() => new PilotWindow { Hub = this });

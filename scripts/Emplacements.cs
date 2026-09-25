@@ -3,7 +3,7 @@ using System;
 using System.Linq;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AN EMPLACEMENT — a HOSTILE hull that does not move, shoots back, and may stand behind a shield
+// AN EMPLACEMENT — a HOSTILE hull that does not move, may answer with a gun, and may stand behind a shield
 // something else is holding up. One row per kind of hull; one class that is every row; one Post[]
 // per SITE those hulls are built on.
 //
@@ -21,7 +21,9 @@ using System.Linq;
 // path), its art and the length that art is drawn at, the two colours the grey art is tinted in at
 // draw time (the sprites are grey on transparent and are NEVER recoloured in the file, exactly as
 // a raider's are -- Raider._Ready), the row whose live ones hold ITS shield up (null: it has none),
-// and the gun it answers with (a TurretSpec, like every other gun in the game).
+// and what it answers with: a TurretSpec on one mount at its centre, like every other gun in the
+// game -- its round any row of Shots.All, and a warning before each shot if the spec asks for one
+// (TurretSpec.Windup) -- or null, for a hull that is only something to be got through.
 //
 // A NEW SITE is a Post[] -- a row of All, and where it stands from Hub.ArenaCentre -- plus the one
 // mission row that names it (Missions.Kinds[].Build). No code is edited for either.
@@ -40,9 +42,9 @@ public sealed class EmplacementDef
     public float Length, HalfWidth;             // drawn nose to tail, and the hull's half width
     public Color Main, Trim;                    // the grey art tinted, and what is drawn over it
     public string Shields;                      // the row whose live ones hold its shield up
-    public TurretSpec Gun;                      // what it answers with, before Missions.DamageMult
-    public int Guns = 1;                        // how many mounts...
-    public float GunRing;                       // ...and how far off the centre they sit
+    // WHAT IT ANSWERS WITH, on one mount at its centre, before Missions.DamageMult (and a Hulled
+    // round's hull before Missions.HullMult for one pilot) -- or null: it answers with nothing
+    public TurretSpec? Gun;
 }
 
 // WHERE ONE HULL OF A SITE STANDS: a row of Emplacements.All, and its spot from Hub.ArenaCentre.
@@ -61,26 +63,30 @@ public static class Emplacements
     {
         // THE PIRATE BASE. Twice the hull of the boss that holds the SAME LEVEL -- read off
         // Missions.ForLevel, so there is one ladder and not a second one of its own -- and nothing
-        // may touch it while a pylon stands.
+        // may touch it while a pylon stands. It carries NO GUNS: a siege's damage is its garrison's
+        // (Waves.All, "siege"), and what the base adds is one CRUISE MISSILE every 15 s at the
+        // nearest pilot within 4500 u -- a red lane to that pilot 1.5 s ahead, a barrel quick enough
+        // to come round from any bearing inside it (Turn x Windup > pi) so the round leaves down its
+        // own lane, then a round slow enough to be met (120 u/s) that every weapon a pilot carries
+        // can bring down (Tag.Hulled). 126 a missile is the base's share of a siege at the curve's
+        // fit, 8.4 a second, over the 15 s between them; 30 hull is two seconds of a median main gun,
+        // on the level's scale alone because it is fired at ONE pilot (Emplacement._hull).
         new() { Id = Base, Label = "PIRATE BASE", Hull = l => 2 * Missions.ForLevel(l).Hull,
                 Sprite = "res://pirate_base.png", Length = 560f, HalfWidth = 330f,
                 Main = new Color(0.72f, 0.20f, 0.17f), Trim = new Color(0.08f, 0.08f, 0.10f),
-                Shields = Pylon, Guns = 4, GunRing = 210f,
-                Gun = new TurretSpec { Kind = Shots.Slug, Damage = 18, Interval = 2.2, Range = 2200f,
-                                       Turn = Mathf.Tau / 6f, ShellSpeed = 900f,
+                Shields = Pylon,
+                Gun = new TurretSpec { Kind = Shots.Cruise, Damage = 126, Interval = 15, Range = 4500f,
+                                       Turn = Mathf.Tau / 2.5f, ShellSpeed = 120f,
+                                       Homing = 1.2f, Size = 3f, Hull = 30, Windup = 1.5,
                                        Texture = "res://turret_main.png", TexScale = 0.26f, Barrel = 34f, Ring = 0f,
-                                       Tint = new Color(0.90f, 0.40f, 0.34f), Source = DamageSource.BaseGun } },
+                                       Tint = new Color(0.90f, 0.40f, 0.34f), Source = DamageSource.BaseMissile } },
 
         // ITS FOUR SHIELD PYLONS. 400 hull to start, on the same ladder above that; nothing shields
-        // THEM, and nothing ends the mission when one falls -- they are only what has to go first.
+        // THEM, nothing ends the mission when one falls, and they answer with nothing -- they are
+        // only what has to go first.
         new() { Id = Pylon, Label = "SHIELD PYLON", Hull = _ => 400,
                 Sprite = "res://pirate_pylon.png", Length = 220f, HalfWidth = 150f,
-                Main = new Color(0.68f, 0.20f, 0.20f), Trim = new Color(0.08f, 0.08f, 0.10f),
-                Guns = 1, GunRing = 0f,
-                Gun = new TurretSpec { Kind = Shots.Slug, Damage = 9, Interval = 2.6, Range = 1400f,
-                                       Turn = Mathf.Tau / 5f, ShellSpeed = 820f,
-                                       Texture = "res://turret_pd.png", TexScale = 0.20f, Barrel = 20f, Ring = 0f,
-                                       Tint = new Color(0.90f, 0.40f, 0.34f), Source = DamageSource.PylonGun } },
+                Main = new Color(0.68f, 0.20f, 0.20f), Trim = new Color(0.08f, 0.08f, 0.10f) },
     };
 
     public static int RowOf(string id)
@@ -148,7 +154,9 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
     private ShieldFlash _shield;
     private HullWatch _hullWatch;
     private Vector2 _aim;
-    private double _cd, _dmg = 1;
+    private double _cd, _dmg = 1, _hull = 1;
+    private int _marked;                              // the pilot (its NetId) the warning that is up went up for; 0: none
+    private double _warn;                             // ...and what is left of that warning
 
     // ── the gun, and what carries it (ITurretHost) ───────────────────────────
     // MAIN guns, not point defence: a mount that picks for itself picks from Combat.Hostiles
@@ -164,8 +172,9 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
     public PlayerShip Credit => null;
     public TurretSpec Spec(bool pd)
     {
-        var s = Def.Gun;
+        var s = Def.Gun.GetValueOrDefault();
         s.Damage *= _dmg;
+        s.Hull *= _hull;
         return s;
     }
 
@@ -184,6 +193,9 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
     {
         ZIndex = 4;
         _dmg = Missions.DamageMult(Missions.Level, Math.Max(1, Hub?.PartySize ?? 1));
+        // A ROUND'S OWN HULL is sized for ONE pilot's guns, on the level's scale: it is fired at one
+        // pilot, and a party's other guns are not all where it is going
+        _hull = Missions.HullMult(Missions.Level, 1);
         var art = Sprites.Fit(Def.Sprite, Def.Length);
         art.Modulate = Def.Main;                         // grey art, tinted -- never recoloured in the file
         AddChild(art);
@@ -193,12 +205,11 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
                                         Tint = new Color(0.95f, 0.45f, 0.40f) };
             AddChild(_shield);
         }
-        int guns = Math.Max(1, Def.Guns);
-        for (int i = 0; i < guns; i++)
-        {
+        if (Def.Gun != null)
+        {   // one mount, at its centre
             var t = new Turret();
             AddChild(t);
-            t.Setup(this, guns == 1 ? Vector2.Zero : Vector2.Right.Rotated(Mathf.Tau * i / guns) * Def.GunRing, pd: false);
+            t.Setup(this, Vector2.Zero, pd: false);
             _mounts.Add(t);
         }
         Combat.Hostiles.Add(this);
@@ -212,17 +223,43 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
         if (Net.Sim && Alive)
         {
             _status.Tick(delta);
-            var prey = Targeting.Nearest(Combat.Players, Position, Targeting.Attackable, Def.Gun.Range);
-            if (prey != null) _aim = prey.Position;
-            _cd -= delta;
-            if (prey != null && !Held && _cd <= 0)
+            if (Def.Gun is { } gun)
             {
-                _cd = Def.Gun.Interval;
-                foreach (var m in _mounts) m.Shoot();
+                var prey = Targeting.Nearest(Combat.Players, Position, Targeting.Attackable, gun.Range);
+                WarnAndFire(gun, prey, delta);
+                // the barrel follows the pilot a warning is up for, and otherwise the nearest in reach
+                // -- while it can SEE that pilot. Aiming is choosing (Targeting.cs), so a pilot gone
+                // dark leaves the barrel on the last point it was seen at, as a boss's aim is left, and
+                // the round leaves down that line and flies on straight (Shot: homing is choosing too)
+                if ((_marked != 0 ? Combat.PlayerById(_marked) : prey) is { } aim && !Targeting.Hidden(aim)) _aim = aim.Position;
             }
         }
         foreach (var m in _mounts) m.Tick(delta);
         QueueRedraw();
+    }
+
+    // ITS CLOCK, AND THE WARNING BEFORE EACH SHOT. A reload that carries its remainder, as
+    // Turret's does: it runs down whether or not a pilot is in reach and waits at zero, loaded,
+    // never banking a second shot. When it is due and a pilot is in reach, the warning goes up for
+    // the nearest one (Turret.Warn: a red lane to that pilot for the gun's Windup, riding this
+    // hull) and the shot follows when the warning is spent -- at THAT pilot, by its id, if it is
+    // still in the fight, and at nobody otherwise. The clock restarts as the warning goes up, so
+    // shots are Interval apart whatever the warning's length (a warning longer than the interval
+    // sets the pace instead). Held (a status) raises no warning, and spends one already up without
+    // its shot. A gun with no wind-up fires the frame after it comes due.
+    private void WarnAndFire(TurretSpec gun, IHittable prey, double delta)
+    {
+        _cd -= delta;
+        if (prey == null || Held) { if (_cd < 0) _cd = 0; }
+        else if (_marked == 0 && _cd <= 0)
+        {
+            _cd += gun.Interval; _marked = prey.NetId; _warn = gun.Windup;
+            foreach (var m in _mounts) m.Warn(prey, NetId);
+            return;                                   // the warning's first frame: none of it is spent yet
+        }
+        if (_marked == 0 || (_warn -= delta) > 0) return;
+        if (!Held && Combat.PlayerById(_marked) != null) foreach (var m in _mounts) m.Shoot(target: _marked);
+        _marked = 0;
     }
 
     public override void _Draw()

@@ -74,7 +74,7 @@ public static class Sky
     {
         foreach (var row in All)
         {
-            var tex = GD.Load<Texture2D>(row.Texture);
+            var tex = Assets.Load<Texture2D>(row.Texture);
             if (tex == null) continue;                 // a row naming art that is not there is skipped, not fatal
             parent.AddChild(new SkyPlane { Row = row, Art = tex, Name = "Sky_" + row.Id });
         }

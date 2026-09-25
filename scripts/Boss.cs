@@ -70,7 +70,10 @@ public class BossMove
     public float Size = 1f;            // a fired body's drawn size
     public string Source;              // DamageSource: what the blow is called on a hull
     public string Cue, Strike;         // Sfx.Special as the warning goes up, and as it lands
-    public Color Flash;                // a BOLT's colour
+    // A BOLT'S FLASH: a row of Beam.All, its line and its note. A Bolt row NAMES one: row 0 is
+    // point defence, a friend's note. (Not MoveWay.Beam -- that is a move that burns down a line
+    // for Live seconds, and it is heard by its Cue and Strike.)
+    public int Beam;
     // THE ESCORT OPENER. Escorts light craft at +-EscortAngle, EscortOut off the hull, each with
     // EscortHull hull and boosting for the wind-up. The wind-up then starts on the PIN; with every
     // escort shot down, WebGrace past when their web was predicted to land; at the outside
@@ -469,7 +472,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             case MoveWay.Bolt:
                 if (!Sees(s.Target)) break;
                 s.Target.Hit(m.Damage * DamageMult, Position, m.Source);
-                Combat.Flash(nose, s.Target.Position, m.Flash, ShotSound.Boss);
+                Combat.Flash(nose, s.Target.Position, m.Beam);
                 break;
             case MoveWay.Shoot:
             {

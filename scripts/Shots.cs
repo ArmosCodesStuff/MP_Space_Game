@@ -30,21 +30,27 @@ public class ShotDef
     public double Burst;             // seconds it burns where it stopped; 0 = it simply goes
     public bool Smoke;               // a trail behind it, and it lingers until the last of it fades
     public bool Guided;              // its nose may turn toward a target (TurnRate, TargetId)
-    public bool Interceptable;       // it joins Combat.Hostiles with an id: point defence can kill it
+    public bool Interceptable;       // it joins Combat.Hostiles with an id: whatever may strike its Tags can bring it down
     public bool MarkEveryPeer;       // the damage number is drawn wherever it is seen, not just on the host
     public ShotLook Look;
     public bool Heavy;               // the bigger body, the darker smoke, the wider blast
     public string Sound;             // Sfx.Special id at launch, or null (Bullet and Missile have their own)
+    // WHAT IT COUNTS AS to everything that asks (Tags.cs). Tag.Missile -- point defence's alone, and
+    // the first hit brings it down -- for every row but one whose body carries a HULL of its own:
+    // that row says Tag.Hulled, and its body is a target like any hull (Shot.Hull).
+    public Tag Tags = Tag.Missile;
+    public string Label;             // what a target line calls one, for a row that can be picked (Tag.Hulled)
 }
 
 public static class Shots
 {
     // The index IS the id on the wire (Hub.NetShot), so APPEND ONLY.
-    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5;
+    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6;
 
     public static readonly ShotDef[] All =
     {
-        // a main gun's round: straight, and it hits the first thing that is not a missile
+        // a main gun's round: straight, and it hits the first thing that is not a missile point
+        // defence alone may have (Tag.Missile) -- a cruise missile's hull it strikes like any hull
         new() { Id = "shell",   AtPlayers = false, Pad = 3f,  Sweep = 6f, Look = ShotLook.Bullet },
         // a boss's slow, dodgeable round, and the scrap of the same volley
         new() { Id = "slug",    AtPlayers = true,  Pad = 0f,  Sweep = 6f, Burst = 0.25, Look = ShotLook.Ball, Sound = "drake_gun" },
@@ -58,6 +64,13 @@ public static class Shots
         // fired AT the pilots, and the one thing point defence exists for
         new() { Id = "seeker",  AtPlayers = true,  Pad = 4f,  Sweep = 0f, Burst = 0.5, Smoke = true, Guided = true,
                 Interceptable = true, MarkEveryPeer = true, Look = ShotLook.Missile },
+        // A CRUISE MISSILE: slow, long-legged and guided, fired AT the pilots -- and a target in its
+        // own right. Its body carries a hull (Tag.Hulled, not Tag.Missile), so every gun, blow, wing
+        // and seeker a pilot has may bring it down and point defence wears it down rather than
+        // deleting it; how much hull, like how fast and how hard, is the launcher's (TurretSpec).
+        new() { Id = "cruise",  AtPlayers = true,  Pad = 4f,  Sweep = 0f, Burst = 0.5, Smoke = true, Guided = true,
+                Interceptable = true, MarkEveryPeer = true, Look = ShotLook.Missile,
+                Tags = Tag.Hulled, Label = "CRUISE MISSILE" },
     };
 
     public static ShotDef Of(int id) => All[id >= 0 && id < All.Length ? id : Shell];
@@ -94,7 +107,7 @@ public partial class Shot : Node2D, IHittable, ITagged
 {
     public int Kind = Shots.Shell;
     public ShotDef Def => Shots.Of(Kind);
-    public Tag Tags => Tag.Missile;
+    public Tag Tags => Def.Tags;
 
     public Vector2 Dir;
     public float Speed, Range, Radius, Size = 1f;
@@ -106,6 +119,7 @@ public partial class Shot : Node2D, IHittable, ITagged
     public string HitSource;               // family#body (Shots.SourceKey): its OWN source, so a volley is never one
     public int Variant;                    // scrap: which jagged shape
     public float Lead;                     // a guest's copy starts this far into the flight (the round trip)
+    public double Hull;                    // what is left of its body's hull (host): 0 falls to the first blow
 
     private float _flown, _puffCd;
     private bool _spent;
@@ -113,11 +127,14 @@ public partial class Shot : Node2D, IHittable, ITagged
     private readonly List<(Vector2 p, float age)> _smoke = new();
     public const float SmokeLife = 1.6f, PuffEvery = 0.03f;
 
-    // ── as a target: a seeker, and one hit brings it down ────────────────────
+    // ── as a target: a seeker falls to one hit, a Hulled body is worn down ───
     public int NetId { get; set; }
-    public float HitRadius => 8f * Size;
+    public const float BodyRadius = 8f;                 // its hit radius at size 1
+    public float HitRadius => BodyRadius * Size;
     public bool Alive => !_spent;
-    public bool Selectable => false;
+    // Picked like any hull when it IS one (Tag.Hulled); a Missile never is
+    public bool Selectable => (Def.Tags & Tag.Hulled) != 0;
+    public string Label => Def.Label ?? $"#{NetId}";
     public static int Intercepted;                       // brought down (host), for the record
     // What it is, in the words the rest of the game uses. The rows carry the truth; these are how
     // a caller (and a check) asks without naming an index.
@@ -127,6 +144,10 @@ public partial class Shot : Node2D, IHittable, ITagged
     public void TakeDamage(double d)
     {
         if (!Net.Sim || _spent) return;
+        // A HULLED BODY WEARS DOWN: what it was launched with (Combat.Fire's hull), less every blow,
+        // and it falls at nothing. A body launched with none -- every row but a Hulled one -- falls
+        // to the first blow, as a seeker always has.
+        if ((Hull -= d) > 0) return;
         Intercepted++;
         Intercept();
         Hub.I?.MissileDown(NetId);
@@ -192,7 +213,8 @@ public partial class Shot : Node2D, IHittable, ITagged
     {
         foreach (var h in d.AtPlayers ? Combat.Players : Combat.Hostiles)
         {
-            // a shell never takes a missile out of the air: that is point defence's job
+            // a shell never takes a Missile out of the air -- that is point defence's job; a body with
+            // a hull of its own (Tag.Hulled) it strikes like any hull
             if (h == null || !h.Alive || TagExt.Is(h, Tag.Missile) || !h.Covers(p, d.Pad + Radius)) continue;
             if (d.MarkEveryPeer && h is Node2D seen) Popups.NoteImpact(seen, p);
             if (!Cosmetic && Net.Sim)

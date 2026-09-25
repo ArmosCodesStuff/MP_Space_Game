@@ -1,5 +1,3 @@
-using Godot;
-
 // THE BOUNTY BOSS OF THE ODD LEVELS (Missions.ForLevel), shown to a player as RUSTY BUCKET. This
 // file and its id keep the Lancer name because the ID IS A SAVE KEY ("silver_lancer", written into
 // [boss_cleared] by every build there has ever been); renaming either would orphan every pilot's
@@ -36,7 +34,7 @@ public static class Lancer
         // own specials. It waits on nothing, so it needs no idle hull to fire from.
         new() { Id = "guns", Way = MoveWay.Bolt, Waits = MoveWait.Nothing,
                 Every = 1.2, First = 2.0, Damage = 3.6, Find = 900f,
-                Source = DamageSource.LancerGuns, Flash = new Color(1f, 0.5f, 0.35f) },
+                Source = DamageSource.LancerGuns, Beam = Beam.Bolt },
 
         // THE TRIDENT, between the supers: three seekers 25 degrees apart, born 14 u ahead of the
         // nose, twice a missile's size, turning at 1.4 rad/s after the ship they were thrown at.

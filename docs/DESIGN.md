@@ -40,6 +40,9 @@ HUB (safe, idles)                    WORMHOLE                 HOSTILE SYSTEM (in
 - A small asteroid belt **above** the base, orbiting a **small sun**.
 - A **salvage wreck** to the **left** of the base, somewhat smaller than the old behemoth.
 - A **wormhole to the right** — outbound trade, and the way into other systems.
+- The **EQUIPMENT BASE**, a pad to the **right** of the base with caution tape across it. EQUIPMENT and
+  the RECYCLER are its windows. A part is levelled or scrapped only over it, and only 10 s clear of
+  combat (`Landmarks.Serves`). Its windows open anywhere to look.
 
 ## Resources
 
@@ -162,11 +165,21 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   symmetrical, recoloured by part (miner ore brown with white; salvager safety orange with black
   caution chevrons).
 - **The base's five service arms** each take **one miner or salvager at a time**, loading through
-  their **open face** as if they were open-topped containers: the north side, except the top arm,
-  which opens to the west. **Blue hologram bars** across each open face flash gently (brighter when
-  the arm is taken). A full ship takes the free arm nearest it; if all five are taken it **joins
-  the queue** (a line north-east of the top arm) and the head of the line takes the next arm to
-  free up. Never two ships on one arm.
+  their **open face** as if they were open-topped containers: the north side, tilted 30 degrees
+  with the four diagonal arms. **Blue hologram bars** across each open face flash gently (brighter
+  when the arm is taken). A full ship takes the free arm nearest it; if all five are taken it
+  **joins the queue** (a line north-east of the top arm) and the head of the line takes the next
+  arm to free up. Never two of the fleet holding one arm.
+- **Every place a craft pulls up to is a dock** (`scripts/Docks.cs`), a row measured off its
+  station's art: the base's five arms, and the four clamps on each outpost's corners. Which station
+  carries which is its place's row (`Landmark.Docks`), reached by the landmark's id. A craft finds
+  its spot by one arithmetic (`Dock.Berth`: its own length, its nose 4 u off the open face) and
+  swings nose-in at one rate (`Docks.NoseIn`). **Who holds a dock is not the dock's business**: the
+  Yard reserves arms for the fleet because an unload is a delivery. A lane's **courier** delivers
+  nothing and holds nothing: it docks at the base arm nearest its outpost and the outpost clamp
+  nearest the base, sits 2 s, and leaves -- and on an arm a miner holds it berths at the outboard
+  end of the face, beside the miner rather than under it. **The base's rows are in the order the
+  wire sends an arm's index** (`Yard.NetState`): append only.
 - **The hauler** lands on the base's **bottom pad, enlarged to 140 × 85 u**. The pad and the
   portal share one horizontal line (y = 219), so it always moves perfectly flat. Landed, it is drawn
   at **65%** of its 200 u flight size; lifting off it grows back, and settling it shrinks, with a
@@ -340,7 +353,14 @@ Recorded here so every chunk builds from the written word, not from memory.
 
 - **Sounds are local and cosmetic**: every peer plays what it sees (`Sfx`). Loudness is by the camera
   (distance from the view's centre, and zoom as listener height); per-sound rate limits keep a wing
-  from becoming noise. Boss weapons flag their flashes `boss` for the deeper buzz.
+  from becoming noise.
+- **Every fired beam is a row of `Beam.All`**: the colour of its flash and its report, a file of
+  `sfx/` at a pitch of its own. Beams that share a file are different notes (your side's climb in
+  whole tones above point defence, the raiders' fall below it in minor thirds). Each is gated under
+  its own id, not its file's. The wire carries the row's index only.
+- **A beam's level is in its file**: every file a beam is heard by is stored at 0.75 of where it was
+  made (`gain.ps1`; `BEAM` in `make_sounds.py`). There is no beam volume in Sfx, on a bus or in
+  Settings. A second 0.75 anywhere would make the beams 0.56.
 - **One look** (`Ui`): shaded panels from small generated textures, one theme for all controls,
   installed on the root window. New UI takes the theme; nothing builds its own panel style.
 - **Boss tiers**: 1.1^n, unlocked by beating the tier below, auto-selected at the TIO, saved per pilot.
@@ -441,7 +461,9 @@ Recorded here so every chunk builds from the written word, not from memory.
   at, homed on, picked -- stealth hides) or `Hits` (a blow that lands where it lands -- it does not).
   A new chooser asks `Chooses` / `Nearest` / `Choosable`; a new area blow asks `Hits` / `Hittable`.
   A boss with nobody in sight aims at the last place it saw anyone and its clocks run on; with nobody
-  alive it waits.
+  alive it waits. A launcher's barrel is the same: it holds the last point it saw the pilot its
+  warning is up for, so a pilot gone dark is fired at down that line, and the round flies on straight
+  while the pilot stays dark (homing is choosing too).
 
 ## Damage, death and the two colours
 
@@ -460,9 +482,10 @@ Recorded here so every chunk builds from the written word, not from memory.
   area tick — none of which come through `Combat.Fire` — keep the single shared name they need. The
   names themselves are members of `DamageSource` (`Combat.cs`): "boss:gun" and "boss:guns" are two
   weapons on two bosses one character apart, and a typo there suppresses hits in silence.
-- **Death**: 0 hull puts the ship into a 2-minute **stasis** where it lies; the owner flies an
-  **escape pod**; afterwards **F** re-boards at 33% hull (a request the host decides). Stasis and
-  hull are host state, replicated with the rest.
+- **Death**: 0 hull puts the ship into a 24 s **stasis** where it lies (the owner's ruling:
+  `PlayerShip.StasisTime`); the owner flies an **escape pod**; afterwards **F** re-boards at 33% hull
+  (a request the host decides). A party with a pilot still flying fights on meanwhile; the whole party
+  in stasis at once fails the mission. Stasis and hull are host state, replicated with the rest.
 - **Hull colour** is the hull. **Accent colour** is the turrets, engines and lighting: turrets,
   plumes on the player's ship and everything it launches, shields, PD arcs. Utility ships' engines
   are always light yellow (`Plume.Utility`). Missiles keep their smoke. The defaults are a **grey
@@ -661,7 +684,7 @@ This is the developer's rule, not a default to revisit:
 
 Selection is local UI state. It reaches the host only as the `NetId` argument of an ability, so
 every hostile needs a `NetId` that is the same on every peer (`TargetDummy.NetId` is
-`NetIds.Dummy + Number - 1`, and `BuildWorld` builds numbers 1, 3, 4 and 5: so 1000, 1002, 1003, 1004).
+`NetIds.Dummy + Number - 1`, and `Hub.PracticeTargets` holds numbers 1, 3, 4 and 5: so 1000, 1002, 1003, 1004).
 
 ### Balance on paper
 
@@ -679,9 +702,16 @@ twice it — and holds the least hull. The levers are the rows themselves: `main
 `main_interval` in a class's `Nums`, `broadside_cooldown`, `missile_damage`, each one number, and
 `tools\smoketest\run.ps1 -Solo` proves each total against literals.
 
-The hub's test bench is **two target dummies (1, and 3 armed) and two practice fighters (4 and 5)**
-standing where dummy 2 used to: hostile, harmless, unkillable, each reporting damage per second. The
-meter restarts itself on the first hit after 5 s without one.
+The hub's test bench is **the practice range: two target dummies (1, and 3 armed) and two practice
+fighters (4 and 5)** standing where dummy 2 used to, one row each of `Hub.PracticeTargets`: hostile,
+harmless, unkillable, each reporting damage per second. The meter restarts itself on the first hit
+after 5 s without one. **It stands 500 u or more from every leg the hauler flies** (a layout check
+proves it). The trap: the hauler's own point defence does not know a practice fighter from a raider
+(`Targeting.PointDefence` requires Light and forbids nothing), and a hunter's 90 u blast lands where
+the hauler will be 12 s on -- on a pilot practising there, never on a target (a raid's blast takes
+only `Hub.RaiderTargets`). On the base's line, 500 u off the lone run and the escort's last leg
+leaves nothing between y 414 and y 1533, which is why the range is below that leg rather than just
+under the base. A route or a range that moves must keep the 500.
 
 ### Art
 
@@ -806,7 +836,8 @@ each (`python tools/map.py`). The files to start from:
 | `PlayerShip.cs` / `ShipClasses.cs` | the ship (helm, abilities, refit, wing) / turrets and wings |
 | `Stats.cs` / `Equipment.cs` | every number a ship flies with / the 96 drop parts and the kit |
 | `Loot.cs` / `Hints.cs` | drops and crates / the tutorial's corner card |
-| `Yard.cs` / `Economy.cs` / `Hauler.cs` / `Gatherer.cs` | the idle economy: the base, its numbers, the hauler's runs, miners and salvagers |
+| `Yard.cs` / `Economy.cs` / `Hauler.cs` / `Gatherer.cs` / `Docks.cs` | the idle economy: the base, its numbers, the hauler's runs, miners and salvagers, and every pad a craft docks at |
+| `Landmarks.cs` | the places at home: footprints, art, scope marks, docks, and the one service gate (`Serves`) |
 | `Character.cs` / `Game.cs` | the pilot on disk (save format 2, the batched save) / the build's number and the way out |
 | `Boss.cs` (the base) / `Lancer.cs` / `Raider.cs` / `Missions.cs` | the arena's boss, raiders and hunters, levels and rewards |
 
@@ -886,6 +917,28 @@ where the editor cannot delete it.*
 
 ## Traps that have already cost time
 
+- **A file's C# object must not die while the engine can still hand the file out.** Godot 4.7.2 keeps
+  only a WEAK handle to a resource's C# object while nothing but that object holds it -- a texture
+  whose last sprite has gone. The collector can take the object, and until its finalizer runs the
+  resource is alive and in the engine's cache. A load of the same path then swaps a dead handle and
+  blanks it; if the finalizer (its own thread) lets go of its reference before the load reaches C#,
+  each reference that brings the count back to two asks .NET to swap a null handle: "Handle is not
+  initialized" from `ScriptManagerBridge.SwapGCHandleForType`, an ERROR that turns a green run red,
+  now and then. (The binding hears a count only as it lands at 2 or at 1.) Every file is loaded through `Assets.Load`, which holds its C# object for the life
+  of the process; a rung-3 check reads the build's IL for any other call to the engine's loader.
+- **Where an ERROR sits in a harness log says nothing about when it happened.** `run.ps1` writes a
+  role's whole stdout and then its stderr, so every engine error lands after that role's `DONE` and
+  reads like something the quit did. The handle error above was chased as a shutdown bug for that
+  reason alone.
+- **`PlayerShip.CalmFor` can say at most `CombatHold` (12 s).** The combat clock runs DOWN from 12, so
+  any lock of 12 s or less can be read off it, and a longer one cannot. A smoke check holds
+  `Landmarks.CalmNeeded` under it. A lock longer than 12 s needs the clock to count up, and that changes
+  a field on the wire (the host-state packet's `combat`).
+- **A check that spends through a service must stand on the place that serves it.** `Yard.BuyGearLevel`
+  and `Yard.QueueScrap` refuse off the EQUIPMENT BASE or inside the 10 s lock, whatever the button
+  says, so a check that presses UPGRADE or QUEUE -- or calls either -- sets its ship down on the pad
+  and runs the combat clock out first (the recycler's checks, the level bought in the window, the
+  guest's mid-session level), and puts both back after.
 - **A spec's figure is not the gun's.** `Spec().Interval` carried the overdrive while `FireControl`
   fired off the raw reload, and every check read the spec. A rate or a speed is proved by counting
   what leaves the barrel or measuring the hull's way, never by reading a figure the gun does not
@@ -1019,6 +1072,10 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   error anywhere.
   *Rule: when you add something DRAWN from a value, ask which peers have that value. The solo run
   is the host, so it can never tell you.*
+- **A sound played where only the host runs is silence on every guest.** The railgun's report was
+  played inside `FireRail`, an ability's `Expire`, which runs under `Net.Sim` alone. A sound belongs
+  to what every peer is SENT: a flash, an `FxDef.Sound`, or a move's `Cue` / `Strike`.
+  *Rule: an `Sfx.` call inside host-only code is a guest bug.*
 - **A node can pass every behavioural check and draw nothing.** The title screen's battleship
   moved, warped, held station and reported its position correctly for several rounds of checks
   while `PlayerShip.Init()` had never been called, so it had no sprite, no turrets and no stat
@@ -1308,6 +1365,7 @@ produced, and what each one replaced.
 | `Ships.cs` → `ClassDef.Damage` | what a class calls its weapons, and what one pilot level adds to each | `Progression.DamageStat` naming one stat for every class, and `Equipment.DamageStats` naming them again per class |
 | `Ships.cs` → `ClassDef.Kit` | the two parts a class is born with | three classes named in `Equipment`, and the battleship's mounts handed to everything else |
 | `Equipment.cs` → `ItemDef.Needs` | the stats a part moves, and so the hulls it fits | `ItemDef.Class`: one class per part, which is why nine classes could wear almost nothing |
+| `Landmarks.cs` → `Landmarks.All` | a place at home: where it stands, its footprint, art, label, scope mark, click, services and docks | the base, the TIO, the recycler and the outposts written out by hand four times in `Hub` -- layout, `BuildWorld`, `ScopeMarks`, `SelectAt` -- with three different click shapes, and the portal, the field and the belt as a further list of scope rows |
 
 **What is deliberately NOT a table.** The two ways an enemy fights (PIN and STANDOFF), the
 ways a boss move runs (`MoveWay`), and a boss's THROWN ROCK -- held in a tractor beam, thrown down a fixed lane on a cubic
@@ -1332,6 +1390,16 @@ point-defence frames off the hulls with no point defence -- without any of them 
 **One door for damage** (`PlayerShip.Incoming`). The 0.52 s per-source gap, the tally, the shield
 flash, the impact point, the death -- and `Guarded()`, where a dart's evasion, a warrior's
 hardening and a freighter's bubble meet the blow. No weapon in the game knows any of them exist.
+
+**A body in flight is point defence's alone -- unless its row gives it a hull.** `Tag.Missile` keeps a gun, a blow,
+a wing and a click off a shot, and every row of `Shots.All` carries it unless it says otherwise. A row may say
+`Tags = Tag.Hulled` (the cruise missile): its body takes a hull from whatever fires it (`TurretSpec.Hull`,
+`Combat.Fire(hull:)`), wears down under every weapon a pilot has -- an EMP's blow, not its hold: a body in flight
+carries no statuses -- and is picked like any hull. The one rule the two
+kinds share is `Targeting.Throwable`: nothing in flight is thrown, because every peer flies it from its launch and a
+throw happens on the host alone. A launcher's warning rides the launcher (`Turret.Warn`, an `FxRaise.Anchor`), so a
+launcher brought down takes it along on every peer. The next shootable projectile is `Tags = Tag.Hulled` on its row
+and a hull on its launcher.
 
 ## The harness is source (2026-09-22)
 

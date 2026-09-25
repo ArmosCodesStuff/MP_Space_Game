@@ -10,8 +10,8 @@ using System.Linq;
 //   WORKING    beam until the hold is full: a Shaft is one steady beam, a Scan a
 //              narrow, sweeping spray of forking arcs
 //   QUEUED     full, and every arm is busy: wait in line (Yard's queue)
-//   DOCKING    an arm is theirs: fly to its open face and turn nose-in
-//   UNLOADING  empty into the arm, then free it for the next in line
+//   DOCKING    an arm is theirs: fly to its berth off the open face (Dock.Berth, Docks.cs)
+//   UNLOADING  swing nose-in (Docks.NoseIn), empty into the arm, then free it for the next in line
 //
 // Above each, a hollow yellow bar fills as the hold does. Host-simulated; guests
 // draw from the Yard's 10 Hz state.
@@ -209,19 +209,20 @@ public partial class Gatherer : UtilityShip
             case St.Docking:
             {
                 int arm = Yard.ArmOf(this);
-                // No arm means it lost the one it was flying to. UnloadSpot indexes Arms with no
-                // bounds check, so -1 here would throw; ask again instead, and queue if none is free.
+                // No arm means it lost the one it was flying to. Arms[-1] would throw; ask again
+                // instead, and queue if none is free.
                 if (arm < 0) { State = Yard.RequestArm(this) >= 0 ? St.Docking : St.Queued; break; }
-                if (FlyTo(Yard.UnloadSpot(arm), dt)) State = St.Unloading;
+                if (FlyTo(Yard.Arms[arm].Dock.Berth(Length), dt)) State = St.Unloading;
                 break;
             }
             case St.Unloading:
             {
                 int arm = Yard.ArmOf(this);
                 if (arm < 0) { State = St.Outbound; break; }        // arm taken away mid-unload: go back out
-                var a = Yard.Arms[arm];
-                Position = Position.Lerp(Yard.UnloadSpot(arm), Mathf.Clamp(8f * dt, 0f, 1f));
-                Rotation = Mathf.LerpAngle(Rotation, Aim.Along(-a.Open), Mathf.Clamp(6f * dt, 0f, 1f));
+                // onto its berth and nose in: the berth and the swing every craft on a dock uses
+                var dock = Yard.Arms[arm].Dock;
+                Position = Position.Lerp(dock.Berth(Length), Mathf.Clamp(8f * dt, 0f, 1f));
+                Docks.NoseIn(this, dock, dt);
                 double amt = Math.Min(Cargo, Economy.UnloadRate * dt);
                 Cargo -= amt; Yard.Deposit(Def.Resource, amt);
                 if (Cargo <= 1e-6) { Cargo = 0; Yard.Release(this); State = St.Outbound; }

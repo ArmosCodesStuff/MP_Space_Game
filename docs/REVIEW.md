@@ -113,8 +113,7 @@ confirmed, 2 refuted. Fixed, each with a check where one could see it:
   frame from earlier on.
 - **A hull check split 262.5 as 262.4 + 0.1**, which floating point leaves alive by 2e-14.
 - (The critic's other finding, CHANGES.md not yet updated, was the end-of-batch docs.)
-Refuted: the last leg running through the dummies (it passes 58-96 u from them, which nothing minds) and
-the stop check killing every raider (the old check did the same).
+Refuted: the stop check killing every raider (the old check did the same).
 
 ## Pass 6 — slice 1 of the second batch: the broadside and the destroyer (done)
 

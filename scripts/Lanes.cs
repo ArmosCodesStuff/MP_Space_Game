@@ -20,6 +20,7 @@ using System.Collections.Generic;
 //                    up to one; five rows at 0.2 would be fifths, with no arithmetic changed here
 //                    or anywhere else -- the share is a FIELD, never a count.
 //   Texture/Tint/Length/Drones/Speed   the couriers that fly it
+//   Dwell            how long each of them sits on a dock before it leaves
 //
 // WHERE THE INCOME IS CUT: Yard.Deposit, AND NOWHERE ELSE. Every unit the fleet ever delivers
 // comes through that one method, so cutting a lane is ONE MULTIPLY by Lanes.Flow -- the sum of the
@@ -47,6 +48,12 @@ using System.Collections.Generic;
 // and it does not matter, because no number anywhere is read off where a courier is -- exactly as
 // every peer builds its own outposts rather than being sent them.
 //
+// A COURIER DOCKS WHERE THE FLEET DOES. Each end of its run is a DOCK (Docks.cs): the base's
+// service arm nearest its outpost -- the arm a miner unloads in -- and the clamp on its outpost's
+// corner nearest the base. It berths and swings nose-in by the fleet's own arithmetic, sits there
+// its row's Dwell, and leaves. It HOLDS NO DOCK: the Yard's reservation is for deliveries and a
+// courier delivers nothing, so a miner holding its arm keeps it and the courier berths beside it.
+//
 // THE GUN AT THE FAR END is the lane's too, by its row, so a fifth lane arrives defended. It
 // throws the heavy fighter's own predicted missile (Missiles.cs) in friendly colours, on the one
 // gun component every other mount in the game uses (Turrets.cs), and the yard buys its RANGE, its
@@ -65,6 +72,7 @@ public sealed class LaneDef
     public Color Tint;           // ...in the stations' own livery
     public int Drones;           // how many fly it, spread evenly round the round trip
     public float Speed;          // u/s
+    public double Dwell;         // seconds a courier sits on each dock before it leaves
 }
 
 public static class Lanes
@@ -75,15 +83,13 @@ public static class Lanes
 
     public static readonly LaneDef[] All =
     {
-        new() { Id = "se", Outpost = 0, Share = 0.25, Texture = "res://miner.png",    Length = 22f, Tint = Livery, Drones = 2, Speed = 320f },
-        new() { Id = "ne", Outpost = 1, Share = 0.25, Texture = "res://salvager.png", Length = 22f, Tint = Livery, Drones = 2, Speed = 320f },
-        new() { Id = "nw", Outpost = 2, Share = 0.25, Texture = "res://miner.png",    Length = 22f, Tint = Livery, Drones = 2, Speed = 320f },
-        new() { Id = "sw", Outpost = 3, Share = 0.25, Texture = "res://salvager.png", Length = 22f, Tint = Livery, Drones = 2, Speed = 320f },
+        new() { Id = "se", Outpost = 0, Share = 0.25, Texture = "res://miner.png",    Length = 22f, Tint = Livery, Drones = 2, Speed = 320f, Dwell = 2.0 },
+        new() { Id = "ne", Outpost = 1, Share = 0.25, Texture = "res://salvager.png", Length = 22f, Tint = Livery, Drones = 2, Speed = 320f, Dwell = 2.0 },
+        new() { Id = "nw", Outpost = 2, Share = 0.25, Texture = "res://miner.png",    Length = 22f, Tint = Livery, Drones = 2, Speed = 320f, Dwell = 2.0 },
+        new() { Id = "sw", Outpost = 3, Share = 0.25, Texture = "res://salvager.png", Length = 22f, Tint = Livery, Drones = 2, Speed = 320f, Dwell = 2.0 },
     };
 
-    // ── the geometry of a run ────────────────────────────────────────────────
-    public const float BaseDock = 300f;    // how far off the base a courier turns round
-    public const float Dock = 110f;        // ...and how far off the outpost
+    // ── where a blockade stands on a lane ────────────────────────────────────
     public const float Along = 0.8f;       // where a blockade forms, along the lane
     public const float Ring = 200f;        // ...the ring its squad holds there (WaveDef.Hold)
     public const float Hold = 450f;        // ...and how near one must be for the lane to be cut
@@ -112,16 +118,17 @@ public static class Lanes
     public static string Name(int lane) => Hub.Outposts[Of(lane).Outpost].name;
     // ITS TWO ENDS: the base, and the outpost its row names.
     public static (Vector2 near, Vector2 far) Ends(int lane) => (Hub.BasePos, Hub.Outposts[Of(lane).Outpost].at);
-    // ...and the two points a courier actually turns round on, clear of both hulls.
-    public static (Vector2 from, Vector2 to) Run(int lane)
+    // ...and the DOCK AT EACH END its couriers use (Docks.cs): the base's service arm nearest the
+    // outpost, and the outpost's clamp nearest the base. The fleet's own pads by the fleet's own
+    // "nearest pad" rule, held by nobody -- so a courier shares an arm with whatever miner holds it.
+    public static (Dock home, Dock away) EndDocks(int lane)
     {
         var (a, b) = Ends(lane);
-        var d = (b - a).Normalized();
-        return (a + d * BaseDock, b - d * Dock);
+        var home = Docks.On(Landmarks.ById("base")); var away = Docks.On(Landmarks.Outposts[Of(lane).Outpost]);
+        return (home[Docks.Nearest(home, b)], away[Docks.Nearest(away, a)]);
     }
     public static Vector2 Stand(int lane) { var (a, b) = Ends(lane); return a.Lerp(b, Along); }
     public static Vector2 GunAt(int lane) { var (a, b) = Ends(lane); return b + (a - b).Normalized() * (Hub.OutpostHeight * 0.25f); }
-    public static double Cycle(int lane) { var (a, b) = Run(lane); return 2.0 * a.DistanceTo(b) / Mathf.Max(1f, Of(lane).Speed); }
 
     // CUT while anything hostile is standing on it. Worked out on every peer from the raiders it
     // already holds, so a blockade is state nobody has to send and nobody can disagree about.
@@ -179,8 +186,11 @@ public static class Lanes
 
 // A COURIER — a small drone shuttling between a lane's two ends, both ways, for ever. It is what
 // the flow of income LOOKS like and nothing more: it holds no cargo figure, banks nothing, and
-// cannot be hit, selected or destroyed (see the file header). Its clock is public so a check can
-// put it at a point of the run rather than waiting one out.
+// cannot be hit, selected or destroyed (see the file header). Each half of its round trip starts
+// DOCKED -- on the base's service arm nearest its outpost going out, on the outpost's clamp
+// nearest the base coming back (Lanes.EndDocks) -- for its row's Dwell, swinging nose-in; then it
+// FLIES to the other dock, eased at both ends so it reads as leaving and arriving. Its clock is
+// public so a check can put it at a point of the run rather than waiting one out.
 public partial class Courier : Node2D
 {
     public Hub Hub;
@@ -189,8 +199,15 @@ public partial class Courier : Node2D
     public double Clock;             // seconds into the round trip
 
     public LaneDef Def => Lanes.Of(Lane);
-    public double Cycle => Lanes.Cycle(Lane);
+    public Dock Home { get; private set; }                          // the base's arm it docks on
+    public Dock Away { get; private set; }                          // ...and its outpost's clamp
+    // WHERE IT SITS on each: its own length, at the face's outboard end (Dock.Abreast). The
+    // centre line is for the craft that holds a dock, and a courier holds none.
+    public Vector2 HomeBerth { get; private set; }
+    public Vector2 AwayBerth { get; private set; }
+    public double Cycle { get; private set; }                       // two dwells and two flights, s
     public bool Outbound { get; private set; } = true;              // base -> outpost, or back
+    public bool Docked { get; private set; }                        // on a dock, not flying
     public bool Held { get; private set; }                          // its lane is cut: it waits
     public int Runs => (int)(Clock / Math.Max(0.001, Cycle) * 2);   // one-way runs finished
 
@@ -199,33 +216,43 @@ public partial class Courier : Node2D
         var art = Sprites.Fit(Def.Texture, Def.Length);
         art.Modulate = Def.Tint;                                    // grey art in the stations' livery
         AddChild(art);
-        ZIndex = 1;
-        Place();
+        // over the stations it docks on (2), under the Yard's fleet (3 + 1): on a shared arm the
+        // miner holding it is drawn over the courier beside it
+        ZIndex = 3;
+        float half = art.Texture.GetWidth() * art.Scale.X * 0.5f;  // its own half-width, off its art
+        (Home, Away) = Lanes.EndDocks(Lane);
+        HomeBerth = Home.Berth(Def.Length, Home.Abreast(half));
+        AwayBerth = Away.Berth(Def.Length, Away.Abreast(half));
+        Cycle = 2.0 * (HomeBerth.DistanceTo(AwayBerth) / Mathf.Max(1f, Def.Speed) + Def.Dwell);
+        Place(1f);                   // a whole second of swing, clamped to all of it: it starts ON its heading
     }
 
     public override void _Process(double delta)
     {
         Held = Lanes.Cut(Hub, Lane);
         if (!Held) Clock += delta;                                  // a cut lane's couriers hold
-        Place();
+        Place((float)delta);
         QueueRedraw();
     }
 
-    private void Place()
+    // WHERE THE CLOCK PUTS IT. Each half of the round trip begins on a dock and ends on the other:
+    // Def.Dwell seconds berthed and swinging nose-in, then the flight across.
+    private void Place(float dt)
     {
-        var (a, b) = Lanes.Run(Lane);
         double f = (Clock / Math.Max(0.001, Cycle) + Phase) % 1.0;
         Outbound = f < 0.5;
-        float k = (float)(Outbound ? f * 2.0 : 2.0 - f * 2.0);      // 0 at the base, 1 at the outpost
-        var was = Position;
-        Position = a.Lerp(b, Mathf.SmoothStep(0f, 1f, k));           // easing reads as docking
-        var step = Position - was;
-        if (step.LengthSquared() > 1e-6f) Rotation = Aim.Along(step);
+        double inHalf = (Outbound ? f : f - 0.5) * Cycle;          // seconds into this half
+        var (on, at, to) = Outbound ? (Home, HomeBerth, AwayBerth) : (Away, AwayBerth, HomeBerth);
+        Docked = inHalf < Def.Dwell;
+        if (Docked) { Position = at; Docks.NoseIn(this, on, dt); return; }
+        float k = (float)((inHalf - Def.Dwell) / Math.Max(0.001, Cycle * 0.5 - Def.Dwell));
+        Position = at.Lerp(to, Mathf.SmoothStep(0f, 1f, k));        // easing reads as leaving and arriving
+        Rotation = Mathf.LerpAngle(Rotation, Aim.Face(at, to), Mathf.Clamp(Docks.Swing * dt, 0f, 1f));
     }
 
     public override void _Draw() =>
         Plume.Draw(this, new Vector2(0, Def.Length * 0.5f), Vector2.Down, Def.Length,
-                   Plume.Utility, Held ? 0f : 1f, !Held);
+                   Plume.Utility, Held || Docked ? 0f : 1f, !Held && !Docked);
 }
 
 // THE GUN AT A LANE'S FAR END — an outpost's answer to a blockade, and the late deterrent the

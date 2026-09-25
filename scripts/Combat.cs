@@ -24,9 +24,8 @@ public static class DamageSource
     // the Drake Bastion (Drake.cs)
     public const string DrakeGun = "boss:gun";
     public const string DrakeScrap = "boss:scrap";
-    // the guns an emplacement answers with, one name per row of Emplacements.All
-    public const string BaseGun = "base:gun";
-    public const string PylonGun = "pylon:gun";
+    // what an emplacement answers with, one name per row of Emplacements.All that answers at all
+    public const string BaseMissile = "base:missile";
 }
 
 // Combat services. Everything here is HOST-SIDE: target lookup, damage, and the
@@ -71,7 +70,8 @@ public static class Combat
         }
         return best;
     }
-    // What a player may pick with Tab or a click: alive, and selectable -- never a missile.
+    // What a player may pick with Tab or a click: alive, and selectable -- never a missile point
+    // defence alone may have (Tag.Missile); a body in flight with a hull of its own (Tag.Hulled) is.
     public static bool Pickable(IHittable h) => h.Alive && h.Selectable;
 
     // A long hull's hit shape: a capsule down its keel (a circle would be far too wide), `length`
@@ -92,12 +92,12 @@ public static class Combat
     }
 
     // Set by the live world so combat can draw without knowing what world it is in.
-    // A laser shot's flash, and its sound. The KIND is what fired it, not a boss/not-boss
-    // boolean: a carrier's fighters want their own report, quieter than a capital ship's, and
-    // "make the fighters quieter" has to be answerable somewhere other than at every call site.
-    public static System.Action<Vector2, Vector2, Color, ShotSound> OnFlash;
-    public static void Flash(Vector2 a, Vector2 b, Color c, ShotSound snd = ShotSound.Light)
-        => OnFlash?.Invoke(a, b, c, snd);
+    // A BEAM'S FLASH, and its sound. `beam` is a row of Beam.All -- what fired it -- and the row
+    // says how the line is drawn and which note it is heard at, so a new kind of beam, or a new
+    // note for an old one, is answered in that table and never at a call site. No default: a
+    // caller that names no row is a caller that has not said what it fires.
+    public static System.Action<Vector2, Vector2, int> OnFlash;
+    public static void Flash(Vector2 a, Vector2 b, int beam) => OnFlash?.Invoke(a, b, beam);
 
     // THE WORLD PROJECTILES ARE BORN INTO: the hub, or the title screen's diorama. Every shell and
     // torpedo is spawned HERE, into whatever world set itself -- one spawner, where each world
@@ -110,11 +110,14 @@ public static class Combat
     public static System.Action<Shot> ShotFired;
 
     // THE ONE DOOR EVERYTHING THAT FLIES COMES THROUGH. `kind` is a row of Shots.All -- what it
-    // hits, how it ends, what it looks like; everything else is the weapon's own numbers. The
-    // host's copy deals the damage and the world tells its guests to fly a cosmetic one.
+    // hits, how it ends, what it looks like; everything else is the weapon's own numbers, down to
+    // `hull`: its body's own hull, for a row whose body is a target (Tag.Hulled) -- 0 falls to the
+    // first blow. The host's copy deals the damage and the world tells its guests to fly a
+    // cosmetic one; the hull is the host's alone, since a guest's copy damages nothing and is hurt
+    // by nothing.
     public static Shot Fire(int kind, Vector2 from, Vector2 dir, float speed, float range, double damage,
                             float radius = 0f, int targetId = 0, float turnRate = 0f, PlayerShip source = null,
-                            string hitSource = null, float size = 1f, int variant = 0)
+                            string hitSource = null, float size = 1f, int variant = 0, double hull = 0)
     {
         if (World == null) return null;
         var s = new Shot { Kind = kind, Position = from, Dir = dir.Normalized(), Speed = speed, Range = range,
@@ -122,7 +125,7 @@ public static class Combat
                            // EVERY SHOT IS ITS OWN SOURCE: the caller names the weapon, the body's
                            // identity is added here, so no volley can be mistaken for one ongoing
                            // source and swallowed by PlayerShip's 0.52 s gap
-                           Source = source, HitSource = Shots.SourceKey(hitSource), Size = size, Variant = variant,
+                           Source = source, HitSource = Shots.SourceKey(hitSource), Size = size, Variant = variant, Hull = hull,
                            NetId = Shots.Of(kind).Interceptable ? NextMissileId() : 0 };
         World.AddChild(s);
         ShotFired?.Invoke(s);

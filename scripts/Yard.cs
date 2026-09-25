@@ -11,9 +11,10 @@ using System.Linq;
 //                been delivered -- never a field per resource
 //   upgrades     their levels, purchases (a guest asks, the host decides)
 //   the fleet    miners and salvagers, as many as the +1 upgrades allow
-//   the arms     the base's five service arms: each takes one miner or salvager at
-//                a time, loading through its open face (north; the top arm, west),
-//                marked by gently flashing blue hologram bars
+//   the arms     WHO HOLDS each of the base's five service arms -- where they are is a
+//                row each of the base's docks (Docks.cs). Each takes one miner or salvager at a
+//                time, loading through its open north face, marked by gently flashing blue
+//                hologram bars. A lane's courier docks at them too, and holds none (Lanes.cs)
 //   the queue    ships that come home to full arms wait in line, first come first
 //                served, and take the next arm that frees up
 //   the hauler   and its dispatch
@@ -57,28 +58,17 @@ public partial class Yard : Node2D
     private const double AutoSaveEvery = 30;
 
     // ── the service arms ─────────────────────────────────────────────────────
-    // Pad centres measured from base_station.png (pixels from its centre x 0.6).
+    // WHERE each arm is, is its row of the base's docks (Docks.BaseArms, through the base's
+    // Landmark row), in table order, which is the index ArmOf sends down the wire. WHO HOLDS it is the Yard's alone: a miner or salvager reserves an
+    // arm to unload into it, one at a time. A lane's courier docks at them too and reserves
+    // nothing, so it never takes an arm from the fleet or stands in its queue.
     public class Arm
     {
-        public Vector2 Pad;       // pad centre, relative to the base
-        public Vector2 Open;      // the open face: ships load through this side
-        public float Reach;       // pad centre to its open face
-        public float Face;        // length of the open face
+        public Dock Dock;
         public Gatherer Occupant;
     }
 
-    public readonly Arm[] Arms =
-    {
-        // Measured from the art (each pad's rotated outline): its centre, and its
-        // north-facing edge -- the outward normal (Open), the distance to it (Reach) and
-        // its length (Face). The four diagonal pads are turned 30 degrees, so their
-        // north faces tilt with them; every bay, the top one included, loads from its north face.
-        new() { Pad = new(0f, -195.9f),      Open = new(0f, -1f),          Reach = 22.2f, Face = 54.6f },
-        new() { Pad = new(-169.5f, -97.9f),  Open = new(0.501f, -0.865f),  Reach = 28.1f, Face = 45.6f },
-        new() { Pad = new(169.5f, -97.9f),   Open = new(-0.501f, -0.865f), Reach = 28.1f, Face = 45.6f },
-        new() { Pad = new(-169.5f, 97.9f),   Open = new(-0.501f, -0.865f), Reach = 28.1f, Face = 45.6f },
-        new() { Pad = new(169.5f, 97.9f),    Open = new(0.501f, -0.865f),  Reach = 28.1f, Face = 45.6f },
-    };
+    public readonly Arm[] Arms = Docks.On(Landmarks.ById("base")).Select(d => new Arm { Dock = d }).ToArray();
 
     private readonly List<Gatherer> _queue = new();
 
@@ -342,13 +332,8 @@ public partial class Yard : Node2D
     {
         int mine = ArmOf(g);
         if (mine >= 0) return mine;
-        int best = -1; float bd = float.MaxValue;
-        for (int i = 0; i < Arms.Length; i++)
-        {
-            if (Arms[i].Occupant != null) continue;
-            float d = g.Position.DistanceTo(Hub.BasePos + Arms[i].Pad);
-            if (d < bd) { bd = d; best = i; }
-        }
+        // the nearest arm nobody holds: the one "nearest pad" rule every craft docks by
+        int best = Docks.Nearest(Arms.Select(a => a.Dock).ToArray(), g.Position, i => Arms[i].Occupant == null);
         if (best >= 0) { SetArm(g, best); _queue.Remove(g); return best; }
         if (!_queue.Contains(g)) _queue.Add(g);
         return -1;
@@ -369,9 +354,6 @@ public partial class Yard : Node2D
     public int QueueIndex(Gatherer g) => _queue.IndexOf(g);
     public int QueueLength => _queue.Count;
     public Vector2 QueueSpot(int i) => Hub.BasePos + new Vector2(70f + 46f * i, -330f);   // a line north-east of the top arm
-
-    // where a ship holds to unload: just outside the arm's open face, nose in
-    public Vector2 UnloadSpot(int arm) { var a = Arms[arm]; return Hub.BasePos + a.Pad + a.Open * (a.Reach + Gatherer.Length * 0.5f + 4f); }
 
     public void Release(Gatherer g)
     {
@@ -447,6 +429,10 @@ public partial class Yard : Node2D
     // a pilot visiting a friend spends its own stock and not the host's. True when it was paid for.
     public bool BuyGearLevel(string id)
     {
+        // ONLY OVER THE EQUIPMENT BASE, AND CALM (Landmarks.Serves). It is asked here, where the
+        // salvage is spent, and not only by the button. A press that raced its pilot off the pad or
+        // into a fight is refused in the words the button was greyed with.
+        if (!Landmarks.Serves(Hub?.MyShip, Service.LevelGear).Ok) return false;
         double cost = Equipment.NextLevelCost(id);
         if (cost < 0) return false;                                  // at the ceiling
         const string res = "salvage";
@@ -463,7 +449,9 @@ public partial class Yard : Node2D
     // The part leaves the hold the moment it is QUEUED, so it cannot be fitted or queued twice
     // while it waits, and TAKE BACK puts it straight back. The salvage lands in YOUR OWN base --
     // the rule a refit and a gear level already follow -- so a pilot visiting a friend is not
-    // feeding the host's stock.
+    // feeding the host's stock. A part is QUEUED only over the EQUIPMENT BASE and 10 s clear of
+    // combat (Landmarks.Serves). TAKE BACK works anywhere, because it spends nothing. The queue
+    // drains on its own clock wherever the pilot is.
     private readonly List<string> _scrap = new();
     private double _scrapClock;
     public IReadOnlyList<string> ScrapQueue => _scrap;
@@ -473,6 +461,7 @@ public partial class Yard : Node2D
     {
         var it = Equipment.ById(id);
         if (it == null || it.Kit || Character.GearLocked.Contains(id) || Character.GearHold.GetValueOrDefault(id) <= 0) return false;
+        if (!Landmarks.Serves(Hub?.MyShip, Service.Scrap).Ok) return false;          // on the equipment base, and calm
         Character.Unstow(id);                       // out of the hold at once: it is spoken for
         _scrap.Add(id);
         Character.Save();
@@ -649,19 +638,19 @@ public partial class Yard : Node2D
         }
         for (int i = 0; i < Arms.Length; i++)
         {
-            var a = Arms[i];
+            var (d, row) = (Arms[i].Dock, Arms[i].Dock.Row);
             float pulse = 0.5f + 0.5f * Mathf.Sin((float)_t * 2.2f + i * 1.3f);   // a gentle flash
-            float alpha = (a.Occupant != null ? 0.55f : 0.30f) + 0.30f * pulse;
-            var across = new Vector2(-a.Open.Y, a.Open.X) * (a.Face * 0.5f);
+            float alpha = (Arms[i].Occupant != null ? 0.55f : 0.30f) + 0.30f * pulse;
+            var across = new Vector2(-row.Open.Y, row.Open.X) * (row.Face * 0.5f);
             var col = new Color(0.35f, 0.75f, 1f, alpha);
             foreach (float off in new[] { 3f, 9f })
             {
-                var c = Hub.BasePos + a.Pad + a.Open * (a.Reach + off);
+                var c = d.Pad + row.Open * (row.Reach + off);
                 DrawLine(c - across, c + across, col, 2f);
             }
-            var o0 = Hub.BasePos + a.Pad + a.Open * (a.Reach + 1f);
-            DrawLine(o0 - across, o0 - across + a.Open * 12f, col, 1.5f);            // the posts at each end
-            DrawLine(o0 + across, o0 + across + a.Open * 12f, col, 1.5f);
+            var o0 = d.Pad + row.Open * (row.Reach + 1f);
+            DrawLine(o0 - across, o0 - across + row.Open * 12f, col, 1.5f);            // the posts at each end
+            DrawLine(o0 + across, o0 + across + row.Open * 12f, col, 1.5f);
         }
     }
 

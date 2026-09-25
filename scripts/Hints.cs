@@ -18,7 +18,7 @@ public partial class Hints : CanvasLayer
         ["abilities"]   = ("ABILITIES", "The bar along the bottom shows each ability and its key. K lists every number your ship flies and fights with, and rebinds any key."),
         ["base"]        = ("THE BASE", "B, or left-click the station. Miners, salvagers and the hauler earn while you fly; spend the credits here. REFIT changes your ship."),
         ["tio"]         = ("THE TIO", "Left-click the building for boss missions. When every pilot is READY the portal opens and the party goes through."),
-        ["equipment"]   = ("EQUIPMENT", "I. Bosses drop parts that lean hard one way; your hold keeps what you are not flying. Each class keeps its own."),
+        ["equipment"]   = ("EQUIPMENT", "I. Bosses drop parts that lean hard one way; your hold keeps what you are not flying, and each class keeps its own. Level or scrap them on the EQUIPMENT BASE, right of the station, 10 s clear of combat."),
         ["loot"]        = ("LOOT", "Crates only you can see. Fly over one to take it; any you leave behind come home with you."),
         ["multiplayer"] = ("MULTIPLAYER", "HOST THIS WORLD, then COPY ADDRESS for your friends. To join one, type their address and JOIN."),
         ["raid"]        = ("RAIDERS", "They come for your base after a failed mission, and for your hauler on an escort. The base's guns help; nothing else you own can fight back."),

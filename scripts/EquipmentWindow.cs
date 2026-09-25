@@ -7,10 +7,16 @@ using System.Linq;
 // UNEQUIP takes a chip off into the hold. A core slot is never empty. Each class keeps its own
 // loadout; the hold is the pilot's. Only this pilot sees any of it: gear is per pilot, like the
 // loot it comes from.
+// It is the EQUIPMENT BASE's window. A click on the base opens it, and RECYCLER on its title line
+// hands the spot to the recycler. It opens anywhere, to look and to fit. What it will NOT do
+// anywhere is level a part: that is a service of the base (Landmarks.Serves), available over it
+// and 10 s clear of combat.
 public partial class EquipmentWindow : PanelContainer
 {
     public Hub Hub;
     private VBoxContainer _ship, _hold;
+    private Label _gate;                 // why the SALVAGE buttons are grey, when they are (on the foot line)
+    private bool _served;                // what the equipment base's gate said at the last Rebuild
     // Both columns scroll, at a height that ends the window above the hull bar (930 px down a
     // 1080 screen): a ship's ten parts, each with what it does, run to about 970 px on their own.
     private const float ShipW = 500, HoldW = 400, ColH = 700;
@@ -22,7 +28,14 @@ public partial class EquipmentWindow : PanelContainer
         Ui.Panelise(this);
         var col = Ui.VBox(10); AddChild(col);
         var title = Ui.VBox(2);
-        title.AddChild(Ui.Lbl("EQUIPMENT", Ui.Title, Ui.Accent));
+        // THE TITLE LINE carries the way to the RECYCLER. Both windows belong to the equipment base
+        // and share the side spot; a click on the base opens this one. Away from home there is no
+        // yard and nothing to recycle, so there the button is not shown.
+        var head = Ui.HBox(8);
+        var heading = Ui.Lbl("EQUIPMENT", Ui.Title, Ui.Accent); heading.SizeFlagsHorizontal = SizeFlags.ExpandFill; head.AddChild(heading);
+        var toRecycler = Ui.Btn("RECYCLER", () => Hub.OpenSide(() => new RecyclerPanel { Hub = Hub }), "Recycler");
+        toRecycler.SizeFlagsVertical = SizeFlags.ShrinkCenter; toRecycler.Visible = Hub?.Yard != null; head.AddChild(toRecycler);
+        title.AddChild(head);
         title.AddChild(Ui.Lbl("Bosses drop parts that lean hard one way. Each class keeps its own; the hold is yours.", Ui.Small, Ui.Dim));
         col.AddChild(title);
         var cols = Ui.HBox(16); col.AddChild(cols);
@@ -34,13 +47,34 @@ public partial class EquipmentWindow : PanelContainer
                                            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         _hold = Ui.VBox(6, "Hold"); _hold.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         scroll.AddChild(_hold); cols.AddChild(scroll);
-        col.AddChild(Ui.Lbl("I or Esc closes.", Ui.Small, Ui.Dim));
+        // THE FOOT LINE says WHY the SALVAGE buttons are grey, when they are. It shares the line
+        // that was already there: the window ends about 30 px above the hull bar (930 px down), and a
+        // line of its own would take most of that.
+        var foot = Ui.HBox(16);
+        foot.AddChild(Ui.Lbl("I or Esc closes.", Ui.Small, Ui.Dim));
+        _gate = Ui.Lbl("", Ui.Small, Ui.Warn); _gate.Name = "Gate";
+        _gate.SizeFlagsHorizontal = SizeFlags.ExpandFill; _gate.HorizontalAlignment = HorizontalAlignment.Right;
+        foot.AddChild(_gate);
+        col.AddChild(foot);
         Rebuild();
+    }
+
+    // THE EQUIPMENT BASE'S GATE, kept live. This window opens anywhere to look, and its SALVAGE
+    // buttons wake the moment the pilot is over the base and 10 s clear of combat
+    // (Landmarks.Serves). The reason is on the foot line -- except where there is no yard (the
+    // arena), which has no SALVAGE buttons for it to explain. The rows are rebuilt only when the
+    // answer changes.
+    public override void _Process(double delta)
+    {
+        var gate = Landmarks.Serves(Hub?.MyShip, Service.LevelGear);
+        Ui.SetText(_gate, gate.Ok || Hub?.Yard == null ? "" : "Levelling is shut: " + gate.Why);
+        if (gate.Ok != _served) Rebuild();
     }
 
     private void Rebuild()
     {
         Ui.Clear(_ship); Ui.Clear(_hold);
+        _served = Landmarks.Serves(Hub?.MyShip, Service.LevelGear).Ok;
         var cls = Character.Class; var l = Character.LoadoutFor(cls);
         _ship.AddChild(Ui.Heading($"{Classes.NameOf(cls)}  ·  core parts"));
         for (int k = 0; k < Equipment.CoreSlots; k++)
@@ -122,8 +156,12 @@ public partial class EquipmentWindow : PanelContainer
         if (it == null || Hub.I?.Yard is not { } yard) return null;
         double cost = Equipment.NextLevelCost(id);
         if (cost < 0) { var top = Ui.Btn($"+{Equipment.MaxLevel * Equipment.LevelStep * 100:0}%", () => { }, "Upgrade"); top.Disabled = true; return top; }
+        // ...and only over the EQUIPMENT BASE, 10 s clear of combat. The price stays on the button,
+        // greyed, so a pilot can see what a level will cost before flying there; the foot line says why.
+        var gate = Landmarks.Serves(Hub?.MyShip, Service.LevelGear);
         var b = Ui.Btn($"{cost:0} SALVAGE", () => { if (yard.BuyGearLevel(id)) Changed(); }, "Upgrade");
-        b.Disabled = yard.OwnStock("salvage") < cost;
+        b.Disabled = yard.OwnStock("salvage") < cost || !gate.Ok;
+        if (!gate.Ok) b.TooltipText = gate.Why;
         return b;
     }
 

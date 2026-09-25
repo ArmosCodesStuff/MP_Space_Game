@@ -179,20 +179,13 @@ public partial class ShipPreview : Control
 
     public override void _Process(double delta) { if (Live) QueueRedraw(); }
 
-    // GD.Load goes through ResourceLoader every call. A LIVE preview redraws every frame and
-    // loaded the hull plus one texture per turret each time -- seven lookups a frame for a
-    // battleship. They never change, so hold them -- for this preview's life, not the process's.
-    private readonly System.Collections.Generic.Dictionary<string, Texture2D> _texCache = new();
-    private Texture2D Tex(string path) =>
-        _texCache.TryGetValue(path, out var t) ? t : _texCache[path] = GD.Load<Texture2D>(path);
-
     public override void _Draw()
     {
         if (Live) { Main = Character.Main; Accent = Character.Accent; Class = Character.Class; }
         DrawRect(new Rect2(Vector2.Zero, Size), new Color(0.05f, 0.07f, 0.12f));
         var art = Classes.Art(Class);
         if (art.Texture == null) return;                       // a class with no hull drawn yet
-        var tex = Tex(art.Texture);
+        var tex = Assets.Load<Texture2D>(art.Texture);     // a LIVE preview asks every frame: a lookup after the first
 
         // In a wide box (the select screen's rows) the ship lies nose-right so it can
         // be drawn large; in a tall box (the creator) it stands nose-up.
@@ -213,7 +206,7 @@ public partial class ShipPreview : Control
         void Mount(Vector2 off, bool pd)
         {   // at rest: forward turrets face forward, aft turrets aft
             var p = c + off * k;
-            var tt = Tex(pd ? art.PdTurret : art.MainTurret);
+            var tt = Assets.Load<Texture2D>(pd ? art.PdTurret : art.MainTurret);
             var sz = tt.GetSize() * art.TurretTexScale * k;
             DrawSetTransformMatrix(shipXf * new Transform2D(!pd && off.Y > 0 ? Mathf.Pi : 0f, p));
             DrawTextureRect(tt, new Rect2(-sz * 0.5f, sz), false, Accent);

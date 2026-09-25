@@ -7,7 +7,7 @@ public static class Sprites
 {
     public static Sprite2D Fit(string path, float length)
     {
-        var tex = GD.Load<Texture2D>(path);
+        var tex = Assets.Load<Texture2D>(path);
         return new Sprite2D { Texture = tex, Scale = Vector2.One * (length / tex.GetHeight()) };
     }
 }

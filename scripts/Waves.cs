@@ -265,8 +265,8 @@ public static class Waves
                                Named(Enemies.Gunship, _ => 1, new Vector2(0f, 160f), Vector2.Zero) } },
     };
 
-    // How far out a garrison forms up from what it is defending: outside the pirate base's own
-    // 2200 u guns, so a wave is never born under them.
+    // How far out a garrison forms up from what it is defending: beyond the four pylons (1200 u)
+    // and a pilot at work on one, so a wave is seen coming rather than born on top of the fight.
     public const float GarrisonRing = 2600f;
 
     // THE ROW A TRIGGER MEANS RIGHT NOW: the LAST one that matches, so a row written under

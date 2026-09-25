@@ -74,7 +74,7 @@ def write(name, xs, peak):
     data = b''.join(struct.pack('<h', int(round(max(-1.0, min(1.0, x / m * peak)) * 32767))) for x in xs)
     with wave.open(os.path.join(ROOT, name + '.wav'), 'wb') as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes(data)
-    print(f'{name:18s} {len(xs) / SR:.2f} s, peak {peak}')
+    print(f'{name:18s} {len(xs) / SR:.2f} s, peak {peak:.4g}')
 
 
 def beam_charge(rng):
@@ -213,16 +213,23 @@ def rock(rng):
     return [math.tanh(1.5 * x) for x in mix([1.6 * c for c in crunch], boom)]
 
 
+# A BEAM IS HEARD A QUARTER UNDER THE LEVEL IT WAS MADE AT (the owner: "lower the volume default of
+# beams by 25%"). Each peak below is the level a sound was made at; a beam's is that times BEAM, so
+# the cut is one number and the level it was cut from stays on its row. The other beam files
+# (laser_*) are not made here: tools/gain.ps1 cut them by the same 0.75. Sfx plays every file at
+# 0 dB and holds no beam volume of its own, so the files are the only place the cut is made.
+BEAM = 0.75
+
 SOUNDS = [
-    ('boss_beam_charge', beam_charge, 0.55),
-    ('boss_beam', beam, 0.85),
+    ('boss_beam_charge', beam_charge, 0.55 * BEAM),
+    ('boss_beam', beam, 0.85 * BEAM),
     ('boss_ram', ram, 0.75),
     ('boss_shockwave', shockwave, 0.9),
     ('boss_trident', trident, 0.7),
     ('drake_gun', gun, 0.6),
     ('drake_warp', warp, 0.6),
     ('drake_scrap', scrap, 0.85),
-    ('drake_tractor', tractor, 0.45),
+    ('drake_tractor', tractor, 0.45 * BEAM),
     ('drake_throw', throw, 0.75),
     ('drake_rock', rock, 0.9),
 ]

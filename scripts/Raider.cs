@@ -153,7 +153,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
         {   // the main turret on its spine behind the canopy, mounted where ITS OWN ROW says and
             // as wide as its row says -- both shares of its length, so a new hull states where its
             // gun sits instead of being scaled off the gunship's
-            _turret = new Sprite2D { Texture = GD.Load<Texture2D>("res://turret_main.png"),
+            _turret = new Sprite2D { Texture = Assets.Load<Texture2D>("res://turret_main.png"),
                                      Position = new Vector2(0, Length * Def.TurretAft),
                                      Scale = Vector2.One * (Length * Def.TurretWidth / TurretPixels),
                                      Modulate = Def.Tint, ZIndex = 1 };
@@ -269,7 +269,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             {
                 _shot = Def.ShotEvery;
                 Strike(Target, Def.Dps * Def.ShotEvery * Strength);
-                Combat.Flash(Position, Target.Position, new Color(1f, 0.3f, 0.25f));
+                Combat.Flash(Position, Target.Position, Def.Beam);
             }
         }
         QueueRedraw();
@@ -328,7 +328,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             {
                 _shot = Def.ShotEvery;       // 1 s: slower than a target's 0.52 s invulnerability, so no shot is wasted
                 Strike(Target, Def.Dps * Def.ShotEvery * Strength);
-                Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, new Color(1f, 0.35f, 0.25f));
+                Combat.Flash(ToGlobal(_turret?.Position ?? Vector2.Zero), Target.Position, Def.Beam);
             }
         }
         _missileCd -= delta;

@@ -41,15 +41,18 @@ public readonly struct TargetFilter
 
 public static class Targeting
 {
-    // Point defence takes missiles and small craft only -- never a heavy, a boss or a dummy hulk.
+    // Point defence takes what is in flight -- a missile, or a body with a hull of its own -- and
+    // small craft, never a heavy, a boss or a dummy hulk.
     // (a practice dummy's FIGHTER is Light, so PD still engages it; the hulk itself is not.)
-    public static readonly TargetFilter PointDefence = new(require: Tag.Missile | Tag.Light | Tag.Fighter);
+    public static readonly TargetFilter PointDefence = new(require: Tag.Missile | Tag.Hulled | Tag.Light | Tag.Fighter);
     // ANYTHING BUT A MISSILE IN FLIGHT. Three things want exactly this: something hostile choosing
     // a ship or a fleet craft to attack, a FIRE-AND-FORGET SEEKER choosing what to chase, and a blow
     // landing on everything under it (asked through Hits). One row, because a second one with the
-    // same contents is a second one to keep true.
+    // same contents is a second one to keep true. (A body in flight WITH a hull of its own --
+    // Tag.Hulled -- is no Missile: it is attackable like any hull.)
     public static readonly TargetFilter Attackable = new(forbid: Tag.Missile);
-    // What a wing takes for itself when its target dies: never a missile, never a practice dummy
+    // What a wing takes for itself when its target dies: never a missile point defence alone may
+    // have (Tag.Missile; a cruise missile's hull is fair game), never a practice dummy
     // (it cannot die, so the wing would strafe it for ever). A SEEKER DOES NOT USE THIS, and using
     // it is what made the warden look broken -- the dummy a pilot tests on was the one thing its
     // missiles refused to fly at. The reasoning above is about a wing RE-TARGETING; a seeker hits
@@ -57,6 +60,10 @@ public static class Targeting
     public static readonly TargetFilter WingPrey = new(forbid: Tag.Missile | Tag.Dummy);
     // Raiding craft, for the base's guns: what actually comes at the station.
     public static readonly TargetFilter Craft = new(require: Tag.Light | Tag.Heavy, forbid: Tag.Dummy);
+    // WHAT A THROW MAY MOVE (a bastion's shockwave): nothing in flight, of either kind. Every peer
+    // flies a body in flight from its launch, so a throw -- which happens on the host alone -- would
+    // put two copies of one damaging body a throw apart.
+    public static readonly TargetFilter Throwable = new(forbid: Tag.Missile | Tag.Hulled);
     // WHAT A TURRET LEFT STANDING TAKES: anything hostile -- a missile, a raider of any weight, a
     // boss, a station -- ranked as point defence ranks (Turret.Rank), so missiles and small craft
     // still come first. Point defence's own filter would keep it off a heavy, a boss and a pylon,

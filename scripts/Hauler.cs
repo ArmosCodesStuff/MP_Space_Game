@@ -99,6 +99,7 @@ public partial class Hauler : UtilityShip, ITurretHost
         Turn = (float)Economy.HaulerPdTurn,
         Texture = "res://turret_pd.png",
         TexScale = 1.3085f / 5.5f, Barrel = 7.2f, Ring = 3.93f,
+        Beam = Beam.Hauler,              // its flash: its own note, above a warship's point defence
         Tint = new Color(0.78f, 0.82f, 0.9f),
     };
     private Vector2 _netPos; private float _netRot; private bool _hasNet;
@@ -109,7 +110,7 @@ public partial class Hauler : UtilityShip, ITurretHost
 
     public override void _Ready()
     {
-        var tex = GD.Load<Texture2D>("res://hauler.png");
+        var tex = Assets.Load<Texture2D>("res://hauler.png");
         _sprite = new Sprite2D { Texture = tex };
         AddChild(_sprite);
         _overlay = new Node2D();

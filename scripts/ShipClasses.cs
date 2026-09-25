@@ -4,7 +4,6 @@ using System;
 // ─────────────────────────────────────────────────────────────────────────────
 // WHAT A FIGHT IS SPOKEN THROUGH — the contracts, and the carrier's craft.
 //
-//   ShotSound      what fired a laser, which decides which report is played
 //   IHittable      anything a shot, a turret or a click can find: the same id, and the same name,
 //                  on every peer
 //   IRaidTarget    anything a raider may come for -- a pilot's ship, a ship of a base's fleet, a
@@ -23,10 +22,6 @@ using System;
 // renders what it is told. The owner decides only its heading, where it aims, and
 // whether it is pulling the trigger -- never what the shot hits.
 // ─────────────────────────────────────────────────────────────────────────────
-// What fired a laser, which decides which report is played. Not a volume: the level lives in
-// the file (see tools/gain.ps1), so a new kind of shot is a new sound rather than a new offset.
-public enum ShotSound { Light, Fighter, Boss }
-
 public interface IHittable
 {
     // Same on every peer, so a guest can name a target to the host ("attack 1000").
@@ -53,7 +48,8 @@ public interface IHittable
     // Does a projectile at p (with pad for its own size) touch this? A circle by
     // default; a long ship answers with a capsule along its keel.
     bool Covers(Vector2 p, float pad) => p.DistanceTo(Position) <= HitRadius + pad;
-    // Missiles can be shot down, but they are never SELECTED (click or Tab).
+    // A missile (Tag.Missile) can be shot down but is never SELECTED (click or Tab); a body in
+    // flight with a hull of its own (Tag.Hulled) is picked like any hull.
     bool Selectable => true;
 }
 
@@ -121,8 +117,7 @@ public class WingDef
     public string BurstStat, RestStat;  // seconds it fights before it goes home, and rests (Strafe)
     public string AmmoStat, RearmStat;  // its magazine, and the wait to refill it. null: neither
     public string ShotSpeedStat, ShotRangeStat;   // its round, when the round is a launched one
-    public Color ShotTint;              // the beam it draws when the shot is a flash
-    public ShotSound Report;            // ...and which report is played
+    public int Beam;                    // its shot, when the shot is a flash: a row of Beam.All (its line and its note)
     public int Shots = 1;               // shots a pass (Strafe)
     public float Overshoot = 1f;        // ...carried on through the target by this many diameters
     public float Crawl = 1f;            // it keeps closing at this share of top speed while firing
@@ -151,7 +146,7 @@ public static class Wings
                 CountStat = "fighter_count", SpeedStat = "fighter_speed", RangeStat = "fighter_range",
                 IntervalStat = "fighter_interval", DamageStat = "fighter_damage",
                 TurnStat = "fighter_turn", BurstStat = "fighter_burst", RestStat = "fighter_rest",
-                ShotTint = new Color(0.7f, 0.95f, 1f), Report = ShotSound.Fighter,
+                Beam = Beam.Fighter,
                 Shots = 3, Overshoot = 1.2f, LaunchInterval = 0.83 },
 
         new() { Id = "bomber", Name = "Bomber", Way = WingWay.Strike,
@@ -320,7 +315,7 @@ public partial class Wing : Node2D
                 {
                     _cd += Carrier.Cadence(Def.IntervalStat); _shots++;
                     t.TakeDamage(S[Def.DamageStat]); Carrier.NoteCombat();
-                    Combat.Flash(Position, t.Position, Def.ShotTint, Def.Report);
+                    Combat.Flash(Position, t.Position, Def.Beam);
                 }
                 if (_shots >= Def.Shots) _f = FSt.Overshoot;
                 break;

@@ -46,10 +46,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     (float halfLength, float halfWidth) IRaidTarget.Extent => (MyArt.Length * 0.5f, MyArt.HalfWidth);
 
     // ── death: stasis, and the escape pod ───────────────────────────────────
-    public const double StasisTime = 120, ReboardHull = 0.33;
+    // 24 s in stasis, then F re-boards at a third of the hull (the owner's ruling). A party with a
+    // pilot still flying fights on meanwhile; the whole party in stasis at once fails the mission.
+    public const double StasisTime = 24, ReboardHull = 0.33;
 
     // ── "in combat": dealt or took damage in the last CombatHold seconds (host) ──
-    // Out of combat after 12 s: the one global rule (music and regeneration use it).
+    // Out of combat after 12 s: the one global rule (music and regeneration use it). The equipment
+    // base's shorter lock (Landmarks.CalmNeeded, 10 s) reads the SAME clock through CalmFor. So the
+    // game has one "last blow" with two thresholds on it, never two clocks.
     public const double CombatHold = 12;
     // Regeneration, always: 0.5% of max hull a second in combat, 3% out of it.
     public const double RegenInCombat = 0.005, RegenOutOfCombat = 0.03;
@@ -65,6 +69,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public readonly System.Collections.Generic.Dictionary<string, double> DamageBySource = new();   // host: damage taken, by source
     private double _combatT;
     public bool InCombat => _combatT > 0;
+    // SECONDS SINCE THE LAST BLOW, as far as the clock above can tell. It runs down from
+    // CombatHold, so anything longer reads as CombatHold, and a rule that needs more calm than that
+    // cannot be read off it (a smoke check holds Landmarks.CalmNeeded under CombatHold). On a
+    // guest it is the host's figure, from the host-state packet, counted down here between packets.
+    public double CalmFor => CombatHold - _combatT;
     public void NoteCombat() { if (Net.Sim) _combatT = CombatHold; }
     private double _stasis;
     public double StasisLeft => _stasis;
@@ -291,7 +300,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Sl("missile").N = (int)Stats["missile_mag"];
 
         var art = MyArt;
-        var tex = GD.Load<Texture2D>(art.Texture);
+        var tex = Assets.Load<Texture2D>(art.Texture);
         _sprite.Texture = tex;
         _sprite.Scale = Vector2.One * (art.Length / tex.GetHeight());
         _sprite.Modulate = Main;
@@ -564,11 +573,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Sl("shockwave").Cool > 0) return;
         Sl("shockwave").Cool = Cooling(Stats["wave_cooldown"]);
         float reach = (float)Stats["wave_range"], push = (float)Stats["wave_push"];
-        // Targeting.Attackable, not the raw list: a missile in flight is point defence's business,
-        // and THROWING one was worse than hitting it -- the host moved a live hostile seeker 1000 u
-        // while every guest flew its own copy along the old path, so the two peers held a damaging
-        // missile a thousand units apart.
-        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
+        // Targeting.Throwable, not the raw list: nothing in flight is thrown, a missile or a body
+        // with a hull of its own. THROWING one was worse than hitting it -- the host moved a live
+        // hostile seeker 1000 u while every guest flew its own copy along the old path, so the two
+        // peers held a damaging missile a thousand units apart.
+        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Throwable)))
         {
             if (h.Position.DistanceTo(Position) > reach) continue;
             if (TagExt.Is(h, Tag.Boss)) { (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["wave_disable"]); continue; }
@@ -606,7 +615,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             }
         }
         Fx.Line(Fx.Rail, a, b);                             // the line it threw, on every peer
-        Sfx.Laser(a, b, ShotSound.Boss);
+        Combat.Flash(a, b, Beam.Rail);                      // ...and its report, on every peer: this runs on the host alone
         Sl("railgun").Cool = Cooling(Stats["rail_cooldown"]);
     }
 

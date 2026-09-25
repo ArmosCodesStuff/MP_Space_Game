@@ -105,7 +105,7 @@ public partial class MainMenu : Node2D
         // foe's health bar) read them, and without this they keep whatever the last scene left.
         Txt.UiScale = 1f / Zoom;
         // nebula backdrop: a few large tinted patches
-        var neb = GD.Load<Texture2D>("res://nebula.png");
+        var neb = Assets.Load<Texture2D>("res://nebula.png");
         Color[] tints = { new(0.45f, 0.30f, 0.75f), new(0.25f, 0.45f, 0.80f), new(0.85f, 0.55f, 0.30f), new(0.30f, 0.75f, 0.85f) };
         for (int i = 0; i < 22; i++)
         {
@@ -116,7 +116,7 @@ public partial class MainMenu : Node2D
             AddChild(sp);
         }
         // asteroids
-        var rockTex = GD.Load<Texture2D>("res://asteroid_1.png");
+        var rockTex = Assets.Load<Texture2D>("res://asteroid_1.png");
         for (int i = 0; i < 6; i++)
         {
             var r = new Sprite2D { Texture = rockTex, ZIndex = -5 };
@@ -141,7 +141,7 @@ public partial class MainMenu : Node2D
         _cap.WarpEvery = AoeEvery - AoeWarn;      // ready again before the next area shot is called
 
         // Its turrets and shells all go through Combat, exactly as in the hub.
-        Combat.OnFlash = (a, b, c, snd) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Laser(a, b, snd); };
+        Combat.OnFlash = (a, b, beam) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Beam(a, b, Beam.Of(beam)); };
         Fx.On = r => AddChild(new FxNode { Id = r.Id, Position = r.At, To = r.To, Radius = r.Size, Time = r.Time,
                                            Hold = r.Hold, Since = r.Since, Anchor = r.Anchor, Cue = r.Cue, Strike = r.Strike });
         Combat.World = this;

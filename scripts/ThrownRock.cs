@@ -33,7 +33,7 @@ public partial class ThrownRock : Node2D
         ZIndex = 5; Position = _last = From;
         // fitted by its LONGER side, so the rock drawn is never wider than the lane or the hit it deals
         // (the art is wider than it is tall, and fitting by height drew it 20 u past the lane's edges)
-        var tex = GD.Load<Texture2D>(Variant == 0 ? "res://boss_rock_1.png" : "res://boss_rock_2.png");
+        var tex = Assets.Load<Texture2D>(Variant == 0 ? "res://boss_rock_1.png" : "res://boss_rock_2.png");
         _sprite = new Sprite2D { Texture = tex, Scale = Vector2.One * (Radius * 2f / Mathf.Max(tex.GetWidth(), tex.GetHeight())) };
         AddChild(_sprite);
     }

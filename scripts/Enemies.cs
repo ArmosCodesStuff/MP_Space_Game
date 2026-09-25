@@ -50,6 +50,10 @@ public class EnemyDef
     public double MissileDamage = 42;
     public float BlastRadius = 90f;      // how wide the blast is where it lands
     public Color Tint;
+    // WHAT ITS GUN IS SEEN AND HEARD AS: a row of Beam.All. A light fires from its nose and a heavy
+    // from its turret, but what the shot looks and sounds like is the row's. EVERY ROW NAMES ONE:
+    // row 0 is YOUR point defence, and an enemy that fell through to it would buzz like a friend.
+    public int Beam;
 
     public float Hold => Reach * 0.9f;   // posted just inside its reach, so nothing is lost to drift
     public Tag Tag => Way == EnemyWay.Standoff ? Tag.Heavy : Tag.Light;
@@ -74,37 +78,37 @@ public static class Enemies
     {
         new() { Id = "webifier", Name = "Webifier", Way = EnemyWay.Pin,
                 Texture = "res://enemy_light_fighter.png", Tint = LightTint,
-                Length = 34f, Hull = 25, Dps = 1.0, Reach = 100f },
+                Length = 34f, Hull = 25, Dps = 1.0, Reach = 100f, Beam = Beam.LightRaider },
 
         new() { Id = "gunship", Name = "Gunship", Way = EnemyWay.Standoff,
                 Texture = "res://enemy_heavy_hull.png", Tint = HeavyTint,
                 Length = 136f, HitShare = 0.3f, Hull = 100, Dps = 2.0, Reach = 150f,
-                BoostMult = 7f, Turret = true, Missiles = true },
+                BoostMult = 7f, Turret = true, Missiles = true, Beam = Beam.HeavyRaider },
 
         // ── the owner's four new hulls ──────────────────────────────────────
         // A TALON is a webifier that gave up its armour for speed: it arrives first and holds on.
         new() { Id = "talon", Name = "Talon", Way = EnemyWay.Pin,
                 Texture = "res://enemy_talon_hull.png", Tint = TalonTint,
-                Length = 40f, Hull = 18, Dps = 1.4, Cruise = 130f, Reach = 90f },
+                Length = 40f, Hull = 18, Dps = 1.4, Cruise = 130f, Reach = 90f, Beam = Beam.LightRaider },
 
         // A POD is slow and hard to shift -- it webs from further out and takes a while to kill.
         new() { Id = "pod", Name = "Pod", Way = EnemyWay.Pin,
                 Texture = "res://enemy_pod_hull.png", Tint = PodTint,
                 Length = 52f, HitShare = 0.45f, Hull = 60, Dps = 0.7, Cruise = 78f,
-                BoostMult = 3.5f, Reach = 130f },
+                BoostMult = 3.5f, Reach = 130f, Beam = Beam.LightRaider },
 
         // A CROSS is a gunship with the missile racks stripped out and the gun wound up.
         new() { Id = "cross", Name = "Cross", Way = EnemyWay.Standoff,
                 Texture = "res://enemy_cross_hull.png", Tint = CrossTint,
                 Length = 120f, HitShare = 0.34f, Hull = 130, Dps = 2.6, ShotEvery = 0.8,
-                Reach = 140f, BoostMult = 6f, Turret = true },
+                Reach = 140f, BoostMult = 6f, Turret = true, Beam = Beam.HeavyRaider },
 
         // A LANCERKIN is built on the Silver Lancer's lines: it stands further off than any of
         // them and throws the same predicted missile.
         new() { Id = "lancerkin", Name = "Lancerkin", Way = EnemyWay.Standoff,
                 Texture = "res://enemy_lancerkin_hull.png", Tint = KinTint,
                 Length = 150f, HitShare = 0.3f, Hull = 150, Dps = 1.8, ShotEvery = 1.2,
-                Reach = 260f, BoostMult = 5.5f, Turret = true, Missiles = true },
+                Reach = 260f, BoostMult = 5.5f, Turret = true, Missiles = true, Beam = Beam.HeavyRaider },
     };
 
     public static EnemyDef Of(int kind) => All[kind >= 0 && kind < All.Length ? kind : Webifier];
