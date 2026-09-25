@@ -189,5 +189,40 @@ third-party infrastructure but the Google and Cloudflare STUN rows.
   started at the top of every solo run, judged first in `WebRtcPairs` with the literal 30 check;
   `ReplyDelaysS`/`MeasureReplyWindow` deleted), tools/smoketest/run.ps1 (`-ReplyWindow` deleted),
   docs/DESIGN.md (the reply-window entry)
-- checkpoint: the J7 commit ("R1 J7: ...")
+- checkpoint: 6eef84e
 - next: J8
+
+#### J8 PRE
+- intent: new `scripts/Rendezvous.cs`, the codec half (§4): the four records, `Pack`/`Unpack` with
+  the 4-byte check, `Sdp` (the 17-line template read off SPIKE `runs\stun`, `Strip`, `Build`, the
+  candidate line), the text (`WSI`/`WSR`, Crockford base32, the self-delimiting forgiving `Find`),
+  `Fit` (the /64 rule, then rank), `IRendezvousPath` with `Id`/`Claims`/`Auto`/`Stun`/`Budget`/
+  `Measure` and `Paths = {Paste, Address}`, the clipboard seam; the J8 checks in the solo run.
+- files: scripts/Rendezvous.cs (new), tools/smoketest/SmokeTest.cs.txt, docs/plans/ledger_webrtc.md
+- from: 6eef84ef5e9ef64118927d17bef5081b121173bf
+- hashes: SmokeTest.cs.txt d48a10c19ad3b63856058e58c95f4eb3d323e516; Rendezvous.cs absent
+
+#### J8 POST
+- verdict: done; rung 1 green; `-Quick`'s build, analysers (0) and text green, xref 0 after the
+  wire-values check named `Why.Full`/`Why.Closed` (the listener, J10, uses them too). Untested at rung 3.
+- files: scripts/Rendezvous.cs (new: records, codec, `Sdp`, text, `HoldsCode`, `Fit`, the two rows,
+  `Paths`/`PathFor`, `Clipboard`); tools/smoketest/SmokeTest.cs.txt (`RtcPair.Offer`/`Answer`/
+  `OfferLines`/`AnswerLines`; the spike's bundles as literals; `Said`, `VaryRecord`, `ThroughCodec`,
+  `Refusal`, `Codes()` run at the top of `WebRtcPairs` with no plugin needed; the live-bundle check
+  after pair `a` connects)
+- decisions:
+  - D8 · **The spike's real bundles are harness literals**, the owner's internet address replaced by
+    203.0.113.7 (TEST-NET-3), so the byte-for-byte check runs on every machine (plugin or not) as
+    well as on the live pair's own bundles.
+  - D9 · **Names clip to 16 bytes, build ids to 24** (§4.1's bullet "clipped to 16 bytes"; the
+    table's "1+n <= 16" read as the field's text, not its length byte). The shared name rule's "empty
+    -> the default name" stays R2's (it lands with the rule's move out of `Hub.NetIdentity`).
+  - D10 · **An IPv6 non-host candidate's tail is `raddr :: rport 0`** (RFC 8839); libjuice's own is
+    unread (§4.1 says so). Only an IPv6 server-reflexive would show it, and no network here has one.
+  - D11 · **Candidate lines are strict like SDP lines**: anything but `raddr x rport y` after the
+    type is refused by name (a plugin upgrade that adds `generation 0` fails the solo run, not the field).
+  - D12 · **A damaged code is claimed by no row** (`HoldsCode`: a prefix and 64+ code characters, more
+    than any host-name label holds), so R3's JOIN box can say "damaged" instead of looking it up as a
+    host name.
+- checkpoint: the J8 commit
+- next: J9

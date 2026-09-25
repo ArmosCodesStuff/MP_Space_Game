@@ -219,6 +219,11 @@ public partial class _Test : Node
             HostConn.CreateOffer();
         }
         public static ulong Now => Time.GetTicksMsec();
+        // the bundles exactly as the plugin made them, for the codec's byte-for-byte check
+        public string Offer => _offer;
+        public string Answer => _answer;
+        public string[] OfferLines => _offerCands.Select(c => c.name).ToArray();
+        public string[] AnswerLines => _answerCands.Select(c => c.name).ToArray();
         readonly ulong _born = Now;
         void Seen() { Handlers++; if (OS.GetThreadCallerId() != OS.GetMainThreadId()) OffMain++; }
         public bool Connected => HostSawAt > 0 && GuestSawAt > 0;
@@ -296,6 +301,222 @@ public partial class _Test : Node
         return seen;
     }
 
+    // ── WEBRTC, R1: THE CODES (network_webrtc.md §4, §10.4 R1) ──────────────────────────────────────
+    // THE SPIKE'S REAL BUNDLES (runs\stun offer_2.json and answer_2.json), the internet address replaced
+    // by a documentation one (203.0.113.7): what the plugin makes, as literals the codec is held to.
+    const string SpikeOffer = "v=0\r\no=rtc 2614788236 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic:WMS *\r\na=ice-options:ice2,trickle\r\n"
+        + "a=fingerprint:sha-256 45:C6:28:38:84:9D:AD:28:5E:93:1A:E8:88:0C:A7:50:12:17:F4:92:DE:24:53:13:AC:1E:F8:85:80:13:20:99\r\n"
+        + "m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=mid:0\r\na=sendrecv\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n"
+        + "a=setup:actpass\r\na=ice-ufrag:giTP\r\na=ice-pwd:4g46IhzHEvYFD/0EIUDle1\r\n";
+    static readonly string[] SpikeOfferLines = { "candidate:1 1 UDP 2114977791 192.168.0.33 54617 typ host", "candidate:2 1 UDP 1678769919 203.0.113.7 54617 typ srflx raddr 0.0.0.0 rport 0" };
+    const string SpikeAnswer = "v=0\r\no=rtc 2634790502 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic:WMS *\r\na=ice-options:ice2,trickle\r\n"
+        + "a=fingerprint:sha-256 07:9A:D7:15:4A:4C:26:4A:5A:22:A8:45:65:01:87:E7:2A:50:2A:E2:39:EC:20:B0:A6:B6:84:3D:E0:D5:8F:B1\r\n"
+        + "m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=mid:0\r\na=sendrecv\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n"
+        + "a=setup:active\r\na=ice-ufrag:BOeX\r\na=ice-pwd:ZOIsPAdHc0dSoJIIX6y8wQ\r\n";
+    static readonly string[] SpikeAnswerLines = { "candidate:1 1 UDP 2114977791 192.168.0.33 54581 typ host", "candidate:3 1 UDP 1678769663 203.0.113.7 54581 typ srflx raddr 0.0.0.0 rport 0" };
+
+    // A record as one line of text, every field, for comparing two.
+    static string Said(Rendezvous.Record r) =>
+        $"{r.Kind} setup {r.Setup} nostun {r.NoStun} proto {r.Proto:x8} id {r.Id} guest {r.Guest} why {r.Why} build '{r.Build}' name '{r.Name}' "
+        + $"ice {r.Ufrag}/{r.Pwd} fp {Convert.ToHexString(r.Fingerprint)} [{string.Join(" | ", r.Candidates.Select(Rendezvous.Sdp.Line))}]";
+    const string CredChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static string VaryCred(int n) => new(Enumerable.Range(0, n).Select(_ => CredChars[Rng.RandiRange(0, 63)]).ToArray());
+    static System.Net.IPAddress VaryIp(bool v6)
+    {
+        var b = new byte[v6 ? 16 : 4];
+        for (int i = 0; i < b.Length; i++) b[i] = (byte)Rng.RandiRange(0, 255);
+        if (v6) b[0] = (byte)(0x20 | (b[0] & 0x1F));           // global unicast, 2000::/3
+        return new System.Net.IPAddress(b);
+    }
+    static Rendezvous.Candidate VaryCandidate(Rendezvous.Via type, System.Net.IPAddress at) =>
+        new(type, Rng.RandiRange(0, 255), Rng.Randi(), Rng.RandiRange(1, 65535), at);
+    // A record of a kind with only the fields that kind carries (§4.1), every one of them drawn.
+    static Rendezvous.Record VaryRecord(Rendezvous.Kind kind)
+    {
+        var names = new[] { "Harbour8", "Ølaf", "Kasia Ż", "x", "Twelve Chars" };
+        var r = new Rendezvous.Record { Kind = kind };
+        string build = Rng.RandiRange(0, 1) == 0 ? "dev" : "2026.09.25-1a2b3c4";
+        switch (kind)
+        {
+            case Rendezvous.Kind.Knock: r.Proto = (int)Rng.Randi(); r.Guest = Rng.Randi(); r.Build = build; r.Name = names[Rng.RandiRange(0, names.Length - 1)]; return r;
+            case Rendezvous.Kind.Refuse: r.Why = (Rendezvous.Why)Rng.RandiRange(0, 3); r.Proto = (int)Rng.Randi(); r.Build = build; return r;
+        }
+        r.Setup = kind == Rendezvous.Kind.Invite ? 0 : 1; r.NoStun = Rng.RandiRange(0, 1) == 1;
+        r.Id = Rng.RandiRange(2, int.MaxValue); r.Name = names[Rng.RandiRange(0, names.Length - 1)];
+        if (kind == Rendezvous.Kind.Invite) { r.Proto = (int)Rng.Randi(); r.Build = build; }
+        r.Ufrag = VaryCred(4); r.Pwd = VaryCred(22);
+        for (int i = 0; i < 32; i++) r.Fingerprint[i] = (byte)Rng.RandiRange(0, 255);
+        int n = Rng.RandiRange(1, 5);
+        for (int i = 0; i < n; i++) r.Candidates.Add(VaryCandidate((Rendezvous.Via)Rng.RandiRange(0, 3), VaryIp(Rng.RandiRange(0, 2) == 0)));
+        return r;
+    }
+
+    // ONE BUNDLE THROUGH THE WHOLE CODEC, as a code travels: stripped, packed, written as text, found
+    // in a message, rebuilt. The rebuilt SDP must equal the plugin's own byte for byte but the o= id
+    // (fresh each time, and meaningless to the far end), and every candidate line byte for byte. "" when
+    // it does; otherwise what differs.
+    static string ThroughCodec(Rendezvous.Kind kind, string sdp, string[] lines)
+    {
+        var r = Rendezvous.Sdp.Strip(kind, sdp, lines);
+        r.Id = Rng.RandiRange(2, int.MaxValue); r.Name = "Harbour8";
+        if (kind == Rendezvous.Kind.Invite) { r.Proto = Net.Protocol; r.Build = Game.Build; }
+        var back = Rendezvous.Find($"here you go: {Rendezvous.Encode(r)} (thanks)", kind);
+        if (back == null) return "the code was not found in its own message";
+        var was = sdp.Split("\r\n"); var now = Rendezvous.Sdp.Build(back).Split("\r\n");
+        var oLine = new System.Text.RegularExpressions.Regex(@"^o=rtc [0-9]+ 0 IN IP4 127\.0\.0\.1$");
+        var diff = new List<string>();
+        for (int i = 0; i < Math.Max(was.Length, now.Length); i++)
+        {
+            string x = i < was.Length ? was[i] : "(none)", y = i < now.Length ? now[i] : "(none)";
+            if (x != y && !(i == 1 && oLine.IsMatch(x) && oLine.IsMatch(y))) diff.Add($"line {i + 1} \"{x}\" came back \"{y}\"");
+        }
+        var rebuilt = back.Candidates.Select(Rendezvous.Sdp.Line).ToList();
+        for (int i = 0; i < Math.Max(lines.Length, rebuilt.Count); i++)
+            if ((i < lines.Length ? lines[i] : "(none)") != (i < rebuilt.Count ? rebuilt[i] : "(none)"))
+                diff.Add($"candidate \"{(i < lines.Length ? lines[i] : "(none)")}\" came back \"{(i < rebuilt.Count ? rebuilt[i] : "(none)")}\"");
+        return string.Join("; ", diff);
+    }
+    // What a refusal says, or "" when there was none.
+    static string Refusal(Action act)
+    {
+        try { act(); return ""; }
+        catch (FormatException e) { return e.Message; }
+    }
+
+    void Codes()
+    {
+        var kinds = new[] { Rendezvous.Kind.Invite, Rendezvous.Kind.Reply, Rendezvous.Kind.Knock, Rendezvous.Kind.Refuse };
+        // EVERY KIND COMES BACK, field for field, three varied records of each
+        var trips = new List<string>();
+        for (int n = 0; n < 3; n++)
+            foreach (var k in kinds)
+            {
+                var r = VaryRecord(k);
+                string back;
+                try { back = Said(Rendezvous.Unpack(Rendezvous.Pack(r))); } catch (FormatException e) { back = e.Message; }
+                if (back != Said(r)) trips.Add($"{Said(r)} came back {back}");
+            }
+        Check(trips.Count == 0, $"invite, reply, knock and refuse each come back from Pack and Unpack field for field, three varied records of each ({(trips.Count == 0 ? "12 of 12" : string.Join("; ", trips))})");
+        // the wire values the format names (§4.1): the kind nibble, and a refusal's reason byte
+        Check((int)Rendezvous.Kind.Invite == 1 && (int)Rendezvous.Kind.Reply == 2 && (int)Rendezvous.Kind.Knock == 3 && (int)Rendezvous.Kind.Refuse == 4
+              && (int)Rendezvous.Why.Full == 0 && (int)Rendezvous.Why.Build == 1 && (int)Rendezvous.Why.Rate == 2 && (int)Rendezvous.Why.Closed == 3
+              && Rendezvous.Format == 1 && Rendezvous.Pack(VaryRecord(Rendezvous.Kind.Knock))[0] == 0x31,
+              "a record's first byte is its kind and the format (a knock: 0x31), and a refusal says full, build, rate or closed as 0-3 (§4.1)");
+
+        // THE SIZES the plan's model gives for this PC's shape (§4.4 A: one LAN address and one
+        // server-reflexive, a release build id of 18 characters, an 8-character name)
+        var inv = Rendezvous.Sdp.Strip(Rendezvous.Kind.Invite, SpikeOffer, SpikeOfferLines);
+        inv.Id = Rng.RandiRange(2, int.MaxValue); inv.Proto = Net.Protocol; inv.Build = "2026.09.25-1a2b3c4"; inv.Name = "Harbour8";
+        var rep = Rendezvous.Sdp.Strip(Rendezvous.Kind.Reply, SpikeAnswer, SpikeAnswerLines);
+        rep.Id = inv.Id; rep.Name = "Harbour8";
+        int invB = Rendezvous.Pack(inv).Length, repB = Rendezvous.Pack(rep).Length, invC = Rendezvous.Encode(inv).Length, repC = Rendezvous.Encode(rep).Length;
+        Check(invB == 121 && repB == 98 && invC == 197 && repC == 160,
+              $"the spike's bundles pack to the plan's sizes: invite 121 B and 197 characters, reply 98 B and 160 (§4.4 A; {invB} B {invC}, {repB} B {repC})");
+
+        // A NAME is clipped to 16 bytes at a character boundary: the ø of "Ølaf, the Ångøra" would end at 17
+        var named = VaryRecord(Rendezvous.Kind.Reply); named.Name = "Ølaf, the Ångøra";
+        string clipped = Rendezvous.Unpack(Rendezvous.Pack(named)).Name;
+        Check(clipped == "Ølaf, the Ång", $"a name is carried as at most 16 bytes, never half a character (\"{clipped}\")");
+
+        // BYTE FOR BYTE: the spike's real bundles, stripped to a code and rebuilt
+        string offerDiff = ThroughCodec(Rendezvous.Kind.Invite, SpikeOffer, SpikeOfferLines), answerDiff = ThroughCodec(Rendezvous.Kind.Reply, SpikeAnswer, SpikeAnswerLines);
+        Check(offerDiff == "" && answerDiff == "",
+              $"the spike's offer and answer, through the codec and back, equal the plugin's own byte for byte but the o= id ({(offerDiff + answerDiff == "" ? "17 lines and 2 candidates each" : offerDiff + " " + answerDiff)})");
+
+        // WHAT A CODE CANNOT CARRY is refused, and the refusal names it
+        string unknown = Refusal(() => Rendezvous.Sdp.Strip(Rendezvous.Kind.Invite, SpikeOffer.Replace("a=mid:0\r\n", "a=mid:0\r\na=extmap-allow-mixed\r\n"), SpikeOfferLines));
+        Check(unknown.Contains("\"a=extmap-allow-mixed\""), $"an SDP line the template does not know is refused, by name ({unknown})");
+        int big = Rng.RandiRange(256, 999);
+        string foundation = Refusal(() => Rendezvous.Sdp.Parse($"candidate:{big} 1 UDP 2114977791 192.168.0.33 54617 typ host"));
+        Check(foundation.Contains("over 255"), $"a candidate foundation over 255 ({big}) is refused ({foundation})");
+        string cred = Refusal(() => Rendezvous.Sdp.Strip(Rendezvous.Kind.Invite, SpikeOffer.Replace("a=ice-ufrag:giTP", "a=ice-ufrag:gi_P"), SpikeOfferLines));
+        Check(cred.Contains("'_'"), $"an ICE credential with a character outside base64 is refused, naming it ({cred})");
+        string sha1 = Refusal(() => Rendezvous.Sdp.Strip(Rendezvous.Kind.Invite,
+            SpikeOffer.Replace("a=fingerprint:sha-256 45:C6:28:38:84:9D:AD:28:5E:93:1A:E8:88:0C:A7:50:12:17:F4:92:DE:24:53:13:AC:1E:F8:85:80:13:20:99", "a=fingerprint:sha-1 45:C6:28:38:84:9D:AD:28:5E:93:1A:E8:88:0C:A7:50:12:17:F4:92"), SpikeOfferLines));
+        Check(sha1.Contains("sha-256"), $"a fingerprint that is not sha-256 is refused ({sha1})");
+
+        // THE TEXT (§4.3), three varied codes. A code whose text holds no 0 or no 1 is drawn again, so
+        // the I/L/O check always has something to prove.
+        var textFails = new List<string>();
+        for (int n = 0; n < 3; n++)
+        {
+            Rendezvous.Record r; string code;
+            do { r = VaryRecord(n == 1 ? Rendezvous.Kind.Invite : Rendezvous.Kind.Reply); code = Rendezvous.Encode(r); }
+            while (!code[3..].Contains('0') || !code[3..].Contains('1'));
+            string Back(string text) => Rendezvous.Find(text) is { } f ? Said(f) : "nothing";
+            if (Back(code) != Said(r)) textFails.Add($"round trip: {Back(code)}");
+            // a whole copied Discord message: a name holding "wsr" before the code, the time, line
+            // breaks, a code hand-copied over two lines with a hyphen, and words after it
+            int cut = Rng.RandiRange(10, code.Length - 10);
+            string msg = $"Swsrdna the Brave — Today at {Rng.RandiRange(1, 12)}:{Rng.RandiRange(10, 59)} PM\nhere it is, paste it in:\n{code[..cut]}-\n{code[cut..]}\nthanks! wsr = warships reply btw";
+            if (Back(msg) != Said(r)) textFails.Add($"in a message: {Back(msg)}");
+            // one changed character, anywhere but the last (whose low bits can be padding)
+            int at = Rng.RandiRange(3, code.Length - 2);
+            int was = Rendezvous.Crockford.IndexOf(code[at]);
+            char other = Rendezvous.Crockford[(was + Rng.RandiRange(1, 31)) % 32];
+            string damaged = code[..at] + other + code[(at + 1)..];
+            if (Rendezvous.Find(damaged) != null) textFails.Add($"a changed character at {at} ({code[at]} to {other}) still read");
+            if (Back(code.ToLowerInvariant()) != Said(r)) textFails.Add("lower case did not read");
+            int ones = 0;
+            string retyped = new(code.Select((c, i) => i < 3 ? c : c == '1' ? (ones++ % 2 == 0 ? 'I' : 'L') : c == '0' ? 'O' : c).ToArray());
+            if (Back(retyped) != Said(r)) textFails.Add("I, L and O for 1, 1 and 0 did not read");
+            // the rows: a code is the paste row's, never the address row's, and a damaged one neither's
+            foreach (var t in new[] { code, msg })
+                if (Rendezvous.PathFor(t) != Rendezvous.Paste || Rendezvous.Address.Claims(t)) textFails.Add($"the {Rendezvous.PathFor(t)?.Id ?? "no"} row claimed a code");
+            if (Rendezvous.PathFor(damaged) != null) textFails.Add($"the {Rendezvous.PathFor(damaged).Id} row claimed a damaged code");
+        }
+        Check(textFails.Count == 0,
+              $"a code reads back whole, inside a Discord message, in lower case and with I, L, O for 1, 1, 0; one changed character does not; every code is the paste row's (three varied: {(textFails.Count == 0 ? "all" : string.Join("; ", textFails))})");
+        var typed = new[] { $"192.168.{Rng.RandiRange(0, 255)}.{Rng.RandiRange(1, 254)}", $"26.{Rng.RandiRange(0, 255)}.{Rng.RandiRange(0, 255)}.{Rng.RandiRange(1, 254)}:{Rng.RandiRange(1024, 65535)}", "[2001:db8::7]:27016", "gamebox.local" };
+        var misread = typed.Where(t => Rendezvous.PathFor(t) != Rendezvous.Address || Rendezvous.Paste.Claims(t)).ToList();
+        Check(misread.Count == 0, $"a typed address is the address row's, and never the paste row's ({(misread.Count == 0 ? string.Join(", ", typed) : "misread: " + string.Join(", ", misread))})");
+        Check(Rendezvous.Paste.Id == "paste" && !Rendezvous.Paste.Auto && Rendezvous.Paste.Stun && Rendezvous.Paste.Budget == 400
+              && Rendezvous.Address.Id == "address" && Rendezvous.Address.Auto && !Rendezvous.Address.Stun && Rendezvous.Address.Budget == 8192,
+              "the paste row walks the STUN rows, never signals again by itself, and holds a code to 400 characters; the address row gathers without STUN, retries by itself, and reads 8,192 B");
+
+        // THE FIT RULE (§4.3, §4.4 E): 10 IPv4 host addresses (the LAN, a Radmin one and 8 others), 9
+        // global IPv6 on 9 /64s and a server-reflexive: 20 candidates, in a varied order, into 400
+        // characters. The rest goes first, then IPv6; the invite's 248 B then hold the three that matter
+        // and 4 IPv6 (97 B + 12 an IPv4 + 24 an IPv6, the plan's layout).
+        var lan = VaryIp(false); var radmin = VaryIp(false); var srflx = VaryCandidate(Rendezvous.Via.Srflx, VaryIp(false));
+        var shapeE = new Rendezvous.Record { Kind = Rendezvous.Kind.Invite, Id = 7, Proto = 1, Build = "2026.09.25-1a2b3c4", Name = "Harbour8", Ufrag = VaryCred(4), Pwd = VaryCred(22) };
+        shapeE.Candidates.Add(srflx);
+        shapeE.Candidates.Add(VaryCandidate(Rendezvous.Via.Host, lan));
+        shapeE.Candidates.Add(VaryCandidate(Rendezvous.Via.Host, radmin));
+        for (int i = 0; i < 8; i++) shapeE.Candidates.Add(VaryCandidate(Rendezvous.Via.Host, VaryIp(false)));
+        for (int i = 0; i < 9; i++)
+        {
+            var v6 = VaryIp(true).GetAddressBytes(); v6[7] = (byte)i;       // 9 different /64s
+            shapeE.Candidates.Add(VaryCandidate(Rendezvous.Via.Host, new System.Net.IPAddress(v6)));
+        }
+        shapeE.Candidates = shapeE.Candidates.OrderBy(_ => Rng.Randi()).ToList();
+        int fitDropped = Rendezvous.Fit(shapeE, Rendezvous.Paste, new List<System.Net.IPAddress> { radmin }, lan);
+        int fitLength = Rendezvous.Encode(shapeE).Length, v6Kept = shapeE.Candidates.Count(c => c.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6);
+        Check(fitLength <= 400 && shapeE.Candidates.Contains(srflx) && shapeE.Candidates.Any(c => c.Address.Equals(lan)) && shapeE.Candidates.Any(c => c.Address.Equals(radmin))
+              && v6Kept == 4 && shapeE.Candidates.Count == 7 && fitDropped == 13,
+              $"20 candidates fit 400 characters with the server-reflexive, the overlay and the LAN address kept, and 4 IPv6 (§4.4 E: {fitLength} characters, {shapeE.Candidates.Count} kept, {v6Kept} IPv6, {fitDropped} dropped)");
+        // two IPv6 on one /64 keep one, fit or not; one on another /64 stays
+        var a64 = VaryIp(true).GetAddressBytes(); var b64 = (byte[])a64.Clone(); var c64 = (byte[])a64.Clone();
+        b64[15] ^= 0x5A; b64[12] ^= 0x33; c64[7] ^= 0x01;
+        var small = VaryRecord(Rendezvous.Kind.Reply);
+        var first6 = VaryCandidate(Rendezvous.Via.Host, new System.Net.IPAddress(a64));
+        small.Candidates = new List<Rendezvous.Candidate> { VaryCandidate(Rendezvous.Via.Host, lan), first6, VaryCandidate(Rendezvous.Via.Host, new System.Net.IPAddress(b64)),
+                                                            VaryCandidate(Rendezvous.Via.Host, new System.Net.IPAddress(c64)), srflx };
+        int smallDropped = Rendezvous.Fit(small, Rendezvous.Paste, new List<System.Net.IPAddress>(), lan);
+        Check(smallDropped == 1 && small.Candidates.Count == 4 && small.Candidates.Contains(first6) && Rendezvous.Encode(small).Length <= 400,
+              $"two IPv6 addresses on one /64 keep the first, though the code fits; one on another /64 stays ({smallDropped} dropped, {small.Candidates.Count} kept)");
+
+        // THE SEAMS ARE MUTABLE, so they stay out of the build's fingerprint: swapped, it is the same
+        var fingerprint = typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, Type.EmptyTypes);
+        var clipField = typeof(Rendezvous).GetField(nameof(Rendezvous.Clipboard), BindingFlags.Public | BindingFlags.Static);
+        var clipWas = Rendezvous.Clipboard;
+        Rendezvous.Clipboard = () => "swapped";
+        int swapped = (int)fingerprint.Invoke(null, null);
+        Rendezvous.Clipboard = clipWas;
+        Check(clipField != null && !clipField.IsInitOnly && !clipField.IsLiteral && swapped == Net.Protocol,
+              $"Rendezvous.Clipboard is mutable and outside the build's fingerprint (swapped: {swapped:x8}, the build's {Net.Protocol:x8})");
+    }
+
     async Task WebRtcPairs()
     {
         // the number every friend's countdown shows, proved against the measured literal here; the
@@ -307,6 +528,9 @@ public partial class _Test : Node
             Check(w.connected && w.appliedAfter >= Link.ReplyWindowS * 1000L && w.upAfter >= 0 && w.upAfter <= 2000,
                   $"a host that takes the reply {Link.ReplyWindowS} s after the friend made it still connects, within 2 s of taking it (taken after {w.appliedAfter} ms, connected {w.upAfter} ms later; {w.stage})");
         }
+        // the codec needs no plugin: it runs on every machine
+        try { Codes(); }
+        catch (Exception ex) { Check(false, $"the codec checks threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         // THE PLUGIN LOADED, asked by the literal names the spike read (SPIKE Q1), so the row is
         // proved against them here and every other check reads the row.
         bool loaded = GDExtensionManager.GetLoadedExtensions().Contains("res://addons/webrtc_native/webrtc_native.gdextension");
@@ -329,6 +553,13 @@ public partial class _Test : Node
         bool up = await RtcUntil(() => a.Connected, 5000, a);
         Check(up, $"an in-process pair connects, the host offering, bundles sealed and swapped whole ({RtcPair.Now - t0} ms, id {a.Id}{(up ? "" : "; " + a.Stage())})");
         if (!up) { a.Free(); return; }
+        // THE CODEC ON THIS PC'S OWN BUNDLES (§4.2, §10.4 R1): the live pair's offer and answer,
+        // stripped to a code and rebuilt, equal the plugin's own byte for byte but the o= id
+        string liveOffer, liveAnswer;
+        try { liveOffer = ThroughCodec(Rendezvous.Kind.Invite, a.Offer, a.OfferLines); } catch (FormatException ex) { liveOffer = "refused: " + ex.Message; }
+        try { liveAnswer = ThroughCodec(Rendezvous.Kind.Reply, a.Answer, a.AnswerLines); } catch (FormatException ex) { liveAnswer = "refused: " + ex.Message; }
+        Check(liveOffer == "" && liveAnswer == "",
+              $"the live pair's offer and answer, through the codec and back, equal the plugin's own byte for byte but the o= id ({(liveOffer + liveAnswer == "" ? $"{a.OfferLines.Length} and {a.AnswerLines.Length} candidates: {string.Join(" | ", a.OfferLines)}" : liveOffer + " " + liveAnswer)})");
         // every row's data channel open at both ends -- 15: channel 0's three and the 12 above -- and
         // every one of them reliable whatever the row asked for (Godot writes maxPacketLifetime, the
         // plugin reads maxPacketLifeTime: §2.1), which is why each row has its own
