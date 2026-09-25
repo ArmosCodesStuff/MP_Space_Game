@@ -60,3 +60,13 @@ raid squad ids + "4200 u" text. Frames: 49a_squad_inbound, 49b_squad_lock_lines,
 49_heavy_waiting_missile). Deleted: Raider.HeavyReach, Boss escorts/EscortsAt/LaunchEscorts, Raider escort/patrol.
 Known broken (for CHANGES): a stretched wind-up replaces the host's lane; a guest keeps its first lane (its
 strike sound early). engine-unproven: rungs owed in the final test phase (solo x2, screens: 49a/49b/49).
+## J3 PRE -- tier opus -- bounty_adds (roster H,L,L,L, AddsFloor, FormFor 10, boss multipliers), Raids.TickGarrison (Hub's clock moved), slot arrival by hull or k x 30 s, 30 s refill with the same kinds. HEAD 8a0e732. Files: Waves 802bfb40, Raids 786e09a1, Squads 6f64ccb8, Hub f881e921, SmokeTest 1d09ef15.
+## J3 POST -- done. typecheck 0 errors; quick ALL PASSED (re-run owed to the slot-Due tidy, a one-line change;
+J4's quick covers it). Hub hunk: TickArena's garrison clock -> _raids.TickGarrison, the two fields gone, one face
+RestartGarrison. Raids.Held (static) holds the arena clock for the harness. Raider.Worth set at the spawn (first
+fill only; paid in J4). Checks new: RaidsAddsTableChecks (N11 schedule + 1..60 sweep, Rusty floor, N12
+thresholds by literal, slot kinds, form-up distances 2600/3250/3040/1729/2940/2910, L18 P2 multipliers, only
+bounty_adds pays, N14 routing); RaidsArenaAddsChecks (live L1: squad wave 1 of 2 webifiers at 2600 +-5% in
+formation 9 s; N16 an add's web starts the beam; N13 refill empty at +29.5, same kinds at +30.5, Worth 0,
+never above the roster). The Solo arena holds the adds while the boss's own moves are tested.
+engine-unproven: rungs owed in the final test phase (solo x2).

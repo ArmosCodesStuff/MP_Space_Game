@@ -72,6 +72,17 @@ public static class Squads
     public static readonly SquadDoctrine Gank = new() { Id = "gank", Pick = SquadPick.Loneliest, Prefer = Tag.Player, Spread = true };
     public static readonly SquadDoctrine[] All = { Lone, Patrol, Gank };
 
+    // FOR A CREW NOT YET BUILT (Raids' FormFor placement): the pace of its slowest, and its commit
+    // range -- the smallest among its pinners, or among all of them with none.
+    public static float PaceOf(IEnumerable<EnemyDef> crew, double agility = 1) =>
+        crew.Select(d => d.Cruise * (float)agility).DefaultIfEmpty(0f).Min();
+    public static float CommitOf(IEnumerable<EnemyDef> crew)
+    {
+        var all = crew.ToList();
+        var pin = all.Where(d => d.Cc != null).ToList();
+        return (pin.Count > 0 ? pin : all).Select(d => d.Cruise * d.BoostMult * (float)d.BoostTime + d.Reach).DefaultIfEmpty(0f).Min();
+    }
+
     // THE PINNERS ON A TARGET RIGHT NOW: how many hold it with a status, and how much of their
     // ROWS' hull is left on them (Def.Hull x Hp / MaxHull -- a level scales hull and the pilot's
     // guns alike, so the row's figure is the strip at every level). A boss's escape floor reads it.

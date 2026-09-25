@@ -211,7 +211,6 @@ public partial class Hub : Node2D
     // reads this and names no kind (Missions.Kinds[].Quarry).
     public IQuarry Quarry => Missions.KindOf(Missions.Kind).Quarry?.Invoke(this);
     private double _arenaEndT = -1;                         // the FAILURE clock only: a wiped party home in 3 s
-    private double _garrisonT; private int _garrisonWaves;  // the mission row's own wave clock, in the arena
     public bool MissionWon { get; private set; }
     // THE PARTY'S VOTES. READY (launch a mission) and RETURN (leave a won arena) are ONE
     // mechanic with a row each (Votes.cs). The comment that stood here said they were kept apart
@@ -1031,16 +1030,8 @@ public partial class Hub : Node2D
         // these lines start throwing. See DESIGN.md -> Traps.
         if (!Net.IsHost) return;
         Yard.TripClock += delta;                              // what the base is missing, in game time
-        // THE MISSION'S OWN GARRISON, on its row's clock: an escort's schedule (a first wave, then
-        // one every so often -- Economy.EscortFirstWave / EscortWaveEvery is the Yard's version of
-        // the same) run in the arena, at FULL strength. A row with no clock brings none, which is
-        // every bounty.
-        var kind = Missions.KindOf(Missions.Kind);
-        if (!MissionWon && kind.WaveEvery > 0)
-        {
-            _garrisonT += delta;
-            if (_garrisonT >= kind.FirstWave + _garrisonWaves * kind.WaveEvery) GarrisonWave(ArenaCentre, _garrisonWaves++);
-        }
+        // THE MISSION'S OWN GARRISON -- a siege's waves, a bounty's adds -- on its row's clock (Raids)
+        if (!MissionWon) _raids.TickGarrison(delta);
         // the whole party in stasis at once: the mission fails, everyone goes home
         if (!MissionWon && _arenaEndT < 0 && _ships.Count > 0 && _ships.Values.All(s => IsInstanceValid(s) && !s.Alive)) _arenaEndT = 3.0;
         if (_arenaEndT >= 0 && (_arenaEndT -= delta) <= 0)
@@ -1238,6 +1229,7 @@ public partial class Hub : Node2D
     }
     public IReadOnlyList<Squad> Squads => _raids.LiveSquads;
     public Squad FormSquad(SquadDoctrine doctrine, Vector2 at, float heading = 0f) => _raids.Form(doctrine, at, 0, heading);
+    public void RestartGarrison() => _raids.RestartGarrison();
     public PostBook Posts => _raids.Posts;
     public void RaiderDown(Raider r) => Down(Spawns.Raider, r, burst: true, (float)System.Math.Max(0, r.Hp));
 

@@ -32,6 +32,7 @@ using System.Collections.Generic;
 //   Doctrine      how its squads fly (Squads.All; null: patrol)
 //   Mission       a Garrison row: which mission kind it answers (null: any)
 //   Exp, FormFor  what a kill pays (x EnemyDef.Exp; 0 nothing), and seconds of form-up before commit
+//   Roster        a boss fight's adds: how many the level brings (null: a wave, sent and forgotten)
 //   HullShare     the share of its row's hull each of them is built with
 //   Strength      where its hull-and-damage multiplier comes from
 //   Agility       ...and its speed and turning
@@ -97,6 +98,7 @@ public sealed class WaveBrief
     public Vector2 Anchor;        // the point a Fan is measured to, and a Spot sits on
     public Node2D Quarry;         // the one thing it hunts, or null for whatever it finds
     public string Mission;        // the mission kind flying (Missions.Kinds[].Id), for a Garrison row
+    public int Heavies, Lights;   // a rostered squad's share of the roster (Waves.Deal), for its crew's counts
 }
 
 public sealed class WaveDef
@@ -128,6 +130,12 @@ public sealed class WaveDef
     public double FormFor;
     // the share of its row's hull each of them is built with (null: 1)
     public Func<WaveBrief, double> HullShare;
+    // A ROSTER (a boss fight's adds): how many enemies the level brings in all. Non-null makes the
+    // row a set of SLOTS the arena's clock keeps filled (Raids.TickGarrison) rather than a wave sent
+    // and forgotten: Waves.Deal cuts the roster into squads, slot k comes at k x the mission's
+    // WaveEvery or when the boss's hull falls to 1 - k/slots, and a wiped slot returns WaveEvery later
+    // with the same kinds, paying nothing.
+    public Func<WaveBrief, int> Roster;
     public Func<WaveBrief, double> Strength;      // null: x1
     public Func<WaveBrief, double> Agility;       // null: x1
 }
@@ -272,6 +280,22 @@ public static class Waves
                 Crew = new[] { Patrol[0], Patrol[1],
                                Named(Enemies.Gunship, _ => 1, new Vector2(0f, 160f), Vector2.Zero) } },
 
+        // A BOSS FIGHT'S ADDS (raids v2, owner's rulings): N(L) enemies -- none to L5, one at L6 and
+        // one more every 3 levels to 3 heavies + 9 lights at L39 -- dealt H, L, L, L into squads of a
+        // standoff and three pinners; the boss's first squad brings at least its AddsFloor pinners from
+        // level 1 (the Rusty Bucket's two beam escorts, now its squad wave 1). Each squad draws the
+        // kinds of its SLOT (slot 1 gunship + webifiers, 2 cross + talons, 3 lancerkin + pods), hunts
+        // the loneliest pilot, forms up 10 s of its pace outside its commit range on a fan off the
+        // party -> boss line, and takes the boss's own multipliers. A first fill pays EXP; a refill
+        // never does.
+        new() { Id = "bounty_adds", Trigger = WaveTrigger.Garrison, Mission = "bounty",
+                Roster = b => AddsAt(b.Level), Doctrine = Squads.Gank, FormFor = 10, Exp = 1,
+                Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
+                Strength = b => Missions.DamageMult(b.Level, b.Pilots),
+                HullShare = b => Missions.HullMult(b.Level, b.Pilots) / Missions.DamageMult(b.Level, b.Pilots),
+                Crew = new[] { Draw(EnemyWay.Standoff, 0, b => b.Heavies, new Vector2(0f, 60f), Vector2.Zero),
+                               Draw(EnemyWay.Pin, 0, b => b.Lights, new Vector2(0f, -40f), new Vector2(60f, 0f), 30f) } },
+
         // A BLOCKADE -- the plain squad, sitting ON a lane 80% of the way out (Lanes.Stand) and
         // holding a tight ring THERE rather than the perimeter round the base. That is the whole
         // difference between a blockade and a patrol, and it is one field. At the base owner's own
@@ -291,6 +315,29 @@ public static class Waves
                 Crew = new[] { Patrol[0], Patrol[1],
                                Named(Enemies.Gunship, _ => 1, new Vector2(0f, 160f), Vector2.Zero) } },
     };
+
+    // ── THE ADDS' ROSTER ──────────────────────────────────────────────────
+    // N(L): none under level 6, then one more every 3 levels, 12 at the most (3 heavies + 9 lights at L39)
+    public const int AddsFrom = 6, AddsEvery = 3, AddsMax = 12, SquadSize = 4;
+    public static int AddsAt(int level) => level < AddsFrom ? 0 : Math.Min(AddsMax, (level - AddsFrom) / AddsEvery + 1);
+    // DEALT H, L, L, L, H, L, L, L, ...: squad k is (its heavy, its lights). The first squad brings at
+    // least `floor` lights -- a squad of lights alone when the roster brings nothing yet.
+    public static List<(int heavies, int lights)> Deal(int n, int floor = 0)
+    {
+        var squads = new List<(int, int)>();
+        for (int k = 0; k * SquadSize < n; k++)
+            squads.Add((1, Math.Min(SquadSize - 1, n - k * SquadSize - 1)));
+        if (floor > 0)
+        {
+            if (squads.Count == 0) squads.Add((0, floor));
+            else squads[0] = (squads[0].Item1, Math.Max(floor, squads[0].Item2));
+        }
+        return squads;
+    }
+    // SLOT k OF n COMES when its clock is up (k x every), or -- its first fill only -- once the boss's
+    // hull has fallen to 1 - k/n. Slot 0 comes at once.
+    public static bool SlotDue(int k, int n, double t, double every, double bossHull, bool firstFill) =>
+        t >= k * every || (firstFill && k > 0 && n > 0 && bossHull <= 1.0 - (double)k / n);
 
     // How far out a garrison forms up from what it is defending: beyond the four pylons (1200 u)
     // and a pilot at work on one, so a wave is seen coming rather than born on top of the fight.

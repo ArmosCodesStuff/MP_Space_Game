@@ -1463,6 +1463,7 @@ public partial class _Test : Node
         BossScaleChecks();
         BuildChecks();
         RaidsFoundationChecks();
+        RaidsAddsTableChecks();
         await RecyclerChecks();
 
         // Every class is touched first: Load() fills the loadout for ALL of them, so a character that
@@ -4202,6 +4203,106 @@ public partial class _Test : Node
         me.MaxHp = keepMax; me.TakeDamage(-(me.MaxHp - me.Hp));
         me.Stats.SetBase("pd_range", pdKeep);
         me.Position = keepPos; me.Velocity = Vector2.Zero;
+    }
+
+    // ── LANE G (raids v2): a boss fight's adds, by literal (raids_squads_adds.md §2; N11, N12's
+    // thresholds, N14, the slot kinds, the form-up distances, the boss's multipliers) ──
+    void RaidsAddsTableChecks()
+    {
+        string Sch(int level, int floor = 0) =>
+            string.Concat(Waves.Deal(Waves.AddsAt(level), floor).Select(q => "[" + new string('H', q.heavies) + new string('L', q.lights) + "]"));
+        Check(Waves.AddsAt(5) == 0 && Waves.AddsAt(6) == 1 && Waves.AddsAt(9) == 2 && Waves.AddsAt(18) == 5 && Waves.AddsAt(39) == 12
+              && Waves.AddsAt(40) == 12 && Waves.AddsAt(99) == 12
+              && Sch(5) == "" && Sch(6) == "[H]" && Sch(9) == "[HL]" && Sch(18) == "[HLLL][H]" && Sch(39) == "[HLLL][HLLL][HLLL]" && Sch(40) == Sch(39),
+              $"the adds by level: none at 5, a heavy at 6, then a light every 3 levels, H L L L, to 3 heavies + 9 lights at 39 and no more (L9 {Sch(9)}, L18 {Sch(18)}, L39 {Sch(39)})");
+        bool sweep = true;
+        for (int lv = 1; lv <= 60; lv++)
+        {
+            int n = Waves.AddsAt(lv);
+            string flat = Sch(lv).Replace("[", "").Replace("]", "");
+            sweep &= n <= 12 && flat == "HLLLHLLLHLLL".Substring(0, n) && flat.Count(c => c == 'H') == (n + 3) / 4;
+        }
+        Check(sweep, "levels 1 to 60 deal exactly HLLLHLLLHLLL cut at N(L): never past 12, a heavy for every squad started");
+        Check(Sch(1, 2) == "[LL]" && Sch(5, 2) == "[LL]" && Sch(6, 2) == "[HLL]" && Sch(14, 2) == "[HLL]" && Sch(15, 2) == "[HLLL]" && Sch(39, 2) == Sch(39),
+              $"the Rusty's floor of 2: its squad wave 1 from level 1 ({Sch(1, 2)}), filled by the roster from 6 ({Sch(6, 2)}, {Sch(15, 2)} at 15)");
+        // ARRIVAL: slot k of n on its clock (k x 30 s) or, its first fill only, at hull 1 - k/n -- around each edge, never on it
+        Check(Waves.SlotDue(0, 3, 0, 30, 1.0, true)
+              && !Waves.SlotDue(1, 3, 1, 30, 0.68, true) && Waves.SlotDue(1, 3, 1, 30, 0.66, true)
+              && !Waves.SlotDue(2, 3, 1, 30, 0.34, true) && Waves.SlotDue(2, 3, 1, 30, 0.32, true)
+              && !Waves.SlotDue(1, 3, 29.5, 30, 1.0, true) && Waves.SlotDue(1, 3, 30.5, 30, 1.0, true)
+              && !Waves.SlotDue(2, 3, 59.5, 30, 1.0, true) && Waves.SlotDue(2, 3, 60.5, 30, 1.0, true)
+              && !Waves.SlotDue(1, 3, 1, 30, 0.10, false),
+              "L39's three slots: slot 2 at hull 66% (not 68%) or 30 s, slot 3 at 32% (not 34%) or 60 s; slot 1 at once; a refill never on the hull");
+        var row = Waves.All.First(d => d.Id == "bounty_adds");
+        string Kinds(int k) => $"{Enemies.Of(Waves.KindOf(row.Crew[0], k)).Id}+{Enemies.Of(Waves.KindOf(row.Crew[1], k)).Id}";
+        Check(Kinds(0) == "gunship+webifier" && Kinds(1) == "cross+talon" && Kinds(2) == "lancerkin+pod" && Kinds(3) == Kinds(0),
+              $"each slot keeps its kinds: {Kinds(0)}, {Kinds(1)}, {Kinds(2)}");
+        float FormAt(params int[] kinds) { var crew = kinds.Select(Enemies.Of).ToList(); return Squads.CommitOf(crew) + Squads.PaceOf(crew) * (float)row.FormFor; }
+        int W = Enemies.Webifier, G = Enemies.Gunship, T = Enemies.Talon, Pd = Enemies.Pod, X = Enemies.Cross, K = Enemies.Lancerkin;
+        Check(Math.Abs(FormAt(W, W, W, G) - 2600) < 1 && Math.Abs(FormAt(W, W) - 2600) < 1 && Math.Abs(FormAt(G) - 3250) < 1
+              && Math.Abs(FormAt(X, T, T, T) - 3040) < 1 && Math.Abs(FormAt(K, Pd, Pd, Pd) - 1729) < 1 && Math.Abs(FormAt(X) - 2940) < 1 && Math.Abs(FormAt(K) - 2910) < 1,
+              $"each squad forms up 10 s of its own pace outside its commit range: webifiers 2600, a lone gunship 3250, talons 3040, pods 1729, a lone cross 2940, a lone lancerkin 2910 ({FormAt(W, W, W, G):0}, {FormAt(G):0}, {FormAt(X, T, T, T):0}, {FormAt(K, Pd, Pd, Pd):0})");
+        var b18 = new WaveBrief { Level = 18, Pilots = 2 };
+        double s18 = row.Strength(b18), h18 = s18 * row.HullShare(b18);
+        Check(row.Mission == "bounty" && row.Doctrine == Squads.Gank && row.FormFor == 10 && row.Exp == 1
+              && Waves.All.Where(d => d != row).All(d => d.Exp == 0)
+              && Math.Abs(s18 - Math.Pow(1.025, 17) * 1.2) < 1e-9 && Math.Abs(h18 - Math.Pow(1.025, 17) * 1.6) < 1e-9,
+              $"the adds take the boss's multipliers -- L18 with 2 pilots: damage x{s18:0.000} (1.025^17 x 1.2), hull x{h18:0.000} (1.025^17 x 1.6) -- hunt the loneliest pilot, and only they pay EXP");
+        bool routed = Enumerable.Range(1, 60).All(lv => Waves.For(WaveTrigger.Garrison, new WaveBrief { Mission = "bounty", Level = lv })?.Id == "bounty_adds")
+                      && Enumerable.Range(0, 6).All(i => Waves.For(WaveTrigger.Garrison, new WaveBrief { Mission = "siege", Index = i })?.Mission == "siege");
+        Check(routed, "a bounty's garrison is always its adds and a siege's never is");
+    }
+
+    // ── LANE G (raids v2): the adds live, in the level-1 arena (N12, N13, N16) ──
+    // The Rusty's squad wave 1 comes at once, 2600 u out, in formation for 9 s; an add's web starts the
+    // beam; wiped at a seeded moment, the slot is empty at +29.5 s and back with the same kinds at +30.5 s.
+    async Task RaidsArenaAddsChecks(Boss boss, PlayerShip me)
+    {
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var held = boss.Type.Moves.ToDictionary(m => m.Id, m => boss.S(m.Id).Due);
+        foreach (var m in boss.Type.Moves) { boss.S(m.Id).Due = 999; boss.S(m.Id).At = Boss.Phase.Idle; }
+        Fx.ClearWarnings();
+        foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+        me.Position = VaryNear(boss.Position, 700f); me.Velocity = Vector2.Zero; me.Statuses.Clear(Status.Pinned);
+        await Frame();
+        var centre = me.Position;
+        int roster = Waves.Deal(Waves.AddsAt(Missions.Level), boss.Type.AddsFloor).Sum(q => q.heavies + q.lights);
+        H.RestartGarrison(); Raids.Held = false;
+        for (int i = 0; i < 30 && H.Raiders.Count == 0; i++) await Frame();
+        var adds = H.Raiders.ToList();
+        var sq = adds.FirstOrDefault()?.Squad;
+        float out0 = sq == null ? 0 : sq.Anchor.DistanceTo(centre);
+        bool formed = true; int most = adds.Count;
+        for (int i = 0; i < 60 * 9; i++) { formed &= sq != null && sq.Phase != SquadPhase.Commit; most = Math.Max(most, H.Raiders.Count); me.Velocity = Vector2.Zero; await Frame(); }
+        Check(Missions.Level == 1 && adds.Count == 2 && adds.All(r => r.Kind == Enemies.Webifier && r.Squad == sq) && sq?.Doctrine == Squads.Gank
+              && Math.Abs(out0 - 2600f) < 2600f * 0.05f && formed,
+              $"the Rusty's squad wave 1 at level 1: its two webifiers at once ({adds.Count}), {out0:0} u out (2600 +-5%), still in formation 9 s later");
+        // N16: an ADD'S web starts the beam (ruling): pinned by the squad, the beam made due charges on it
+        for (int i = 0; i < 60 * 12 && !me.Pinned; i++) { me.Velocity = Vector2.Zero; most = Math.Max(most, H.Raiders.Count); await Frame(); }
+        bool addsPin = me.Pinned && Squads.PinnersOn(H, me).count > 0 && H.Raiders.Where(r => r.Latched).All(r => r.Squad == sq);
+        boss.S("beam").Due = 0.01;
+        for (int i = 0; i < 60 * 2 && boss.S("beam").At != Boss.Phase.Winding; i++) { me.Velocity = Vector2.Zero; await Frame(); }
+        Check(addsPin && boss.S("beam").At == Boss.Phase.Winding && boss.S("beam").Cause == "pinned",
+              $"an add's web on the pilot starts the beam's charge ({boss.S("beam").Cause}, pinned by the adds {addsPin})");
+        boss.S("beam").Due = 999; boss.S("beam").At = Boss.Phase.Idle; Fx.ClearWarnings();
+        // N13: wiped at a seeded moment, the slot returns 30 s later with the same kinds
+        await Wait(Vary(0.2f, 1.5f));
+        var kinds0 = string.Join(",", H.Raiders.Where(r => r.Squad == sq).Select(r => r.Kind).OrderBy(k => k));
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(9999);
+        await Frame();
+        await Wait(29.5);
+        int at295 = H.Raiders.Count;
+        await Wait(1.0);
+        var back = H.Raiders.ToList();
+        var kinds1 = string.Join(",", back.Select(r => r.Kind).OrderBy(k => k));
+        most = Math.Max(most, back.Count);
+        Check(at295 == 0 && back.Count == 2 && kinds1 == kinds0 && back.All(r => r.Worth == 0) && most <= roster,
+              $"wiped, the slot is empty at +29.5 s ({at295}) and back at +30.5 s with the same kinds ({kinds1} for {kinds0}), paying nothing, never more than the roster's {roster} live");
+        Raids.Held = true;
+        foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+        foreach (var m in boss.Type.Moves) boss.S(m.Id).Due = held[m.Id];
+        me.Statuses.Clear(Status.Pinned);
+        await Frame();
     }
 
     async Task Solo()
@@ -8846,6 +8947,8 @@ public partial class _Test : Node
             Check(Math.Abs((double)leftWith.GetValue("base", "credits", -1.0) - 424242) < 1e-6,
                   $"leaving for the arena writes the base to disk on the way out ({(double)leftWith.GetValue("base", "credits", -1.0):0} of 424242)");
             var boss = H.Boss;
+            Raids.Held = true;                                   // the fight's adds held: the boss's own moves are on trial first
+            foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
             Check(boss != null && boss.Alive && boss.Type.Id == "silver_lancer" && boss.Type.Name == "RUSTY BUCKET" && H.Yard == null && !Nodes<TargetDummy>().Any() && Combat.Hostiles.Contains(boss),
                   "the arena at level 1: the Silver Lancer, and no base or dummies");
             // THE LEVEL'S OWN COPY of every move. At level 1 the scale is exactly 1, so the boss
@@ -9223,6 +9326,7 @@ public partial class _Test : Node
                 me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
             }
             await LaneABurnClockChecks(boss, me2);
+            await RaidsArenaAddsChecks(boss, me2);
             await LaneAOutDoorBossChecks(boss, me2);
             // ── STEALTH STOPS THE BOSS CHOOSING, NEVER HITTING, AND NEVER STOPS THE FIGHT ──
             // Its pilots were ONE list, the seen one: a solo pilot who went dark emptied it and the
@@ -9294,6 +9398,7 @@ public partial class _Test : Node
             Character.Exp = 0; Character.Level = 1; Character.BossCleared.Clear(); Character.Points = 0; Character.BossCleared.Clear();
             // (hints off meanwhile: a card starting mid-way would move the batched save these checks time)
             Character.HintsOff = true;
+            Raids.Held = false;                                  // the clock free again for every arena after this one
             // clear of where the crates will fall, with adds out (they must go with it)
             Me.Position = boss.Position + new Vector2(0, 1500); Me.Velocity = Vector2.Zero;
             for (int i = 0; i < 2; i++) H.SpawnRaider(Me.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(900f, 1200f));

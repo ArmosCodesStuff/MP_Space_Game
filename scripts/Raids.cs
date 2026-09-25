@@ -82,6 +82,63 @@ public sealed class Raids
     public void Raid(int level) =>
         Send(WaveTrigger.Failed, new WaveBrief { Pilots = _hub.PartySize, Level = level, Origin = Hub.BasePos });
 
+    // ── A MISSION'S GARRISON, ON ITS ROW'S CLOCK (was Hub.TickArena's _garrisonT / _garrisonWaves) ──
+    // A row with no Roster (a siege) is a wave sent every WaveEvery from FirstWave and forgotten. A
+    // row with one (a bounty's adds) is SLOTS: dealt once, each squad of the deal a slot that comes
+    // on its clock or on the boss's hull (Waves.SlotDue), keeps its kinds, and -- wiped -- comes back
+    // WaveEvery later, paying nothing. Held stops the clock (the harness tests a boss alone with it).
+    public static bool Held;
+    private double _gT;
+    private int _gWaves;
+    private sealed class Slot { public int Heavies, Lights; public double Due; public bool First = true; public Squad Squad; }
+    private List<Slot> _slots;
+    public void RestartGarrison() { _gT = 0; _gWaves = 0; _slots = null; }
+    public void TickGarrison(double delta)
+    {
+        if (!Net.IsHost || Held) return;
+        var kind = Missions.KindOf(Missions.Kind);
+        if (kind.WaveEvery <= 0) return;                       // its row brings none
+        _gT += delta;
+        var b = GarrisonBrief(0);
+        var row = Waves.For(WaveTrigger.Garrison, b);
+        if (row?.Roster == null)
+        {
+            if (_gT >= kind.FirstWave + _gWaves * kind.WaveEvery) Garrison(Missions.Level, Hub.ArenaCentre, _gWaves++);
+            return;
+        }
+        _slots ??= Waves.Deal(row.Roster(b), Missions.ForLevel(b.Level).AddsFloor)
+                        .Select(q => new Slot { Heavies = q.heavies, Lights = q.lights }).ToList();
+        var boss = _hub.Boss;
+        double hull = GodotObject.IsInstanceValid(boss) && boss.MaxHp > 0 ? boss.Hp / boss.MaxHp : 1;
+        for (int k = 0; k < _slots.Count; k++)
+        {
+            var s = _slots[k];
+            if (s.Squad != null)
+            {
+                if (!s.Squad.Empty) continue;
+                s.Squad = null; s.First = false; s.Due = _gT + kind.WaveEvery;   // wiped: back, the same kinds
+                continue;
+            }
+            bool due = s.First ? Waves.SlotDue(k, _slots.Count, _gT - kind.FirstWave, kind.WaveEvery, hull, true) : _gT >= s.Due;
+            if (!due) continue;
+            var sb = GarrisonBrief(k); sb.Heavies = s.Heavies; sb.Lights = s.Lights;
+            int id = Send(WaveTrigger.Garrison, sb, roll: k, pays: s.First);
+            s.Squad = _live.FirstOrDefault(q => q.Id == id);
+        }
+    }
+    // A garrison's brief: the arena's mission and level, formed on the party's centre, the fan
+    // measured along the line to the boss (or to the arena's centre)
+    private WaveBrief GarrisonBrief(int index)
+    {
+        var ships = _hub.Ships.Where(GodotObject.IsInstanceValid).ToList();
+        var centre = ships.Count > 0 ? ships.Aggregate(Vector2.Zero, (a, s) => a + s.Position) / ships.Count : Hub.ArenaCentre;
+        var boss = _hub.Boss;
+        var toward = GodotObject.IsInstanceValid(boss) ? boss.Position : Hub.ArenaCentre;
+        if (toward.DistanceTo(centre) < 1f) toward = centre + Vector2.Up;
+        return new WaveBrief { Pilots = _hub.PartySize, Index = index, Level = Missions.Level, Origin = centre, Anchor = toward,
+                               Mission = Missions.KindOf(Missions.Kind).Id };
+    }
+
     public int Patrol(Vector2 at, double scale = 1) =>
         Send(WaveTrigger.Called, new WaveBrief { Pilots = _hub.PartySize, Scale = scale, Origin = Hub.BasePos, Anchor = at });
 
@@ -141,7 +198,8 @@ public sealed class Raids
     // gets two, which no wave could do before. Every squad flies its row's doctrine, from the
     // brief's Origin (its ring's centre), on the row's Hold if it names one. Returns the FIRST
     // squad's id, which is what Hub.SpawnPatrol has always handed back.
-    private int Send(WaveTrigger trigger, WaveBrief b)
+    // `roll` >= 0 fixes the kinds (a rostered slot keeps its own); `pays` is a first fill's EXP.
+    private int Send(WaveTrigger trigger, WaveBrief b, int roll = -1, bool pays = true)
     {
         if (!Net.IsHost) return 0;
         var d = Waves.For(trigger, b);
@@ -151,9 +209,17 @@ public sealed class Raids
         int first = 0, wave = ++_waves;
         for (int s = 0; s < squads; s++)
         {
-            int roll = _roll++;
+            int draw = roll >= 0 ? roll + s : _roll++;
             var at = Waves.SquadAt(d, b, s, squads);
-            var squad = Form(d.Doctrine ?? Squads.Patrol, at, wave);
+            float heading = 0f;
+            if (d.FormFor > 0)
+            {   // FORM-UP: FormFor seconds of its own pace outside its commit range, on its bearing
+                var crew = d.Crew.SelectMany(c => Enumerable.Repeat(Enemies.Of(Waves.KindOf(c, draw)), c.Count(b))).ToList();
+                var dir = (at - b.Origin).LengthSquared() > 1e-6f ? (at - b.Origin).Normalized() : Vector2.Up;
+                at = b.Origin + dir * (Squads.CommitOf(crew) + Squads.PaceOf(crew, agility) * (float)d.FormFor);
+                heading = Aim.Face(at, b.Origin);
+            }
+            var squad = Form(d.Doctrine ?? Squads.Patrol, at, wave, heading);
             if (s == 0) first = squad.Id;
             squad.Quarry = b.Quarry;
             // ...and WHERE IT WAITS with nothing to fight: a ring of the row's Hold round its own
@@ -162,12 +228,13 @@ public sealed class Raids
             squad.Circuit = d.Hold > 0 ? d.Hold : Squad.PerimeterR;
             foreach (var c in d.Crew)
             {
-                int n = c.Count(b), kind = Waves.KindOf(c, roll);
+                int n = c.Count(b), kind = Waves.KindOf(c, draw);
                 for (int i = 0; i < n; i++)
                 {
-                    var r = _hub.SpawnRaider(at + c.Slot(i, n), kind, squad, strength, d.HullShare?.Invoke(b) ?? 1);
+                    var r = _hub.SpawnRaider(at + c.Slot(i, n).Rotated(heading), kind, squad, strength, d.HullShare?.Invoke(b) ?? 1);
                     if (r == null) continue;
                     r.Agility = agility; r.Level = b.Level;
+                    r.Worth = pays ? r.Def.Exp * d.Exp : 0;     // a refill, and every wave with no Exp, pays nothing
                 }
             }
         }
