@@ -49,7 +49,7 @@ public class FxDef
     public float Width = 2f;        // the stroke of a ring, a spoke or a bar
     public int Spokes = 8;
     public bool Fill = true;        // a soft disc inside the ring
-    public string Sound;            // an effect's own noise: Sfx.Special id, or null for silence
+    public string Sound;            // an effect's own noise: Sfx.ByName id, or null for silence
     // A WARNING, NOT AN EFFECT: something is about to be hit here, and the raise says for how
     // long. The row's Life is not used -- a warning lives its wind-up, its hold and one flash --
     // and its sounds are the raise's, because they are the move's.
@@ -85,7 +85,8 @@ public static class Fx
     // The index IS the id on the wire (Hub.NetFx), so APPEND ONLY.
     public const int Burst = 0, Lost = 1, Rebuilt = 2, Wave = 3, Emp = 4, Echo = 5, Rail = 6,
                      WarnLane = 7, WarnZone = 8, AimZone = 9, TauntRing = 10,
-                     Rip = 11, RipSparks = 12, RipSmoke = 13, Scar = 14;
+                     Rip = 11, RipSparks = 12, RipSmoke = 13, Scar = 14,
+                     RailEnhanced = 15;
     // WHAT A WARNING RIDES: the world itself, or the NetId of the hull it is drawn on. A beam's
     // and a dash's lane are drawn in the BOSS'S OWN FRAME and parented to it, so the line it drew
     // is the line it fires down however the hull turns; everything else is pinned to the ground
@@ -134,6 +135,8 @@ public static class Fx
         new() { Id = "rip_sparks", Shape = FxShape.Sparks, Tint = new(1f, 0.62f, 0.2f), Life = 1.2, Loose = true, Count = 28 },
         new() { Id = "rip_smoke",  Shape = FxShape.Puffs,  Tint = new(0.55f, 0.55f, 0.58f), Life = 3.0, Loose = true, Count = 6 },
         new() { Id = "scar",       Shape = FxShape.Scar,   Tint = new(0.10f, 0.07f, 0.06f), Life = 10.0, Cap = 3 },
+        // an enhanced rail round (ActiveReload's perfect press): the rail's bar in white, 1.5x as wide
+        new() { Id = "rail_enhanced", Shape = FxShape.Bar, Tint = new(0.92f, 0.96f, 1f), Life = 0.35, Width = 10.5f, Fill = false },
     };
 
     public static FxDef Of(int id) => All[id >= 0 && id < All.Length ? id : Burst];
@@ -281,7 +284,7 @@ public partial class FxNode : Node2D
         // warning that rides a hull is a child of it, and its Position is an offset from the
         // boss's nose rather than a place in the world.
         var opening = Cue ?? D.Sound;
-        if (opening != null && Since <= 0) Sfx.Special(opening, GlobalPosition);
+        if (opening != null && Since <= 0) Sfx.ByName(opening, GlobalPosition);
     }
     public override void _ExitTree() => Fx.Left(this);
 
@@ -328,7 +331,7 @@ public partial class FxNode : Node2D
         if (D.Warn && !_struck && _t >= Time)
         {   // it lands: the move's own sound, once -- and never for a copy that arrived after it
             _struck = true;
-            if (Time > 0 && Strike != null) Sfx.Special(Strike, GlobalPosition);
+            if (Time > 0 && Strike != null) Sfx.ByName(Strike, GlobalPosition);
         }
         if (D.Shape == FxShape.Debris)
         {
@@ -471,6 +474,7 @@ public enum FieldLook
     Dashed,    // a dashed ring, turning slowly: a reach something patrols (the Supercarrier's patrol)
     Shimmer,   // hex plates over the hull, pulsing, and the row's tag under it (the Taunt's guard)
     Plume,     // a long hot plume out of the stern over the engine's own (a drive's boost)
+    Wedge,     // a fan on the ship's guard (IPrism.GuardAngle), one shade a band of Prism.Bands (the prism stance)
 }
 
 public class FieldDef
@@ -500,6 +504,8 @@ public static class Fields
         new() { Id = "taunt", Slot = "taunt", Look = FieldLook.Shimmer, HullShare = 0.55f, TagStat = "taunt_guard", Tint = new(1f, 0.62f, 0.25f) },
         // the boost (the nine's drive, kits_v31 §3.4): the engine burning hot while it runs
         new() { Id = "boost", Slot = "boost", Look = FieldLook.Plume, HullShare = 1.8f, Tint = new(1f, 0.85f, 0.55f) },
+        // the prism stance (kits_v2 Warrior card): the guard's wedge, SQUARE bright and SLANT faint, on every peer
+        new() { Id = "prism", Slot = "prism", Look = FieldLook.Wedge, HullShare = 1.1f, Tint = new(0.75f, 0.95f, 1f) },
     };
 
     public static FieldDef Of(string id) => System.Array.Find(All, f => f.Id == id);
@@ -579,6 +585,20 @@ public static class Fields
                         Txt.Centre(s, ThemeDB.FallbackFont, new Vector2(0, art.Length * 0.5f + 22f), f.Tag, Txt.Size(14), c);
                         s.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                     }
+                    break;
+                }
+                case FieldLook.Wedge:
+                {   // widest band first, so the square one draws over it; the guard itself a hard line
+                    float g = s.GuardAngle - s.Rotation;
+                    for (int b = Prism.Bands.Length - 1; b >= 0; b--)
+                    {
+                        float half = Mathf.DegToRad(Prism.Bands[b].MaxAngle);
+                        var fan = new Vector2[18];
+                        fan[0] = Vector2.Zero;
+                        for (int k = 0; k < 17; k++) fan[k + 1] = Vector2.Right.Rotated(g - half + 2f * half * k / 16f) * f.Radius;
+                        s.DrawColoredPolygon(fan, new Color(c.R, c.G, c.B, b == 0 ? 0.32f : 0.14f));
+                    }
+                    s.DrawLine(Vector2.Zero, Vector2.Right.Rotated(g) * f.Radius * 1.15f, c, 2.5f);
                     break;
                 }
                 case FieldLook.Plume:

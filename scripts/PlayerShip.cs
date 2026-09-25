@@ -125,7 +125,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // ── what this ship's own class brings ────────────────────────────────
 
     // WHAT LIFTS ITS RATE OF FIRE, and WHAT LIFTS ITS SPEED, right now -- the tender's overdrive,
-    // the warrior's rush, the dart's boost, the wraith's veil. Every running ability that names a
+    // the V boost, the dart's boost, the wraith's veil. Every running ability that names a
     // stat for one of them (AbilityDef.RateStat, AbilityDef.SpeedStat) lifts it by that figure,
     // and the row knows its own slot, so the next buff is a ROW rather than an `if` naming a slot
     // id and a stat id by string.
@@ -139,7 +139,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public float FireRate => (float)Stat.Scale(Lifts(Lift.Rate));
     public float SpeedMult => (float)Stat.Scale(Lifts(Lift.Speed));
     public float StrafeMult => (float)Stat.Scale(Lifts(Lift.Strafe));
-    private enum Lift { Rate, Speed, Strafe }
+    // REACH: every running row's ReachStat, the same rule (the anchor's x1.4 on the railgun's line)
+    public float ReachMult => (float)Stat.Scale(Lifts(Lift.Reach));
+    private enum Lift { Rate, Speed, Strafe, Reach }
     private readonly List<double> _lifts = new();
     private double Lifts(Lift kind)
     {
@@ -147,12 +149,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
-            string stat = kind == Lift.Rate ? def.RateStat : kind == Lift.Speed ? def.SpeedStat : def.StrafeStat ?? def.SpeedStat;
+            string stat = kind switch { Lift.Rate => def.RateStat, Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, _ => def.StrafeStat ?? def.SpeedStat };
             if (stat != null && sl.Left > 0 && (def.While == null || def.While(this))) _lifts.Add(Stats[stat]);
             // a RAMP's running total is already a share (F1, D18): 1 + it reads the same as any
             // other lift's raw multiplier would, and it keeps lifting through its post-run drain,
-            // not only while Left > 0.
-            if (kind != Lift.Rate && def.Ramp != null && sl.Own > 0) _lifts.Add(1 + sl.Own);
+            // not only while Left > 0. It lifts the helm alone: speed and slide.
+            if ((kind == Lift.Speed || kind == Lift.Strafe) && def.Ramp != null && sl.Own > 0) _lifts.Add(1 + sl.Own);
         }
         return LiftShares(_lifts);
     }
@@ -223,7 +225,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             _spinLast = _clock;
             share += Items.SpinShare(Items.Shares(Items.Door.Spin, Stats, default), _clock - _spinSince);
         }
-        return d * (1 + share);
+        // A CRAFT THIS SHIP CALLED (the Taunt) takes its taunt_mult -- a row of the dealer's sheet, 0 (nothing)
+        // on a class without it
+        double called = target is ICalled { CalledBy: { } by } && ReferenceEquals(by, this) && Stats["taunt_mult"] > 0 ? Stats["taunt_mult"] : 1;
+        return d * (1 + share) * called;
     }
     // A kill this ship made: every ability cooldown left, less the Kill rows' share.
     public void NoteKill()
@@ -306,6 +311,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             Range    = (float)(pd ? Stats["pd_range"] : Stats["main_range"]),
             Turn     = (float)(pd ? Stats["pd_turn"]  : Stats["main_turn"]),
             ShellSpeed = (float)Stats["shell_speed"],
+            Kind     = Stats.Def.Shot,                // what its main guns fire (ClassDef.Shot); point defence fires none
             Texture  = pd ? art.PdTurret : art.MainTurret,
             TexScale = art.TurretTexScale,
             Barrel   = pd ? art.PdBarrel : art.MainBarrel,
@@ -381,6 +387,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                 s.Cool = Math.Max(0, kept.slot.Cool - (_clock - kept.clock));
                 s.N = kept.slot.N;                 // a magazine over the new sheet's is cut to it (FitWings)
             }
+        // a chamber is fitted seated (a reload that was running ended with the refit), and the owner's view with it
+        foreach (var def in list) if (def.Reload is { } rl) ActiveReload.Seat(this, rl);
+        ReloadView = default; _charge = -1; _strokeDown = false;
 
         var art = MyArt;
         var tex = Assets.Load<Texture2D>(art.Texture);
@@ -573,6 +582,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Net.FromPlayer(this, out int who) && who == OwnerId) DoAbility(id, targetId);
     }
 
+    // THE ACTIVE RELOAD'S TIMING PRESS (ActiveReload.Press): a guest's claim of how far through its
+    // reload it was, as a share on its own clock. The host judges it, believed within the sender's
+    // leeway only, and only from the ship's own pilot.
+    public void AskReloadPress(string id, float claim) => Net.AskHost(this, nameof(RequestReloadPress), id, claim);
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void RequestReloadPress(string id, float claim)
+    {
+        if (Net.FromPlayer(this, out int who) && who == OwnerId && Abilities.Find(Class, id)?.Reload is { } r)
+            ActiveReload.Judge(this, r, claim, Net.Leeway(who));
+    }
+
     // THE GATE, not a courtesy. Refuse (above) runs on the owner so the slot says why at once;
     // this is what the host is held to. A wreck presses nothing but the one ability declared for
     // it (AbilityDef.WhenWrecked -- reboard). The nine newest abilities each repeated `!Net.Sim ||
@@ -591,7 +611,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var def = Abilities.Find(Class, id);
         if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked) || PressHeld(def)
             || Unlocks.LockedAt(Class, Peak, def) != null) return;
-        def.Press?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null);
+        var target = targetId != 0 ? Combat.ById(targetId) : null;
+        // ANY OTHER OF THE CLASS'S ABILITIES ends a running stance (the lunge and the whirlwind end the
+        // prism's): read by the row's Stance, never by an id. The drive (V) and the weapon's own rows do not.
+        if (def.Stance == null && !def.Weapon && Array.IndexOf(Classes.Of(Class).Abilities, def) >= 0
+            && def.Refuse?.Invoke(this, target) == null)
+            foreach (var st in Abilities.For(Class))
+                if (st.Stance is { Keeps: false } && Sl(st.Id).Left > 0) EndStance(st.Id);
+        def.Press?.Invoke(this, target);
     }
 
     // ── what the abilities do. The catalogue (Abilities.cs) points at these, and each one
@@ -734,48 +761,25 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     // ── THE HEAVY FIGHTERS ──────────────────────────────────────────────
-    // The railgun commits: while it charges the ship cannot turn or thrust (its row's Hold of x0,
-    // taken after the lifts: see Held), and at the end everything on the line takes the whole of it.
-    public void ChargeRail()
+    // THE RAILGUN'S SHOT (its row's Loose, on the host, when a charge stroke is let go on a seated
+    // round): the band the charge reached (Charges.Of: rail_tap at once, ramping to the whole at full)
+    // times the round in the chamber (ActiveReload.Take: x rail_perfect enhanced, drawn and heard
+    // white) of rail_damage, from the nose along the heading as far as rail_range (x ReachMult: the
+    // anchor's x1.4); then the chamber is spent and reloads by itself.
+    public void FireRail(double share)
     {
-        if (Sl("railgun").Left > 0 || Sl("railgun").Cool > 0) return;
-        Sl("railgun").Left = Stats["rail_charge"];
-    }
-    // The charge is spent (the Railgun row's Expire, on the host): the band its charge reached
-    // (Charges.Of("railgun")) says how much of rail_damage goes down which line, from the nose
-    // along the heading, as far as rail_range.
-    public void FireRail()
-    {
-        double charged = 1 - Sl("railgun").Left / Stats["rail_charge"];
-        var (mult, line) = Charges.At(Charges.Of("railgun"), charged);
+        var r = ActiveReload.Rail;
+        var (mult, line) = Charges.At(Charges.Of(r.Id), share, id => Stats[id]);
+        double round = ActiveReload.Take(this, r);
+        if (round > 1) line = Lines.RailEnhanced;
         var nose = Aim.Nose(this, MyArt.Length * 0.5f);
-        Lines.Strike(line, this, nose, nose + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"], Stats["rail_damage"] * mult);
-        Sl("railgun").Cool = Cooling(Stats["rail_cooldown"]);
+        Lines.Strike(line, this, nose, nose + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"] * ReachMult, Stats["rail_damage"] * mult * round);
+        ActiveReload.Spent(this, r);
     }
 
-    public void StartRush()
-    {
-        if (Sl("rush").Cool > 0) return;
-        ref var r = ref Sl("rush");
-        r.Left = Stats["rush_time"]; r.Cool = Cooling(Stats["rush_cooldown"]);
-        ApplyStatus(Status.Hardened, r.Left, Stats["rush_guard"]);   // the rush says how hard, not the hit hull
-    }
-    // The rush ends in an EMP: everything close takes it, and everything small enough is held.
-    // (The Rush row's Expire, on the host.)
-    public void RushEmp()
-    {
-        float reach = (float)Stats["emp_range"];
-        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
-        {
-            if (h.Position.DistanceTo(Position) > reach) continue;
-            Dealt.Deal(h, Stats["emp_damage"], this, Dealt.Emp);
-            if (!TagExt.Is(h, Tag.Boss)) (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["emp_stun"]);
-        }
-        Fx.Raise(Fx.Emp, Position, reach);
-    }
-
-    // Six missiles, each on a target of its own while there are targets to go round; what is left
-    // over goes at the nearest one.
+    // Six missiles, each on a target of its own while there are targets to go round, in the cell's PREY ORDER
+    // (kits_v2's Warden card): whatever has a web on a friendly hull first (ISquadMember.Latched -- a raider
+    // latches on nothing else), then the nearest; what is left over goes round again from the first.
     // WHAT THE CELL CAN SEE, in one place, because the slot has to say "NOTHING IN REACH" before
     // the press and the press has to find the same things afterwards. Targeting.Attackable, not
     // WingPrey: a seeker hits once and dies, so a practice dummy is a perfectly good target for it.
@@ -785,7 +789,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var seen = new List<IHittable>();
         foreach (var h in Targeting.Choosable(Combat.Hostiles, Targeting.Attackable))
             if (Position.DistanceTo(h.Position) <= range) seen.Add(h);
-        return seen;
+        return seen.OrderBy(h => h is ISquadMember { Latched: true } ? 0 : 1).ThenBy(h => Position.DistanceTo(h.Position)).ToList();
     }
 
     public void LaunchHunters()
@@ -905,6 +909,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public void ApplyStatus(Status s, double seconds, double share = double.NaN)
     {
         if (!Net.Sim) return;
+        if (s == Status.Pinned && _status.Has(Status.Unwebbed)) return;   // no web takes it (the whirlwind)
         if (s == Status.Pinned && WebCut > 0)
         {   // Web Breaker: the web's ask is kept whole, and the pin's own clock holds it shorter
             _webAsked = Math.Max(_webAsked, seconds);
@@ -1055,7 +1060,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // WHAT THE STATUSES ON THIS SHIP LET THROUGH. Each status that changes a blow is a row of
     // StatusSet.Guards (Statuses.cs), walked in the order written there -- evasion first, because
     // it decides whether the blow happened at all, then the shares, then the bubbles. The share is
-    // the one its APPLIER named (the rush's rush_guard, a taunt's 0.67) and the row's default where
+    // the one its APPLIER named (a taunt's taunt_guard 0.67) and the row's default where
     // none was named -- never a row read off this hull's own sheet.
     private double Guarded(double d)
     {
@@ -1131,7 +1136,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
         TickAbilities(delta);
 
-        if (Net.Sim) FireControl(delta);
+        if (Mine && Abilities.TriggerOf(Class)?.Reload is { } view) ActiveReload.Step(this, view, delta);
+        if (Net.Sim) { FireControl(delta); Swings(delta); DashSweeps(); ChargeLatch(delta); }
         foreach (var t in _turrets) t.Tick(delta);
         for (int i = _wings.Count - 1; i >= 0; i--)
         {
@@ -1160,7 +1166,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // EVERY ABILITY THIS CLASS CARRIES, BY ITS OWN ROW. The cooldown runs down, a timer that is
     // up runs down, and on the frame it reaches zero the ROW says what happens: Elapsed on every
     // peer (the phase the bar must show at once), Expire on the host alone (what it resolves --
-    // the railgun's shot, the rush's EMP, the echo's blast, the magazine a reload refills). Every
+    // the railgun's shot, the echo's blast, the magazine a reload refills). Every
     // peer counts down so a guest's bars move smoothly between host packets, and the next packet
     // corrects any drift. A timed ability is a row and nothing else: this loop is the only expiry.
     private void TickAbilities(double delta)
@@ -1169,7 +1175,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
-            if (sl.Cool > 0) sl.Cool = Math.Max(0, sl.Cool - delta);
+            if (sl.Cool > 0)
+            {
+                sl.Cool = Math.Max(0, sl.Cool - delta);
+                // A CHARGED ROW (AbilityDef.Charges): a charge back, and the next one starts if any is still out
+                if (sl.Cool <= 0 && def.Charges != null && sl.N > 0 && --sl.N > 0) sl.Cool = Cooling(Stats[def.Recharge]);
+            }
             // A RAMP's running total (F1, D18) steps every frame regardless of Left, so it keeps
             // draining after the row stops -- Steer already ran this frame (LocalFlight, above),
             // so _yawRate is this frame's, not last frame's. OWNER-STEPPED: only the peer that
@@ -1242,6 +1253,259 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         }
     }
 
+    // ── an active reload (AbilityDef.Reload: the Sniper's railgun) ─────────────
+    // THE OWNER'S STROKE RULE (ActiveReload.cs, one meaning per stroke): a trigger row that reloads
+    // actively fixes each stroke's meaning at its press -- the owner's view reloading, it is the timing
+    // press (ActiveReload.Press) and the trigger stays low until it is let go; otherwise it is the
+    // charge, and the trigger follows the key. A guest's own charge let go starts its view's reload.
+    public ActiveReload.View ReloadView;
+    private bool _strokeDown, _strokeTimes;
+    private bool Stroke(AbilityDef def, bool down)
+    {
+        if (def.Reload is not { } r) return down;
+        if (down && !_strokeDown)
+        {
+            _strokeTimes = ReloadView.Running;
+            if (_strokeTimes) ActiveReload.Press(this, r);
+        }
+        else if (!down && _strokeDown && !_strokeTimes && !Net.Sim && ReloadView.Charge > 0) ActiveReload.Shot(this, r);
+        _strokeDown = down;
+        return down && !_strokeTimes;
+    }
+    // THE HOST'S CHARGE LATCH: a charge begins on the later of the trigger rising and the chamber
+    // seating, fills at the ship's Cadence of the row's Charge, and on the trigger falling fires the
+    // row's Loose with the share it reached (1 at full, held past full is full). A wreck or a DISABLED
+    // hull loses a charge it had begun; the round stays in the chamber.
+    private double _charge = -1;
+    private void ChargeLatch(double delta)
+    {
+        if (Abilities.TriggerOf(Class) is not { Reload: { } r } def) return;
+        if (!Alive || Disabled || Stilled) { _charge = -1; return; }
+        if (_charge < 0) { if (Trigger && ActiveReload.Seated(Sl(r.Id))) _charge = 0; return; }
+        if (Trigger) { _charge += delta; return; }
+        double share = Math.Min(1, _charge / Math.Max(1e-6, Cadence(r.Charge)));
+        _charge = -1;
+        def.Loose?.Invoke(this, share);
+    }
+
+    // ── melee: every row that names a Swing (the blade, the whirlwind) ─────────
+    // A Hold row swings while the trigger holds and nothing Stills it; a Press row while its Left
+    // runs. Each keeps its own clock in its slot's Own (host-side; the wire's copy is only drawn),
+    // which CARRIES its remainder like the guns' reload, and a swing lands at once on the first frame.
+    public bool Stilled
+    {
+        get
+        {
+            foreach (var def in Abilities.For(Class)) if (def.Stills && Sl(def.Id).Left > 0) return true;
+            return false;
+        }
+    }
+    private void Swings(double delta)
+    {
+        foreach (var def in Abilities.For(Class))
+        {
+            if (def.Swing is not { } row) continue;
+            ref var sl = ref Sl(def.Id);
+            bool on = Alive && !_status.Has(Status.Disabled) && Melee.Running(this, def);
+            if (!on) { sl.Own = Math.Max(0, sl.Own - delta); continue; }
+            sl.Own -= delta;
+            for (int n = 0; sl.Own <= 0 && n < 8; n++)
+            {
+                Melee.Strike(row, this, Stats[row.Damage]);
+                sl.Own += Cadence(row.Every);
+            }
+        }
+    }
+
+    // WHAT A PRESS SPENDS, on the host: a CHARGED row (AbilityDef.Charges) one charge if one is left (its slot's N
+    // counts the spent ones), the recharge started if none was running; a row with a Cooldown its cooldown, if it
+    // is not cooling. False: nothing to spend, and the press does nothing.
+    private bool Spend(AbilityDef def)
+    {
+        ref var sl = ref Sl(def.Id);
+        if (def.Charges != null)
+        {
+            if (sl.N >= (int)Stats[def.Charges]) return false;
+            sl.N++;
+            if (sl.Cool <= 0) sl.Cool = Cooling(Stats[def.Recharge]);
+            return true;
+        }
+        if (def.Cooldown == null) return true;
+        if (sl.Cool > 0) return false;
+        sl.Cool = Cooling(Stats[def.Cooldown]);
+        return true;
+    }
+    // A ZONE LAID (AbilityDef.Lays: the tether mine, the curtain), on the host: what the press spends, then the
+    // row laid where it goes (Zones.Spot: the stern, or the cursor clamped with its bar across the aim), what the
+    // host decides of it read from this sheet now (Zones.Lay).
+    public void Lay(string id)
+    {
+        var def = Abilities.Find(Class, id);
+        if (def?.Lays is not { } row || !Net.Sim || MyHub is not { } hub || !Spend(def)) return;
+        var (at, rot) = Zones.Spot(row, Position, Rotation, MyArt.Length * 0.5f, AimPoint);
+        Zones.Lay(hub, row, at, rot, this);
+    }
+
+    // A SALVO POPPED (AbilityDef.Pops: the flares), on the host: what the press spends (its Cooldown), then the
+    // row round the hull (Hub.Flares).
+    public void Pop(string id)
+    {
+        var def = Abilities.Find(Class, id);
+        if (def?.Pops is not { } row || !Net.Sim || MyHub is not { } hub || !Spend(def)) return;
+        hub.Flares(Position, Rotation, Array.IndexOf(Decoys.All, row));
+    }
+
+    // THE TAUNT (AbilityDef Taunt: the Warden's Q), on the host: for taunt_time every raider squad with a member
+    // within taunt_reach, or hunting a target within it, is called onto this ship (Raider.Call: a boss, a missile
+    // or a practice craft never -- Targeting.Raiding); the hull takes taunt_guard of every blow (Hardened); the
+    // reach flashes for every peer. The x taunt_mult is Outgoing's; the row Draws while it runs (Draws below).
+    public void Taunt()
+    {
+        ref var sl = ref Sl("taunt");
+        if (!Net.Sim || sl.Cool > 0 || sl.Left > 0 || MyHub is not { } hub) return;
+        double secs = Stats["taunt_time"]; float reach = (float)Stats["taunt_reach"];
+        sl.Left = secs; sl.Cool = Cooling(Stats["taunt_cooldown"]);
+        _status.Apply(Status.Hardened, secs, Stats["taunt_guard"]);
+        Fx.Raise(Fx.TauntRing, Position, reach);
+        foreach (var r in hub.Raiders.ToList())
+            if (Targeting.Raiding.Hits(r) && (r.Position.DistanceTo(Position) <= reach || (r.Target is { } t && t.Position.DistanceTo(Position) <= reach)))
+                r.Call(this, secs);
+    }
+
+    // IT DRAWS THE HOSTILE GUNS (IRaidTarget.Draws) while any of its class's rows that Draws runs: the Taunt. Read by
+    // an emplacement's gun (Emplacement.Prefer), on the host, where the row's Left is the host's own.
+    public bool Draws
+    {
+        get
+        {
+            foreach (var def in Abilities.For(Class)) if (def.Draws && Sl(def.Id).Left > 0) return true;
+            return false;
+        }
+    }
+
+    // THE WHIRLWIND'S PRESS (host): its time up, its cooldown, its first blow at once; every web on
+    // the hull let go (the pin and the web's own ask), and none may take it until the spin is over.
+    public void Whirl()
+    {
+        ref var sl = ref Sl("whirlwind");
+        if (sl.Left > 0 || sl.Cool > 0) return;
+        sl.Left = Stats["whirl_time"]; sl.Cool = Cooling(Stats["whirl_cooldown"]); sl.Own = 0;
+        _webAsked = 0; _webPhase = 0; _status.Clear(Status.Pinned);
+        _status.Apply(Status.Unwebbed, sl.Left);
+    }
+
+    // ── a stance (AbilityDef.Stance: the prism) ─────────────────────────────
+    // THE PRESS, on the host: up (its Time, its Status for that Time, no split yet), or, pressed while it
+    // runs, dropped -- at once, or over its Release (what is left is cut to it; a press inside the release
+    // changes nothing). Its cooldown is set where it ENDS (EndStance), never here.
+    public void Stance(string id)
+    {
+        var st = Abilities.Find(Class, id)?.Stance;
+        ref var sl = ref Sl(id);
+        if (st == null) return;
+        if (sl.Left > 0)
+        {
+            if (st.Release == null) EndStance(id);
+            else sl.Left = Math.Min(sl.Left, Stats[st.Release]);
+            return;
+        }
+        if (sl.Cool > 0) return;
+        sl.Left = Stats[st.Time]; sl.N = 0; sl.Own = 0;
+        if (st.Holds != Status.None) _status.Apply(st.Holds, sl.Left);
+    }
+    // IT ENDS: dropped, ended by another press, or run out (the row's Elapsed, on every peer, so every bar
+    // shows the cooldown at once). The cooldown runs from here; the host lets the Status go.
+    public void EndStance(string id)
+    {
+        var st = Abilities.Find(Class, id)?.Stance;
+        if (st == null) return;
+        ref var sl = ref Sl(id);
+        sl.Left = 0; sl.Cool = Cooling(Stats[st.Cooldown]);
+        if (Net.Sim && st.Holds != Status.None) _status.Clear(st.Holds);
+    }
+    // THE SPLIT TICK (IPrism.Split, the host's Prism.Catch): a running stance splits at most its Splits
+    // catches, Every seconds apart (a hair early is on time: a burn's own tick is the same 0.75 s); its
+    // slot counts them (N) and keeps when the last one fell, in seconds into the stance (Own). A catch in
+    // between still takes the catcher nothing. With no stance running (the status put on by hand) every
+    // catch splits.
+    public const double SplitEarly = 0.05;
+    public bool Split()
+    {
+        foreach (var def in Abilities.For(Class))
+        {
+            if (def.Stance is not { Splits: not null } st || Sl(def.Id).Left <= 0) continue;   // a stance that splits
+            ref var sl = ref Sl(def.Id);
+            double into = Stats[st.Time] - sl.Left;
+            if (sl.N >= (int)Stats[st.Splits] || (sl.N > 0 && into - sl.Own < Stats[st.Every] - SplitEarly)) return false;
+            sl.N++; sl.Own = into;
+            return true;
+        }
+        return true;
+    }
+
+    // ── a dash (AbilityDef.Dash: the lunge) ─────────────────────────────────
+    // THE PRESS, on the host: the row's Time up, its cooldown, where and which way it started (the
+    // slot's At and Own, which the wire carries), the hardening, and nothing struck yet.
+    private readonly HashSet<IHittable> _dashStruck = new();
+    public void StartDash(string id)
+    {
+        var d = Abilities.Find(Class, id)?.Dash;
+        ref var sl = ref Sl(id);
+        if (d == null || sl.Left > 0 || sl.Cool > 0) return;
+        sl.Left = Stats[d.Time]; sl.Cool = Cooling(Stats[d.Cooldown]);
+        sl.At = Position; sl.Own = Rotation;
+        _dashStruck.Clear();
+        if (d.Guard != null) ApplyStatus(Status.Hardened, sl.Left, Stats[d.Guard]);   // the dash says how hard
+    }
+    // THE HOST'S SWEEP: every hostile body within the hull's half-beam (plus its own radius) of the line
+    // from the press's spot, along its heading, `progress` (0..1) of the way to the row's Reach, struck
+    // once a dash for the row's Damage. Run every frame the row is up, and at 1 by its Expire.
+    public void DashSweep(string id, double progress)
+    {
+        var d = Abilities.Find(Class, id)?.Dash;
+        if (d == null || !Net.Sim) return;
+        ref var sl = ref Sl(id);
+        var from = sl.At;
+        var to = from + Vector2.Up.Rotated((float)sl.Own) * (float)(Stats[d.Reach] * Math.Clamp(progress, 0, 1));
+        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
+        {
+            if (_dashStruck.Contains(h)) continue;
+            var near = Geometry2D.GetClosestPointToSegment(h.Position, from, to);
+            if (near.DistanceTo(h.Position) > MyArt.HalfWidth + h.HitRadius) continue;
+            _dashStruck.Add(h);
+            Dealt.Deal(h, Stats[d.Damage], this, id);
+            if (h is Node2D n) Popups.NoteImpact(n, h.Position);
+        }
+    }
+    private void DashSweeps()
+    {
+        foreach (var def in Abilities.For(Class))
+            if (def.Dash is { } d && Sl(def.Id).Left > 0) DashSweep(def.Id, 1 - Sl(def.Id).Left / Stats[d.Time]);
+    }
+    // THE OWNER'S CARRY: from the first frame it sees a dash row's Left (the host's press, here at once
+    // on the host, a packet later on a guest), the hull goes the row's Reach along its nose over the
+    // row's whole Time, whatever the lifts, the helm or its speed -- exactly Reach, the last frame's step
+    // cut to what is left. A fresh press is told from a stale packet by its cooldown jumping back up.
+    private AbilityDef _dashRow;
+    private double _dashLeft, _dashCool0 = double.NegativeInfinity, _dashAt;
+    private bool DashCarry(float dt)
+    {
+        if (Disabled) { _dashLeft = 0; return false; }
+        if (_dashLeft <= 0)
+            foreach (var def in Abilities.For(Class))
+            {
+                if (def.Dash == null || Sl(def.Id).Left <= 0) continue;
+                if (Sl(def.Id).Cool <= _dashCool0 - (_clock - _dashAt) + 1.0) continue;    // the dash already flown
+                _dashRow = def; _dashLeft = Stats[def.Dash.Time]; _dashCool0 = Sl(def.Id).Cool; _dashAt = _clock;
+                break;
+            }
+        if (_dashLeft <= 0 || _dashRow?.Dash is not { } d) return false;
+        double step = Math.Min(dt, _dashLeft);
+        _dashLeft -= step;
+        Position += Vector2.Up.Rotated(Rotation) * (float)(Stats[d.Reach] / Stats[d.Time] * step);
+        return true;
+    }
+
     // ── the owner steers it: naval handling ──────────────────────────────────
     private void LocalFlight(float dt)
     {
@@ -1271,14 +1535,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             (throttle, rudder) = Autopilot.Capital(Position, Rotation, Velocity, (float)Stats["max_speed"], dest, 60f);
         if (Pinned) { throttle = 1f; rudder = 0f; strafe = 0f; AutopilotTo = null; }   // forced thrust, no rudder, no slide
         Thrusting = throttle != 0f;
-        Steer(throttle, rudder, strafe, dt);
+        if (!DashCarry(dt)) Steer(throttle, rudder, strafe, dt);   // a dash carries the hull instead of the helm
 
         // the main guns aim at the cursor; the hull does not follow it
         if (!Demo) Trigger = false;              // a display ship's driver owns the trigger
         if (!locked)
         {
             AimPoint = GetGlobalMousePosition();
-            Trigger = Stats.Def.Has(Fit.Guns) && Input.IsKeyPressed(Abilities.KeyFor(Class, "guns"));
+            Trigger = Abilities.TriggerOf(Class) is { } trig && Stroke(trig, Input.IsKeyPressed(Abilities.KeyFor(Class, trig.Id)));
         }
 
         SendState(dt);
@@ -1333,9 +1597,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (disabled) { throttle = 0f; rudder = 0f; }
         float hold = Held;
         throttle *= hold; rudder *= hold;
-        // A SPEED LIFT (the rush, the boost, the veil) lifts the push ahead WITH the top speed. The
-        // water holds a hull to thrust / drag, so a lift on the cap alone would stop there: a warrior
-        // pushes 130 against 0.35, which is 371 u/s of the 475 its 2.5x rush promises. Astern is
+        // A SPEED LIFT (the boost, the veil) lifts the push ahead WITH the top speed. The water holds a
+        // hull to thrust / drag, so a lift on the cap alone would stop there: a heavy pushes 130
+        // against 0.35, which is 371 u/s where a 2.5x lift on its 190 promises 475. Astern is
         // not lifted, and neither is its cap.
         float lift = SpeedMult;
         if (throttle > 0) along += (float)Stats["thrust"] * lift * throttle * dt;
@@ -1540,6 +1804,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Alive)
             Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f - MyArt.EngineInset), Vector2.Down, MyArt.Length, Accent,
                        0.25f + 0.75f * Mathf.Abs(SpeedAhead) / (float)Stats["max_speed"], Thrusting || Mathf.Abs(SpeedAhead) > 2f);
+        Melee.Draw(this);                           // a blade or a spin swinging, on every peer
+        ActiveReload.Draw(this);                    // an enhanced round's glint at the muzzle, on every peer
         foreach (var (p, t) in _signals)
         {
             bool yellow = (int)(t * 7) % 2 == 0;                           // flashing

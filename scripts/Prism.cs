@@ -27,7 +27,7 @@ using System.Linq;
 //
 // A NEW BAND is a row of Prism.Bands (its widest angle, what goes back and along what, what goes
 // on and whether it bends). How often a stance may split and how long it lasts are the stance's
-// own (its ability row, 6c), not this file's.
+// own (AbilityDef.Stance: prism_split, prism_splits, prism_time), asked through IPrism.Split.
 // ─────────────────────────────────────────────────────────────────────────────
 // Area: a ring, a ram, the rock, a blast, a web -- what lands where it lands and is never caught
 public enum BlowKind { Beam, Ray, Shot, Area }
@@ -51,6 +51,9 @@ public interface IPrism
 {
     bool Prismatic { get; }
     float GuardAngle { get; }
+    // May this catch split now? The stance's own tick and cap (PlayerShip.Split); a caught blow that
+    // may not still takes the catcher nothing. Counts the split when it says yes.
+    bool Split();
 }
 
 // ONE RESOLVED CATCH: the band (-1: OPEN, not caught), the unit directions of the two children,
@@ -119,6 +122,7 @@ public static class Prism
         var u = (at.Position - source).Normalized();
         var split = Resolve(at, u);
         if (!split.Caught) return false;
+        if (at is IPrism p && !p.Split()) return true;       // caught between the stance's splits: nothing lands, nothing splits
         bool ray = kind == BlowKind.Ray;
         var from = at.Position;
         Lines.Strike(Lines.PrismOut, at as PlayerShip, from, from + split.Out, d * split.OutShare, ray ? RayReach : BeamReach);

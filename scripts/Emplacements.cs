@@ -174,6 +174,12 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
     public System.Collections.Generic.IReadOnlyList<Turret> Siblings => _mounts;
     public void NoteDealt(double d, IHittable target, string weapon) { }
     public PlayerShip Credit => null;
+    // WHAT ITS GUN TAKES FIRST: the nearest pilot in its reach that DRAWS the hostile guns (IRaidTarget.Draws: a
+    // running Taunt), before the nearest of all -- read as each warning goes up (WarnAndFire). Null: none does,
+    // or it has no gun. Host.
+    public IHittable Prefer => Def.Gun is { } gun
+        ? Targeting.Nearest(Combat.Players, Position, Targeting.Attackable, gun.Range, h => h is IRaidTarget { Draws: true })
+        : null;
     // read as each round leaves (Turret.Shoot), so its damage goes out through the door
     // (StatusSet.Out) with whatever is on this hull at that moment
     public TurretSpec Spec(bool pd)
@@ -230,9 +236,9 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
             _status.Tick(delta);
             if (Def.Gun is { } gun)
             {
-                var prey = Targeting.Nearest(Combat.Players, Position, Targeting.Attackable, gun.Range);
+                var prey = Prefer ?? Targeting.Nearest(Combat.Players, Position, Targeting.Attackable, gun.Range);
                 WarnAndFire(gun, prey, delta);
-                // the barrel follows the pilot a warning is up for, and otherwise the nearest in reach
+                // the barrel follows the pilot a warning is up for, and otherwise the one it would take
                 // -- while it can SEE that pilot. Aiming is choosing (Targeting.cs), so a pilot gone
                 // dark leaves the barrel on the last point it was seen at, as a boss's aim is left, and
                 // the round leaves down that line and flies on straight (Shot: homing is choosing too)

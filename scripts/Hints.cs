@@ -33,6 +33,7 @@ public partial class Hints : CanvasLayer
         ["boost"]       = ("BOOST", "V: +50% top speed, thrust and strafe for 3 s, every 15 s."),
         ["strafe"]      = ("STRAFE", "Hold Shift and A / D slide the hull sideways; the nose and your guns stay where they are."),
         ["stasis"]      = ("STASIS", "Your ship is held in stasis, not lost. Fly the escape pod clear; F re-boards when the ship is ready."),
+        ["reload"]      = ("ACTIVE RELOAD", "Tap SPACE while the grey bar is inside the white box: the next round hits half again as hard."),
         ["boss"]        = ("THE BOSS", "Red shapes are its attacks, drawn before they land: get out of them. Its adds come in squads: a web holds you for its beam, so kill the webifiers. Beat it for EXP, a bounty and parts."),
     };
 

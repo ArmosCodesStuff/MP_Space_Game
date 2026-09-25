@@ -77,7 +77,8 @@ public interface ITurretHost
     void NoteDealt(double d, IHittable target, string weapon);  // what this gun just did, and to what
     PlayerShip Credit { get; }                  // whose shell it is, for the tally (may be null)
     // WHAT IT TAKES FIRST, whatever its rank, while it is in reach and the gun's Prey may choose it:
-    // a sentry's owner's paint (F14). Null -- every gun but a sentry -- changes nothing.
+    // a sentry's owner's paint (F14). An emplacement names its drawing pilot (a Taunt), which its own gun's choice
+    // reads (Emplacement.WarnAndFire): its mount is a main gun and follows AimAt. Null changes nothing.
     IHittable Prefer => null;
 }
 
