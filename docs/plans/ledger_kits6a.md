@@ -394,3 +394,18 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   x0.7, 50/250 x1.0), frame LaneA6aSuppressFrames (85d_dd_suppressed: the chevron), witness "suppress" in the sweep.
 - Harness notes: python edit scripts written to the scratchpad file first (bash heredocs holding long C# broke); every
   tracked file is LF. typecheck ~20 s; verify -Quick > 2 min (run it with a 600 s timeout).
+
+### kits6a-J8 · PRE · Suppressing fire (A6a-8) -- tier opus (agent 4; no COORDINATOR NOTE in the tail)
+- Intent: Ab.Suppress (Q) = a timed row (RunFor: suppress_window 6, suppress_cooldown 20 from the press) whose OnDealt
+  hands every hostile a SHELL hits (weapon id Shots.Of(Shots.Shell).Id; the Lance "lance" and PD "pd" differ) to a new
+  generic PlayerShip.Afflict(target, Status.Suppressed, "suppress_time", Fx.Chevron): host only, IStatused only, the
+  status via ApplyStatus (Reaches / OutGuards unchanged), the mark raised only when the status is new or has run down
+  0.5 s. Fx: FxShape.Chevron, Fx.Chevron = 16 appended at the END, row "chevron" (grey, Life 3, Cap 1), Fx.Mark(id, h)
+  raising on the hull's NetId; drawn upright HitRadius + 12 u above the hull. DD Rows suppress_window / suppress_time /
+  suppress_cooldown; DD Abilities Guns, Lance, Suppress; Items @duration + suppress_window.
+  Checks NEW: LaneA6aSuppressChecks, LaneA6aSuppressWeaponChecks, LaneA6aSuppressGunChecks, frame LaneA6aSuppressFrames
+  (85d_dd_suppressed), rung 5 LaneA6aSuppressGuestChecks; the sweep's witness "suppress".
+- Files: scripts/Abilities.cs, Ships.cs, PlayerShip.cs, Fx.cs, Items.cs, tools/smoketest/SmokeTest.cs.txt,
+  tools/screens/Shots.cs.txt.
+- HEAD 7ae29dd8e7fd9ea3993c28576e3a9f9b483bea98 · Abilities.cs 4d6035da · Ships.cs d40e1d14 · PlayerShip.cs 14d5308d ·
+  Fx.cs a25d422d · Items.cs e111996e · SmokeTest.cs.txt ec3a7496 · Shots.cs.txt 71b74484
