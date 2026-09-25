@@ -13667,6 +13667,8 @@ public partial class _Test : Node
 
         await ItemsEchoChecks(yonder);
         await ItemsBoostLiftChecks();
+        await ItemsAnchorLiftChecks(yonder);
+        await ItemsFlareRiderChecks(yonder);
     }
 
     // THE ECHO REPEATS WHAT WAS WEIGHED, ONCE (Items.Repeats): each blow it stores was weighed at the
@@ -13789,14 +13791,14 @@ public partial class _Test : Node
         bool Fit(string id, ShipClass c) { var it = Equipment.ById(id); return it != null && Equipment.Fits(it, it.Slot, c); }
         var ready = Classes.All.Where(c => c.Ready).Select(c => c.Id).ToList();
         Check(ready.All(c => Wears(c) >= 10) && Wears(ShipClass.Destroyer) == 10 && Wears(ShipClass.Battleship) == 11 && Wears(ShipClass.HeavyWarrior) == 10
-              && Wears(ShipClass.HeavyWarden) == 11 && Wears(ShipClass.LightEcho) == 10,
-              $"every class wears at least 10 of its category's lines: battleship 11, destroyer 10, warden 11, warrior 10, echo 10 ({string.Join(", ", ready.Select(c => $"{Classes.NameOf(c)} {Wears(c)}"))})");
+              && Wears(ShipClass.HeavyWarden) == 11 && Wears(ShipClass.HeavySniper) == 11 && Wears(ShipClass.LightEcho) == 10,
+              $"every class wears at least 10 of its category's lines: battleship 11, destroyer 10, warden 11, sniper 11, warrior 10, echo 10 ({string.Join(", ", ready.Select(c => $"{Classes.NameOf(c)} {Wears(c)}"))})");
         Check(Fit("magazine_core_t3", ShipClass.Battleship) && Fit("magazine_core_t3", ShipClass.Carrier) && !Fit("magazine_core_t3", ShipClass.Destroyer)
-              && Fit("swarm_rack_t7", ShipClass.HeavyWarden) && !Fit("swarm_rack_t7", ShipClass.HeavyWarrior)
+              && Fit("swarm_rack_t7", ShipClass.HeavyWarden) && Fit("swarm_rack_t7", ShipClass.HeavySniper) && !Fit("swarm_rack_t7", ShipClass.HeavyWarrior)
               && Fit("warp_spine_t1", ShipClass.Carrier) && !Fit("warp_spine_t1", ShipClass.FreightHauler)
               && !Fit("hot_barrel_t1", ShipClass.Battleship) && Fit("hot_barrel_t1", ShipClass.LightWraith) && !Fit("heavy_barrel_t10", ShipClass.LightDart)
               && ready.All(c => chips.All(l => Fit($"{l.Stem}_t5", c))),
-              "a line fits its own category: Magazine Core on the battleship and the carrier but never the destroyer, Swarm Rack on the warden but never the warrior, Warp Spine on capitals only, a light's Hot Barrel on no battleship; every chip on every hull");
+              "a line fits its own category: Magazine Core on the battleship and the carrier but never the destroyer, Swarm Rack on the warden and the sniper but never the warrior, Warp Spine on capitals only, a light's Hot Barrel on no battleship; every chip on every hull");
         // PAR'S LINES: one per power slot per category, the Weapon, Utility, Shield and Hull ones
         var par = lines.Where(l => l.Par).ToList();
         Check(par.Count == 16 && Enum.GetValues<HullCat>().All(c => par.Where(l => l.Cat == c).Select(l => l.Slot).OrderBy(x => x)
@@ -13843,19 +13845,24 @@ public partial class _Test : Node
               && NearI(crawl, 104 * 0.1),
               $"no stack takes a number to zero: a battleship paying top speed in four slots and three combat chips is -108%, held at the x0.1 floor ({crawl:0.0} u/s of 104); the worst hull on a battleship 0, on a dart -15% ({Worst(ShipClass.Battleship, "max_speed"):0.00})");
         // EVERY STAT A PART NAMES IS REAL on every hull it fits (a role on at least one of its rows),
-        // and no part changes a turret count
-        var unknown = new List<string>();
+        // and no part changes a turret count. An UP always is. A PRICE may find no row only where the
+        // hull has no such system at all (ledger_items R-D5): the battleship has no ability reach, so
+        // Salvo and Magazine Core are unpriced on it; the railgun and the blade aim with the nose, so
+        // Heavy Barrel's tracking price finds nothing on the sniper and the warrior. Exactly these four.
+        var unknown = new List<string>(); var unpriced = new List<string>();
         foreach (var it in drops.Where(i => i.Tier == 1))
             foreach (var c in ready.Where(c => Equipment.Fits(it, it.Slot, c)))
             {
                 var sheet = Equipment.SheetOf(c);
                 foreach (var key in it.Pct.Keys)
-                    if (!Items.IdsOf(key, c).Any(sheet.Contains)) unknown.Add($"{it.Line.Stem}/{Classes.NameOf(c)}:{key}");
+                    if (!Items.IdsOf(key, c).Any(sheet.Contains))
+                        (it.Line.Up.Any(u => u.key == key) ? unknown : unpriced).Add($"{it.Line.Stem}/{Classes.NameOf(c)}:{key}");
                 if (it.Add.Count > 0 && !it.Add.Keys.Any(sheet.Contains)) unknown.Add($"{it.Line.Stem}/{Classes.NameOf(c)}:+n");
             }
         bool noCounts = drops.All(i => !i.Pct.Keys.Concat(i.Add.Keys).Any(k => k is "main_count" or "pd_count" or "strike_range"));
-        Check(unknown.Count == 0 && noCounts,
-              $"every stat a part names is on every hull it fits, and no part changes a turret count ({unknown.Count}: {string.Join(", ", unknown.Take(12))})");
+        var unpricedWant = new[] { "heavy_barrel/SNIPER:@tracking", "heavy_barrel/WARRIOR:@tracking", "magazine_core/BATTLESHIP:@area", "salvo_core/BATTLESHIP:@area" };
+        Check(unknown.Count == 0 && noCounts && unpriced.OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(unpricedWant),
+              $"every stat a part names is on every hull it fits, and no part changes a turret count ({unknown.Count}: {string.Join(", ", unknown.Take(12))}); a price finds no row only for Salvo / Magazine Core on the battleship and Heavy Barrel on the sniper and the warrior ({string.Join(", ", unpriced)})");
         var kit = Equipment.All.Where(i => i.Kit).ToList();
         var bsC = ShipClass.Battleship; var ddC = ShipClass.Destroyer;
             // A KIT PART FITS ONLY THE HULLS BORN WITH IT, by the SAME rule as every other part:
@@ -13890,6 +13897,150 @@ public partial class _Test : Node
         var words = Equipment.Describe(Equipment.ById("chip_combat_t1"), ShipClass.Carrier).ToList();
         Check(words.Any(w => w.StartsWith("Fighters")) && words.Any(w => w.StartsWith("Bombers")) && words.Any(w => w.StartsWith("Helm")) && !words.Any(w => w.StartsWith("Main guns")),
               $"a part's effects are named for the ship it is on: the Combat Chip on a carrier lifts its fighters and torpedoes and costs helm ({string.Join(" | ", words)})");
+    }
+
+    // THE ITEMS RECONCILED WITH THE BUILT KITS (ledger_items "LANE I RECONCILE", R-D1..R-D4): each role row
+    // the reconcile added, on the ship's own sheet, at T1 / T5 / T10 (P = 1, 1.4641, 2.357948), every figure
+    // a literal from the class's card and §3.3's lean -- a lift row's EXCESS moves (R-D1), never the whole x.
+    //   the railgun is the sniper's primary: Gunner Chip 120 -> 132 / 137.57 / 148.30; Rapid Action shortens
+    //     the charge 0.8 s and the reload 3.0 s together (/1.2, /1.29282, /1.47159) and pays range 2500 -> 1800;
+    //   Tactical Core lifts the Anchor's x2.5 to 2.875 / 3.049 / 3.384 and pays its x1.4 reach down to 1.288,
+    //     the railgun's own 120 untouched;
+    //   Field Core on the tender: the Overdrive field x1.5 -> 1.625 (T10 1.7947), the Repair field 2% -> 2.5% a
+    //     second, fields 500 -> 360 u; on the hauler Time on target 40 -> 50; on the bastion the Buster 180 -> 225;
+    //   Field Emitter on the tender: fields 500 -> 590 / 712.2 u, the Repair and Overdrive fields 8 -> 9.6 / 11.77 s;
+    //   Salvo Core: the destroyer's Lance run 3000 -> 2160 u; the carrier's gunships 2.5 -> 3.125 a shot;
+    //   Ace Core pays its reach on every light: the rod 1400 -> 1008 u, the Shadow step 900 -> 648 u, the EMP 300 -> 216 u.
+    void ItemsReconcileChecks()
+    {
+        ShipStats On(ShipClass c, string id)
+        {
+            var lo = Equipment.Default(c); var it = Equipment.ById(id);
+            lo[it.Slot == GearSlot.Chip ? Equipment.CoreSlots : Array.IndexOf(Equipment.Core, it.Slot)] = id;
+            return new ShipStats(c, Equipment.Bonuses(c, lo, 14, NoLevels));
+        }
+        var off = new List<string>();
+        void Want(ShipClass c, string id, string stat, double want, double tol = 1e-4)
+        {
+            double got = On(c, id)[stat];
+            if (!NearI(got, want, tol)) off.Add($"{id}/{Classes.NameOf(c)} {stat} {got:0.####} ({want})");
+        }
+        var sn = ShipClass.HeavySniper;
+        foreach (var (t, rail) in new[] { (1, 132.0), (5, 137.5692), (10, 148.2954) }) Want(sn, $"chip_gunner_t{t}", "rail_damage", rail);
+        Want(ShipClass.HeavyWarden, "chip_gunner_t1", "hunter_damage", 45); Want(ShipClass.HeavyWarden, "chip_gunner_t1", "main_damage", 24.75);
+        foreach (var (t, charge, reload) in new[] { (1, 0.666667, 2.5), (5, 0.618801, 2.320508), (10, 0.543630, 2.038612) })
+        {
+            Want(sn, $"rapid_action_t{t}", "rail_charge", charge); Want(sn, $"rapid_action_t{t}", "rail_reload", reload);
+            Want(sn, $"rapid_action_t{t}", "rail_range", 1800);
+        }
+        foreach (var (t, rate) in new[] { (1, 2.875), (5, 3.049038), (10, 3.384231) })
+        {
+            Want(sn, $"tactical_core_t{t}", "anchor_rate", rate); Want(sn, $"tactical_core_t{t}", "anchor_reach", 1.288);
+            Want(sn, $"tactical_core_t{t}", "rail_damage", 120);
+        }
+        var td = ShipClass.FreightTender;
+        foreach (var (t, od) in new[] { (1, 1.625), (5, 1.683013), (10, 1.794744) }) Want(td, $"field_core_t{t}", "overdrive_mult", od);
+        Want(td, "field_core_t1", "repair_share", 0.025, 1e-9); Want(td, "field_core_t1", "field_radius", 360);
+        Want(ShipClass.FreightHauler, "field_core_t1", "tot_damage", 50); Want(ShipClass.FreightHauler, "field_core_t10", "tot_damage", 63.5795);
+        Want(ShipClass.FreightBastion, "field_core_t1", "buster_damage", 225); Want(ShipClass.FreightBastion, "field_core_t5", "buster_damage", 245.8845);
+        foreach (var (t, r, s) in new[] { (1, 590.0, 9.6), (10, 712.2153, 11.77272) })
+        {
+            Want(td, $"field_emitter_t{t}", "field_radius", r, 1e-3); Want(td, $"field_emitter_t{t}", "repair_time", s); Want(td, $"field_emitter_t{t}", "overdrive_time", s);
+        }
+        Want(ShipClass.Destroyer, "salvo_core_t1", "lance_range", 2160); Want(ShipClass.Destroyer, "salvo_core_t10", "lance_range", 2160);
+        Want(ShipClass.Carrier, "salvo_core_t1", "gunship_damage", 3.125); Want(ShipClass.Carrier, "salvo_core_t1", "torpedo_damage", 75);
+        Want(ShipClass.LightDart, "ace_core_t1", "rod_range", 1008); Want(ShipClass.LightWraith, "ace_core_t5", "step_reach", 648);
+        Want(ShipClass.LightEcho, "ace_core_t10", "emp_range", 216);
+        Check(off.Count == 0,
+              $"the items reconciled with the built kits: the railgun is the sniper's primary (Gunner 132, Rapid Action charge 0.667 s + reload 2.5 s at 1800 u), Tactical Core lifts the Anchor's excess (x2.875, reach x1.288), Field Core the Overdrive's excess (x1.625), the Repair field, TOT and the Buster; Field Emitter the tender's fields; Salvo and Ace Core pay the Lance / rod / step / EMP reach ({off.Count} off: {string.Join(", ", off.Take(8))})");
+    }
+
+    // TACTICAL CORE ON A RUNNING ANCHOR (the interaction: an item's excess share x an ability's running lift).
+    // Three varied situations -- none, T1, T10, each at a VaryNear spot and VaryAngle heading: the anchored
+    // sniper's FireRate is the Anchor's x2.5 / x2.875 / x3.3842 and its ReachMult x1.4 / x1.288 / x1.288;
+    // and its 0.8 s charge takes 0.8 / that; weighed out again, both are x1. Read once the anchor shows, never on the press.
+    async Task ItemsAnchorLiftChecks(Vector2 yonder)
+    {
+        foreach (var (id, rate, reach) in new[] { ("", 2.5, 1.4), ("tactical_core_t1", 2.875, 1.288), ("tactical_core_t10", 3.384231, 1.288) })
+        {
+            var was = await WearI(ShipClass.HeavySniper, id == "" ? Equipment.Default(ShipClass.HeavySniper)[4] : id);   // no part: the kit Utility
+            var sn = Me; bool demo = sn.Demo; sn.Demo = true; sn.AutopilotTo = null;
+            sn.Position = VaryNear(yonder, 300f); sn.Rotation = VaryAngle(); sn.Velocity = Vector2.Zero;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await SniperAnchor(sn, true);
+            float onRate = sn.FireRate, onReach = sn.ReachMult; double onCharge = sn.Cadence("rail_charge");
+            await SniperAnchor(sn, false);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float offRate = sn.FireRate, offReach = sn.ReachMult;
+            Check(NearI(onRate, rate, 1e-4) && NearI(onReach, reach, 1e-4) && NearI(onCharge, 0.8 / rate, 1e-4) && NearI(offRate, 1, 1e-6) && NearI(offReach, 1, 1e-6),
+                  $"the Anchor under {(id == "" ? "no part" : id)}: fire rate x{onRate:0.0000} (x{rate}), the 0.8 s charge {onCharge:0.0000} s, reach x{onReach:0.000} (x{reach}); weighed out x{offRate:0.00} / x{offReach:0.00} (x1)");
+            sn.Demo = demo;
+            await WornOffI(ShipClass.HeavySniper, was);
+        }
+    }
+
+    // SWARM RACK'S FLARES (§3.3: "Flares 6 -> 7 -> ... +2 from T6"; ledger_items R-D6): the salvo's count is the
+    // sniper's flare_count row, carried in the spawn seed (Decoys.Pack: row + 64 x count). The pure rule once
+    // (Pack / Unpack at 0 / 7 / 8; an old seed of 0 draws the row's six), then three varied runs through E --
+    // no part, Swarm Rack T1, Swarm Rack T6, each at a VaryNear spot and VaryAngle heading -- pop 6 / 7 / 8
+    // flares 180 u round the hull, evenly (360 / n degrees apart), the first dead astern. The warden's rack
+    // lifts its hunters 6 -> 7 and names no flare row.
+    async Task ItemsFlareRiderChecks(Vector2 yonder)
+    {
+        var fl = Decoys.Of(Decoys.Flares);
+        Check(Decoys.Pack(Decoys.Flares, 0) == 0 && Decoys.Unpack(Decoys.Pack(Decoys.Flares, 7)) == (Decoys.Flares, 7) && Decoys.Unpack(Decoys.Pack(Decoys.Flares, 8)) == (Decoys.Flares, 8)
+              && Decoys.Points(fl, Vector2.Zero, 0f, fl.Coast, 0).Length == 6 && fl.CountStat == "flare_count"
+              && new ShipStats(ShipClass.HeavySniper)["flare_count"] == 6 && !Equipment.SheetOf(ShipClass.HeavyWarden).Contains("flare_count"),
+              $"the flare count rides the seed: Pack(row, 7) unpacks to 7, a seed of the bare row draws the row's {Decoys.Points(fl, Vector2.Zero, 0f, fl.Coast, 0).Length} (6); the sniper's flare_count 6; no flare row on a warden");
+        var wd = await WearI(ShipClass.HeavyWarden, "swarm_rack_t1");
+        Check(NearI(Me.Stats["hunter_count"], 7), $"Swarm Rack T1 on a warden: hunters 6 -> {Me.Stats["hunter_count"]:0} (7)");
+        await WornOffI(ShipClass.HeavyWarden, wd);
+        foreach (var (id, n) in new[] { ("", 6), ("swarm_rack_t1", 7), ("swarm_rack_t6", 8) })
+        {
+            var was = await WearI(ShipClass.HeavySniper, id == "" ? Equipment.Default(ShipClass.HeavySniper)[4] : id);   // no part: the kit Utility
+            var pm = Me; bool demo = pm.Demo; pm.Demo = true; pm.AutopilotTo = null;
+            foreach (var sv in H.Salvos.ToList()) H.Down(Spawns.Decoy, sv, burst: false, float.NaN);
+            pm.Position = VaryNear(yonder, 300f); pm.Rotation = VaryAngle(); pm.Velocity = Vector2.Zero; pm.Sl("flares").Cool = 0;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var at = pm.Position; float rot = pm.Rotation;                                   // re-taken after the wait
+            Key(Abilities.KeyFor(ShipClass.HeavySniper, "flares"));
+            DecoySalvo salvo = null;
+            for (int i = 0; i < 10 && salvo == null; i++)
+            {
+                pm.Position = at; pm.Rotation = rot; pm.Velocity = Vector2.Zero;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); salvo = H.Salvos.LastOrDefault();
+            }
+            var rest = salvo?.Resting ?? System.Array.Empty<Vector2>();
+            bool even = rest.Length == n && Enumerable.Range(0, n).All(i => Math.Abs(Math.Abs(Mathf.AngleDifference((rest[i] - at).Angle(), (rest[(i + 1) % n] - at).Angle())) - Mathf.Tau / n) < 0.01f);
+            bool ring = rest.Length == n && rest.All(p => Math.Abs(p.DistanceTo(at) - 180f) < 5f) && (rest[0] - at).Normalized().Dot(Vector2.Down.Rotated(rot)) > 0.999f;
+            Check(salvo != null && salvo.Count == n && pm.Stats["flare_count"] == n && even && ring,
+                  $"flares under {(id == "" ? "no part" : id)} at {Mathf.RadToDeg(rot):0} deg: E pops {rest.Length} ({n}), {360f / Math.Max(1, rest.Length):0.0} deg apart ({even}), 180 u out with the first astern ({ring}); the sheet's flare_count {pm.Stats["flare_count"]:0}");
+            foreach (var sv in H.Salvos.ToList()) H.Down(Spawns.Decoy, sv, burst: false, float.NaN);
+            pm.Sl("flares").Cool = 0; pm.Demo = demo;
+            await WornOffI(ShipClass.HeavySniper, was);
+        }
+    }
+
+    // SWARM RACK'S FLARES ON A GUEST (rung 5, R-D6's wire): the guest sniper fits Swarm Rack T1, re-announces, waits
+    // out the host's cooldown and presses E: the host's salvo drawn on THIS peer from the seed has 7 flares, evenly
+    // round (360 / 7 degrees), on its hull. The guest takes its own Utility part back after.
+    async Task ItemsFlareRiderGuestChecks()
+    {
+        var lo = Character.LoadoutFor(ShipClass.HeavySniper); string keep = lo[4];
+        lo[4] = "swarm_rack_t1"; H.PilotChanged();
+        await RealTime(() => Me is { } m && Math.Abs(m.Stats["flare_count"] - 7) < 1e-9 && m.Sl("flares").Cool <= 0, Wan ? 24 : 18);
+        await Wait(0.8);                                                            // the host's copy re-fitted and its cooldown out
+        var me = Me; me.AutopilotTo = null; me.Velocity = Vector2.Zero;
+        var at = me.Position;
+        Key(Abilities.KeyFor(ShipClass.HeavySniper, "flares"));
+        await RealTime(() => H.Salvos.Any(s => s.At.DistanceTo(at) < 40f), Wan ? 6 : 3);
+        var salvo = H.Salvos.FirstOrDefault(s => s.At.DistanceTo(at) < 40f);
+        var rest = salvo?.Resting ?? System.Array.Empty<Vector2>();
+        bool even = rest.Length == 7 && Enumerable.Range(0, 7).All(i => Math.Abs(Math.Abs(Mathf.AngleDifference((rest[i] - salvo.At).Angle(), (rest[(i + 1) % 7] - salvo.At).Angle())) - Mathf.Tau / 7) < 0.01f);
+        Check(salvo != null && salvo.Count == 7 && even,
+              $"arena guest: Swarm Rack T1 on its sniper, the host's salvo drawn here has {rest.Length} flares (7), {360f / Math.Max(1, rest.Length):0.0} deg apart ({even}), {salvo?.At.DistanceTo(at):0.0} u off its hull");
+        await RealTime(() => H.Salvos.Count == 0, Wan ? 10 : 7);
+        lo[4] = keep; H.PilotChanged(); await Wait(0.3);
     }
 
     // EVERY LINE AT THREE TIERS (§3.3's "T1 -> T10" column): its headline at T1, T5 and T10, from the
@@ -16844,6 +16995,7 @@ public partial class _Test : Node
         // ── THE ITEMS (lane I): the law, the generator, the caps, every line at three tiers, the drops ──
         ItemsLawChecks();
         ItemsTableChecks();
+        ItemsReconcileChecks();
         ItemsLineChecks();
         ItemsLootChecks();
         ItemsParRowsChecks();
@@ -22536,6 +22688,7 @@ public partial class _Test : Node
             await LaneA6cReloadGuestChecks();                               // slice 6c: a guest's active reload (its host half: LaneA6cReloadHostChecks)
             await LaneA6cAnchorGuestChecks();                               // slice 6c: a guest's Anchor, rooted by the host's word
             await LaneA6cFlaresGuestChecks();                               // slice 6c: a guest's flares, the host's salvo on its hull
+            await ItemsFlareRiderGuestChecks();                             // lane I reconcile: Swarm Rack's seventh flare, drawn from the seed
             await LaneA6cTauntGuestChecks();                                // slice 6c: a guest's taunt, the host's guard on its hull
             await LaneA6aGunshipGuestChecks();                              // slice 6a: a guest's gunships, its picks with the press
             await LaneA6cCurtainGuestChecks();                              // slice 6c: a guest's curtain, drawn where the host laid it

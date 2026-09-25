@@ -267,3 +267,135 @@ HEAD 7afd1d4cc7a9c0f98f8e0ea81945b3acd74903b9; merging version-l 54db5c3. Confli
 - SmokeTest.cs.txt: boss drop check keeps items' tier literal (T1 or T2) and raids' adds-cleared check; the guest block keeps ItemsGuestChecks and net2's _streamGap = 0.
 - Combination red fixed: wings deleted Dealt.Fighter (wing blows credit their row id); Items.PrimaryShots now names "fighter" (same value).
 - typecheck 0 errors, verify -Quick ALL CHECKS PASSED. No engine run.
+
+# LANE I RECONCILE (2026-09-25): the items against the built kits (slices 6a-6d and the items merged)
+
+## Step 0 (items-0): wt/items was an ancestor of version-l; `git merge version-l` fast-forwarded to d524c33 (no commit).
+
+## JOB 0: the audit (rung 0: a static read of Ships.cs / Stats.cs / Drives.cs rows against Items.cs, every line on
+every hull of its category; the script lives in the scratchpad) and the job list
+ASSUMPTIONS A1-A11 against the built kits:
+- A1 HOLDS except the Sniper: its primary is the railgun (kits_v31 §2 "Space: Charge railgun"; §3.3 Heavy Barrel
+  "blade, railgun, flak"), but `rail_damage` sits in @output, not @primary: the Gunner Chip lifts NOTHING on a Sniper.
+- A2 FAILS for the Sniper: @primary_rate / @primary_range have no Sniper row (Rapid Action lifts nothing there; its
+  price vanishes). §3.3: "rail charge rate (Overcharge reads it)". Nose-aimed primaries (railgun, blade) have no
+  tracking row: Heavy Barrel is UNPRICED on the Sniper and the Warrior.
+- A3 FAILS in part: @output misses Time on target (`tot_damage`), the Buster (`buster_damage`), the Repair field's
+  strength (`repair_share`), the Carrier's gunships (`gunship_damage`, the model's 8.5 share); `overdrive_mult`
+  (x1.5 a rate LIFT) is lifted whole (+25% -> x1.875: +75% of the field) where the model lifts the ability's share
+  (+25% of its excess); the Sniper's ability output is the Anchor's lift (`anchor_rate` x2.5; model 16.7), not the rail.
+- A4 FAILS in part: @area misses the Tender's `field_radius` (Field Emitter's up is EMPTY on the Tender), the DD's
+  Lance run, the Sniper's Anchor reach, the Dart's rod reach, the Wraith's step reach, the Echo's EMP reach; @duration
+  misses `repair_time`. The Battleship has no ability reach at all: Salvo / Magazine Core are unpriced on it.
+- A5 FAILS for the Flares: `flare_count` exists on no sheet (the count is Decoys.All's literal 6), so Swarm Rack does not
+  fit the Sniper (§3.3, numbers_v2 'hvy_swarm' fits SNIPER + WARDEN). broadside_volleys 6, bomber_ammo 4, hunter_count 6 HOLD.
+- A6 HOLDS (warp_safe 2400, warp_rate, surge_time 3, surge_cooldown 15, surge_lift 1.5, surge_strafe 1.5, strafe_thrust).
+- A7 HOLDS (cooldown_share on every sheet). A8 HOLDS: no line grants cloak, warp off a capital, heal, pull, rewind,
+  paint, speed-priced damage, a web-break button, a blink or a CIWS burst (Aegis lifts pd_damage, which the CIWS also
+  multiplies: a lift, not the burst). A9 HOLDS: no light line lifts max_speed; the Dart prices its live top (TopNow).
+- A10 HOLDS (Spin-up fits freighters: spotter, Dealt.Mortar, Dealt.Lance are their primaries' blows). A11 HOLDS.
+- Hull categories: Hulls.All = §3.3's headings exactly. Chip budget (kits_v31 §10 d6 / numbers §8 R7) HOLDS: 6 slots
+  (walls L2/4/8/10/12/14), 3 of a kind, LevelKey(Chip) == null, chip T1 8% (Gunner 10%, Engine 5/6%, Targeting 6%).
+- Signatures (kits_v31 §2-3): no duplicate. Reset Core (a kill cuts cooldowns, lights) vs the Tender's Resupply
+  (a party field, on demand): different trigger and category, as §3.3 designed.
+- The harness's ItemsTableChecks "every stat a part names is on every hull it fits" would be RED today on 15 pairs.
+
+Decisions (defaults; in the return's open):
+- R-D1 A role row may name an EXCESS (`~id`): the role lifts that x-multiplier row's excess over x1, as a line's `~id`
+  already does. Needed so "ability output" on a LIFT row (overdrive_mult, anchor_rate) and "area" on a reach lift
+  (anchor_reach) move the ability's share, not the whole multiplier.
+- R-D2 @output names the damage (or strength) row of each ability §3.3 names plus every ability the model gives a DPS
+  share with a row of its own: + tot_damage, buster_damage, repair_share, gunship_damage, ~overdrive_mult (was
+  overdrive_mult), ~anchor_rate (was rail_damage). Left out (no damage row, or a signature): the CIWS, Prism, Ramjet,
+  Veil's primed volley, the Grapnel rip, Resupply, the Supercarrier (it flies the fighters: @primary already).
+- R-D3 @area gains field_radius, lance_range, ~anchor_reach, rod_range, step_reach, emp_range (each the reach of an
+  ability its category's output line lifts); @duration gains repair_time.
+- R-D4 The Sniper's railgun joins the primary roles: @primary rail_damage; @primary_rate rail_charge AND rail_reload
+  (the cycle is reload + charge: +20% rate is +20% DPS only if both shorten); @primary_range rail_range.
+- R-D5 UNPRICED where the hull has no such system (no row invented): Salvo Core and Magazine Core on the Battleship
+  (no ability reach), Heavy Barrel on the Sniper and the Warrior (no tracking: nose-aimed). ItemsTableChecks names
+  exactly these four; an UP with no row stays an error. Owner question: price them on something else?
+- R-D6 `flare_count` becomes the Sniper's row (base 6) and a salvo's count travels in its spawn seed (N = row + 64 x
+  count, Decoys.Pack/Unpack; no new RPC), so Swarm Rack fits the Sniper: 6 -> 7 (T1-T5) -> 8 (T6+).
+
+Jobs (foundations first):
+- items-J1 the role rows (R-D1..R-D5): Items.cs (role members may be `~id`; Roles edits). Checks: NEW
+  ItemsReconcileChecks (sheet literals on 3 hulls x T1/T5/T10), NEW live ItemsAnchorLiftChecks (Tactical Core on the
+  Anchor's running lift, 3 situations), REWRITTEN ItemsTableChecks "every stat a part names" (the R-D5 literal list).
+- items-J2 the flare count (R-D6): Ships.cs Sniper row, DecoyDef.CountStat, DecoySalvo.Count, Decoys.Pack/Unpack,
+  Spawned Decoy seed, Hub.Flares(count), PlayerShip.Pop. Checks: NEW ItemsFlareRiderChecks (rung 3, none / T1 / T6
+  through the E key), NEW ItemsFlareRiderGuestChecks (rung 5, the guest draws 7), REWRITTEN ItemsTableChecks'
+  wears (Sniper 11) and Swarm Rack fit (Sniper yes, Warrior no).
+- items-J3 the record: CHANGES.md Handoff + Unreleased, DESIGN.md (role law), final POST (what the test phase owes).
+
+## items-J1 PRE -- tier opus
+Intent: R-D1..R-D5 -- role members may be `~id` (an excess); Roles rows per the audit; ItemsTableChecks' "every stat"
+check onto the R-D5 list; NEW ItemsReconcileChecks + ItemsAnchorLiftChecks. HEAD ad8d93183f206165fa9fe9f4b91d5da197eadd32. Hashes:
+  scripts/Items.cs 409dcc91cc3d9f81521a7f5ac16e503e415d5a4a
+  tools/smoketest/SmokeTest.cs.txt a94b5c6be0ea4eb7b61d6156df0e94b388b0f9dd
+## items-J1 POST
+Verdict: done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED (0 warnings, UNUSED 0). Own diff read.
+Files: scripts/Items.cs (Roles: @primary + rail_damage; @primary_rate + rail_charge, rail_reload; @primary_range +
+rail_range; @output + gunship_damage, tot_damage, repair_share, buster_damage, ~overdrive_mult (was overdrive_mult),
+~anchor_rate (rail_damage out); @area + field_radius, emp_range, lance_range, ~anchor_reach, rod_range, step_reach;
+@duration + repair_time; Members() lets a role member be `~id`, IdsOf / Expand read it), SmokeTest.cs.txt.
+Checks (engine-unproven: rungs owed in the final test phase): NEW ItemsReconcileChecks (rung 3; sheet literals on
+sniper / warden / tender / hauler / bastion / DD / carrier / dart / wraith / echo at T1/T5/T10); NEW
+ItemsAnchorLiftChecks (rung 3, live: none / Tactical Core T1 / T10 on a running Anchor at VaryNear spots, FireRate
+x2.5 / x2.875 / x3.3842, the charge 0.8 / rate, reach x1.4 / x1.288, x1 after); REWRITTEN ItemsTableChecks "every stat
+a part names" (an up must find a row; a price may miss only the R-D5 four, asserted exactly).
+Next: items-J2 (the flare count).
+
+## items-J2 PRE -- tier opus
+Intent: R-D6 -- the Sniper's flare_count row (base 6); DecoyDef.CountStat; a salvo's count in its seed's N (Decoys.Pack /
+Unpack, row + 64 x count; 0 = the row's Count); DecoySalvo.Count; Hub.Flares(count); PlayerShip.Pop reads the row;
+Swarm Rack fits the Sniper. Checks: NEW ItemsFlareRiderChecks (rung 3), NEW ItemsFlareRiderGuestChecks (rung 5),
+REWRITTEN ItemsTableChecks wears / fit. HEAD 584cd54614c642d94eb43b403db0c235c2b388d1. Hashes:
+  scripts/Ships.cs 592f4b707b51efc1cbde39d0bfbfa99702da5c0e
+  scripts/Decoys.cs 8d5c2ce5752f41cdfb2baba5f97844eb78bf900b
+  scripts/Spawned.cs 872ea8753b282769449623319e28a2f04524230c
+  scripts/Hub.cs 06a7752d90dfaea6dd54a4314625e62b79b4fbb5
+  scripts/PlayerShip.cs 4de55a9d83db4428321c0e17b997c179941bd1ae
+  tools/smoketest/SmokeTest.cs.txt 03fc46d477cf50843ba50808a6bdb87bab1b97b3
+## items-J2 POST
+Verdict: done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED (0 warnings, UNUSED 0). Own diff read.
+Files: scripts/Ships.cs (Sniper row flare_count 6), scripts/Decoys.cs (DecoyDef.CountStat, the flares row names
+flare_count, CountSpan 64 + Pack / Unpack, Points(count), DecoySalvo.Count), scripts/Spawned.cs (the Decoy seed's N
+packs row + count), scripts/Hub.cs (Flares(count)), scripts/PlayerShip.cs (Pop reads the row's CountStat),
+SmokeTest.cs.txt. WIRE: no new RPC or field; the spawn seed's N now carries the count (an old N = the bare row
+draws the row's six). Swarm Rack now fits the Sniper (the audit: every line fits as §3.3 says).
+Checks (engine-unproven: rungs owed in the final test phase): NEW ItemsFlareRiderChecks (rung 3: Pack / Unpack,
+the Warden's rack 6 -> 7 hunters and no flare row; E under no part / Swarm Rack T1 / T6 at VaryNear / VaryAngle:
+6 / 7 / 8 flares, 360/n apart, 180 u, first astern); NEW ItemsFlareRiderGuestChecks (rung 5, guest role: its
+re-announced Swarm Rack T1 -> the host's salvo drawn on the guest has 7, evenly); REWRITTEN ItemsTableChecks (the
+sniper wears 11; Swarm Rack fits the sniper). ItemsAnchorLiftChecks' no-part run now wears the kit Utility.
+Next: items-J3 (the record, the final POST).
+
+## items-J3 PRE -- tier opus
+Intent: the record -- CHANGES.md Handoff (the reconcile replaces the EXPECTED RED line) + Unreleased (a reconcile
+paragraph; Known broken's stale red deleted), DESIGN.md role law (a member may be ~id; the unpriced four); the final
+POST. HEAD cc016f363226eaca38daccb722bc9dfc4b3a1479. Hashes:
+  docs/CHANGES.md 7176662642449a91b1fb7fd7d44fdb6e7ec5af3d
+  docs/DESIGN.md f5e7d04eccbc3274dcf769ebbeb2c14645b76ec1
+## items-J3 POST -- the reconcile's final
+Verdict: done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED at HEAD. Own diff read. Docs only:
+docs/CHANGES.md (Handoff: the reconcile replaces the EXPECTED RED line; Unreleased "Items by hull category": a
+reconciled paragraph, the new checks, Known broken's stale red deleted), docs/DESIGN.md (the role law: `~id` as a
+role member; an empty price role is unpaid, an empty up is a bug).
+THE FINAL TEST PHASE OWES (engine-unproven: nothing of the reconcile has run on the engine):
+- rung 3 (solo) x2 seeds: ItemsReconcileChecks, ItemsAnchorLiftChecks, ItemsFlareRiderChecks (all three inside
+  ItemsDoorChecks / after ItemsTableChecks); ItemsTableChecks (the rewritten every-stat check with the R-D5 four,
+  sniper wears 11, Swarm Rack fits the sniper) -- NO LONGER expected red; plus the kits' LaneA6cFlaresChecks,
+  LaneADecoyChecks and the ability sweep's flares witness (the salvo now draws its count from the seed: 6 unchanged).
+- rung 5 (six) x2: ItemsFlareRiderGuestChecks (arena guest, after LaneA6cFlaresGuestChecks: waits out the host's
+  16 s cooldown, so it costs ~20 s of the guest run), LaneADecoyGuestChecks / LaneA6cFlaresGuestChecks (the seed's N
+  now packs row + 64 x count).
+- rung 4: no new frame (the flare count is 7 / 8 points of the existing salvo art); frame 43_lanea_flares_pull_a_mark
+  and 73g_sniper_flares_key unchanged by eye.
+Open (defaults built; owner questions): R-D5 the four unpriced (line, hull) pairs; R-D2's left-out ability outputs
+(CIWS, Prism, Ramjet, Veil's primed volley, Grapnel rip, Resupply, Supercarrier); R-D4 Rapid Action lifts the rail
+reload too (else +20% rate is ~+4% DPS on the Sniper).
+
+## merge version-l PRE/POST
+- PRE: HEAD fdb41ac15ad0eed7db151810fc02d6611d3ca98a, merging version-l d9f2e82952e8221df2f7cb15681f54c83c0c25a8.
+- POST: no conflicts (auto-merged docs/CHANGES.md, docs/DESIGN.md, scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt); typecheck 0 errors, verify -Quick ALL CHECKS PASSED. No engine run.

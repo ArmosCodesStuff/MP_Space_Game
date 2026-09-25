@@ -156,12 +156,12 @@ public static class Spawns
                 TakeHull = (n, hp) => ((Emplacement)n).SetNet(hp) },
 
         // A DECOY SALVO (Decoys.cs): one spawn for all its points, which every peer derives. `N` is
-        // its row of Decoys.All, `A` the thrower's rotation, `B` its age -- so a joiner draws it
+        // its row of Decoys.All and its count (Decoys.Pack), `A` the thrower's rotation, `B` its age -- so a joiner draws it
         // where it is now and lets it go when the host does. It is no body: nothing hits it.
         new() { Id = "Decoy", Space = NetIds.Decoy, Burst = 0f,
                 Bag = k => new SpawnSet<DecoySalvo>(k),
-                Make = (h, s) => new DecoySalvo { NetId = s.NetId, Row = s.N, At = s.At, Rot = (float)s.A, Age = s.B },
-                Seed = n => { var d = (DecoySalvo)n; return new SpawnSeed(d.NetId, d.At, d.Row, d.Rot, d.Age); } },
+                Make = (h, s) => new DecoySalvo { NetId = s.NetId, Row = Decoys.Unpack(s.N).row, Count = Decoys.Unpack(s.N).count, At = s.At, Rot = (float)s.A, Age = s.B },
+                Seed = n => { var d = (DecoySalvo)n; return new SpawnSeed(d.NetId, d.At, Decoys.Pack(d.Row, d.Count), d.Rot, d.Age); } },
 
         // A ZONE (Zones.cs): a patch a pilot laid. `N` is its row of Zones.All, `A` the layer's rotation, `B`
         // its age, so a joiner draws it as it stands; whose it is and what it holds stay on the host's node.

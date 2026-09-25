@@ -1344,10 +1344,10 @@ public partial class Hub : Node2D
     }
 
     // ── DECOYS (Decoys.cs) ────────────────────────────────────────────────────
-    // host: a salvo of a Decoys.All row's points round `at`, the first astern of `rot` (the 6c
-    // ability's press). Everything it does after the pop is Decoys.Tick's.
-    public DecoySalvo Flares(Vector2 at, float rot, int row = Decoys.Flares) =>
-        Spawn(Spawns.Decoy, at, row, rot, 0) as DecoySalvo;
+    // host: a salvo of a Decoys.All row's `count` points (0: the row's Count) round `at`, the first
+    // astern of `rot` (the 6c ability's press). Everything it does after the pop is Decoys.Tick's.
+    public DecoySalvo Flares(Vector2 at, float rot, int row = Decoys.Flares, int count = 0) =>
+        Spawn(Spawns.Decoy, at, Decoys.Pack(row, count), rot, 0) as DecoySalvo;
     // host: one shot or predicted missile, named by its id, turned onto `point` -- on every peer
     public void Decoy(int id, Vector2 point, float catchRadius)
     {

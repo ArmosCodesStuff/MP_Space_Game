@@ -90,42 +90,52 @@ public static class Items
     // ── THE ROLES: what "every ability output" means, row by row, keyed by stat id ──
     // `@damage` (every weapon's damage) and `@reach` (every weapon's reach) are the classes' own
     // declarations (ClassDef.Damage, ClassDef.Reach). The rest are rows here: a kit row that is an
-    // ability's output, area or duration joins its role by id (the lane's ITEM ASSUMPTIONS).
+    // ability's output, area or duration joins its role by id (the lane's ITEM ASSUMPTIONS, reconciled
+    // against the built kits: ledger_items.md "LANE I RECONCILE"). A member written `~id` is a LIFT row
+    // (x1.5, x2.5: what a running ability multiplies by), and the role moves its EXCESS over x1, so
+    // "+25% ability output" on the Overdrive field's x1.5 is x1.625 -- a quarter more of what the
+    // ability adds -- never x1.875.
     private static readonly (string role, string[] ids)[] Roles =
     {
-        ("@primary",       new[] { "main_damage", "fighter_damage", "blade_damage", "pepper_damage" }),
-        ("@primary_rate",  new[] { "main_interval", "fighter_interval", "blade_interval", "pepper_interval" }),
-        ("@primary_range", new[] { "main_range", "fighter_range", "blade_reach", "pepper_range" }),
+        ("@primary",       new[] { "main_damage", "fighter_damage", "blade_damage", "pepper_damage", "rail_damage" }),
+        // the railgun's cycle is its reload plus its charge: both shorten, so a rate share is a DPS share
+        ("@primary_rate",  new[] { "main_interval", "fighter_interval", "blade_interval", "pepper_interval", "rail_charge", "rail_reload" }),
+        ("@primary_range", new[] { "main_range", "fighter_range", "blade_reach", "pepper_range", "rail_range" }),
         ("@tracking",      new[] { "main_turn", "fighter_turn", "pepper_turn" }),
         ("@shot_speed",    new[] { "shell_speed", "fighter_speed", "pepper_speed" }),
-        ("@output",        new[] { "broadside_mult", "torpedo_damage", "lance_damage", "bubble_pool", "overdrive_mult",
-                                   "wave_push", "rail_damage", "hunter_damage", "reverb_share", "lunge_damage", "whirl_damage", "rod_damage", "venom_dps" }),
-        ("@area",          new[] { "bubble_radius", "wave_range", "reverb_radius", "whirl_reach", "hunter_range", "launch_range", "taunt_reach" }),
-        ("@duration",      new[] { "bubble_time", "overdrive_time", "wave_disable", "veil_time", "venom_time", "sprint_time", "ramjet_time", "reverb_time", "whirl_time", "prism_time", "anchor_time", "tether_hold", "taunt_time",
+        ("@output",        new[] { "broadside_mult", "torpedo_damage", "gunship_damage", "lance_damage", "tot_damage", "bubble_pool", "~overdrive_mult",
+                                   "repair_share", "buster_damage", "wave_push", "~anchor_rate", "hunter_damage", "reverb_share", "lunge_damage", "whirl_damage",
+                                   "rod_damage", "venom_dps" }),
+        ("@area",          new[] { "bubble_radius", "field_radius", "wave_range", "reverb_radius", "emp_range", "whirl_reach", "hunter_range", "launch_range",
+                                   "taunt_reach", "lance_range", "~anchor_reach", "rod_range", "step_reach" }),
+        ("@duration",      new[] { "bubble_time", "overdrive_time", "repair_time", "wave_disable", "veil_time", "venom_time", "sprint_time", "ramjet_time", "reverb_time", "whirl_time", "prism_time", "anchor_time", "tether_hold", "taunt_time",
                                    "brace_time", "ciws_time", "suppress_window" }),
     };
 
-    // The stat ids a key stands for on hull `c`: a role's rows the hull has, or the id itself.
-    public static IEnumerable<string> IdsOf(string key, ShipClass c)
+    // What a key stands for on hull `c`, each member as written (`~id` for an excess): a role's rows
+    // the hull has, or the key itself.
+    private static IEnumerable<string> Members(string key, ShipClass c)
     {
-        if (key.StartsWith('~')) return new[] { key[1..] };
         if (!key.StartsWith('@')) return new[] { key };
         if (key == "@damage") return Classes.Damage(c).Keys;
         if (key == "@reach") return Classes.ReachOf(c).Keys;
         var sheet = Equipment.SheetOf(c);
-        return Roles.Where(r => r.role == key).SelectMany(r => r.ids).Where(sheet.Contains);
+        return Roles.Where(r => r.role == key).SelectMany(r => r.ids).Where(m => sheet.Contains(m.TrimStart('~')));
     }
+    // The stat ids a key stands for on hull `c`.
+    public static IEnumerable<string> IdsOf(string key, ShipClass c) => Members(key, c).Select(m => m.TrimStart('~'));
 
-    // A part's shares as the hull `c` takes them: every role expanded onto its rows, every `~id`
-    // turned into a share of the row (its excess over x1, at the hull's own base).
+    // A part's shares as the hull `c` takes them: every role expanded onto its rows, every `~id` (a
+    // line's key or a role's member) turned into a share of the row (its excess over x1, at the
+    // hull's own base).
     public static Dictionary<string, double> Expand(ShipClass c, IReadOnlyDictionary<string, double> shares)
     {
         var d = new Dictionary<string, double>();
         foreach (var (key, v) in shares)
-            foreach (var id in IdsOf(key, c))
+            foreach (var m in Members(key, c))
             {
-                double share = v;
-                if (key.StartsWith('~'))
+                double share = v; string id = m.TrimStart('~');
+                if (m.StartsWith('~'))
                 {
                     double b = Equipment.BaseOf(c, id);
                     share = b > 1 ? v * (b - 1) / b : 0;
