@@ -3733,6 +3733,35 @@ public partial class _Test : Node
             // offline, there is nothing to get back in to
             var rcBtn = Nodes<Button>(sm).FirstOrDefault(b => b.Name == "Reconnect");
             Check(rcBtn != null && !rcBtn.Visible && !Net.I.CanReconnect && !Net.I.Reconnecting, "offline, there is no RECONNECT: nothing to get back in to");
+            // NO PLUGIN, NO SESSION (network_webrtc.md §6.1, "plugin missing"): on a machine where the
+            // WebRTC library did not load, every way into a session is shut -- the HOST button, the JOIN
+            // button and Enter in the address box, each pressed a full second apart so the gate, not the
+            // one-press-a-second lock, is what stops it -- and the panel says why and what fixes it.
+            {
+                var hostB = Nodes<Button>(sm).First(b => b.Name == "Host"); var joinB = Nodes<Button>(sm).First(b => b.Name == "Join");
+                var addrBox = Nodes<LineEdit>(sm).First(); var gateLbl = Nodes<Label>(sm).First(l => l.Name == "PluginMissing");
+                bool openBefore = !hostB.Disabled && !joinB.Disabled && !gateLbl.Visible;
+                Link.PretendMissing = true; await Wait(0.05);
+                bool shut = hostB.Disabled && joinB.Disabled && gateLbl.Visible
+                            && gateLbl.Text == "Multiplayer is off on this PC: its network library, libwebrtc_native.windows.template_release.x86_64.dll (webrtc-native 1.2.1), did not load. "
+                                             + "It must sit beside Warships.exe; an antivirus may have quarantined it. Run PLAY.bat again to put it back. Playing offline works as always.";
+                var leaked = new List<string>();
+                addrBox.Text = "127.0.0.1:9";
+                foreach (var (way, press) in new (string, Action)[] {
+                    ("HOST", () => hostB.EmitSignal(BaseButton.SignalName.Pressed)),
+                    ("JOIN", () => joinB.EmitSignal(BaseButton.SignalName.Pressed)),
+                    ("Enter", () => addrBox.EmitSignal(LineEdit.SignalName.TextSubmitted, addrBox.Text)) })
+                {
+                    press(); await Wait(0.1);
+                    if (Net.IsOnline || Net.I.Connecting) { leaked.Add(way); Net.I.GoOffline(); }
+                    await Wait(SessionMenu.PressGap);
+                }
+                addrBox.Text = "";
+                Link.PretendMissing = false; await Wait(0.05);
+                bool openAfter = !hostB.Disabled && !joinB.Disabled && !gateLbl.Visible;
+                Check(openBefore && shut && leaked.Count == 0 && openAfter && Net.I.NetworkIdle,
+                      $"without the WebRTC plugin HOST, JOIN and Enter are shut and the panel says why; with it they open again (open before {openBefore}, shut {shut}, got through: {(leaked.Count == 0 ? "none" : string.Join(",", leaked))}, open after {openAfter})");
+            }
             // A JOIN THAT NEVER CONNECTS, from offline: this pilot's world as it was -- the same ship,
             // not a fresh one at the spawn -- and nothing retried (it was never in)
             var ship0 = Me;

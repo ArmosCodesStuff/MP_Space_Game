@@ -43,12 +43,20 @@ public partial class SessionMenu : CanvasLayer
         // the box lets go of the keyboard so the helm works again.
         _addr.TextSubmitted += t => { _addr.ReleaseFocus(); Limited(DoJoin); };
         _options.AddChild(_addr);
+        // NO PLUGIN, NO SESSION: without the WebRTC library HOST and JOIN are shut, and this says
+        // why and what fixes it. Offline play is untouched.
+        _missing = Ui.Lbl(Link.MissingText, Ui.Small, Ui.Dim);
+        _missing.Name = "PluginMissing";
+        _missing.Visible = !Link.Available;
+        _missing.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _missing.CustomMinimumSize = new Vector2(320, 0);
+        _options.AddChild(_missing);
 
         // FocusMode None: a clicked button must not keep keyboard focus, or Space/Enter
         // would press it again mid-flight.
         // one press a second: starting or stopping a session is not free, and nothing
         // should be able to hammer it
-        _hostBtn = Ui.Btn("HOST THIS WORLD", () => Limited(() => Net.I?.Host()), "Host");
+        _hostBtn = Ui.Btn("HOST THIS WORLD", () => Limited(() => { if (Link.Available) Net.I?.Host(); }), "Host");
         _joinBtn = Ui.Btn("JOIN", () => Limited(DoJoin), "Join");
         _offBtn = Ui.Btn("PLAY OFFLINE", () => Limited(() => Net.I?.GoOffline()), "Offline");
         _options.AddChild(_hostBtn); _options.AddChild(_joinBtn); _options.AddChild(_offBtn);
@@ -93,6 +101,9 @@ public partial class SessionMenu : CanvasLayer
         foreach (var btn in _sessionBtns) btn.Disabled = locked;
         // HOST while hosting would drop every guest to start the same session again
         _hostBtn.Disabled |= Net.IsHost && Net.IsOnline;
+        bool gated = !Link.Available;
+        _hostBtn.Disabled |= gated; _joinBtn.Disabled |= gated;
+        _missing.Visible = gated;
         var n = Net.I;
         _reconnect.Visible = n != null && n.CanReconnect;
         Refresh();
@@ -124,10 +135,11 @@ public partial class SessionMenu : CanvasLayer
         Ui.SetText(_toggle, $"{(_toggle.ButtonPressed ? "▾" : "▸")}  MULTIPLAYER  ({where})");
     }
 
-    private void DoJoin() => Net.I?.Join(_addr.Text);
+    private void DoJoin() { if (Link.Available) Net.I?.Join(_addr.Text); }
 
     private Button _hostBtn, _joinBtn, _offBtn, _reveal, _reconnect;
     private Button[] _sessionBtns;
+    private Label _missing;
     private bool _revealed;
     public const double PressGap = 1.0;
     private double _now, _lockedUntil;                          // game time: in play, the same as real time

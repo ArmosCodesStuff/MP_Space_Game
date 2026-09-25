@@ -67,3 +67,18 @@ Then: `tools\smoketest\run.ps1 -Solo` (rung 3), `-Solo -OneDll` once, `-ReplyWin
 - files: scripts/Link.cs (new), tools/smoketest/SmokeTest.cs.txt
 - from: 57e2c26ddb8c996e97767258e248070f31e367b6
 - hashes: SmokeTest.cs.txt 671205d802d89218de55fac3beef9684692cee08; Link.cs absent
+
+#### J1 POST
+- verdict: done; rung 1 green (0 errors, 0 warnings from csc); xref UNUSED ANYWHERE 0. Untested at rung 3.
+- files: scripts/Link.cs (new), tools/smoketest/SmokeTest.cs.txt (StreamChannel, RtcPair, RtcUntil,
+  RtcChannels, WebRtcPairs called just before the solo leak check)
+- checkpoint: 39df356
+- next: J2
+
+#### J2 PRE
+- intent: SessionMenu's plugin-missing gate (HOST and JOIN, button, Enter and handler) with
+  `Link.MissingText` (D2) shown in the panel; `Link.PretendMissing` seam; a solo check of the gate.
+- files: scripts/Link.cs, scripts/SessionMenu.cs, tools/smoketest/SmokeTest.cs.txt
+- from: 39df356
+- hashes: Link.cs 073ecfe49c2afbaefed5c656d645e60c2391fe5b; SessionMenu.cs 78118dbfc110c28032abd5d191dd411839b3b793;
+  SmokeTest.cs.txt 625c6d598822ce243f925a9292f9c5077e8c0b92

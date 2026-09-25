@@ -30,6 +30,10 @@ public static class Link
     private static bool? _loaded;
     // The smoke test's way to be a machine without the plugin, to prove the gate on a real menu.
     public static bool PretendMissing;
+    // What the player reads where HOST and JOIN would be (plan §6.1, "plugin missing").
+    public static string MissingText =>
+        $"Multiplayer is off on this PC: its network library, {Plugin.ReleaseDll} ({Plugin.Name} {Plugin.Version}), did not load. "
+        + "It must sit beside Warships.exe; an antivirus may have quarantined it. Run PLAY.bat again to put it back. Playing offline works as always.";
 
     // THE CHANNELS A SESSION NEGOTIATES, read off every [Rpc] in the game's assembly -- the harness's
     // own stream included, since both ends of a test run are one build (§3.2). Transfer channel N is
