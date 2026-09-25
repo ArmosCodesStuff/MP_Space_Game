@@ -1102,3 +1102,19 @@ heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu on
 - Defaults recorded: [THIRD-PARTY] wording written here (v1 §8.4 is not in the repo); the release's file
   count and size are left to the next pack (README says so).
 - LANE DONE: S2, R2 (a-c), R3, R4, R5 built; nothing run on the engine.
+
+#### GATE FIX PRE
+- job gate-fix, tier opus. HEAD 1035596. Intent: the opus merge gate's six findings, each code fix with its
+  check (written, not run). (1) the rejoin token to the host alone (SendIdentity sends every other peer "");
+  rung-5 third-player check that its copy of Guesty's identity never carried one. (2) P8's REFIT: one rule
+  (Hub.RefitOpen, read by Hub.Refit, ResetShip, the class picker and the base menu's RESET); a class change
+  keeps the hull fraction and does not refresh slots (PlayerShip.FitClass carries each slot's cooldown and
+  count by id, run down by the game seconds it was away); solo checks at three situations. (3) the JOIN box
+  fills itself from a copied invite (SessionMenu, PickupMs); solo check. (4) run.ps1: 205 s for the three
+  roles under -Wan. (5) the report's per-join line gains "ICE connected" (the peer connection reaching
+  Connected), the old "connected" reads "channels open"; R3WordsChecks wants both. (6) two stale router
+  comments in SmokeTest.cs.txt (invariant C).
+- files: scripts/Hub.cs 4feec202, scripts/PlayerShip.cs 2a913835, scripts/Net.cs 80af0a72,
+  scripts/SessionMenu.cs 38dc6940, scripts/CharacterCreator.cs f108033a, scripts/BasePanel.cs 3d8362a6,
+  tools/smoketest/SmokeTest.cs.txt 6101e98e, tools/smoketest/run.ps1 18b57ec1, tools/screens/Shots.cs.txt
+  148de467, docs/CHANGES.md 8107904f, ledger 108a7a6f.
