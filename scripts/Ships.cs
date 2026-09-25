@@ -344,7 +344,7 @@ public static class Classes
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Overdrive, Ab.Deploy } },
         new() { Id = ShipClass.FreightBastion, Name = "BASTION", Ready = true, Fit = Fit.Guns | Fit.Pd, Primary = Primary.Lob, LobSide = Missiles.Mortar,
-            Blurb = "A siege mortar lobbed onto the cursor, two point-defence turrets, and a shockwave that throws what is near it clear, or holds a boss still.",
+            Blurb = "A siege mortar lobbed onto the cursor, a bunker buster for what holds a spot, two point-defence turrets, and a shockwave that throws what is near it clear, or holds a boss or a structure still.",
             Hint = "BASTION  ·  the mortar lands on the cursor, 150-1100 u",
             Drive = Drives.Boost,
             Nums = new() {
@@ -367,9 +367,13 @@ public static class Classes
                 new() { Group = "Siege mortar", Id = "mortar_min",    Label = "Nearest landing", Base = 150, Unit = "u", Dec = 0 },
                 new() { Group = "Siege mortar", Id = "mortar_flight", Label = "Time in the air", Base = 1.4, Unit = "s", Dec = 1 },
                 new() { Group = "Siege mortar", Id = "mortar_blast",  Label = "Blast radius",    Base = 110, Unit = "u", Dec = 0 },
+                new() { Group = "Bunker buster", Id = "buster_damage",   Label = "Damage (x2 on a boss or structure)", Base = 180, Dec = 0 },
+                new() { Group = "Bunker buster", Id = "buster_speed",    Label = "Round speed",  Base = 380, Unit = "u/s", Dec = 0 },
+                new() { Group = "Bunker buster", Id = "buster_range",    Label = "Range",        Base = 1400, Unit = "u", Dec = 0 },
+                new() { Group = "Bunker buster", Id = "buster_cooldown", Label = "Cooldown",     Base = 12, Unit = "s", Dec = 1, Inverse = true },
                 new() { Group = "Shockwave", Id = "wave_range",    Label = "Reach",          Base = 1000, Unit = "u", Dec = 0 },
                 new() { Group = "Shockwave", Id = "wave_push",     Label = "Throws them",    Base = 1000, Unit = "u", Dec = 0 },
-                new() { Group = "Shockwave", Id = "wave_disable",  Label = "Holds a boss",   Base = 3, Unit = "s", Dec = 1 },
+                new() { Group = "Shockwave", Id = "wave_disable",  Label = "Holds a boss or structure", Base = 3, Unit = "s", Dec = 1 },
                 new() { Group = "Shockwave", Id = "wave_cooldown", Label = "Cooldown",       Base = 30, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
@@ -379,7 +383,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0.0f, 53.48f) },
                 Pds   = new Vector2[] { new(-27.1f, 64.4f), new(27.1f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
-            Abilities = new[] { Ab.Guns, Ab.Shockwave } },
+            Abilities = new[] { Ab.Guns, Ab.Buster, Ab.Shockwave } },
 
         // -- page 3: heavy fighters --------------------------------------------
         new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.Guns,

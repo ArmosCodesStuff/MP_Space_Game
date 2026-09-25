@@ -299,10 +299,19 @@ public static class Ab
         Show = (s, _) => Timed(s, "overdrive", "overdrive_cooldown", $"x{s.Stats["overdrive_mult"]:0.#}"),
     };
 
+    public static readonly AbilityDef Buster = new()
+    {
+        Id = "buster", Name = "Bunker buster", Short = "BUSTER", Default = Key.F,
+        Blurb = "One slow heavy round at the cursor that stops on the first thing it meets: double on a boss or a structure, and a quarter of that through a pylon's shield.",
+        Press = (s, _) => s.FireBuster(),
+        Refuse = (s, _) => s.Sl("buster").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "buster", "buster_cooldown", "READY"),
+    };
+
     public static readonly AbilityDef Shockwave = new()
     {
-        Id = "shockwave", Name = "Shockwave", Short = "WAVE", Default = Key.F,
-        Blurb = "Throws everything near you clear. What is too big to throw (a boss) is held still instead.",
+        Id = "shockwave", Name = "Shockwave", Short = "WAVE", Default = Key.Q,
+        Blurb = "Throws everything near you clear. What cannot be thrown -- a boss, a structure -- is held still instead.",
         Press = (s, _) => s.Shockwave(),
         Refuse = (s, _) => s.Sl("shockwave").Cool > 0 ? "CHARGING" : null,
         Show = (s, _) => Timed(s, "shockwave", "wave_cooldown", "READY"),

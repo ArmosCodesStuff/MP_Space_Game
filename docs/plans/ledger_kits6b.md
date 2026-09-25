@@ -237,3 +237,32 @@ Done: J2, J3, J4 (a3265f7, 43b0953, 19cfffa). Next is kits6b-J5; no PRE written.
   structure/dummy case (Targeting.Throwable already refuses to move them: make them held too). The witness sweep
   needs rows for "buster" (and "well" in J6); sweep B (reach) needs an arm for any Reach id J5/J6 add (or keep
   them out of ClassDef.Reach). Arena guest `Abilities.For(...).Length` asserts only the freighter's.
+
+## Agent 3 resumes at kits6b-J5 (696062a; J4 POSTed, nothing interrupted, no COORDINATOR NOTE)
+
+### kits6b-J5 · PRE · BA Bunker buster + Shockwave holds what it cannot throw -- tier opus
+- Intent: Shots.Buster (9, appended): Look Ball, Stops 1, and three new ShotDef fields read in Shot.Strike --
+  Versus (Tag.Boss|Structure) x VersusMult 2, Through 0.25 (the share landing through a shield: Dealt.Deal's new
+  `through` arg; IShielded {Shielded, TakeThrough} on Emplacement). Ab.Buster (F, ability 1): one round from the main
+  barrel toward the cursor, buster_damage 180, buster_speed 380, buster_range 1400, buster_cooldown 12 (kept out of
+  Damage/Reach, as TOT). Dealt: the row's own id "buster". Shockwave -> Q: Targeting.Shaken (forbid Missile|Hulled);
+  Immovable (boss, structure, dummy) HELD wave_disable 3 s, never thrown; TargetDummy becomes IStatused (Disabled holds
+  its armed fire). D42: the x2 and the 0.25 live on the Shots row (data), so a boss check needs no Bastion on the hull.
+  Old truths: Shots.All.Length 8 -> 10 (stale since J1), S2 dummy check (+ held 3 s), witness sweep + "buster".
+  Checks LaneA6bBusterChecks (solo, press), LaneA6bBusterBossChecks (boss fight), LaneA6bSiegeChecks (pylon 360,
+  shielded base 90, shockwave holds base + pylon in place).
+- Files: Shots.cs, Dealt.cs, Emplacements.cs, TargetDummy.cs, Targeting.cs, Abilities.cs, Ships.cs, PlayerShip.cs, SmokeTest.cs.txt.
+- HEAD 696062a2c7820803f189a530a834f1fb8873c511 · 19f62f9 52bc3ed 9e91e95 0734f54 68d6620 00d8e23 e596e8d 9d00c9d 50d8ee8
+### kits6b-J5 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Shots.Buster = 9 (appended) with ShotDef.Versus / VersusMult / Through (D42: the x2 and the 0.25 are the
+  row's); Dealt.Deal(.., through); IShielded (Targeting.cs) on Emplacement (TakeThrough); Ab.Buster on F (ability 1),
+  PlayerShip.FireBuster; Shockwave on Q (ability 2) through Targeting.Shaken: Immovable held wave_disable, the rest
+  thrown; TargetDummy is IStatused (Disabled holds its armed launcher). Bastion rows buster_damage 180 / speed 380 /
+  range 1400 / cooldown 12 (out of Damage/Reach, as TOT); Abilities {Guns, Buster, Shockwave}.
+- Old truths rewritten: Shots.All.Length 8 -> 10 (stale since J1's Spotter) + the buster row's literals; S2's dummy
+  check (+ held 3 s); witness sweep + "buster".
+- Checks written: LaneA6bBusterChecks (solo, after LaneA6bMortarChecks), LaneA6bBusterBossChecks (after
+  LaneAOutDoorBossChecks), LaneA6bSiegeChecks (siege, before THE SHIELD: pylon 360, shielded base 90, shockwave holds).
+  Test phase owes: solo x2.
+- Next: kits6b-J6 (Gravity well).

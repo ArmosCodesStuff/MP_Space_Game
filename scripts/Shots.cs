@@ -55,12 +55,17 @@ public class ShotDef
     // sheet, of the seconds a hit paints for -- or null, a round that marks nothing. The host calls
     // PlayerShip.PaintOn on a hostile it strikes; the paint rides the firer's slots to every peer.
     public string Paint;
+    // A ROUND BUILT FOR WHAT HOLDS A SPOT (the bastion's bunker buster, kits 6b): a body carrying any of
+    // Versus takes VersusMult times the blow, and a body behind a shield (IShielded, Emplacements.cs)
+    // takes Through of it (0 = the shield stops it, as it stops everything else).
+    public Tag Versus;
+    public double VersusMult = 1, Through;
 }
 
 public static class Shots
 {
     // The index IS the id on the wire (Hub.NetShot), so APPEND ONLY.
-    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Spotter = 8;
+    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Spotter = 8, Buster = 9;
 
     public static readonly ShotDef[] All =
     {
@@ -92,6 +97,10 @@ public static class Shots
         // THE FREIGHTER'S SPOTTER ROUND (kits 6b): a shell whose hit paints what it strikes for paint_time
         // (5 s), the target its sentries take first and Time on target converges on
         new() { Id = "spotter", AtPlayers = false, Pad = 3f, Sweep = 6f, Look = ShotLook.Bullet, Paint = "paint_time" },
+        // THE BASTION'S BUNKER BUSTER (kits 6b): one slow heavy round that stops on the first body -- x2 on
+        // a boss or a structure, and a quarter of that through a pylon's shield (180 / 360 / 90)
+        new() { Id = "buster", AtPlayers = false, Pad = 4f, Sweep = 6f, Burst = 0.4, Look = ShotLook.Ball,
+                Versus = Tag.Boss | Tag.Structure, VersusMult = 2, Through = 0.25 },
     };
 
     public static ShotDef Of(int id) => All[id >= 0 && id < All.Length ? id : Shell];
@@ -264,7 +273,7 @@ public partial class Shot : Node2D, IHittable, ITagged
                 if (h is PlayerShip ps) { if (!Reflected(ps, p, d)) ps.Hit(Damage, p - Dir * 10f, HitSource); }
                 else
                 {
-                    Dealt.Deal(h, Damage, IsInstanceValid(Source) ? Source : null, d.Id);
+                    Dealt.Deal(h, TagExt.Is(h, d.Versus) ? Damage * d.VersusMult : Damage, IsInstanceValid(Source) ? Source : null, d.Id, d.Through);
                     if (d.Paint != null && IsInstanceValid(Source) && h.Alive) Source.PaintOn(h, Source.Stats[d.Paint]);
                 }
             }

@@ -4724,6 +4724,223 @@ public partial class _Test : Node
         bn.Position = yonder; bn.Velocity = Vector2.Zero;
     }
 
+    // ── 6b · THE BUNKER BUSTER, PRESSED (kits6b-J5) ─────────────────────────────────────────────
+    // World, host, a fresh BASTION. Its sheet: 180 a round, 380 u/s, 1400 u, 12 s; F is the buster and Q the
+    // shockwave. Three runs from varied spots and bearings, the first light 250-500, 600-900 and 1000-1300 u
+    // down the line: F with the cursor on it throws ONE round from the main barrel that reaches it at 380 u/s
+    // (+-0.1 s of its gap / 380), lands 180 on it (credited "buster"), and stops there -- a second light
+    // 120-200 u behind it on the same line takes nothing. The clock is 12 and a second press is refused
+    // (COOLING). Then, the clock cleared, a round down a fresh bearing at a light whose near edge is 1440-1500
+    // u off the muzzle lands nothing and is gone by 1400 u.
+    async Task LaneA6bBusterChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.FreightBastion);
+        var bn = Me; bn.AutopilotTo = null;
+        var sheet = new ShipStats(ShipClass.FreightBastion);
+        var own = Classes.Of(ShipClass.FreightBastion).Abilities.Where(a => !a.Weapon).Select(a => a.Id).ToList();
+        Check(Math.Abs(sheet["buster_damage"] - 180) < 1e-9 && Math.Abs(sheet["buster_speed"] - 380) < 1e-9
+              && Math.Abs(sheet["buster_range"] - 1400) < 1e-9 && Math.Abs(sheet["buster_cooldown"] - 12) < 1e-9
+              && own.Count >= 2 && own[0] == "buster" && own[1] == "shockwave"
+              && Abilities.KeyFor(ShipClass.FreightBastion, "buster") == global::Godot.Key.F
+              && Abilities.KeyFor(ShipClass.FreightBastion, "shockwave") == global::Godot.Key.Q,
+              $"the bastion's bunker buster: 180 a round at 380 u/s out to 1400 u, every 12 s; ability 1 on F, the shockwave ability 2 on Q ({string.Join(", ", own)})");
+        var blows = new List<(IHittable t, double d, double at)>();
+        void Heard(IHittable t, double d, string w) { if (w == "buster") blows.Add((t, d, bn.Clock)); }
+        Dealt.Landed += Heard;
+        var bands = new[] { (250f, 500f), (600f, 900f), (1000f, 1300f) };
+        for (int run = 0; run < 3; run++)
+        {
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+            await Wait(0.3);
+            var home = VaryNear(yonder, 200f); float rot = VaryAngle();
+            var way = Vector2.Right.Rotated(VaryAngle());
+            float dA = Vary(bands[run].Item1, bands[run].Item2);
+            var aAt = home + way * dA; var bAt = home + way * (dA + Vary(120f, 200f));
+            var a = H.SpawnRaider(aAt); a.Hp = 1e9; a.ApplyStatus(Status.Disabled, 30);
+            var b = H.SpawnRaider(bAt); b.Hp = 1e9; b.ApplyStatus(Status.Disabled, 30);
+            void Hold() { bn.Position = home; bn.Velocity = Vector2.Zero; bn.Rotation = rot; a.Position = aAt; b.Position = bAt; }
+            Hold();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Hold();
+            blows.Clear();
+            double credit0 = bn.DealtBy.GetValueOrDefault("buster");
+            bn.Sl("buster").Cool = 0;
+            bn.AimPoint = aAt; bn.UseAbility("buster", 0);
+            double pressed = bn.Clock;
+            var round = Nodes<Shot>().FirstOrDefault(x => x.Kind == Shots.Buster && ReferenceEquals(x.Source, bn));
+            var start = round?.Position ?? home;
+            float gap = Raider.Gap(start, a);
+            double cool = bn.Sl("buster").Cool;
+            string refused = Abilities.Find(ShipClass.FreightBastion, "buster").Refuse(bn, null);
+            for (int i = 0; i < 60 * 5 && blows.Count == 0; i++) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await Wait(0.3);
+            double flew = blows.Count > 0 ? blows[0].at - pressed : -1;
+            bool onA = blows.Count(x => ReferenceEquals(x.t, a) && Math.Abs(x.d - 180) < 1e-9) == 1, onB = blows.Any(x => ReferenceEquals(x.t, b));
+            double credited = bn.DealtBy.GetValueOrDefault("buster") - credit0;
+            Check(round != null && start.DistanceTo(home) < 120f && onA && !onB && Math.Abs(flew - gap / 380f) < 0.1
+                  && Math.Abs(credited - 180) < 1e-6 && Math.Abs(cool - bn.Cooling(12)) < 1e-6 && refused == "COOLING",
+                  $"buster run {run}: one round from the main barrel ({(round != null)}) reaches the light {gap:0} u off in {flew:0.00} s (want {gap / 380f:0.00} at 380 u/s), lands 180 on it ({onA}) and stops -- the light behind it takes {(onB ? "a blow" : "nothing")}; {credited:0} credited \"buster\"; its clock {cool:0.0} s (the sheet's 12: {bn.Cooling(12):0.0}), a second press {refused ?? "ALLOWED"}");
+            // the reach: a fresh bearing, a light just past 1400 u of the muzzle
+            a.TakeDamage(1e12); b.TakeDamage(1e12);
+            await Wait(0.2);
+            var far = Vector2.Right.Rotated(VaryAngle());
+            var farAt = home + far * 1600f;
+            var c = H.SpawnRaider(farAt); c.Hp = 1e9; c.ApplyStatus(Status.Disabled, 30);
+            void HoldC() { bn.Position = home; bn.Velocity = Vector2.Zero; bn.Rotation = rot; c.Position = farAt; }
+            HoldC();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            blows.Clear();
+            bn.Sl("buster").Cool = 0;
+            bn.AimPoint = farAt; bn.UseAbility("buster", 0);
+            var longRound = Nodes<Shot>().FirstOrDefault(x => x.Kind == Shots.Buster && ReferenceEquals(x.Source, bn) && x.Alive);
+            var from = longRound?.Position ?? home;
+            var dirC = (farAt - from).Normalized();
+            float want = Vary(1440f, 1500f);
+            farAt = from + dirC * (want + (from.DistanceTo(farAt) - Raider.Gap(from, c)));    // its near edge `want` u off the muzzle
+            HoldC();
+            float edge = Raider.Gap(from, c);
+            for (int i = 0; i < 60 * 5 && longRound != null && GodotObject.IsInstanceValid(longRound) && longRound.Alive; i++) { HoldC(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await Wait(0.2);
+            bool gone = longRound == null || !GodotObject.IsInstanceValid(longRound) || !longRound.Alive;
+            Check(longRound != null && gone && blows.Count == 0 && edge > 1400f,
+                  $"buster run {run}: a round at a light whose edge is {edge:0} u off the muzzle lands nothing ({blows.Count} blows) and is gone at 1400 u ({gone})");
+            c.TakeDamage(1e12);
+            bn.Sl("buster").Cool = 0;
+        }
+        Dealt.Landed -= Heard;
+        bn.Position = yonder; bn.Velocity = Vector2.Zero;
+    }
+
+    // ── 6b · THE BUNKER BUSTER ON A BOSS (kits6b-J5, D42) ────────────────────────────────────────
+    // In the boss fight, the boss held where it stands and its clocks held: three rounds of the Buster row
+    // (180, as the press sends it) fired at it from 500-900 u past its edge on varied bearings each land 360 (x2 on a
+    // boss) -- the rule is the row's, so the pilot's own class does not matter. A fourth with a light craft
+    // 150-300 u short of the boss on its line lands 180 on the light (a craft is no boss) and nothing on
+    // the boss: it stops on the first body.
+    async Task LaneA6bBusterBossChecks(Boss boss, PlayerShip me)
+    {
+        var dues = boss.Type.Moves.ToDictionary(m => m.Id, m => boss.S(m.Id).Due);
+        foreach (var m in boss.Type.Moves) boss.S(m.Id).Due = 999;
+        var blows = new List<(IHittable t, double d)>();
+        void Heard(IHittable t, double d, string w) { if (w == "buster") blows.Add((t, d)); }
+        Dealt.Landed += Heard;
+        var bossAt = boss.Position;
+        for (int run = 0; run < 4; run++)
+        {
+            foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+            me.Hp = me.MaxHp;
+            var dir = Vector2.Right.Rotated(VaryAngle());
+            var from = bossAt + dir * (boss.HitRadius + Vary(500f, 900f));
+            Raider light = null; Vector2 lightAt = default;
+            if (run == 3)
+            {
+                lightAt = bossAt + dir * (boss.HitRadius + Raider.LightLength * 0.5f + Vary(150f, 300f));
+                light = H.SpawnRaider(lightAt); light.Hp = 1e9; light.ApplyStatus(Status.Disabled, 30);
+            }
+            void Hold() { boss.Position = bossAt; if (light != null) light.Position = lightAt; }
+            Hold();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double hp0 = boss.Hp;
+            blows.Clear();
+            Combat.Fire(Shots.Buster, from, bossAt - from, 380f, 1400f, 180);
+            for (int i = 0; i < 60 * 4 && blows.Count == 0; i++) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await Wait(0.2);
+            boss.Hp = hp0;
+            int onBoss = blows.Count(x => ReferenceEquals(x.t, boss) && Math.Abs(x.d - 360) < 1e-9);
+            if (run < 3)
+                Check(onBoss == 1 && blows.Count == 1,
+                      $"buster on a boss, run {run}: a 180 round from {from.DistanceTo(bossAt):0} u lands {string.Join("/", blows.Select(x => $"{x.d:0}"))} on the boss (want one 360: x2 on a boss)");
+            else
+                Check(blows.Count == 1 && ReferenceEquals(blows[0].t, light) && Math.Abs(blows[0].d - 180) < 1e-9,
+                      $"buster with a light craft {lightAt.DistanceTo(bossAt):0} u short of the boss on its line: the light takes {(blows.Count > 0 ? $"{blows[0].d:0}" : "nothing")} (want 180, a craft is no boss) and the boss nothing ({onBoss})");
+            light?.TakeDamage(1e12);
+        }
+        Dealt.Landed -= Heard;
+        foreach (var m in boss.Type.Moves) boss.S(m.Id).Due = dues[m.Id];
+    }
+
+    // ── 6b · THE BASTION AT A SIEGE (kits6b-J5) ──────────────────────────────────────────────────
+    // The four pylons up, a fresh BASTION: (1) three pylons, each from 500-1000 u outside it on a varied
+    // bearing: F on it lands 360 (x2 on a structure) and its hull drops 360. (2) the SHIELDED base from
+    // 600-1000 u along a varied axis between the pylons: F lands 90 (a quarter of 360 through the shield)
+    // and its hull drops 90, where any other blow is stopped. (3) Q from 400-700 u off the base on three
+    // axes: nothing that holds a spot moves (base, pylons), every one of them inside 980 u is HELD 3 s, none
+    // past 1020 u is, and a light 300-600 u off is thrown clear. Every hull and hold is put back after.
+    async Task LaneA6bSiegeChecks(Emplacement pbase, List<Emplacement> pylons)
+    {
+        var cls0 = Character.Class; var at0 = Me.Position; double max0 = Me.MaxHp;
+        await SetClass(ShipClass.FreightBastion);
+        var bs = Me; bs.AutopilotTo = null; bs.MaxHp = max0;      // the siege's pilot is kept alive the same way
+        var blows = new List<(IHittable t, double d)>();
+        void Heard(IHittable t, double d, string w) { if (w == "buster") blows.Add((t, d)); }
+        Dealt.Landed += Heard;
+        async Task<(List<(IHittable t, double d)> got, double took)> Bust(Emplacement at, Vector2 home)
+        {
+            foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+            bs.Hp = bs.MaxHp;
+            float rot = VaryAngle();
+            void Hold() { bs.Position = home; bs.Velocity = Vector2.Zero; bs.Rotation = rot; }
+            Hold();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Hold();
+            double hp0 = at.Hp;
+            blows.Clear();
+            bs.Sl("buster").Cool = 0;
+            bs.AimPoint = at.Position; bs.UseAbility("buster", 0);
+            for (int i = 0; i < 60 * 5 && blows.Count == 0; i++) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await Wait(0.2);
+            double took = hp0 - at.Hp;
+            at.Hp = hp0;
+            return (blows.ToList(), took);
+        }
+        for (int run = 0; run < 3; run++)
+        {
+            var p = pylons[run];
+            var outward = (p.Position - pbase.Position).Normalized().Rotated(Vary(-0.6f, 0.6f));
+            var (got, took) = await Bust(p, p.Position + outward * Vary(500f, 1000f));
+            Check(got.Count == 1 && ReferenceEquals(got[0].t, p) && Math.Abs(got[0].d - 360) < 1e-9 && Math.Abs(took - 360) < 1e-6,
+                  $"buster on pylon {run}: {string.Join("/", got.Select(x => $"{x.d:0}"))} landed, its hull down {took:0} (want 360: x2 on a structure)");
+        }
+        for (int run = 0; run < 3; run++)
+        {
+            var axis = Vector2.Right.Rotated(Mathf.Pi / 2 * run + Vary(-0.4f, 0.4f));
+            bool shielded = pbase.Shielded;
+            var (got, took) = await Bust(pbase, pbase.Position + axis * Vary(600f, 1000f));
+            Check(shielded && got.Count == 1 && ReferenceEquals(got[0].t, pbase) && Math.Abs(got[0].d - 90) < 1e-9 && Math.Abs(took - 90) < 1e-6,
+                  $"buster on the shielded base, run {run} (shield up: {shielded}): {string.Join("/", got.Select(x => $"{x.d:0}"))} landed, its hull down {took:0} (want 90: a quarter of 360 through the shield)");
+        }
+        Dealt.Landed -= Heard;
+        var spots = H.Emplacements.ToList();
+        for (int run = 0; run < 3; run++)
+        {
+            foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+            foreach (var e in spots) e.Statuses.Clear(Status.Disabled);
+            var axis = Vector2.Right.Rotated(Mathf.Pi / 2 * run + Vary(-0.3f, 0.3f));      // between two pylons
+            var home = pbase.Position + axis * Vary(400f, 700f);
+            bs.Position = home; bs.Velocity = Vector2.Zero; bs.Hp = bs.MaxHp;
+            var lt = H.SpawnRaider(home + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 600f)); lt.Hp = 1e9; lt.ApplyStatus(Status.Disabled, 30);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bs.Position = home; bs.Velocity = Vector2.Zero;
+            var was = spots.ToDictionary(e => e, e => e.Position);
+            float ltWas = lt.Position.DistanceTo(home);
+            bs.Sl("shockwave").Cool = 0;
+            bs.UseAbility("shockwave", 0);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            int moved = spots.Count(e => e.Position.DistanceTo(was[e]) > 1f);
+            var inside = spots.Where(e => was[e].DistanceTo(home) <= 980f).ToList();
+            var outside = spots.Where(e => was[e].DistanceTo(home) > 1020f).ToList();
+            int heldIn = inside.Count(e => Math.Abs(e.Statuses.Left(Status.Disabled) - 3) < 0.1);
+            int heldOut = outside.Count(e => e.Statuses.Has(Status.Disabled));
+            float thrown = lt.Position.DistanceTo(home) - ltWas;
+            Check(moved == 0 && inside.Count >= 1 && heldIn == inside.Count && heldOut == 0 && thrown > 900f,
+                  $"shockwave at the siege, run {run}: nothing that holds a spot moved ({moved} of {spots.Count}), {heldIn} of the {inside.Count} inside 1000 u held 3 s, {heldOut} of the {outside.Count} past it held, and the light beside it thrown {thrown:0} u");
+            lt.TakeDamage(1e12);
+        }
+        foreach (var e in spots) e.Statuses.Clear(Status.Disabled);
+        await SetClass(cls0);
+        if (Me is { } back) { back.MaxHp = max0; back.Hp = max0; back.Position = at0; back.Velocity = Vector2.Zero; }
+    }
+
     // ── 6b · TIME ON TARGET ACROSS THE WIRE (kits6b-J2, rung 5; kits_v31 8's second run) ─────────
     // HOST: the guest's freighter (three sentries standing 0-600 u off it) paints the held gunship
     // 560-700 u off (host-varied spots); the guest presses F. Every line is the host's: the gunship
@@ -11290,7 +11507,9 @@ public partial class _Test : Node
                 // lifetime, cosmetic-copy rule and hit. Eight rows and one node now, and ONE launch
                 // on the wire where there were three. The eighth is the round a prism turns back
                 // (Shots.Reflect): straight, unguided, at the base's enemies.
-                Check(Shots.All.Length == 8 && Shots.Reflect == 7
+                Check(Shots.All.Length == 10 && Shots.Reflect == 7 && Shots.Spotter == 8 && Shots.Buster == 9
+                      && Shots.Of(Shots.Buster).Stops == 1 && Shots.Of(Shots.Buster).VersusMult == 2 && Shots.Of(Shots.Buster).Through == 0.25
+                      && Shots.Of(Shots.Buster).Versus == (Tag.Boss | Tag.Structure) && Shots.All.Count(x => x.Through > 0) == 1
                       && !Shots.Of(Shots.Reflect).AtPlayers && !Shots.Of(Shots.Reflect).Guided && Shots.Of(Shots.Reflect).Sweep == 6f
                       && !Shots.Of(Shots.Reflect).Smoke
                       && !Shots.Of(Shots.Shell).AtPlayers && Shots.Of(Shots.Shell).Sweep == 6f && Shots.Of(Shots.Shell).Burst == 0
@@ -11300,7 +11519,7 @@ public partial class _Test : Node
                       && Shots.Of(Shots.Seeker).Interceptable && !Shots.Of(Shots.Missile).Interceptable
                       && Shots.All.Count(x => x.Smoke) == 4
                       && Shots.All.Count(x => x.Tags == Tag.Hulled) == 1 && Shots.Of(Shots.Cruise).Tags == Tag.Hulled,
-                      "eight kinds of shot, each a row: a shell, a boss's slug and its scrap, a torpedo, a heavy missile, the seeker point defence exists for, the cruise missile anything may shoot down, and the round a prism reflects (straight, unguided, sweep 6, at the base's enemies)");
+                      "ten kinds of shot, each a row: a shell, a boss's slug and its scrap, a torpedo, a heavy missile, the seeker point defence exists for, the cruise missile anything may shoot down, the round a prism reflects (straight, unguided, sweep 6, at the base's enemies), the freighter's spotter and the bastion's bunker buster (stops on the first body, x2 on a boss or structure, 0.25 through a shield)");
                 // ── A BODY IN FLIGHT WITH A HULL OF ITS OWN (Tag.Hulled) ──
                 // A missile is point defence's alone: a shell passes through it, a blow skips it, Tab
                 // and a wing cannot have it, and one hit deletes it. A row that gives its body a hull
@@ -11460,6 +11679,7 @@ public partial class _Test : Node
             await LaneA6bBubbleCoverChecks(yonder);
             await LaneA6bRedeployChecks(yonder);
             await LaneA6bMortarChecks(yonder);
+            await LaneA6bBusterChecks(yonder);
             await LaneARaiderCallChecks(yonder);
             await LaneADecoyChecks(yonder);
             await LaneATowChecks(yonder);
@@ -11871,6 +12091,7 @@ public partial class _Test : Node
                     ["tot"]       = sp => sp.Sl("tot").Cool > 0 && sp.DealtBy.GetValueOrDefault(Dealt.Tot) > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Tot),
                     ["overdrive"] = sp => Math.Abs(sp.FireRate - (float)sp.Stats["overdrive_mult"]) < 1e-3f,
                     ["shockwave"] = sp => sp.Sl("shockwave").Cool > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Wave),
+                    ["buster"]    = sp => sp.Sl("buster").Cool > 0 && Nodes<Shot>().Any(x => x.Kind == Shots.Buster && ReferenceEquals(x.Source, sp)),
                     ["railgun"]   = sp => sp.Held == 0f && sp.Sl("railgun").Left > sp.Stats["rail_charge"] - 0.1,
                     ["rush"]      = sp => sp.Statuses.Has(Status.Hardened) && Math.Abs(sp.SpeedMult - (float)sp.Stats["rush_mult"]) < 1e-3f,
                     ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && InFlight().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
@@ -12912,6 +13133,7 @@ public partial class _Test : Node
             await LaneABurnClockChecks(boss, me2);
             await RaidsArenaAddsChecks(boss, me2);
             await LaneAOutDoorBossChecks(boss, me2);
+            await LaneA6bBusterBossChecks(boss, me2);
             await FieldsRipChecks(boss, "Lancer", boss.Type.Id == "silver_lancer" ? 57.6f : float.NaN, false);
             // ── STEALTH STOPS THE BOSS CHOOSING, NEVER HITTING, AND NEVER STOPS THE FIGHT ──
             // Its pilots were ONE list, the seen one: a solo pilot who went dark emptied it and the
@@ -13639,6 +13861,7 @@ public partial class _Test : Node
                       $"a siege wave is 3 pinners and a standoff at FULL hull, level 3 (hull x{siegeLv:0.00}) -- not the escort's half ({wave.Count} raiders, {wave.Count(r => r.Heavy)} heavy)");
                 foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
                 await Wait(0.2);
+                await LaneA6bSiegeChecks(pbase, pylons);
 
                 // THE SHIELD: the four pylons hold it up, and nothing touches the base until every
                 // one of them is down. All in one frame -- a dropped hull leaves H.Emplacements at
@@ -14345,12 +14568,12 @@ public partial class _Test : Node
             bs.Sl("shockwave").Cool = 0;
             bs.Shockwave();
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            if (dm.Position.DistanceTo(dmAt) < 1f) kept++;
+            if (dm.Position.DistanceTo(dmAt) < 1f && Math.Abs(dm.Statuses.Left(Status.Disabled) - 3) < 0.1) kept++;   // held 3 s, not thrown (kits6b-J5)
             if (mk.Position.DistanceTo(bs.Position) - mkWas > 900f) thrown++;
             mk.TakeDamage(99999);
         }
         Check(kept == 3 && thrown == 3,
-              $"a bastion's shockwave, from 3 varied spots: every practice dummy stays where it stands, every raider beside it is thrown ({kept} kept, {thrown} thrown of 3; P5)");
+              $"a bastion's shockwave, from 3 varied spots: every practice dummy stays where it stands and is HELD 3 s, every raider beside it is thrown ({kept} kept and held, {thrown} thrown of 3; P5)");
         await SetClass(cls0);
         if (Me is { } back) { back.Position = at0; back.Velocity = Vector2.Zero; }
         Check(Hub.Refit(ShipClass.Destroyer, ShipClass.Battleship, arena: true, inCombat: false) == ShipClass.Destroyer

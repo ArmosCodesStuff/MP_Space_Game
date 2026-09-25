@@ -8,8 +8,14 @@ using Godot;
 // fairly. After 5 s without a hit, the next hit starts a fresh count.
 //
 // Host-owned like all combat: the host counts, and sends the readout to guests.
-public partial class TargetDummy : Node2D, IHittable, ITagged
+public partial class TargetDummy : Node2D, IHittable, ITagged, IStatused
 {
+    // HELD like anything that holds a spot (a bastion's shockwave, kits 6b): Disabled keeps an armed
+    // dummy's launcher quiet while it lasts. Host-side, like its fire.
+    private StatusSet _status;
+    public StatusSet Statuses => _status;
+    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim && StatusSet.Reaches(s, Tags)) _status.Apply(s, seconds, share); }
+
     // An ARMED dummy fights back: every 5 s it fires a guided missile at the nearest
     // player ship within 150 u, for 50 damage. Host-owned like all combat.
     public bool Armed;
@@ -73,7 +79,8 @@ public partial class TargetDummy : Node2D, IHittable, ITagged
         _hullWatch.Tick(this, -Total, taken: false);
         _hitFlash = Mathf.Max(0, _hitFlash - delta);
         if (_fighter != null) _fighter.Modulate = _hitFlash > 0 ? new Color(1f, 0.8f, 0.7f) : Colors.White;
-        if (Armed && Net.Sim)
+        if (Net.Sim) _status.Tick(delta);
+        if (Armed && Net.Sim && !_status.Has(Status.Disabled))
         {
             _fireCd = System.Math.Max(0, _fireCd - delta);
             if (_fireCd <= 0)

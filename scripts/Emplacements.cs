@@ -129,7 +129,7 @@ public static class Emplacements
 }
 
 // ONE HULL OF A SITE. Everything about it that is not behaviour is its row's.
-public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretHost
+public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, IShielded, ITurretHost
 {
     public Hub Hub;
     public int Kind;                                  // which row of Emplacements.All
@@ -187,9 +187,11 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
     // the host's word on its hull (Hub.NetHulls); the host's own copy keeps its own figure
     public void SetNet(float hp) { if (!Net.Sim) Hp = hp; }
 
-    public void TakeDamage(double d)
+    public void TakeDamage(double d) { if (!Shielded) Take(d); }      // its shield is absolute while it is up...
+    public void TakeThrough(double d) => Take(d);                     // ...but for what a row sends through it (IShielded)
+    private void Take(double d)
     {
-        if (!Net.Sim || !Alive || Shielded) return;      // its shield is absolute while it is up
+        if (!Net.Sim || !Alive) return;
         Popups.NoteImpact(this, Position);
         Hp = Math.Max(0, Hp - d);
         if (Hp <= 0) Hub?.EmplacementDown(this);

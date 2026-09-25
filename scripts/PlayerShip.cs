@@ -769,28 +769,43 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         return n;
     }
 
-    // Everything within reach is thrown clear -- and what is too big to throw (a boss) is held
-    // still instead, which is what the reach is really for.
+    // Everything within reach is thrown clear -- and what cannot be thrown (a boss, a structure, a
+    // practice dummy: Targeting.Immovable) is HELD still instead, wave_disable, never moved.
     public void Shockwave()
     {
         if (Sl("shockwave").Cool > 0) return;
         Sl("shockwave").Cool = Cooling(Stats["wave_cooldown"]);
         float reach = (float)Stats["wave_range"], push = (float)Stats["wave_push"];
-        // Targeting.Throwable, not the raw list: nothing in flight is thrown, a missile or a body
+        // Targeting.Shaken, not the raw list: nothing in flight is reached, a missile or a body
         // with a hull of its own. THROWING one was worse than hitting it -- the host moved a live
         // hostile seeker 1000 u while every guest flew its own copy along the old path, so the two
-        // peers held a damaging missile a thousand units apart.
-        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Throwable)))
+        // peers held a damaging missile a thousand units apart. What holds a spot is held, not moved:
+        // every peer builds it where it stands and never hears of a move (audit P5).
+        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Shaken)))
         {
             if (h.Position.DistanceTo(Position) > reach) continue;
-            if (TagExt.Is(h, Tag.Boss)) { (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["wave_disable"]); continue; }
-            if (h is Node2D n)
+            if (Targeting.Immovable.Hits(h)) { (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["wave_disable"]); continue; }
+            if (Targeting.Throwable.Hits(h) && h is Node2D n)
             {
                 var away = n.Position - Position;
                 n.Position += (away.LengthSquared() > 1f ? away.Normalized() : Vector2.Up) * push;
             }
         }
         Fx.Raise(Fx.Wave, Position, reach);                 // the ring, on every peer: how far it threw them
+    }
+
+    // THE BUNKER BUSTER (the Bastion's F): one slow heavy round from the main barrel toward the cursor,
+    // buster_damage, stopping on the first body. What it does to a boss, a structure or a shield is its
+    // Shots row's (Shots.Buster: Versus, Through), so the rule is data and any hull firing it keeps it.
+    public void FireBuster()
+    {
+        if (Sl("buster").Cool > 0) return;
+        Sl("buster").Cool = Cooling(Stats["buster_cooldown"]);
+        var from = _mains.Count > 0 ? _mains[0].GlobalPosition : Position;
+        var off = AimPoint - from;
+        var dir = off.LengthSquared() > 1f ? off.Normalized() : Vector2.Up.Rotated(Rotation);
+        Combat.Fire(Shots.Buster, from + dir * Spec(false).Barrel, dir, (float)Stats["buster_speed"], (float)Stats["buster_range"],
+                    Stats["buster_damage"], source: this, hitSource: "buster", size: 1.8f);
     }
 
     // ── THE HEAVY FIGHTERS ──────────────────────────────────────────────
