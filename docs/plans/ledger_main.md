@@ -3,16 +3,15 @@
 Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
-- test-phase / task wb7z3o3to (wf_8c62491c-3b2, attempt 4 resumed 18:36: premerged a1-arena-stall, done [a1-items-tables]; the cache replays a PREFIX of calls only): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
+- test-phase / task wxmo7btan (wf_8c62491c-3b2, attempt 4 resumed 19:17: premerged arena-stall + the 4-task check group 86be177 in wt_fix0, done 5, preTasks a2 = round2_tasks.json): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
   -> release. lands: 3 lines to the owner + frames (framesForOwner, netOwed); a stop -> ledger_test.md + journal, fix, relaunch per Next 1. Watchdog Monitor re-armed at expiry.
 
 ## Landed (verdict first; delete the row once its action is done): none (code-read 17b94df: do not rewrite; round>=2 triage reads it)
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. When the check group's merge lands (Monitor b70843jn5 prints "merged":true): TaskStop wb7z3o3to, kill orphans, relaunch
-   Workflow({scriptPath, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 4, review: [], premerged: {"a1-arena-stall": {key:
-   "fixa1a1arenastall", tree: "fix1"}}, done: ["a1-items-tables"], preTasks: <docs/plans/round2_tasks.json>}}) (owner 19:05: skip round 2's
-   chains + triage; 17 tasks from the code read; merges start at Sonnet). The cache replays only the unchanged PREFIX of agent calls.
+1. Wait for task wxmo7btan (round 1: two merges; round 2: 17 pre-authored fixes in 5 groups, no chains, no triage; round 3 measures). A stop ->
+   relaunch with the same args (premerged: arena-stall fix1, a1-rip-dummy4 ids x4 fix0; done: items-tables + the 3 group ids; preTasks a2 from
+   docs/plans/round2_tasks.json) plus every task merged since per ledger_test.md in done; the cache replays only an unchanged PREFIX of calls.
 2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
 
 ## Owner questions (one line each, with its default): none open (today's rulings: README, Agents).
