@@ -4219,6 +4219,100 @@ public partial class _Test : Node
         pm.Position = yonder; pm.Velocity = Vector2.Zero;
     }
 
+    // ── F11 · ROUNDS REFLECT, RAYS SPLIT (lane A slice 5, kits5-J3) ────────────────────────────
+    // World (Shot.Strike): a Parrying pilot (a display ship for the check, so its guard stays on its nose)
+    // meets a hostile slug (20, 400 u/s) from 250-400 u, 3 varied headings. SQUARE (theta 1-12): a Reflect
+    // round leaves along the guard at 600 u/s (x1.5) and the held gunship 250-500 u out on the guard loses
+    // 20; SLANT (theta 25-45): along the mirror at 400 u/s (x1.0) into the gunship on the mirror; OPEN
+    // (theta 70-85) lands 20 on the pilot. A cruise missile (never Reflectable) lands at theta 1-12.
+    async Task LaneAPrismReflectChecks(Vector2 yonder)
+    {
+        var pm = Me; bool demo = pm.Demo; pm.Demo = true;
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            var g = Vector2.Up.Rotated(rot);
+            float sign = run % 2 == 0 ? 1f : -1f;
+            foreach (var (band, theta) in new[] { ("square", Vary(1f, 12f)), ("slant", Vary(25f, 45f)), ("open", Vary(70f, 85f)), ("cruise", Vary(1f, 12f)) })
+            {
+                var u = -g.Rotated(sign * Mathf.DegToRad(theta));
+                var mirror = (u - 2f * u.Dot(g) * g).Normalized();
+                var outDir = band == "slant" ? mirror : g;
+                var spot = at + outDir * Vary(250f, 500f);
+                var foe = H.SpawnRaider(spot, Enemies.Gunship); foe.Hp = 1e9; foe.ApplyStatus(Status.Disabled, 30);
+                pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = rot; pm.AimPoint = at + g * 600f;
+                pm.Hp = pm.MaxHp; pm.ApplyStatus(Status.Parrying, 10.0);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double f0 = foe.Hp, h0 = pm.Hp;
+                bool cruise = band == "cruise";
+                Combat.Fire(cruise ? Shots.Cruise : Shots.Slug, at - u * Vary(250f, 400f), u, 400f, 1500f, 20, radius: 6f,
+                            hitSource: $"test:{band}#{run}", hull: cruise ? 1e6 : 0);
+                Shot back = null;
+                for (int i = 0; i < 60 * 3 && foe.Hp == f0 && pm.Hp == h0; i++)
+                {
+                    pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = rot; pm.AimPoint = at + g * 600f; foe.Position = spot;
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    back ??= Combat.World.GetChildren().OfType<Shot>().FirstOrDefault(s => s.Kind == Shots.Reflect && s.Alive);
+                }
+                double lost = f0 - foe.Hp, took = h0 - pm.Hp;
+                if (band == "square" || band == "slant")
+                {
+                    float want = band == "square" ? 600f : 400f;
+                    Check(back != null && Mathf.Abs(back.Speed - want) < 0.01f && back.Dir.DistanceTo(outDir) < 1e-3f && Math.Abs(lost - 20) < 1e-6 && took == 0,
+                          $"a slug caught {band.ToUpper()} at theta {theta:0} deg ({(sign > 0 ? "left" : "right")}): it goes back {(band == "square" ? "along the guard at x1.5" : "along the mirror at x1.0")} ({back?.Speed:0} u/s), the gunship {spot.DistanceTo(at):0} u out loses its 20 ({lost:0.##}), the pilot nothing ({took:0.##})");
+                }
+                else
+                    Check(Math.Abs(took - 20) < 1e-6 && lost == 0,
+                          band == "open" ? $"a slug at theta {theta:0} deg (OPEN) lands its 20 on the Parrying pilot ({took:0.##})"
+                                         : $"a cruise missile (never Reflectable) caught square at theta {theta:0} deg lands its 20 ({took:0.##})");
+                pm.Statuses.Clear(Status.Parrying); pm.Hp = pm.MaxHp;
+                foe.TakeDamage(1e12);
+                await Wait(0.3);
+            }
+        }
+        pm.Demo = demo; pm.Position = yonder; pm.Velocity = Vector2.Zero;
+    }
+
+    // World (Raider.Strike through Prism.Catch): a webifier latched on the pilot, 250-400 u off at a varied
+    // bearing. The pilot Parrying with its guard on the webifier: over 2 s its laser never lands on the
+    // hull and the split credits the pilot "prism" (the light goes back into the webifier). The guard
+    // turned away (cursor behind: clamped to 90 deg, the light OPEN): its laser lands again. 3 bearings.
+    async Task LaneAPrismRayChecks(Vector2 yonder)
+    {
+        var pm = Me; bool demo = pm.Demo; pm.Demo = true;
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.3);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            float rot = VaryAngle();
+            pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = rot; pm.Hp = pm.MaxHp;
+            var w = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f)); w.Quarry = pm; w.Hp = 1e9;
+            for (int i = 0; i < 60 * 6 && !w.Latched; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            async Task<(double took, double split)> Hold(bool facing)
+            {
+                double h0 = pm.Hp, d0 = pm.DealtBy.TryGetValue(Dealt.Prism, out var v) ? v : 0;
+                for (int i = 0; i < 120; i++)
+                {
+                    var toW = (w.Position - at).Normalized();
+                    pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = rot;
+                    pm.AimPoint = at + (facing ? toW : -toW) * 500f;
+                    pm.ApplyStatus(Status.Parrying, 1.0);
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                }
+                return (h0 - pm.Hp, (pm.DealtBy.TryGetValue(Dealt.Prism, out var v2) ? v2 : 0) - d0);
+            }
+            var (tookFacing, split) = await Hold(true);
+            var (tookAway, _) = await Hold(false);
+            Check(w.Latched && tookFacing == 0 && split > 0 && tookAway > 0,
+                  $"a webifier latched {w.Position.DistanceTo(at):0} u off: with the guard on it, its laser splits ({split:0.00} credited \"prism\") and lands nothing ({tookFacing:0.00}); with the guard turned away it lands ({tookAway:0.00})");
+            pm.Statuses.Clear(Status.Parrying); pm.Statuses.Clear(Status.Pinned); pm.Hp = pm.MaxHp;
+            w.TakeDamage(1e12);
+            await Wait(0.3);
+        }
+        pm.Demo = demo; pm.Position = yonder; pm.Velocity = Vector2.Zero;
+    }
+
     // ── F12 · THE MELEE ARC AND THE GUARD CLAMP (lane A slice 5, kits5-J1) ─────────────────────
     // Pure (Melee.Pick, Melee.Guard): the blade's literals (160 u, ±55°, kits_v2 Warrior card) and the
     // whirlwind's (210 u, all round) from 3 varied spots and facings. A body well inside the wedge and one
@@ -10046,6 +10140,8 @@ public partial class _Test : Node
             LaneAPrismResolveChecks();
             await LaneAPrismSplitChecks(yonder);
             await LaneAPrismWalkChecks(yonder);
+            await LaneAPrismReflectChecks(yonder);
+            await LaneAPrismRayChecks(yonder);
             await LaneBHelmChecks(yonder);
             await LaneBStrafeChecks(yonder);
             await LaneBBoostChecks(yonder);

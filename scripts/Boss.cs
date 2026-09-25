@@ -510,7 +510,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         {
             case MoveWay.Bolt:
                 if (!Sees(s.Target)) break;
-                s.Target.Hit(Out(m), Position, m.Source);
+                if (!Prism.Catch(s.Target, BlowKind.Ray, nose, s.Target.Position, Out(m), m.Source))   // a bolt is a ray (F11)
+                    s.Target.Hit(Out(m), Position, m.Source);
                 Combat.Flash(nose, s.Target.Position, m.Beam);
                 break;
             case MoveWay.Shoot:

@@ -185,7 +185,8 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
     void Strike(Node2D t, double d)
     {
         d = _status.Out(d, OutKind.Gun);
-        if (d > 0) (t as IRaidTarget)?.Hit(d, Position, $"raider:{NetId}");
+        if (d > 0 && !(t is IHittable h && Prism.Catch(h, BlowKind.Ray, Position, t.Position, d, $"raider:{NetId}")))   // a prism splits the ray (F11)
+            (t as IRaidTarget)?.Hit(d, Position, $"raider:{NetId}");
     }
 
     public override void _Process(double delta)

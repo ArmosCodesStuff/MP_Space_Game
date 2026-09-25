@@ -21,8 +21,9 @@ using System.Linq;
 //     it, under the parent's name). Children strike through Lines, never through here, so they
 //     never split again.
 // A beam's judgement walks the pilots on it nearest first and stops at the first catcher
-// (Prism.Walk, Boss.Burn); a round is reflected where it strikes (Shot.Strike); a ray splits
-// where it lands.
+// (Prism.Walk, Boss.Burn); a round is reflected where it strikes (Shot.Strike: a Reflectable row,
+// fired back as Shots.Reflect along the band's direction at its RoundSpeed); a ray -- a craft's
+// laser (Raider.Strike), a boss's bolt -- splits where it lands.
 //
 // A NEW BAND is a row of Prism.Bands (its widest angle, what goes back and along what, what goes
 // on and whether it bends). How often a stance may split and how long it lasts are the stance's

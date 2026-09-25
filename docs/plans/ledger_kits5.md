@@ -71,3 +71,17 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
 - Files: scripts/Prism.cs (new), Lines.cs, Dealt.cs (Dealt.Prism), Statuses.cs, PlayerShip.cs, Boss.cs; SmokeTest.cs.txt
   (LaneAPrismBandChecks, LaneAPrismResolveChecks, LaneAPrismSplitChecks, LaneAPrismWalkChecks after the melee pair).
 - Next: kits5-J3.
+### kits5-J3 · PRE · F11b: rounds reflect, rays split -- tier opus
+- Intent: ShotDef.Reflectable (slug, scrap, seeker; never cruise) + the Reflect shot row (appended, index 7); Shot.Strike
+  reflects a caught round (SQUARE along g x1.5, SLANT along the mirror x1.0, friendly, unguided, same damage); the raider
+  laser and the boss bolt are rays through Prism.Catch. Checks LaneAPrismReflectChecks, LaneAPrismRayChecks.
+- Files: scripts/Shots.cs, scripts/Prism.cs, scripts/Raider.cs (Strike, 1 line), scripts/Boss.cs (Bolt), SmokeTest.cs.txt, this ledger.
+- HEAD 9584ae90f2f2e3d8fc39f9af0890485d0a81a5fa · Shots.cs 63009ca1c5e1452a882acc5c7802912fd85fa694 · Prism.cs f2f41917868a3f63dfed7e2172343a4c88ecbd60 · Raider.cs 99962dbd495d83b1513279d3c64d3b0a8c0cd2ff · Boss.cs 93dea68ab53ac4bb1cbde923c46197993ee4ec91 · SmokeTest.cs.txt 993c82bf7b7428fbeec3a3813391ccf557d70394
+### kits5-J3 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. ShotDef.Reflectable (slug, scrap, seeker); Shots.Reflect = 7 (appended; a wire index); Shot.Strike's
+  Reflected fires the catcher's Reflect round (band RoundSpeed x1.5 / x1.0, remaining flight, same damage, size);
+  Raider.Strike and the boss's Bolt are rays through Prism.Catch (Raider.cs: one hunk in Strike, D30's ray).
+- Files: Shots.cs, Prism.cs (header), Raider.cs, Boss.cs; SmokeTest.cs.txt (LaneAPrismReflectChecks, LaneAPrismRayChecks
+  after LaneAPrismWalkChecks). Trap: both set Me.Demo = true for their run so the local cursor does not move the guard.
+- Next: kits5-J4.
