@@ -7,7 +7,7 @@ using System.Collections.Generic;
 // The turret was a part of PlayerShip: it read the ship's stat sheet, the ship's art, the ship's
 // point-defence window and the ship's accent colour. So the only thing in the game that could
 // mount one was a pilot's ship -- and a freighter's deployed turret, a hauler's own mount, the
-// base's gun and a class whose point defence never switches off all wanted the same swing, the
+// base's gun and a warden's heavy point defence all wanted the same swing, the
 // same claim-sharing acquisition and the same reload that carries its remainder.
 //
 // A turret now asks its HOST two things: what gun this is (TurretSpec -- numbers, art, the row
@@ -45,7 +45,7 @@ public struct TurretSpec
     public float ShellSpeed;             // main guns: the shell's speed
     public string Texture;               // the sprite (barrels up, pivot at the sheet's centre)
     public float TexScale;               // world units per turret-texture pixel
-    public float Barrel, Ring;           // muzzle from the pivot; the radius of the ring it draws
+    public float Barrel;                 // muzzle from the pivot
     public Color Tint;
     // WHAT ITS FLASH IS, when it is point defence: a row of Beam.All -- the line's colour and the
     // note it is heard at. Beam.Point is 0, so a gun that says nothing is a warship's point
@@ -70,8 +70,7 @@ public interface ITurretHost
 {
     Node2D AsNode { get; }                      // what the turret is a child of, and turns with
     TurretSpec Spec(bool pd);
-    bool PdOnline { get; }                      // point defence may fire now (a window, or always)
-    float PdRing { get; }                       // 0..1 the PD ring shows, 0 for no ring at all
+    bool PdOnline { get; }                      // point defence may fire now
     Vector2 AimAt { get; }                      // where the main guns point
     float FastSwing { get; }                    // 0, or a turn rate that overrides the spec's
     IReadOnlyList<Turret> Siblings { get; }     // PD turrets that may have claimed a target
@@ -136,12 +135,11 @@ public partial class Turret : Node2D
             // aim point it last sent. On guests this is cosmetic; the host's copy is
             // the one whose barrel direction decides where shots go.
             Swing((Host.AimAt - GlobalPosition).Angle(), delta);
-            QueueRedraw();
             return;
         }
 
         float rest = Host.AsNode.Rotation - Mathf.Pi / 2f;
-        if (!Online) { Target = null; _cd = 0; Swing(rest, delta); QueueRedraw(); return; }
+        if (!Online) { Target = null; _cd = 0; Swing(rest, delta); return; }
 
         // Acquire. Runs on guests too, as cosmetics: the same rule on the same
         // positions picks the same targets, so a guest sees its turrets track what
@@ -153,7 +151,7 @@ public partial class Turret : Node2D
 
         float desired = Target != null ? (Target.Position - wp).Angle() : rest;
         float diff = Swing(desired, delta);
-        if (!Net.Sim) { QueueRedraw(); return; }
+        if (!Net.Sim) return;
 
         // An 8-degree cone, so a turret still swinging does not fire. The reload
         // CARRIES its remainder rather than resetting: resetting rounds every shot up
@@ -171,7 +169,6 @@ public partial class Turret : Node2D
             tgt.TakeDamage(spec.Damage); Host.NoteDealt(spec.Damage, tgt.Position);
             Combat.Flash(wp + Vector2.Right.Rotated(GlobalRotation) * spec.Barrel, tgt.Position, spec.Beam);
         }
-        QueueRedraw();
     }
 
     // WHAT A GUN THAT PICKS FOR ITSELF TAKES FIRST: what is in flight -- a missile, or a body with
@@ -259,26 +256,10 @@ public partial class Turret : Node2D
         return diff;
     }
 
-    // The turret takes the host's accent (turrets, engines, trim) over its hull colour.
+    // The turret takes the host's accent (turrets, engines, trim) over its hull colour. It draws
+    // nothing of its own: its sprite is the whole of it (point defence has no window to show).
     public void Recolor()
     {
         if (_sprite != null) _sprite.Modulate = S.Tint;
-        QueueRedraw();
-    }
-
-    public override void _Draw()
-    {
-        // PD shows the host's cycle, just outside its ring: the firing window running down, or
-        // the recharge. Main guns draw nothing here, and a host whose PD never switches off shows
-        // no ring at all (PdRing 0), so leave before doing any of the work -- this runs per
-        // turret, per frame.
-        if (!PointDefense) return;
-        float frac = Host.PdRing;
-        if (frac <= 0) return;
-        var spec = S;
-        var lit = Online ? spec.Tint : new Color(0.35f, 0.35f, 0.40f);
-        float r = spec.Ring + 1.6f;
-        DrawArc(Vector2.Zero, r, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * frac, 16,
-                Online ? new Color(lit.R, lit.G, lit.B, 0.9f) : new Color(1f, 0.5f, 0.3f, 0.6f), 1.2f);
     }
 }

@@ -284,7 +284,6 @@ public partial class LaneGun : Node2D, ITurretHost
     // ── what carries the mount (ITurretHost) ────────────────────────────────
     public Node2D AsNode => this;
     public bool PdOnline => false;                      // a MAIN mount: it never fires by itself
-    public float PdRing => 0f;
     public Vector2 AimAt => _aim;
     public float FastSwing => 0f;
     public IReadOnlyList<Turret> Siblings => _mounts;
@@ -296,7 +295,7 @@ public partial class LaneGun : Node2D, ITurretHost
     public TurretSpec Spec(bool pd) => new()
     {
         Kind = Shots.Shell, Damage = 0, Interval = Interval, Range = Range, Turn = Lanes.GunTurn,
-        ShellSpeed = 0f, Texture = "res://turret_main.png", TexScale = 0.30f, Barrel = 30f, Ring = 0f,
+        ShellSpeed = 0f, Texture = "res://turret_main.png", TexScale = 0.30f, Barrel = 30f,
         Tint = Lanes.GunTint,
     };
 

@@ -1575,6 +1575,62 @@ public partial class _Test : Node
         }
     }
 
+    // POINT DEFENCE CANNOT BE SWITCHED OFF (F16), so a check that needs a hull's point defence out
+    // of the way takes its reach to 0 for the while (test only) and gives the base back after.
+    double PdReachOff(PlayerShip s)
+    {
+        double was = s.Stats.All.First(x => x.Id == "pd_range").Base;
+        s.Stats.SetBase("pd_range", 0);
+        return was;
+    }
+
+    // POINT DEFENCE IS PASSIVE (F16): no key, no window, no recharge -- it fires whenever its ship is
+    // alive. Every hull that mounts it, each at a seeded spot, heading and reach: a light raider held
+    // inside every mount's reach is taken by every mount with NOTHING pressed, at the row's rate --
+    // 0.5 a shot every 0.5 s, 1 DPS a mount (the warden's one mount 5 a shot, 10 DPS: its cut is 6c's,
+    // D8). Counted over 1.9 s from the first shot after all its mounts hold it: 3 or 4 shots a
+    // mount, never a shot on the window's edge.
+    async Task LaneAPassivePdChecks(Vector2 yonder)
+    {
+        var want = new Dictionary<ShipClass, (int mounts, double shot, float reach)> {
+            [ShipClass.Battleship] = (2, 0.5, 460f), [ShipClass.Carrier] = (3, 0.5, 460f), [ShipClass.Destroyer] = (2, 0.5, 460f),
+            [ShipClass.FreightHauler] = (2, 0.5, 460f), [ShipClass.FreightTender] = (2, 0.5, 460f), [ShipClass.FreightBastion] = (2, 0.5, 460f),
+            [ShipClass.HeavyWarden] = (1, 5.0, 420f),
+        };
+        var pdHulls = Classes.All.Where(c => c.Ready && c.Has(Fit.Pd)).Select(c => c.Id).ToList();
+        Check(pdHulls.Count == want.Count && pdHulls.All(want.ContainsKey),
+              $"every hull that mounts point defence is in the passive-PD table ({pdHulls.Count} hulls, {want.Count} rows)");
+        foreach (var dpl in H.Deployed.ToList()) H.DeployedTaken(dpl);
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.2);
+        foreach (var c in pdHulls.Where(want.ContainsKey))
+        {
+            await SetClass(c);
+            var (mounts, shot, reach) = want[c];
+            var s = Me; var at = VaryNear(yonder, 300f);
+            s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = VaryAngle();
+            await Wait(0.2);
+            var prey = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * reach * Vary(0.25f, 0.5f));
+            prey.Hp = 9000; prey.ApplyStatus(Status.Disabled, 30);
+            var pds = s.PdTurrets;
+            // on it AND swung onto it (inside the 8 degree cone a mount fires in): a slow battleship
+            // mount can take 1.5 s to come round, and the window must not start while one is swinging
+            bool OnAndAimed(Turret t) => ReferenceEquals(t.Target, prey)
+                && Mathf.Abs(Mathf.AngleDifference(t.GlobalRotation, (prey.Position - t.GlobalPosition).Angle())) < Mathf.DegToRad(4f);
+            for (int i = 0; i < 240 && !pds.All(OnAndAimed); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool allOn = pds.Count == mounts && pds.All(OnAndAimed);
+            double was = prey.Hp;
+            for (int i = 0; i < 60 && prey.Hp >= was; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double hp0 = prey.Hp;                                          // the clock starts on a shot
+            for (int i = 0; i < 114; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double got = hp0 - prey.Hp, nominal = mounts * shot / 0.5 * 1.9;
+            Check(allOn && hp0 < was && s.PdOnline && Abilities.Find(c, "pd") == null && Math.Abs(got - nominal) <= mounts * shot + 1e-9,
+                  $"{Classes.NameOf(c)}: point defence with nothing pressed and no key for it -- {pds.Count} mounts on a light raider {prey.Position.DistanceTo(s.Position):0} u off at {Mathf.RadToDeg(s.Rotation):0} deg take {got:0.0} in 1.9 s ({mounts} x {shot} every 0.5 s: {nominal:0.0}, a shot a mount either way)");
+            prey.TakeDamage(1e12);
+            await Wait(0.2);
+        }
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -2713,8 +2769,8 @@ public partial class _Test : Node
         {
             hauler.ResetToPad();
             var mounts = Nodes<Turret>(hauler).ToList();
-            Check(mounts.Count == 1 && mounts[0].PointDefense && hauler.PdOnline && hauler.PdRing == 0f,
-                  $"the hauler carries one point-defence mount, always online, with no window to run down ({mounts.Count} mounts)");
+            Check(mounts.Count == 1 && mounts[0].PointDefense && hauler.PdOnline,
+                  $"the hauler carries one point-defence mount, always online ({mounts.Count} mounts)");
             Check(Math.Abs(hauler.Spec(true).Damage - 1.0) < 1e-9 && Math.Abs(hauler.Spec(true).Interval - 0.5) < 1e-9
                   && Math.Abs(hauler.Spec(true).Range - 400f) < 1e-3,
                   $"its gun: 1 damage a shot every 0.5 s inside 400 u ({hauler.Spec(true).Damage:0.00} / {hauler.Spec(true).Interval:0.00} s / {hauler.Spec(true).Range:0} u)");
@@ -2727,6 +2783,9 @@ public partial class _Test : Node
             // (Turret.StillThere). Nothing tells this mount anything -- it is on no pilot's ship --
             // and the missile below is the proof it is still standing its watch afterwards.
             var pdMount = mounts[0];
+            // the HAULER's mount is on trial: the pilot's own point defence, passive, is taken out of
+            // reach (test only) until the pad's last round is down
+            var padPilot = Me; double padReach = PdReachOff(padPilot);
             var pdHunter = H.SpawnRaider(VaryNear(pdMount.GlobalPosition, 300f));   // inside its 400 u, any bearing
             pdHunter.Hp = 9000; pdHunter.ApplyStatus(Status.Disabled, 20); pdHunter.Quarry = hauler;
             for (int pdI = 0; pdI < 60 && !ReferenceEquals(pdMount.Target, pdHunter); pdI++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -2759,6 +2818,7 @@ public partial class _Test : Node
             }
             Check(padPass == 3,
                   $"...and a cruise missile with a hull of 3 crossing the pad: still up 0.75 s in, then down, a shot at a time ({padPass} of 3 seeded bearings{(padLast.Length > 0 ? "; " + padLast : "")})");
+            padPilot.Stats.SetBase("pd_range", padReach);
         }
 
         // bought for real: five levels to 95%, and no sixth
@@ -3015,10 +3075,10 @@ public partial class _Test : Node
               "stats tab: the main guns at 44.75 DPS, 4 barrels of 11.19, and helm stats");
         Check(labels.Any(x => x.Contains("3 volleys × 4 shells") && x.Contains("= 268.5 damage, every 15.0 s")) && !labels.Any(x => x.StartsWith("Missiles")),
               "stats tab: the broadside, 3 volleys of 4 shells = 268.5 damage every 15 s; no missiles");
-        Check(labels.Any(x => x.Contains("Broadside, averaged over its cycle:  17.90 DPS")) && labels.Any(x => x.Contains("Point defence:  1.00 DPS"))
-              && labels.Any(x => x.Contains("SUSTAINED TOTAL:  63.65 DPS")),
-              "and the total adds up every line it prints: guns 44.75 + broadside 17.90 + point defence 1.00 = 63.65 DPS");
-        Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 10, "keys tab lists the battleship's 4 abilities + 6 open slots");
+        Check(labels.Any(x => x.Contains("Broadside, averaged over its cycle:  17.90 DPS")) && labels.Any(x => x.Contains("Point defence:  2.00 DPS"))
+              && labels.Any(x => x.Contains("2 turrets at 1.00 DPS, always on")) && labels.Any(x => x.Contains("SUSTAINED TOTAL:  64.65 DPS")),
+              "and the total adds up every line it prints: guns 44.75 + broadside 17.90 + point defence 2.00 (2 turrets at 1 DPS, always on: passive) = 64.65 DPS");
+        Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 9, "keys tab lists the battleship's 3 abilities + 6 open slots (point defence is passive: no key)");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
               "six open hotkeys (1-6) on every class, including undefined ones");
@@ -3031,8 +3091,8 @@ public partial class _Test : Node
         Check(Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.G, "a reserved key (W) is refused");
         win.StartCapture("broadside"); Key(global::Godot.Key.V); await Wait(0.05);
         Check(Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.G, "V is warp, a fixed key: refused too");
-        win.StartCapture("pd"); Key(global::Godot.Key.Escape); await Wait(0.05);
-        Check(Count<StatsWindow>() == 1 && Abilities.KeyFor(ShipClass.Battleship, "pd") == global::Godot.Key.Q, "Esc cancels a capture without closing the window");
+        win.StartCapture("broadside"); Key(global::Godot.Key.Escape); await Wait(0.05);
+        Check(Count<StatsWindow>() == 1 && Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.G, "Esc cancels a capture without closing the window");
         Nodes<Button>(win).First(b => b.Name == "ResetKeys").EmitSignal(BaseButton.SignalName.Pressed); await Wait(0.05);
         Check(Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Battleship, "firemode") == global::Godot.Key.G, "reset restores defaults (fire mode on G)");
         Key(global::Godot.Key.K); await Wait(0.1);
@@ -3087,9 +3147,9 @@ public partial class _Test : Node
 
         // ── THE BROADSIDE (F): the main turrets swing onto the cursor through a 0.5 s wind-up, then
         //    every main gun fires three volleys 0.25 s apart; a 14 s cooldown; the ship steers throughout ──
-        Check(Abilities.For(ShipClass.Battleship).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "broadside", "pd" })
+        Check(Abilities.For(ShipClass.Battleship).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "broadside" })
               && Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.F,
-              "the battleship's bar: guns, fire mode, the BROADSIDE on F, point defence -- no missile, no reload");
+              "the battleship's bar: guns, fire mode, the BROADSIDE on F -- no missile, no reload, and no key for point defence, which is passive");
         Check(ship.Stats["broadside_volleys"] == 3 && ship.Stats["broadside_mult"] == 1.0 && ship.Stats["broadside_windup"] == 0.5
               && ship.Stats["broadside_gap"] == 0.25 && ship.Stats["broadside_cooldown"] == 14 && ship.Stats["missile_mag"] == 0,
               "the broadside: 3 volleys at a shell's own damage, a 0.5 s wind-up, 0.25 s between volleys, a 14 s cooldown");
@@ -3263,26 +3323,25 @@ public partial class _Test : Node
             Ready(); me.Position = warpHome;
         }
 
-        // ── battleship PD: idle until Q; slow independent turrets ──
+        // ── battleship PD: passive, with no key; slow independent turrets ──
         // beside the two practice fighters (PD's only light targets), just outside the armed dummy's 150 u
         // ring: a seeded spot within 20 u of (-120, 150) off the pair keeps the hull 172 u or more from it
         var fighterPair = (d2.Position + pf2.Position) / 2f;
         await Park(VaryNear(fighterPair + new Vector2(-120, 150), 20f), 0);
         foreach (var d in Nodes<TargetDummy>()) d.ResetMeter();
         await Wait(2.0);
-        Check(Nodes<TargetDummy>().Sum(d => d.Total) == 0 && !ship.PdActive, "PD does nothing until activated");
-        Key(global::Godot.Key.Q); await Wait(4.0);
         var pds = ship.PdTurrets;
-        Check(ship.PdActive && pds.All(x => x.Target != null) && pds.Select(x => x.Target).Distinct().Count() == pds.Count,
-              $"Q: each battleship PD turret picks its own target ({string.Join(",", pds.Select(x => (x.Target as TargetDummy)?.Number))})");
-        Check(Nodes<TargetDummy>().Sum(d => d.Total) > 0, "PD fires while active");
+        Check(Nodes<TargetDummy>().Sum(d => d.Total) > 0 && ship.PdOnline && Abilities.Find(ShipClass.Battleship, "pd") == null,
+              $"PD fires with nothing pressed: it is passive, and no key on the bar is for it ({Nodes<TargetDummy>().Sum(d => d.Total):0.0} in 2 s)");
+        Check(pds.All(x => x.Target != null) && pds.Select(x => x.Target).Distinct().Count() == pds.Count,
+              $"each battleship PD turret picks its own target ({string.Join(",", pds.Select(x => (x.Target as TargetDummy)?.Number))})");
         Check(ship.Stats["pd_turn"] < Mathf.Tau / 2.9f, "battleship PD turns slowly (τ/3)");
-        await Wait(11.5);
-        Check(!ship.PdActive && ship.PdRechargeLeft > 14, "the window closes after 15 s and recharge starts");
-        Key(global::Godot.Key.Q); await Wait(0.1);
-        Check(!ship.PdActive, "Q does nothing while recharging");
+        // NO WINDOW: 15.5 s after it came into reach -- past where the old 15 s window closed -- it
+        // is still firing, and goes on for the next 2 s: there is no recharge to fall into.
+        await Wait(13.5);
         double mid = Nodes<TargetDummy>().Sum(d => d.Total); await Wait(2.0);
-        Check(Nodes<TargetDummy>().Sum(d => d.Total) == mid, "no PD fire while recharging");
+        Check(Nodes<TargetDummy>().Sum(d => d.Total) > mid && ship.PdOnline,
+              $"no window and no recharge: 15.5 to 17.5 s on, it is still firing ({Nodes<TargetDummy>().Sum(d => d.Total) - mid:0.0} in those 2 s)");
         // A readout goes to the dummy with that NUMBER, not that position. The dummies are 1, 3,
         // 4 and 5 (2's spot holds the two practice fighters), so indexing the list by number-1
         // sent 3's figures to 4, 4's to 5, and dropped 5's entirely because 5 > Count: guests
@@ -3339,9 +3398,9 @@ public partial class _Test : Node
                   && Math.Abs(Classes.Art(ShipClass.Carrier).Length - 283.5f) < 1e-4 && Math.Abs(Classes.Art(ShipClass.Battleship).Length - 378f) < 1e-4,
                   "the destroyer 25% smaller than the carrier (212.625 u), the carrier 25% smaller than the battleship (283.5 of 378); a 27.8 u half-beam; two main turrets, two PD");
             Check(help.Text.StartsWith("DESTROYER") && help.Text.Contains("mouse aims the main guns"), "controls line is destroyer-specific");
-            Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "missile", "reload", "pd" })
+            Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "missile", "reload" })
                   && Abilities.KeyFor(ShipClass.Destroyer, "missile") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Destroyer, "reload") == global::Godot.Key.R,
-                  "the destroyer's bar: guns, fire mode, the missile burst on F, reload on R, point defence");
+                  "the destroyer's bar: guns, fire mode, the missile burst on F, reload on R -- its point defence is passive, with no key");
             var ddS = new ShipStats(ShipClass.Destroyer); var bsS0 = new ShipStats(ShipClass.Battleship); var cvS0 = new ShipStats(ShipClass.Carrier);
             bool N9(double a, double b) => Math.Abs(a - b) < 1e-9;
             Check(N9(ddS["hull"], 250) && N9(ship.MaxHp, 312.5) && N9(ddS["main_count"], 2) && N9(ddS["pd_count"], 2) && ddS["fighter_count"] == 0 && ddS["broadside_volleys"] == 0,
@@ -3527,7 +3586,7 @@ public partial class _Test : Node
               "carrier flies the owner's line-art sprite at 283.5 u, 25% smaller than the battleship");
         await Park(VaryNear(fighterPair + new Vector2(-120, 150), 20f), 0);
         var pdLight = H.SpawnRaider(ship.Position + new Vector2(-80, 160));   // a third light target (the practice fighters are two), placed off the parked hull
-        Key(global::Godot.Key.Q); await Wait(2.0);
+        await Wait(2.0);                                                      // nothing pressed: point defence is passive
         var cpds = ship.PdTurrets;
         var pdts = cpds.Select(x => x.Target).Where(x => x != null).ToList();
         Check(pdts.Distinct().Count() == 3 && pdts.All(t => t is Raider || (t is TargetDummy td && td.Fighter)),
@@ -3679,14 +3738,12 @@ public partial class _Test : Node
             Click(Scr(gone.Position)); await Wait(0.05);
             Key(global::Godot.Key.Space); await Wait(0.3);
             bool attacked = ship.WingTarget == gone;
-            // point defence on it too: a turret holding it must let go as well
-            ship.Sl("pd").Left = 15.0;
+            // point defence on it too (passive: nothing to switch on): a turret holding it must let go as well
             for (int i = 0; i < 90 && !ship.PdTurrets.Any(tu => tu.Target == gone); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             bool pdOn = ship.PdTurrets.Any(tu => tu.Target == gone);
             H.CallOff(H.Yard.Hauler); await Wait(0.5);
             Check(attacked && pdOn && ship.WingTarget == null && ship.PdTurrets.All(tu => tu.Target != gone),
                   $"a hunter called off while the fighters and point defence are on it: both let go of it ({attacked}, {pdOn}, {ship.WingTarget != null})");
-            ship.Sl("pd").Left = 0.0;
             Key(global::Godot.Key.R); await Wait(TargetDummy.IdleReset + 0.5);
         }
 
@@ -4100,7 +4157,7 @@ public partial class _Test : Node
                   && Wear(ShipClass.FreightHauler, GearSlot.Hull) == 30 && Wear(ShipClass.LightWraith, GearSlot.Hull) == 12
                   && Classes.All.Where(c => c.Ready).All(c => Wear(c.Id, GearSlot.Hull)
                          == 12 + (c.Has(Fit.Pd) ? 9 : 0) + (c.Has(Fit.Deploy) ? 9 : 0)),
-                  "a hull wears what it has the stats for: 24 weapon parts for anything with main guns -- a freighter and a dart included, which could wear none -- 12 for the carrier's hangars, 12 utility parts for every one of the twelve classes, every hull all 12 engines, shields and chips, and a hull slot that says what the hull IS: twelve hull-and-handling frames for everything (the armoured frame among them, which is about the hull as much as the window), nine that are point defence's alone, nine turret cradles where turrets are dropped -- a sniper 12 where it wore 3, a battleship 21, a freighter 30");
+                  "a hull wears what it has the stats for: 24 weapon parts for anything with main guns -- a freighter and a dart included, which could wear none -- 12 for the carrier's hangars, 12 utility parts for every one of the twelve classes, every hull all 12 engines, shields and chips, and a hull slot that says what the hull IS: twelve hull-and-handling frames for everything (the armoured frame among them, which is about the hull as much as its point defence), nine that are point defence's alone, nine turret cradles where turrets are dropped -- a sniper 12 where it wore 3, a battleship 21, a freighter 30");
             bool OnlyFamily(ItemDef i, string fam) => i.Pct.Keys.Concat(i.Add.Keys).All(k => k.StartsWith(fam));
             Check(Equipment.All.Where(i => !i.Kit && OnlyFamily(i, "broadside_")).All(i => Equipment.Fits(i, i.Slot, bsC) && !Equipment.Fits(i, i.Slot, ddC))
                   && Equipment.All.Where(i => !i.Kit && OnlyFamily(i, "missile_")).All(i => Equipment.Fits(i, i.Slot, ddC) && !Equipment.Fits(i, i.Slot, bsC))
@@ -5226,6 +5283,7 @@ public partial class _Test : Node
             // a raider walks into one: the turret shoots it, and the raider shoots back
             var tgt = H.Deployed.First();
             var standAt = VaryNear(tgt.Position, 420f);                          // inside its 500 u, any direction
+            double frReach = PdReachOff(fr);                                     // the GUN on trial, not the freighter's own passive point defence
             var rr = H.SpawnRaider(standAt); rr.Hp = 400;
             double rh0 = rr.Hp;
             // held where it appeared: this is a check on the GUN, not on how long a raider with
@@ -5234,7 +5292,7 @@ public partial class _Test : Node
             { rr.Position = standAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(rr.Hp < rh0,
                   $"a turret left standing shoots what comes near it ({rh0 - rr.Hp:0.0} damage at {standAt.DistanceTo(tgt.Position):0} u, aiming at {(tgt.Aimed == null ? "nothing" : "it")})");
-            rr.TakeDamage(99999); await Wait(0.2);
+            rr.TakeDamage(99999); fr.Stats.SetBase("pd_range", frReach); await Wait(0.2);
 
             // ── WHAT A TURRET LEFT STANDING TAKES (Targeting.Sentry) ──
             // Point defence's filter would keep it to missiles and small craft, and a heavy, a boss
@@ -5355,6 +5413,7 @@ public partial class _Test : Node
             // thousand units apart.
             await SetClass(ShipClass.FreightBastion);
             var bn = Me; bn.Position = yonder; bn.Velocity = Vector2.Zero; await Wait(0.2);
+            double bnReach = PdReachOff(bn);            // the WAVE on trial: the bastion's passive point defence out of reach (test only)
             int took0 = Shot.Intercepted;
             Combat.LaunchTorpedo(bn.Position + new Vector2(0, -140), Vector2.Down, 40f, 900f, 5, bn.NetId, 0.4f,
                                  heavy: false, hostile: true);
@@ -5375,6 +5434,7 @@ public partial class _Test : Node
                   $"a 1000 u shockwave throws nothing in flight -- a seeker or a cruise missile -- or counts it as an intercept: they moved {seeker?.Position.DistanceTo(seekerWas):0} and {cruiseNear?.Position.DistanceTo(cruiseWas):0} u of their own and {Shot.Intercepted - took0} were taken");
             if (seeker != null && GodotObject.IsInstanceValid(seeker)) seeker.QueueFree();
             if (cruiseNear != null && GodotObject.IsInstanceValid(cruiseNear)) cruiseNear.QueueFree();
+            bn.Stats.SetBase("pd_range", bnReach);
             // The ring this raised must be gone before the effects block below counts what is up:
             // the checks between here and there are table reads, and pass no game time at all.
             await Wait(0.9);
@@ -5484,13 +5544,13 @@ public partial class _Test : Node
                           && snL.DamageLines.Count() == 2 && !snL.DamageLines.Any(l => l.Label.Contains("Point defence")),
                           $"the sniper's total counts its railgun: the gun 6/0.8 = 7.5 and the rail 150/(3+1) = 37.5 -- 45 DPS, not 7.50, and no point-defence line on a hull that mounts none ({snL.SustainedDps:0.00})");
                     Check(Math.Abs(new ShipStats(ShipClass.HeavyWarden).SustainedDps - (12 / 0.6 + 6 * 45 / 14.0 + 5 / 0.5)) < 1e-6
-                          && Math.Abs(new ShipStats(ShipClass.FreightHauler).SustainedDps - 49.0) < 1e-6
+                          && Math.Abs(new ShipStats(ShipClass.FreightHauler).SustainedDps - 50.0) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.HeavyWarrior).SustainedDps - (2 * 9 / 0.7 + 60 / 18.0)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.LightEcho).SustainedDps - (5 / 0.35 + (5 / 0.35) * 5 / 15.0)) < 1e-6,
-                          $"...and every other signature weapon counts too: the warden 20 + 19.29 + 10, the freighter's gun 12 + three dropped turrets 36 + 1 = 49, the warrior's EMP 60 every 18 s, the echo repeating five seconds of its own damage every 15");
-                    Check(Math.Abs(new ShipStats(ShipClass.Carrier).SustainedDps - (3 * (2.5 / 0.35) * (15.0 / 18.0) + 4 * 2 * 137.5 / 27.5 + 3 * 0.5 / 0.5 * 0.5)) < 1e-6
+                          $"...and every other signature weapon counts too: the warden 20 + 19.29 + 10, the freighter's gun 12 + three dropped turrets 36 + its always-on point defence 2 = 50, the warrior's EMP 60 every 18 s, the echo repeating five seconds of its own damage every 15");
+                    Check(Math.Abs(new ShipStats(ShipClass.Carrier).SustainedDps - (3 * (2.5 / 0.35) * (15.0 / 18.0) + 4 * 2 * 137.5 / 27.5 + 3 * 0.5 / 0.5)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.Carrier).DamageLines.First(l => l.Label.StartsWith("Bomber")).Dps - 40.0) < 1e-6,
-                          $"the carrier's torpedoes are in its total at last: 8 x 137.5 = 1100 over a 27.5 s run (20 s out and back, 1.5 s launching, 6 s rearming) = 40 DPS, beside 17.86 from the fighters and 1.5 from the point defence ({new ShipStats(ShipClass.Carrier).SustainedDps:0.00})");
+                          $"the carrier's torpedoes are in its total at last: 8 x 137.5 = 1100 over a 27.5 s run (20 s out and back, 1.5 s launching, 6 s rearming) = 40 DPS, beside 17.86 from the fighters and 3 from the point defence, always on ({new ShipStats(ShipClass.Carrier).SustainedDps:0.00})");
                     Check(Classes.All.Where(c => c.Ready).All(c => c.Weapons.Length > 0)
                           && Classes.All.Where(c => c.Ready).All(c => new ShipStats(c.Id).DamageLines.All(l => l.Dps > 0 && l.Sustained)),
                           "every flyable class declares what it kills with, and every line it declares is a rate above zero");
@@ -5705,6 +5765,7 @@ public partial class _Test : Node
 
             await LaneAHoldChecks(sn);
             await LaneADisabledChecks(yonder);
+            await LaneAPassivePdChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);
@@ -5762,12 +5823,12 @@ public partial class _Test : Node
                 wr.Statuses.Clear(Status.Hardened);
             }
 
-            // ── WARDEN: point defence with no window, and six hunters on six targets ──
+            // ── WARDEN: point defence that hits hard, and six hunters on six targets ──
             await SetClass(ShipClass.HeavyWarden);
             var wd = Me; wd.Position = yonder; wd.Velocity = Vector2.Zero; await Wait(0.2);
-            Check(wd.PdOnline && !wd.PdActive && wd.PdRing == 0f && Math.Abs(wd.Spec(true).Damage - 5.0) < 1e-9
-                  && Math.Abs(wd.Stats["pd_interval"] - 0.5) < 1e-9 && Math.Abs(wd.Stats.PdDuty - 1) < 1e-9,
-                  $"the warden's point defence is on with nothing pressed -- 5 a shot every 0.5 s, on all of the time ({wd.Stats.PdSustainedDps:0.0} DPS sustained)");
+            Check(wd.PdOnline && Math.Abs(wd.Spec(true).Damage - 5.0) < 1e-9
+                  && Math.Abs(wd.Stats["pd_interval"] - 0.5) < 1e-9 && Math.Abs(wd.Stats.PdDps - 10) < 1e-9,
+                  $"the warden's point defence is on with nothing pressed -- 5 a shot every 0.5 s from its one mount, 10 DPS ({wd.Stats.PdDps:0.0} DPS)");
             // and it KILLS: one light raider inside its 420 u, nothing else firing, dead in seconds.
             // (At the 0.25 a shot it was first written with, this took 50 s and the class's whole
             // reason for existing did nothing a pilot could see.)
@@ -5964,6 +6025,7 @@ public partial class _Test : Node
                     var xwShip = Me; var xwAt = VaryNear(yonder, 300f); float xwWay = VaryAngle();
                     void XwHold() { xwShip.Position = xwAt; xwShip.Velocity = Vector2.Zero; }
                     XwHold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); XwHold();
+                    double xwReach = PdReachOff(xwShip);    // the WING on trial: the carrier's passive point defence out of reach (test only)
                     var xwFirst = H.SpawnRaider(xwAt + Vector2.Right.Rotated(xwWay) * Vary(350f, 500f));
                     xwFirst.Hp = 9000; xwFirst.ApplyStatus(Status.Disabled, 30);
                     var xwCm = XCruise(xwAt + Vector2.Right.Rotated(xwWay + Vary(-0.8f, 0.8f)) * Vary(550f, 800f));
@@ -5974,7 +6036,7 @@ public partial class _Test : Node
                     double xwDrop = await XFirstBlow(xwCm, 15, XwHold);
                     Check(xwSent && ReferenceEquals(xwShip.WingTarget, xwCm) && Math.Abs(xwDrop - xwShip.Stats["fighter_damage"]) < 1e-6,
                           $"a carrier's wing sent at a raider that dies takes the cruise missile {xwCm.Position.DistanceTo(xwAt):0} u off for itself (sent {xwSent}; now on {(ReferenceEquals(xwShip.WingTarget, xwCm) ? "the missile" : xwShip.WingTarget?.Label ?? "nothing")}), and its first pass takes {xwDrop:0.0} off the 30 hull, one fighter's shot of {xwShip.Stats["fighter_damage"]:0.0}");
-                    xwShip.RecallWing(); xwCm.Intercept();
+                    xwShip.RecallWing(); xwCm.Intercept(); xwShip.Stats.SetBase("pd_range", xwReach);
                 }
                 // A DROPPED TURRET PICKS IT BEFORE A LIGHT RAIDER: the light nearer, the missile further
                 // round, both in its reach, and nothing else here
@@ -6003,24 +6065,27 @@ public partial class _Test : Node
                 // A WARSHIP'S POINT DEFENCE PICKS IT BEFORE A LIGHT RAIDER: off its first mount, both
                 // astern of it (so the missile stands clear of the hull it would otherwise strike), the
                 // light nearer and the missile further, both in reach of either mount. The mount that
-                // chooses first takes the missile; the other, finding it held, takes the light.
+                // chooses first takes the missile; the other, finding it held, takes the light. Point
+                // defence is passive, so its reach is 0 (test only) until both are in the world: the
+                // first choice is made with both there to choose from.
                 await SetClass(ShipClass.Battleship);
                 {
                     var xpShip = Me; var xpAt = VaryNear(yonder, 300f); float xpHead = VaryAngle();
                     void XpHold() { xpShip.Position = xpAt; xpShip.Velocity = Vector2.Zero; xpShip.Rotation = xpHead; }
                     XpHold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); XpHold();
+                    double xpReach = PdReachOff(xpShip);
                     var xpFirst = xpShip.PdTurrets[0]; var xpFrom = xpFirst.GlobalPosition; var xpAft = Vector2.Down.Rotated(xpHead);
                     var xpLight = H.SpawnRaider(xpFrom + xpAft.Rotated(Vary(-1.0f, -0.3f)) * Vary(140f, 200f));
                     xpLight.Hp = 9000; xpLight.ApplyStatus(Status.Disabled, 30);
                     var xpCm = XCruise(xpFrom + xpAft.Rotated(Vary(0.3f, 1.0f)) * Vary(300f, 380f));
                     await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                    xpShip.UseAbility("pd", 0);
+                    xpShip.Stats.SetBase("pd_range", xpReach);
                     for (int i = 0; i < 30 && xpShip.PdTurrets.All(t => t.Target == null); i++) { XpHold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                     bool xpTook = ReferenceEquals(xpFirst.Target, xpCm);
                     double xpDrop = await XFirstBlow(xpCm, 5, XpHold);
                     Check(xpTook && Math.Abs(xpDrop - xpShip.Spec(true).Damage) < 1e-6,
                           $"a battleship's point defence picks a cruise missile {xpFrom.DistanceTo(xpCm.Position):0} u off before a light raider {xpFrom.DistanceTo(xpLight.Position):0} u off: the first mount to choose takes the missile (on {xpFirst.Target?.Label ?? "nothing"}; the other on {xpShip.PdTurrets[^1].Target?.Label ?? "nothing"}), and its first shot takes {xpDrop:0.00} off the 30 hull, one point-defence shot of {xpShip.Spec(true).Damage:0.00}");
-                    xpShip.Sl("pd").Left = 0; xpLight.TakeDamage(1e9); xpCm.Intercept();
+                    xpLight.TakeDamage(1e9); xpCm.Intercept();
                     await Wait(0.2);
                 }
             }
@@ -6091,7 +6156,6 @@ public partial class _Test : Node
                     // and it engages no slot at all.
                     ["firemode"]  = sp => sp.Staggered != sweepMode && sp.Sl("firemode").Left == 0 && sp.Sl("firemode").Cool == 0,
                     ["broadside"] = sp => sp.BroadsideTracking && sp.Sl("broadside").Left > sp.Stats["broadside_windup"] - 0.1,
-                    ["pd"]        = sp => sp.PdActive && sp.Sl("pd").Left > sp.Stats["pd_active"] - 0.1,
                     ["missile"]   = sp => sp.MissilesLoaded == sweepMag - 1 && InFlight().Count() >= sweepShots + PlayerShip.BurstSides.Length,
                     ["reload"]    = sp => sp.Reloading && sp.Sl("reload").Left > sp.Stats["missile_reload"] - 0.1,
                     ["attack"]    = sp => ReferenceEquals(sp.WingTarget, sweepMark),
@@ -6135,17 +6199,17 @@ public partial class _Test : Node
                     sweepShip.Rotation = VaryAngle();
                     await Wait(0.15);
 
-                    // ...and the ABSENCE where that is the fact: a light has no point defence, so
-                    // it has no pd slot and nothing of its own is online. Point defence is the one
-                    // fitting that comes apart from its ability -- a hull whose PD never switches
-                    // off (the warden) HAS the fitting and carries no key for it.
+                    // ...and the ABSENCE where that is the fact. Point defence is the one fitting
+                    // with no ability at all: it is passive, so a hull that HAS the fitting mounts
+                    // its turrets, carries no key for it and is online with nothing pressed; a hull
+                    // without it (a light) mounts none.
                     var wrongFit = fitRows.Where(fr2 => fr2.ids.Any(id3 => (Abilities.Find(cls.Id, id3) != null) != cls.Has(fr2.fit)))
                                           .Select(fr2 => fr2.fit.ToString()).ToList();
-                    bool pdRight = (Abilities.Find(cls.Id, "pd") != null) == (cls.Has(Fit.Pd) && !cls.Has(Fit.AlwaysPd))
-                                   && sweepShip.PdOnline == cls.Has(Fit.AlwaysPd);
+                    bool pdRight = Abilities.Find(cls.Id, "pd") == null && sweepShip.PdOnline
+                                   && (sweepShip.PdTurrets.Count > 0) == cls.Has(Fit.Pd);
                     Check(wrongFit.Count == 0 && pdRight,
                           $"{cls.Name}: every ability on its bar is one of its fittings, and every fitting it has NOT got takes its abilities with it -- "
-                          + $"point defence {(cls.Has(Fit.AlwaysPd) ? "always on, no key" : Abilities.Find(cls.Id, "pd") != null ? "on a key, switched off" : "not carried at all")}"
+                          + $"point defence {(cls.Has(Fit.Pd) ? $"always on, no key, {sweepShip.PdTurrets.Count} mounts" : "not carried at all")}"
                           + $"{(wrongFit.Count == 0 ? "" : ", WRONG: " + string.Join(", ", wrongFit))}");
 
                     // THE SIX OPEN HOTKEYS after its own abilities: bound, shown, and they do
@@ -6281,11 +6345,10 @@ public partial class _Test : Node
                         case "pd_range":
                         {
                             // Point defence picks its OWN target, so it is the ACQUISITION that
-                            // stops at the reach and no shot has to be waited for. A hull whose PD
-                            // never switches off has no window to open first.
+                            // stops at the reach and no shot has to be waited for. It is passive:
+                            // nothing to switch on first.
                             var mount = Nodes<Turret>(pilot).FirstOrDefault(tu2 => tu2.PointDefense);
                             if (mount == null) { told = "it declares a point-defence reach and mounts no point-defence turret"; break; }
-                            if (!pilot.PdOnline) { pilot.Sl("pd").Cool = 0; doAbility.Invoke(pilot, new object[] { "pd", 0 }); }
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             var mountAt = mount.GlobalPosition;
                             var mkIn = await Marker(mountAt + way * (float)(reach * Vary(0.60f, 0.90f)));
@@ -6297,7 +6360,6 @@ public partial class _Test : Node
                             proved = gotIt && mount.Target == null;
                             told = $"a turret takes a light at {gotAt:0} u and lets it go at {mountAt.DistanceTo(mkIn.Position):0} u";
                             Sink(mkIn);
-                            pilot.Sl("pd").Left = 0; pilot.Sl("pd").Cool = 0;
                             break;
                         }
                         case "missile_range":
@@ -6799,7 +6861,6 @@ public partial class _Test : Node
             Check(Count<BasePanel>() == 0, "neither B nor the button opens a base menu out there");
             Check(Music.CombatZone, "the arena counts as combat for the music");
             Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
-            Key(global::Godot.Key.Q); await Wait(0.1);                           // point defence up
             Check(Math.Abs(boss.MaxHp - 760) < 1e-6 && Math.Abs(boss.S("guns").M.Damage / boss.S("guns").M.Every - 3) < 1e-9, "the boss: 760 hull at level 1 (solo); its guns 3 DPS");
             // stand in the beam on purpose with a thick hull (test only), and watch the rhythm
             // the boss's health bar: a chunk per hit, bouncing, whitening, fading; bursts merge
@@ -6978,13 +7039,9 @@ public partial class _Test : Node
             // the only thing that proves the locked line still lands.
             boss.Rotation = (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f;
             int down0 = Shot.Intercepted;
-            for (int i = 0; i < 60 * 10 && Shot.Intercepted == down0; i++)
-            {
-                if (!Me.PdActive && Me.PdReady) Key(global::Godot.Key.Q);
-                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            }
-            Check(Shot.Intercepted > down0, "point defence shoots the boss's missiles down");
-            Check(!H.Raiders.Any(r => r.IsEscort), "point defence, switched on, kills the beam's escorts");
+            for (int i = 0; i < 60 * 10 && Shot.Intercepted == down0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Shot.Intercepted > down0, "point defence, with nothing pressed, shoots the boss's missiles down");
+            Check(!H.Raiders.Any(r => r.IsEscort), "point defence, always on, kills the beam's escorts");
             var aMissile = InFlight().FirstOrDefault(t => t.HostileFire);
             Check(Turret.Rank(boss) == 2 && (aMissile == null || Turret.Rank(aMissile) == 0), "point defence takes missiles before anything else");
             var tiny = new StandIn { Tags = Tag.Light };
@@ -6995,8 +7052,10 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnZone); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             Check(ring != null && ring.Radius == 340f && boss.S("wave").M.Reach == 340f && ring.Anchor == Fx.World,
                   "the shockwave is telegraphed: a red zone 340 u across, on the ground, before it lands");
-            // without point defence, a pair of escorts reaches the pilot and pins it inside the charge
-            for (int i = 0; i < 60 * 8 && Me.PdActive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            // without point defence, a pair of escorts reaches the pilot and pins it inside the charge.
+            // It cannot be switched off, so its reach is 0 (test only) from here to the end of the
+            // fight: the rhythm, the fallbacks and stealth below are all read with no point defence.
+            double lancerReach = PdReachOff(me2);
             boss.LaunchEscorts("beam", me2);
             bool pinnedInTime = false;
             for (int i = 0; i < (int)(60 * BeamSlot().M.Windup) && !pinnedInTime; i++) { pinnedInTime = me2.Pinned; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
@@ -7160,6 +7219,7 @@ public partial class _Test : Node
                   && dropped.All(c => c.Position.DistanceTo(bossAt) < 300 && Equipment.ById(c.Item) is { Kit: false, Rarity: Rarity.Common }),
                   $"a level-1 boss drops this pilot 2 Common crates where it died, on disk at once ({dropped.Count} crates, {UnclaimedOnDisk()} on disk)");
             Check(escortsOut >= 2 && H.Raiders.Count == 0, $"the boss's escorts die with it ({escortsOut} out, {H.Raiders.Count} left)");
+            me2.Stats.SetBase("pd_range", lancerReach);                    // the fight is over: point defence back
             // NO CLOCK any more: the failure timer is not armed on a win, and a RETURN button appears
             double solEndT = (double)typeof(Hub).GetField("_arenaEndT", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(H);
             Check(solEndT < 0 && H.MissionWon && !H.IReturned && H.ReturnTotal == 1 && Nodes<ReturnButton>().Any(),
@@ -7575,12 +7635,13 @@ public partial class _Test : Node
                 // pilot coming into reach, the rest 15 s apart, each 1.5 s after a lane that rides the
                 // base's hull out to the pilot, and each leaving down it; the round flies at its row's
                 // speed; the first, left alone, lands for its damage; the second falls to the MAIN
-                // GUNS (point defence off) before it arrives. Every time here is read off an effect --
+                // GUNS (point defence out of reach) before it arrives. Every time here is read off an effect --
                 // a round as it is launched, a lane the frame it is up -- never off a call.
                 {
                     var classWas = Character.Class;
                     await SetClass(ShipClass.Battleship);
                     var bs = Me; bs.MaxHp = 500000; bs.TakeDamage(-(500000 - bs.Hp)); bs.AutopilotTo = null;
+                    double bsReach = PdReachOff(bs);    // point defence cannot be switched off: its reach is 0 here (test only)
                     var gun = pbase.Def.Gun.GetValueOrDefault();
                     var gunsKey = Abilities.KeyFor(ShipClass.Battleship, "guns");
                     foreach (var c in Nodes<Shot>().Where(x => x.Kind == Shots.Cruise && x.Alive).ToList()) c.Intercept();
@@ -7805,12 +7866,13 @@ public partial class _Test : Node
                     double oneHit = gun.Damage * Missions.DamageMult(3, 1);
                     Check(Math.Abs(dealtFirst - oneHit) < 1e-6 && downAtFirst == 0,
                           $"left alone it lands for its damage: {dealtFirst:0.00} of the {gun.Damage:0} x {Missions.DamageMult(3, 1):0.000} a level-3 missile carries, and nothing counted it shot down");
-                    Check(fellAt > 0 && downAtSecond == 1 && Math.Abs(dealtAtSecond - dealtFirst) < 1e-9 && ownShells > 0 && !bs.PdActive,
-                          $"the next falls to the battleship's MAIN GUNS at a seeded bearing, {fellAt:0} u short of the hull, point defence off ({ownShells} shells, {downAtSecond} down, nothing more taken)");
+                    Check(fellAt > 0 && downAtSecond == 1 && Math.Abs(dealtAtSecond - dealtFirst) < 1e-9 && ownShells > 0 && bs.Stats["pd_range"] == 0,
+                          $"the next falls to the battleship's MAIN GUNS at a seeded bearing, {fellAt:0} u short of the hull, point defence out of reach ({ownShells} shells, {downAtSecond} down, nothing more taken)");
                     // ...and the warning after the one the EMP's hold spent went up 15 s after it: the
                     // clock restarts as a warning goes up, round or no round
                     Check(spentLaneAt > 0 && lanes.Count > 0 && Math.Abs(lanes[0].t - spentLaneAt - gun.Interval) < 0.1,
                           $"the warning after one an EMP's hold spent goes up {gun.Interval:0} s after it, round or no round ({(lanes.Count > 0 && spentLaneAt > 0 ? $"{lanes[0].t - spentLaneAt:0.00} s" : "never")})");
+                    bs.Stats.SetBase("pd_range", bsReach);
                     if (classWas != ShipClass.Battleship) await SetClass(classWas);
                 }
                 await Wait(0.2);
@@ -8963,6 +9025,9 @@ public partial class _Test : Node
             Check(rolled.Count == 3 && rolled.Values.All(d => d.Length == 2), $"the host rolls a kill's drops for each of the 3 pilots, 2 each ({rolled.Count})");
             // ...and the base owner's record is the level-3 boss: AUTO-SELL opens on THIS base for everyone
             Character.BossCleared["silver_lancer"] = new System.Collections.Generic.HashSet<int> { 1, 2, 3 };
+            // this host's own point defence is passive, and would kill the light below once it closes:
+            // out of reach (test only) for the rest of the session, as it was when it had to be pressed
+            _ = PdReachOff(Me);
             H.SpawnRaider(new Vector2(-3500, 3500));   // far off: the guests must see it
             H.SpawnRaider(new Vector2(-3700, 3700), Enemies.Gunship);
             Check(!H.AllReady, "the host cannot warp until every pilot is ready");
@@ -8988,7 +9053,25 @@ public partial class _Test : Node
             var dummy = H.GetNode<TargetDummy>("TargetDummy1");
             Check(g != null && g.WingTarget == dummy, "guest's Space order reached the host");
             Check(dummy.Total > 5, $"guest's wing hit the dummy on the host ({dummy.Total:0.0})");
-            Check(g != null && g.PdActive, "guest's PD activation reached the host");
+            // A GUEST'S POINT DEFENCE IS THE HOST'S TO FIRE (F16): nothing is pressed for it and nothing
+            // is asked for -- a light raider set down beside the guest's carrier here, held still, is
+            // taken by the host's copy of its mounts. Left for 20 s: the guest watches its own mounts
+            // flash at it (the guest branch).
+            if (g != null)
+            {
+                var gPrey = H.SpawnRaider(g.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 250f));
+                gPrey.Hp = 9000; gPrey.ApplyStatus(Status.Disabled, 30);
+                double gPrey0 = gPrey.Hp; bool gTook = false;
+                for (int i = 0; i < 180 && !gTook; i++)
+                {
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    gTook = g.PdTurrets.Any(t => ReferenceEquals(t.Target, gPrey)) && gPrey.Hp < gPrey0;
+                }
+                Check(gTook && g.PdOnline && Abilities.Find(g.Class, "pd") == null,
+                      $"a guest's point defence fires on the host with nothing pressed: its {g.PdTurrets.Count} mounts take a light raider {gPrey.Position.DistanceTo(g.Position):0} u off ({gPrey0 - gPrey.Hp:0.0} off its hull)");
+                GetTree().CreateTimer(20.0).Timeout += () => { if (GodotObject.IsInstanceValid(gPrey) && gPrey.Alive) gPrey.TakeDamage(1e12); };
+            }
+            else Check(false, "a guest's point defence fires on the host: no guest ship");
             Check(InFlight().Any(x => !x.Cosmetic) || dummy.Total > 12, "guest's bomber strike launched real torpedoes on the host");
             // stay up while the guest watches its bombers come home and dock (it checks ~22 s in), and
             // send the hauler on an escort half way through for it to see
@@ -9319,11 +9402,13 @@ public partial class _Test : Node
             Key(global::Godot.Key.Space);          // fighters attack
             Key(global::Godot.Key.F);              // bomber strike
             await Wait(1.0);
-            Key(global::Godot.Key.Q);              // point defence
-            // the PD window is read while it is surely open -- before the torpedo wait below, which may
-            // run longer than the window lasts
-            await RealTime(() => mine != null && mine.PdActive, 3);
-            Check(mine != null && mine.PdActive, "guest sees its PD window running (replicated)");
+            // POINT DEFENCE IS PASSIVE, and the host's to fire: nothing is pressed for it here. The host
+            // sets a light raider down beside this carrier; from now until the check below, watch for a
+            // flash leaving one of this ship's OWN mounts -- the host's shot, sent here (a flash lives
+            // 0.1 s, so it is sampled every frame, never once).
+            bool sawPd = false;
+            var pdWatch = new LateSampler { Probe = () => sawPd |= mine != null && GodotObject.IsInstanceValid(mine) && H != null && H.Flashes.Any(f => mine.PdTurrets.Any(t => f.a.DistanceTo(t.GlobalPosition) < 40f)) };
+            AddChild(pdWatch);
             // WAITED FOR, NOT WINDOWED. The strike is the bombers' flight out to the target and then
             // their release, and over a simulated internet the press, the launch and every report
             // each cost a trip -- a fixed 4 s window opened 1 s after the key (timed from the input,
@@ -9365,6 +9450,10 @@ public partial class _Test : Node
             Check(dummy.Total > 0 && dummy.LastSecond > 0, $"dummy readout reached the guest ({dummy.LastSecond:0.00} / {dummy.Total:0.0})");
             int near = Nodes<Wing>().Count(w => w.Carrier == mine && w.Kind == WingKind.Fighter && w.Position.DistanceTo(dummy.Position) < 400);
             Check(near >= 3, $"guest sees its fighters at the target, as the host flies them ({near})");
+            await RealTime(() => sawPd, 10);
+            pdWatch.QueueFree();
+            Check(sawPd && mine != null && mine.PdOnline && Abilities.Find(mine.Class, "pd") == null,
+                  "guest sees its own point defence fire with nothing pressed and no key for it: the host's shot, flashed from this ship's mounts");
             // a flash lives 0.1 s, so watch for one over two seconds rather than sampling once
             var flashes = (System.Collections.IList)H.GetType().GetField("_flashes", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(H);
             int seen = 0;

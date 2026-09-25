@@ -363,10 +363,10 @@ public static class Equipment
                  new[] { ("pd_damage", 0.60), ("pd_interval", 0.30) }, new[] { ("pd_range", -0.15) }),
             Line("fr_picket", "Picket Frame", GearSlot.Hull, "point defence: more range and turret turn rate; less damage",
                  new[] { ("pd_range", 0.40), ("pd_turn", 0.50) }, new[] { ("pd_damage", -0.20) }),
-            Line("fr_endurance", "Endurance Frame", GearSlot.Hull, "point defence: a longer firing window, a shorter recharge",
-                 new[] { ("pd_active", 0.50), ("pd_reload", 0.30) }),
-            Line("fr_armour", "Armoured Frame", GearSlot.Hull, "more hull; a shorter point-defence firing window",
-                 new[] { ("hull", 0.20) }, new[] { ("pd_active", -0.30) }),
+            Line("fr_endurance", "Endurance Frame", GearSlot.Hull, "point defence: a shorter reload and quicker turrets",
+                 new[] { ("pd_interval", 0.30), ("pd_turn", 0.30) }),
+            Line("fr_armour", "Armoured Frame", GearSlot.Hull, "more hull; a slower point-defence reload",
+                 new[] { ("hull", 0.20) }, new[] { ("pd_interval", -0.20) }),
             // ── frames for a hull with no point defence to reinforce ──
             // The four above are point defence's: nine of their twelve parts move nothing but pd_
             // stats, so the five classes that mount no point defence -- the sniper, the warrior,

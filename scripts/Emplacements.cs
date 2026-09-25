@@ -78,7 +78,7 @@ public static class Emplacements
                 Gun = new TurretSpec { Kind = Shots.Cruise, Damage = 126, Interval = 15, Range = 4500f,
                                        Turn = Mathf.Tau / 2.5f, ShellSpeed = 120f,
                                        Homing = 1.2f, Size = 3f, Hull = 30, Windup = 1.5,
-                                       Texture = "res://turret_main.png", TexScale = 0.26f, Barrel = 34f, Ring = 0f,
+                                       Texture = "res://turret_main.png", TexScale = 0.26f, Barrel = 34f,
                                        Tint = new Color(0.90f, 0.40f, 0.34f), Source = DamageSource.BaseMissile } },
 
         // ITS FOUR SHIELD PYLONS. 400 hull to start, on the same ladder above that; nothing shields
@@ -164,7 +164,6 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
     // besieging it.
     public Node2D AsNode => this;
     public bool PdOnline => false;
-    public float PdRing => 0f;
     public Vector2 AimAt => _aim;
     public float FastSwing => 0f;
     public System.Collections.Generic.IReadOnlyList<Turret> Siblings => _mounts;

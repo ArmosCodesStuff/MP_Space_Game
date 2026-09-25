@@ -96,7 +96,7 @@ public partial class _Shots : Node
         await W(2.5);
         H.SelectTarget(range1);
         Input.ParseInputEvent(new InputEventMouseMotion { Position = GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * (range1.Position + new Vector2(0, -250))) });
-        Key(global::Godot.Key.Q); await W(2.0);
+        await W(2.0);                                  // point defence is passive: nothing to press
         Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
         await W(2.3); await Snap("4_hub_battleship");
         Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = false });
@@ -119,7 +119,7 @@ public partial class _Shots : Node
         me = H.GetNode<PlayerShip>("Ship_1");
         me.Position = range1.Position + new Vector2(-180, 90); me.Rotation = 0.3f;
         await W(2.0);
-        Key(global::Godot.Key.Q); Key(global::Godot.Key.Space); Key(global::Godot.Key.F);
+        Key(global::Godot.Key.Space); Key(global::Godot.Key.F);
         await W(4.2); await Snap("7_hub_carrier_strike");
         await W(1.0); await Snap("8_hub_carrier_strike_later");
         // close-ups: zoom in, lock the controls (a focused text box) so the mouse stops
@@ -133,7 +133,6 @@ public partial class _Shots : Node
             N<LineEdit>().First().GrabFocus();
             GetViewport().GetCamera2D().Zoom = new Vector2(3.2f, 3.2f);
             s.AimPoint = s.Position + new Vector2(400, -300);
-            Key(global::Godot.Key.Q);
             await W(4.0); await Snap(name);
         }
         // the idle economy: base menu, beams and cargo bars, arms and the queue, the hauler
@@ -516,7 +515,7 @@ public partial class _Shots : Node
             Key(global::Godot.Key.K); await W(0.2);
 
             // battleship: the broadside -- the turrets swinging onto the cursor, then a volley in flight;
-            // the bar with the broadside cooling down and PD on
+            // the bar with the broadside cooling down (point defence is passive: no slot)
             hub.SelectTarget(d1);
             await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);
             void Cursor(Vector2 w) => Input.WarpMouse(GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * w));
@@ -524,8 +523,8 @@ public partial class _Shots : Node
             Cursor(d1.Position);
             Key(global::Godot.Key.F); await W(0.25); await Snap("22_broadside_aiming");
             await W(0.45); await Snap("22b_broadside_volley");
-            await W(0.8); Key(global::Godot.Key.Q); await W(0.4);
-            await Snap("23_bar_battleship_cooldown_pd");
+            await W(1.2);
+            await Snap("23_bar_battleship_cooldown");
             // destroyer: the magazine spent, then reloading
             await Class(ShipClass.Destroyer);
             await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);

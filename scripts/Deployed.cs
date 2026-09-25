@@ -36,7 +36,6 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
 
     public Node2D AsNode => this;
     public bool PdOnline => Alive;                 // no window: it fires whenever it is standing
-    public float PdRing => 0f;
     public Vector2 AimAt => Position;
     public float FastSwing => 0f;
     public IReadOnlyList<Turret> Siblings => _mounts;
@@ -53,7 +52,7 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
         Range    = Ship != null ? (float)Ship.Stats["deploy_range"] : SpareRange,
         Turn     = Mathf.Tau / 2f,
         Texture  = "res://turret_deploy.png",
-        TexScale = 0.16f, Barrel = 20f, Ring = 0f,
+        TexScale = 0.16f, Barrel = 20f,
         Tint     = Ship?.Accent ?? new Color(0.8f, 0.82f, 0.86f),
     };
 

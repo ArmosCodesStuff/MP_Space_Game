@@ -55,8 +55,7 @@ public class AbilityDef
     //              must show at once, before the host's next report (the broadside leaving its
     //              wind-up for its volleys). Nothing that damages or spends belongs here.
     //   Expire  -- on the HOST alone: what it resolves (the railgun's shot, the rush's EMP, the
-    //              echo's blast, the recharge after a point-defence window, the magazine a reload
-    //              refills). The host gate is the LOOP's, so a new row is safe by default.
+    //              echo's blast, the magazine a reload refills). The host gate is the LOOP's, so a new row is safe by default.
     // Each is handed the ship, and a row that stored a number reads it back from its own slot
     // (PlayerShip.Sl): the echo detonates Sl("echo").Own, so no number has to be carried here.
     public Action<PlayerShip> Elapsed, Expire;
@@ -80,7 +79,8 @@ public class AbilityDef
 }
 
 // THE CATALOGUE. Every ability in the game, once. A class's row (Ships.cs) lists the ones it
-// carries, so two classes with point defence share this one entry rather than a copy each.
+// carries, so two classes with main guns share this one entry rather than a copy each. (Point
+// defence is no entry at all: it is passive, and fires whenever its ship is alive.)
 public static class Ab
 {
     public static readonly AbilityDef Guns = new()
@@ -114,20 +114,6 @@ public static class Ab
             if (s.BroadsideCooldownLeft > 0)
                 return new SlotState { Line = $"{s.BroadsideCooldownLeft:0}s",
                                        Busy = (float)(s.BroadsideCooldownLeft / s.Stats["broadside_cooldown"]) };
-            return new SlotState { Line = "READY" };
-        },
-    };
-
-    public static readonly AbilityDef Pd = new()
-    {
-        Id = "pd", Name = "Point defence", Short = "PD", Default = Key.Q,
-        Blurb = "Opens a firing window: each turret picks its own target. Recharges after.",
-        Press = (s, _) => s.StartPd(),
-        Expire = s => s.Sl("pd").Cool = s.Stats["pd_reload"],      // the window closed: the recharge
-        Show = (s, _) =>
-        {
-            if (s.PdActive) return new SlotState { Line = $"ACTIVE {s.PdLeft:0}s", Lit = true };
-            if (!s.PdReady) return new SlotState { Line = $"{s.PdRechargeLeft:0}s", Busy = s.PdRechargeFrac };
             return new SlotState { Line = "READY" };
         },
     };

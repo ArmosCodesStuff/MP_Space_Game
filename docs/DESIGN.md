@@ -103,7 +103,7 @@ receiving end stops any peer shoving another's ship around.
 **Guests ask; the host acts.** A guest's ability key is one RPC to the host (`RequestAbility(id,
 target NetId)`); the host checks the sender owns that ship before doing anything. The owner's aim
 point, guns key and fire mode ride along with its position at 20 Hz; the host fires the guns from
-them. The host sends back, at 10 Hz per ship: hull, PD window and recharge, missile magazine and
+them. The host sends back, at 10 Hz per ship: hull, every ability slot's timers, missile magazine and
 reload, the broadside's wind-up, volleys left and cooldown, the fighters' target, and every wing
 craft's position and state. It also sends hit flashes,
 the dummies' readouts, and each torpedo launch — guests fly a cosmetic copy of a torpedo, since its
@@ -549,8 +549,8 @@ saved per character; nothing grants them yet.
 
 **A class is asked what it is FITTED with, never "is it the battleship".** `Fit.Guns`
 (cursor-aimed main turrets), `Fit.Broadside`, `Fit.Missiles` (a magazine of bursts), `Fit.Wing`
-(fighters and bombers), `Fit.Pd`, `Fit.Deploy` (turrets it drops and collects), `Fit.AlwaysPd`
-(point defence with no window). The stat sheet grows each group only for a class that carries it
+(fighters and bombers), `Fit.Pd` (point defence: passive, no key, firing whenever the ship is
+alive), `Fit.Deploy` (turrets it drops and collects). The stat sheet grows each group only for a class that carries it
 (a row a class lacks reads 0), the ship builds the matching hardware from the same flag, and the K
 window prints the matching figures.
 

@@ -106,14 +106,69 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
   (floor(Live / Tick + 1e-6) + 1, a constant from the row) and its last one ends it.
 - Checkpoint: the commit after this entry. Next: J3 (F16).
 
+### J3 · PRE · F16, passive point defence
+- Intent: PD fires whenever its ship is alive, no key: delete `Ab.Pd` + the six class-row entries,
+  `Fit.AlwaysPd`, rows pd_active / pd_reload, PlayerShip's Pd window members + `StartPd` + Die's
+  close, `ITurretHost.PdRing` + 5 implementers + `Turret._Draw` + `TurretSpec.Ring` +
+  `ClassArt.PdRing` (13 art rows), `Stats.PdDuty` / `PdSustainedDps` (-> `PdDps`). Restate
+  fr_endurance / fr_armour on PD stats (D11). Per-hull numbers unchanged (D8). Harness: rewrite every
+  pd-key / window / ring site (incl. rung-5 8991 and 9325), the Lancer arena's "no point defence"
+  (range zeroed, test only), the passive-PD fallout the audit agent reports; new `LaneAPassivePdChecks`.
+  Shots: drop the dead Q presses, frame 23 renamed. Docs: CHANGES Handoff key table, DESIGN 106/553.
+- Files: scripts/Abilities.cs, Ships.cs, Stats.cs, PlayerShip.cs, Turrets.cs, Deployed.cs,
+  Emplacements.cs, Hauler.cs, Lanes.cs, Equipment.cs; tools/smoketest/SmokeTest.cs.txt;
+  tools/screens/Shots.cs.txt; docs/CHANGES.md; docs/DESIGN.md; this ledger.
+- Start: b178a9033e031b97ea4f4c7ae72c21b6817dc1bd
+- Hashes: Abilities 382300d7 · Ships d9464120 · Stats c7a5e69a · PlayerShip b05be6b6 ·
+  Turrets f86052a8 · Deployed 3009ebda · Emplacements e0b836e3 · Hauler bbc72c9e · Lanes 0125e73a ·
+  Equipment a2c659c3 · SmokeTest 1cdcdf11 · Shots 809555bf · CHANGES 42426021 · DESIGN 375fd574
+
+### J3 · POST
+- Verdict: rung 2 (`verify.ps1 -Quick`) ALL CHECKS PASSED (typecheck, build, analysers, xref,
+  UNUSED 0, checks-with-code). No engine rung.
+- Files: as the PRE, all touched. A read-only audit agent swept the harness for passive-PD fallout;
+  its HIGH/LOW findings were fixed with `PdReachOff` (below) except three LOW ones left to rung 3
+  (the carrier's raider checks ~4780-4900 and the armed dummy's seeker ~5000: each light loses an
+  estimated 8-12 of 25 hull to PD, so they should hold) and two trivially-still-true ones (the menu
+  diorama's counts at 0.4 s; the beam-notes `P("point_defence") > 0`).
+- **D11** `PlayerShip.PdOnline => Alive`: a wreck's mounts are quiet, as the closed window made them
+  for every hull but the warden (whose AlwaysPd fired from a wreck). Disabled does not stop PD (D7).
+- **D12** Endurance Frame: +30% pd_interval (shorter reload), +30% pd_turn; Armoured Frame: +20% hull,
+  -20% pd_interval. Both stay PD-only / everything-fitting, so every Wear count is unchanged.
+- **D13** PD cannot be switched off, so a check that was written with PD off takes the hull's
+  `pd_range` base to 0 for the while and restores it (`PdReachOff`, lane A's section of SmokeTest).
+  Used: the xp missile-before-light pick (until both spawn), the Lancer arena from the "left alone"
+  escorts to the kill, the siege's main-gun kill, the bastion's wave, the carrier's wing retarget,
+  the freighter's dropped turret, the hauler pad, and the session host (rest of its role).
+- **D14** Rung 5: the host sets a held light raider beside the guest's carrier (after "guest's wing
+  hit the dummy") and checks the host's copy of the guest's mounts take it; it lives 20 s. The guest
+  samples every frame, from 1 s after its Space/F until after "fighters at the target" (+ up to
+  10 s), for a flash leaving one of its own PD mounts (`H.Flashes`, within 40 u of a mount).
+- Merge note: `ClassArt.PdRing` is gone from all 13 art rows in Ships.cs; the art lane (wt_art)
+  edits those rows too -- whichever merges second drops `PdRing = x` from its lines.
+- Checkpoint: the commit after this entry. Next: slice 2 (a FRESH agent: this one passed ~150k).
+
 ## Engine rungs owed to the main session (run in the worktree, rebased, one engine at a time)
 
 | after | rung | seeds | look for (PASS lines) |
 |---|---|---|---|
 | J2 slice 1a | 3 (`tools\smoketest\run.ps1 -Solo`) | two different seeds | "the burn clock:" x3 · "the railgun's charge is a hold of x0" x3 · "a DISABLED warden" x3 · "Hardened at the applier's share" x3 · rewritten: "the railgun charges with the hull held at x0", "then its railgun's whole", the ability sweep's railgun row, "a 100 blow on a HARDENED battleship" |
 | J2b knife edge | 3 (`-Solo`) | two different seeds | "the burn clock:" x3 (now "... and nothing in the 0.4 s after it"; burned 3.000 +- 0.017 s) · "the beam, judged every 0.25 s for 50, through the 0.52 s guard: 3 hits ... 150" · unchanged neighbours "the live beam holds the line it drew", "and the line is still drawn 2 s into its 3 s burn", "the ram, due mid-beam, waits for the beam to end" |
+| J3 F16 | 3 (`-Solo`) | two different seeds | new: "every hull that mounts point defence is in the passive-PD table", 7 x "...: point defence with nothing pressed and no key for it". Rewritten: "PD fires with nothing pressed", "each battleship PD turret picks its own target", "no window and no recharge: 15.5 to 17.5 s on", "Point defence: 2.00 DPS ... = 64.65", "keys tab lists the battleship's 3 abilities + 6 open slots", "Esc cancels a capture", the BB / DD bar lines, "carrier PD: three turrets on three different LIGHT targets", "a hunter called off while the fighters and point defence are on it", "the warden's point defence is on with nothing pressed -- ... 10 DPS", the sustained-total pair (freighter 50, carrier), the 12 fittings-sweep lines, "every ability on every bar has a witness", the pd_range reach row, "a battleship's point defence picks a cruise missile ... before a light raider", "point defence, with nothing pressed, shoots the boss's missiles down", "left alone (no point defence), the escorts pin the pilot", the siege's "falls to the battleship's MAIN GUNS ... point defence out of reach", "a 1000 u shockwave throws nothing in flight", "a carrier's wing sent at a raider that dies", "a turret left standing shoots what comes near it", the hauler pad's three. Watch (unchanged but now with PD on): the carrier raider checks (webifier DPS 3.0 +- 0.7, the gunship's 700% burn and laser on a pinned carrier), the armed dummy's 50 hit |
+| J3 F16 | 4 (`tools\screens\run.ps1`) | - | LINT 0; read by eye: 4_hub_battleship (PD firing, no ring), 7_hub_carrier_strike, 23_bar_battleship_cooldown (renamed: no PD slot on the bar), one close-up (no ring round a PD mount) |
+| J3 F16 | 5 (`tools\smoketest\run.ps1`) | - | host "a guest's point defence fires on the host with nothing pressed"; guest "guest sees its own point defence fire with nothing pressed and no key for it"; unchanged neighbours "guest's bomber strike launched real torpedoes on the host", "the host's raiders reached this guest" |
 
-## Handover: the first agent stopped here (context cap), at a job boundary
+## Handover 2: the second agent stopped after J3 (context cap), at a job boundary
+
+Nothing in flight: J2b and J3 have POSTs; the tree is clean at the J3 commit. The next agent starts
+SLICE 2 with a PRE entry, from the map's last paragraph below ("Then slice 2"); J3's map above is
+DONE (kept for the record of what it touched). Split slice 2 into jobs that share files, e.g.
+J4 = F4 + F17 + F18 (PlayerShip.Incoming / Guarded / NoteDealt, Statuses.cs), J5 = F1 Add + Ramp
+(AbilityDef, PlayerShip.LiftShares), J6 = F20 (2.58, one edit with the raids' EnemyDef rows Cc, Exp;
+MissileFlight onto the row). `PdReachOff` (SmokeTest, lane A section) is the way to hold a hull's
+point defence out of a check.
+
+## Handover 1: the first agent stopped here (context cap), at a job boundary
 
 Nothing is in flight: J1 and J2 have POSTs, the tree is clean at the J2 commit. The next agent starts
 J3 with a PRE entry. Map of what J3 touches (found by J2's greps; line numbers at 38401be):

@@ -192,14 +192,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private readonly Dictionary<string, int> _slotAt = new();
     public ref Slot Sl(string id) => ref _slots[_slotAt.TryGetValue(id, out int i) ? i : 0];
 
-    // Point defence: an active ability. Active window, then recharge.
-    public bool PdActive => Sl("pd").Left > 0;
-    public bool PdReady => Sl("pd").Left <= 0 && Sl("pd").Cool <= 0;
-    public double PdLeft => Sl("pd").Left;
-    public double PdRechargeLeft => Sl("pd").Cool;
-    public float PdActiveFrac => (float)(PdLeft / Math.Max(0.001, Stats["pd_active"]));
-    public float PdRechargeFrac => (float)(PdRechargeLeft / Math.Max(0.001, Stats["pd_reload"]));
-
     // Missiles (destroyer): a magazine of bursts, reloaded by hand.
     public int MissilesLoaded => Sl("missile").N;
     public double MissileReloadLeft => Sl("reload").Left;
@@ -220,10 +212,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // A turret asks these and nothing else, so the same component sits on a ship, on a freighter's
     // deployed mount, on the hauler and on anything else that grows a gun.
     public Node2D AsNode => this;
-    // A class whose point defence never switches off (the warden) has no window to open and no
-    // ring to show: it simply fires, at whatever damage its row gives it.
-    public bool PdOnline => Stats.Def.Has(Fit.AlwaysPd) || PdActive;
-    public float PdRing => Stats.Def.Has(Fit.AlwaysPd) ? 0f : PdActive ? PdActiveFrac : PdRechargeFrac;
+    // POINT DEFENCE IS PASSIVE: no key, no window, no recharge. It fires whenever the ship is
+    // alive -- helm-disabled or not -- at whatever its row gives it; a wreck's mounts are quiet.
+    public bool PdOnline => Alive;
     public Vector2 AimAt => AimPoint;
     // Through a broadside the main turrets come round onto the cursor from anywhere within the
     // wind-up -- half a turn in its time -- or at their own rate if that is already faster.
@@ -253,7 +244,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             Texture  = pd ? art.PdTurret : art.MainTurret,
             TexScale = art.TurretTexScale,
             Barrel   = pd ? art.PdBarrel : art.MainBarrel,
-            Ring     = art.PdRing,
             Tint     = Accent,
         };
     }
@@ -502,7 +492,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // and its turrets already out are not presses, and fight on.
     private bool PressHeld(AbilityDef def) => _status.Has(Status.Disabled) && !def.WhenWrecked;
     public void Reboard() { if (CanReboard) { Alive = true; Hp = MaxHp * ReboardHull; _stasis = 0; } }
-    public void StartPd() { if (PdReady) Sl("pd").Left = Stats["pd_active"]; }
     public void StartBroadside() { if (BroadsideReady) Sl("broadside").Left = Stats["broadside_windup"]; }
     public void StartReload()
     {
@@ -983,7 +972,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private void Die()
     {
         Hp = 0; Alive = false; _stasis = StasisTime;
-        Velocity = Vector2.Zero; Sl("pd").Left = 0;
+        Velocity = Vector2.Zero;
         WingTarget = null; StrikeTarget = null;
     }
 

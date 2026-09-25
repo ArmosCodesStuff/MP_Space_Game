@@ -174,20 +174,21 @@ offered too.
 
 ### Abilities — default keys, all remappable in K
 
-Every class carries Space and G (main guns, salvo ↔ staggered) unless it flies craft instead, Q
-for point defence if it has any, F for what the class is FOR, and six open hotkeys.
+Every class carries Space and G (main guns, salvo ↔ staggered) unless it flies craft instead, F
+for what the class is FOR, and six open hotkeys. Point defence has no key: it is passive, firing
+whenever the ship is alive, on every hull that mounts it.
 
 | Class | Space | G | F | Other |
 |---|---|---|---|---|
-| Battleship | main guns | fire mode | broadside (3 volleys, 14 s cooldown) | Q point defence |
-| Destroyer | main guns | fire mode | missile burst (magazine of 3) | R reload (9 s), Q point defence |
-| Carrier | fighters: attack | — | bomber strike | R recall, Q point defence |
-| Freighter | main gun | fire mode | bubble (400 soaked, 8 s) | T deploy, C collect, Q point defence |
-| Tender | main gun | fire mode | overdrive (x2 rate of fire, 8 s) | T deploy, C collect, Q point defence |
-| Bastion | main gun | fire mode | shockwave (1000 u, or a boss held 3 s) | T deploy, C collect, Q point defence |
+| Battleship | main guns | fire mode | broadside (3 volleys, 14 s cooldown) | point defence (passive) |
+| Destroyer | main guns | fire mode | missile burst (magazine of 3) | R reload (9 s), point defence (passive) |
+| Carrier | fighters: attack | — | bomber strike | R recall, point defence (passive) |
+| Freighter | main gun | fire mode | bubble (400 soaked, 8 s) | T deploy, C collect, point defence (passive) |
+| Tender | main gun | fire mode | overdrive (x2 rate of fire, 8 s) | T deploy, C collect, point defence (passive) |
+| Bastion | main gun | fire mode | shockwave (1000 u, or a boss held 3 s) | T deploy, C collect, point defence (passive) |
 | Sniper | main gun | fire mode | railgun (3 s charge, locked, 150 at 2500 u) | |
 | Warrior | main guns | fire mode | rush (2.5 s, then an EMP) | |
-| Warden | main gun | fire mode | six hunter-seekers | point defence is always on |
+| Warden | main gun | fire mode | six hunter-seekers | point defence (passive), 10 DPS |
 | Dart | main gun | fire mode | barrel roll (1.2 s untouchable, then a boost) | |
 | Echo | main gun | fire mode | echo (5 s remembered, then detonated) | |
 | Wraith | main gun | fire mode | stealth (5 s unseen) | |
@@ -466,6 +467,38 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Class kits, lane A: point defence is passive (F16) (2026-09-25, worktree wt/kits)
+
+- Every hull that mounts point defence fires it whenever the ship is alive: no key, no 15 s window,
+  no 15 s recharge (a wreck's mounts are quiet). The `pd` ability is gone from the six bars that
+  carried it (Q is free on them), with `Fit.AlwaysPd`, the rows `pd_active` / `pd_reload`, the
+  window's members on PlayerShip, the ring a turret drew round itself (`ITurretHost.PdRing`,
+  `TurretSpec.Ring`, `ClassArt.PdRing`) and the duty share on the sheet (`PdDps` is what it holds).
+- Per-hull numbers are unchanged (1 DPS a mount; the carrier 3 mounts, the warden 10 DPS): their
+  cuts go with the 6a / 6c cards. The sheet's point-defence line doubles (a battleship 1.00 -> 2.00
+  DPS, sustained total 63.65 -> 64.65; the freighter 49 -> 50; the carrier's 1.5 -> 3).
+- The two frames that moved the window now move point-defence stats: Endurance Frame a shorter
+  reload and quicker turrets (+30% / +30%); Armoured Frame more hull and a slower reload (-20%). Every
+  hull wears the same count of hull parts as before.
+- Checks that need a hull's point defence out of the way (the Lancer's "left alone" escorts, the
+  siege's main-gun kill, the bastion's wave, the carrier's wing, the freighter's dropped turret, the
+  hauler's own mount, the session host) take its reach to 0 for the while: it cannot be switched off.
+
+**Checks:** new `LaneAPassivePdChecks` (all 7 PD hulls at seeded spots, headings and reaches: every
+mount on a light raider with nothing pressed, 0.5 every 0.5 s = 1 DPS a mount, the warden 5 = 10 DPS,
+over 1.9 s from the first shot; no pd key) and the table-coverage check beside it; rung 5: host "a
+guest's point defence fires on the host with nothing pressed", guest "guest sees its own point
+defence fire with nothing pressed". Rewritten: the battleship's PD block (fires unpressed; still
+firing 15.5-17.5 s on), the K window's DPS lines / key count / Esc capture, the battleship and
+destroyer bars, the fittings sweep, the ability-witness table, the pd_range reach case, the warden's
+figures, the sustained totals (freighter 50, carrier +3), the hauler's mount, the siege's "point
+defence out of reach". Shots: the dead Q presses dropped; frame 23 is `23_bar_battleship_cooldown`.
+**Rungs:** 1 and 2 in the worktree (see the ledger); 3, 4 and 5 owed.
+
+**Known broken:** nothing known; no engine rung has run. Watch at rung 3: the carrier's raider
+checks (webifier DPS, the gunship's burn on a pinned carrier, the armed dummy's seeker) now run with
+its point defence on; the audit put each light raider's loss at 8-12 of 25 hull, so they should hold.
 
 ### Class kits, lane A: a burn counts its judgements (2026-09-25, worktree wt/kits)
 
