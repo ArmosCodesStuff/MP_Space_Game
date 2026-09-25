@@ -4898,27 +4898,44 @@ public partial class _Test : Node
         }
     }
 
-    // ── F8 THE PRESS'S POINT ON THE WIRE (kits_v31 §8, rung 5): the arena guest's F, its bubble lent
-    // TakesPoint on both peers, sends its cursor with the press; the host keeps it in its copy's slot. The
-    // cursor is a LITERAL off the pair's rendezvous: each process seeds its own draws.
+    // ── F8 THE PRESS'S POINT AND PICKS ON THE WIRE (kits_v31 §8, rung 5): the arena guest's F, its bubble
+    // lent TakesPoint and TakesTargets on both peers, sends its cursor and its picks with the press; the host
+    // keeps the cursor in its copy's slot and the living picks in its copy's Picked. The cursor is a LITERAL
+    // off the pair's rendezvous (each process seeds its own draws). The picks are the home range's practice
+    // hulks 3 then 1 (Hub.PracticeTargets: in Combat.Hostiles on every peer, never down, the same NetId
+    // everywhere) around an id nothing holds; Combat.ById reads the hostiles only, so a hull or a turret
+    // would be dropped on every run. The freighter holds 1 target: the host lends its row a cap of 3.
     static Vector2 LaneA4MpCursor => Hub.BasePos + new Vector2(2400 + 310, 2400 - 170);
+    const int LaneA4MpUnknown = NetIds.Dummy + 900;                  // no range has a 901st hulk
+    static readonly int[] LaneA4MpHulks = { 3, 1 };                 // PracticeTargets numbers, in the order sent
+    int _laneA4CapWas = -1;
+    static int LaneA4HulkId(int n) => Combat.Hostiles.OfType<TargetDummy>().FirstOrDefault(d => d.Number == n)?.NetId ?? -1;
     void LaneA4GuestPointPress(PlayerShip fgm)
     {
-        Ab.Bubble.TakesPoint = true;
-        try { fgm.AimPoint = LaneA4MpCursor; fgm.UseAbility("bubble", 0); }
-        finally { Ab.Bubble.TakesPoint = false; }
+        Ab.Bubble.TakesPoint = true; Ab.Bubble.TakesTargets = true;
+        int[] picks = { LaneA4HulkId(LaneA4MpHulks[0]), LaneA4MpUnknown, LaneA4HulkId(LaneA4MpHulks[1]) };
+        try { fgm.AimPoint = LaneA4MpCursor; fgm.UseAbility("bubble", 0, picks); }
+        finally { Ab.Bubble.TakesPoint = false; Ab.Bubble.TakesTargets = false; }
     }
     void LaneA4HostPointLend(PlayerShip fg)
     {
-        Ab.Bubble.TakesPoint = true;
-        if (fg != null) fg.Sl("bubble").At = new Vector2(-1, -1);
+        Ab.Bubble.TakesPoint = true; Ab.Bubble.TakesTargets = true;
+        if (fg == null) return;
+        fg.Sl("bubble").At = new Vector2(-1, -1);
+        _laneA4CapWas = Classes.Of(fg.Class).Targets;
+        Classes.Of(fg.Class).Targets = 3;
     }
     void LaneA4HostPointCheck(PlayerShip fg)
     {
-        Ab.Bubble.TakesPoint = false;
+        Ab.Bubble.TakesPoint = false; Ab.Bubble.TakesTargets = false;
+        if (fg != null && _laneA4CapWas >= 0) Classes.Of(fg.Class).Targets = _laneA4CapWas;
         var at = fg == null ? new Vector2(-1, -1) : fg.Sl("bubble").At;
         Check(fg != null && fg.BubbleUp && at.DistanceTo(LaneA4MpCursor) < 0.01f,
               $"arena host: the guest's F, its row taking a point, lands the guest's cursor in this copy's slot ({at}, want {LaneA4MpCursor}; bubble up {fg?.BubbleUp})");
+        var want = LaneA4MpHulks.Select(LaneA4HulkId).ToArray();
+        var got = fg == null ? System.Array.Empty<int>() : fg.Picked.Select(h => h.NetId).ToArray();
+        Check(fg != null && fg.BubbleUp && want.All(id => id > 0) && Combat.ById(LaneA4MpUnknown) == null && got.SequenceEqual(want),
+              $"arena host: the guest's F, its row taking targets, sends 3 picks and this copy holds the 2 living ones in the order sent, the unknown {LaneA4MpUnknown} dropped ({string.Join(",", got)}, want {string.Join(",", want)})");
     }
 
     // ── LANE A SLICE 4 · F10 MEND: the one heal door (the Tender's lance and Repair field are 6b's rows) ──
@@ -14024,7 +14041,7 @@ public partial class _Test : Node
             // THE BUBBLE IS OVER SOMEBODY ELSE. The pool is the GUEST's and the blow lands on the
             // HOST's hull: PlayerShip.ThroughBubbles reads Combat.Players, and until now no check
             // had ever had two pilots in it.
-            LaneA4HostPointLend(fg);                                        // lane A: the press's point on the wire (its guest half: LaneA4GuestPointPress)
+            LaneA4HostPointLend(fg);                                        // lane A: the press's point and picks on the wire (its guest half: LaneA4GuestPointPress)
             await RealTime(() => fg.BubbleUp, Wan ? 15 : 8);
             LaneA4HostPointCheck(fg);
             Check(fg.BubbleUp && Math.Abs(fg.BubbleLeft - 400) < 1e-6 && hw.Position.DistanceTo(fg.Position) < 260f,
@@ -14320,7 +14337,7 @@ public partial class _Test : Node
             var hurtHere = H.Deployed.FirstOrDefault(t => t.Hp < 119);
             Check(hurtHere != null && Math.Abs(hurtHere.Hp - 75) < 0.01 && Math.Abs(hurtHere.MaxHp - 120) < 1e-6,
                   $"arena guest: the 45 the host put into one of its turrets arrives -- {hurtHere?.Hp:0} of {hurtHere?.MaxHp:0}, and a bar to draw it");
-            LaneA4GuestPointPress(fgm);                        // F, its row lent TakesPoint (lane A: its host half is LaneA4HostPointCheck)
+            LaneA4GuestPointPress(fgm);                        // F, its row lent TakesPoint and TakesTargets (lane A: its host half is LaneA4HostPointCheck)
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             bool ownBubble = fgm.BubbleUp;
             await RealTime(() => fgm.BubbleUp && fgm.BubbleLeft < 400, Wan ? 20 : 12);

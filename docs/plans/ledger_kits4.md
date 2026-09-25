@@ -188,3 +188,11 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
   literal (NetIds.Dummy + 900).
 - Files: tools/smoketest/SmokeTest.cs.txt, this ledger.
 - HEAD 02c2dcac5f9a9170d8d80d6074cf7f2e786940cc · SmokeTest.cs.txt 10abbacbc41417cb4c80fb1d2bc4067e53439211 · ledger f0b9494aefb14b6c7df45a3e2eb96b9564242251
+### kits4-J6 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase (rung 5 `six`, twice: the check above in the rung-5 list).
+- Files: tools/smoketest/SmokeTest.cs.txt (LaneA4GuestPointPress / LaneA4HostPointLend / LaneA4HostPointCheck; NEW
+  LaneA4MpUnknown, LaneA4MpHulks, LaneA4HulkId, _laneA4CapWas), this ledger.
+- Default taken (deviation from the gate's suggested picks): the host's hull and the guest's turrets are not in
+  Combat.Hostiles, which is all Combat.ById reads, so they would be dropped on every run; the practice hulks are.
+- Checkpoint: the commit after this entry. Slice 4 gate 2 fix complete.
