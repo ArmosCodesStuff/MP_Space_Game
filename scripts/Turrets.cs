@@ -51,6 +51,9 @@ public struct TurretSpec
     // note it is heard at. Beam.Point is 0, so a gun that says nothing is a warship's point
     // defence; a freighter's dropped turret and the hauler's mount name their own.
     public int Beam;
+    // THE WEAPON ID THE DAMAGE DOOR CREDITS a blow from this gun's own pick (Dealt.Deal): a pilot's
+    // point defence says Dealt.Pd, a thrown sentry Dealt.Turret. Null: the round's own row, Shots.Of(Kind).Id.
+    public string Weapon;
     // WHAT A HULL CALLS A BLOW FROM THIS GUN (DamageSource): the FAMILY name, to which Combat.Fire
     // adds the firing body's own identity. Null -- every gun a pilot's ship carries -- keeps the
     // behaviour these all had: the blow is nameless, and the 0.52 s per-source gap does not hold it.
@@ -205,7 +208,7 @@ public partial class Turret : Node2D
             if (!StillThere(tgt)) { Target = null; break; }
             var spec = S;
             _cd += spec.Interval;
-            Dealt.Deal(tgt, spec.Damage, Host, Host is PlayerShip ? Dealt.Pd : Dealt.Turret);
+            Dealt.Deal(tgt, spec.Damage, Host, spec.Weapon ?? Shots.Of(spec.Kind).Id);
             Combat.Flash(wp + Vector2.Right.Rotated(GlobalRotation) * spec.Barrel, tgt.Position, spec.Beam);
         }
     }

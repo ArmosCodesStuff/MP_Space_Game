@@ -826,9 +826,11 @@ public partial class Hub : Node2D
                                    "" };
         // THE REJOIN TOKEN GOES TO THE HOST ALONE (P10b). Every other peer hears the same identity with
         // no token: a co-player that learnt it could claim this pilot's place (Session.MayClaim).
-        foreach (int to in toPeer != 0 ? new[] { toPeer } : Multiplayer.GetPeers())
+        // THE HOST LAST: what goes to another guest is relayed by the host, so sent first it reaches that
+        // guest ahead of anything the host says back about it (NetClassKept) on the same ordered channel.
+        foreach (int to in (toPeer != 0 ? new[] { toPeer } : Multiplayer.GetPeers()).OrderBy(p => p == 1))
         {
-            args[^1] = to == 1 && !Net.IsHost ? Session.Rejoin : "";
+            args[^1] = to == 1 && !Net.IsHost ? Session.RejoinFor(Net.I.HostName) : "";
             RpcId(to, nameof(NetIdentity), args);
         }
     }
@@ -863,6 +865,9 @@ public partial class Hub : Node2D
         else if (holder != 0 && Net.IsHost) { _replacing[holder] = peer; Net.I.Hang(holder); }
         var cship = _ships.TryGetValue(peer, out var cs) && IsInstanceValid(cs) ? cs : null;
         var klass = Refit(p.HasIdentity ? p.Class : null, Classes.Sanitize(cls), InArena, cship?.InCombat == true);
+        // THE HOST'S WORD ON A CLASS IT KEPT (P8): every other peer ran its own Refit on its own sector and its
+        // own copy's clock, and may have taken the announcement; the class this host keeps reaches them all
+        if (Net.IsHost && klass != Classes.Sanitize(cls)) Rpc(nameof(NetClassKept), peer, (int)klass);
         (p.Name, p.Main, p.Accent, p.Class, p.Bought, p.Equip, p.CharacterId, p.HasIdentity) =
             (name, main, accent, klass, bought, equip ?? System.Array.Empty<string>(), characterId, true);
         // ITS OWN LEVELS, held to the ladder and to parts that exist, like the loadout: what this
@@ -874,10 +879,19 @@ public partial class Hub : Node2D
         if (Net.IsHost && characterId.Length > 0 && holder == 0) RpcId(peer, nameof(NetToken), Session.TokenFor(characterId));
         TryRestoreHold(peer);
     }
-    // the pilot's rejoin token, from the host that issued it (Session.Rejoin)
+    // the pilot's rejoin token, from the host that issued it, kept for that host (Session.Rejoins)
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetToken(string token) { if (!Net.IsHost) Session.Rejoin = token ?? ""; }
+    private void NetToken(string token) { if (!Net.IsHost) Session.Remember(Net.I.HostName, token); }
     private readonly Dictionary<int, int> _replacing = new();  // an old connection let go -> the peer its place goes to
+    // a class announcement the host refused: the class it kept, over whatever this peer's own Refit took
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetClassKept(int peer, int cls)
+    {
+        // (the announcer's own ship is its own: its identity is the pilot's, never a Players entry's)
+        if (Net.IsHost || Net.I == null || peer == Net.LocalId || !Net.I.Players.TryGetValue(peer, out var p)) return;
+        p.Class = Classes.Sanitize(cls);
+        if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) ApplyIdentity(s);
+    }
 
     // A CLASS IS CHANGED AT REFIT, never in a fight (audit P8): RefitOpen is the one rule, read by the
     // host for every announcement (Refit) and by the pilot's own REFIT, class picker and base menu

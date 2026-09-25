@@ -100,6 +100,9 @@ lower one is blind to it; always come back down to fix and re-prove.
 
 Fable 5.1 coordinates only. Opus 5.5 builds, gates, triages (ONE agent). Sonnet 5 / Haiku 4.5 run a recipe
 (a merge, a chain, exact text, a push) under the watchdog `tools\agents.ps1 -Loop`. Table: `coordinator.md`.
+Grain (owner, 2026-09-25): one agent per kind of work, never one per problem. Triage returns root causes, not
+symptoms; a round's wrong checks go to ONE Sonnet rewrite, the code tasks of one lane to ONE Opus fixer (at
+most 4 tasks each); the text edits, ledger rows, merges or pushes of a batch go to ONE lower-model agent.
 
 ## Commands
 

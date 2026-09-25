@@ -73,7 +73,10 @@ ONE chain and waits under 10 minutes per call; five chains are five waiters in a
 
 Every Sonnet/Haiku agent runs under `tools\agents.ps1 -Loop` (in the background while any runs; one past
 30 minutes is looked at, stopped and redone on Opus if it wastes time or tokens). An Opus agent idle past
-20 minutes gets the same look. Every agent has a task no other agent has (owner). A ruling for a running
+20 minutes gets the same look. Every agent has a task no other agent has, and one agent takes every task
+of one kind of work, never one agent per problem (owner, 2026-09-25): a round's wrong checks to one Sonnet
+agent, code tasks by lane to one Opus agent (at most 4 tasks each, `groupTasks` in the test-phase script),
+the text edits, ledger rows, merges or pushes of a batch to one lower-model agent. A ruling for a running
 lane goes by COORDINATOR NOTE in its ledger.
 
 ## Prompts and returns (the budgets are hard; the script refuses an overrun at launch)
