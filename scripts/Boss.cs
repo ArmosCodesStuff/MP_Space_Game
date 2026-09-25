@@ -53,7 +53,7 @@ public class BossMove
     public bool Busy;                  // it holds the hull still while it runs (Boss.Locked)
     public bool Super;                 // the skinny bar under the hull counts down to it
     public double Damage;              // before the level's and the party's scale (DamageMult)
-    public float Find;                 // how far it looks for a target; 0: the whole arena
+    public float Find;                 // how far past its hull it looks for a target; 0: the whole arena
     public float Reach;                // how far the move itself carries: a beam, a dash, a lane
     public float Width;                // the warning's width, and a beam's own. A move whose
                                        // warning is as wide as the BODY it warns about leaves this
@@ -145,6 +145,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         public Vector2 From, To;           // a dash's end, a warp's landing, a ring's centre, a lane
         public PlayerShip Target;          // the pilot it chose, while it can see one (Sight)
         public Vector2 Spot;               // where it aims: that pilot, or where anyone was last seen
+        public readonly HashSet<PlayerShip> Struck = new();   // who a dash has already rammed, this dash
         public double Predict, Overdue, ArmedFor;   // an escort opener's clock
         public string Cause = "";                   // what ended the escorts' wait
         public readonly List<Raider> Escorts = new();
@@ -351,7 +352,9 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         var m = s.M;
         s.Due = m.Every; s.Fired++;
         if (m.Super) SuperGap = NextSuperHost;
-        s.Target = Combat.Nearest(_choosable, Position, p => p.Position, m.Find > 0 ? m.Find : float.MaxValue);
+        // Find is measured from the HULL, as HoldOff and Standoff are: what is placed round a boss
+        // scales with it, so a doubled hull reaches as far past its own nose as the row says.
+        s.Target = Combat.Nearest(_choosable, Position, p => p.Position, m.Find > 0 ? m.Find + Length * 0.5f : float.MaxValue);
         // WHAT IT AIMS AT: the pilot it chose -- or, with nobody in sight, where it last saw anyone,
         // so going dark is not a pause button. A move that looks only so far (Find) is a gun for
         // whoever is inside that reach, and waits for someone there; so does every move of a boss
@@ -391,6 +394,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             case MoveWay.Dash:
                 Rotation = Aim.Face(Position, s.Spot);
                 s.To = Aim.Nose(this, m.Reach);
+                s.Struck.Clear();
                 break;
             case MoveWay.Ring: s.To = Position; break;
             case MoveWay.Throw: Heave(s); break;
@@ -519,8 +523,13 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                 if ((s.T -= delta) < 0) s.At = Phase.Idle;
                 break;
             case MoveWay.Dash:
+                // ONE RAM A PASS: a hull longer than Speed x PlayerShip's hit gap is over a point
+                // for longer than a source is blocked (the 720 u Rusty: 0.6 s against 0.52 s), so
+                // the row's Damage is struck once per dash to each ship it covers, however long
+                // the hull takes to go by.
                 Position = Position.MoveToward(s.To, m.Speed * (float)delta);
-                foreach (var p in _hittable) if (Covers(p.Position, p.HitRadius)) p.Hit(m.Damage * DamageMult, Position, m.Source);
+                foreach (var p in _hittable)
+                    if (Covers(p.Position, p.HitRadius) && s.Struck.Add(p)) p.Hit(m.Damage * DamageMult, Position, m.Source);
                 if (Position.DistanceTo(s.To) < 1f) s.At = Phase.Idle;
                 break;
             case MoveWay.Throw:

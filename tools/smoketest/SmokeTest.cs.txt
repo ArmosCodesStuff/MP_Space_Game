@@ -7886,6 +7886,15 @@ public partial class _Test : Node
                 }
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
+            // THE BOSS SPAWNS NOSE-ON: its NOSE on ArenaCentre, facing the party, so its centre stands
+            // half a length north of it -- read the first frame the boss exists, before its 30 u/s
+            // approach (0.5 u a frame) can have carried it more than a frame or two
+            int spawnWait = 0;
+            for (; spawnWait < 120 && H?.Boss == null; spawnWait++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float spawnOff = H?.Boss == null ? -1f : H.Boss.Position.DistanceTo(Hub.ArenaCentre + Vector2.Up * (H.Boss.Length * 0.5f));
+            float spawnNose = H?.Boss == null ? -1f : H.Boss.Position.DistanceTo(Hub.ArenaCentre);
+            Check(spawnOff >= 0f && spawnOff < 3f && Mathf.Abs(Mathf.AngleDifference(H.Boss.Rotation, Mathf.Pi)) < 0.05f,
+                  $"the boss spawns with its nose on the arena's centre: its centre {spawnNose:0} u north of it (half its {H?.Boss?.Length:0} u), {spawnOff:0.0} u off that spot, facing south");
             var tripRec = typeof(Yard).GetField("_trip", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
             // The trip's stock is one figure per resource row now, not two named fields.
             var tripBag = tripRec?.GetType().GetProperty("Stock").GetValue(tripRec) as System.Collections.Generic.Dictionary<string, double>;
@@ -8066,7 +8075,7 @@ public partial class _Test : Node
             // -- an invisible line sweeping the arena. 2.2 s in, the pilot is moved clear to the
             // side (after five 50-hull ticks, which the damage check below counts on): a boss that
             // turns would now swing after it.
-            double liveT = 0; float liveRot0 = 0, liveTurn = 0; bool liveDrawn = false, sidestep = false, rammedClear = false;
+            double liveT = 0; float liveRot0 = 0, liveTurn = 0; bool liveDrawn = false, sidestep = false;
             async void Watch()
             {
                 while (Hub.InArena && GodotObject.IsInstanceValid(boss))
@@ -8080,14 +8089,6 @@ public partial class _Test : Node
                         if (liveT > 2.0 && Nodes<FxNode>(boss).Any(x => x.Id == Fx.WarnLane)) liveDrawn = true;
                         if (liveT > 2.2 && !sidestep) { sidestep = true; me2.Position += Vector2.Right.Rotated(boss.Rotation) * 400f; }
                     }
-                    // THE DOUBLED HULL RAMS FOR LONGER, NOT HARDER: at 720 u long and 1200 u/s the hull
-                    // takes 0.6 s to pass a fixed point -- longer than the 0.52 s a source is blocked for
-                    // -- so a pilot that never moves eats the 40 twice. Real play carries a hit pilot off
-                    // the line; this check does the same the instant the row's damage source lands once,
-                    // same as the beam's sidestep above, so what it proves is the row's 40, not however
-                    // many times a target that never moves would take it.
-                    if (Ramming() && !rammedClear && me2.DamageBySource.TryGetValue("boss:charge", out var ramDmg) && ramDmg > 0)
-                    { rammedClear = true; me2.Position += Vector2.Right.Rotated(boss.Rotation) * 400f; }
                     // The beam's place in the rhythm is where it COMMITS -- its escorts going out.
                     // Its red line comes later, when their web pins the pilot, so timing the rhythm
                     // off the telegraph would measure that wait, not the rhythm.
@@ -8266,7 +8267,7 @@ public partial class _Test : Node
             // live 3 s, checked every 0.25 s for 50 -- one source lands at most once per 0.52 s, and
             // ticks fall on frames, so two ticks are sometimes 0.533 s apart: 5 to 7 hits of 50
             Check(beamDmg >= 200 && beamDmg <= 350 && Math.Abs(beamDmg % 50) < 1e-6, $"the beam, live 3 s at 50 a tick, through the 0.52 s guard: {beamDmg / 50:0} hits ({beamDmg:0})");
-            Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
+            Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40, once, the pilot left where it stood ({chargeDmg:0})");
             Check(sidestep && liveTurn < 0.01f, $"the live beam holds the line it drew, with the pilot gone from it (turned {Mathf.RadToDeg(liveTurn):0.00} deg)");
             Check(liveDrawn, "and the line is still drawn 2 s into its 3 s burn");
             Check(Music.I == null || Math.Abs(boss.S("trident").M.Speed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
@@ -8370,6 +8371,120 @@ public partial class _Test : Node
 
                 foreach (var dkMove in boss.Type.Moves) boss.S(dkMove.Id).Due = dkHeld[dkMove.Id];
                 me2.Statuses.Clear(Status.Untargetable);
+                me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
+            }
+            // -- WHAT IS PLACED ROUND A BOSS IS MEASURED FROM ITS HULL, AND A RAM LANDS ONCE --------
+            // The owner's ruling: what is placed around a boss scales with it. So the gap it closes
+            // to, how far its guns look and its shockwave's ring are all taken off the doubled hull,
+            // and a hull that takes 0.6 s to pass a point still rams a pilot once. Every clock is
+            // parked, so the only move that runs is the one each check brings round; the boss's own
+            // place is put back after each (a check that moves it owns putting it back). A pilot's
+            // hit radius under 60 u keeps every spot below clear of the edges it is placed between.
+            {
+                var hbHeld = boss.Type.Moves.ToDictionary(hbMv => hbMv.Id, hbMv => boss.S(hbMv.Id).Due);
+                foreach (var hbMv in boss.Type.Moves) { boss.S(hbMv.Id).Due = 999; boss.S(hbMv.Id).At = Boss.Phase.Idle; }
+                Fx.ClearWarnings();
+                var hbHome = boss.Position; float hbHomeRot = boss.Rotation, hbHalf = boss.Length * 0.5f;
+                bool hbSmall = me2.HitRadius < 60f;
+
+                // ITS GUNS LOOK Find PAST THE HULL: 900 u off the Rusty's nose, 1260 u from its centre
+                // on the 720 u hull. From three bearings, a pilot just inside draws them and one just
+                // outside does not (the clock armed either way, so "not" is a choice, not a silence).
+                var hbGuns = boss.S("guns");
+                float hbReach = hbGuns.M.Find + hbHalf;
+                var hbFindBad = new List<string>();
+                for (int k = 0; k < 3; k++)
+                    foreach (bool hbIn in new[] { true, false })
+                    {
+                        boss.Position = hbHome;
+                        float hbR = hbReach + (hbIn ? -1f : 1f) * Vary(20f, 60f);
+                        me2.Position = boss.Position + Vector2.Up.Rotated(VaryAngle()) * hbR; me2.Velocity = Vector2.Zero;
+                        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                        int hbFired = hbGuns.Fired;
+                        hbGuns.Due = 0.01;
+                        for (int i = 0; i < 30 && hbGuns.Fired == hbFired; i++) { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                        hbGuns.Due = 999;
+                        bool hbDrew = hbGuns.Target == me2;
+                        if (hbGuns.Fired != hbFired + 1 || hbDrew != hbIn)
+                            hbFindBad.Add($"{boss.Position.DistanceTo(me2.Position):0} u off its centre: {(hbDrew ? "fired on" : "left alone")}, armed {hbGuns.Fired - hbFired}");
+                    }
+                Check(hbFindBad.Count == 0 && Math.Abs(hbReach - 1260f) < 0.01f,
+                      $"its guns look 900 u past its hull, not past its centre: at three bearings a pilot 20-60 u inside {hbReach:0} u draws them and one 20-60 u outside does not{(hbFindBad.Count > 0 ? " -- " + string.Join("; ", hbFindBad) : "")}");
+
+                // ITS SHOCKWAVE LANDS WHERE ITS RING IS DRAWN: 340 x 2 = 680 u round where it stood. A
+                // pilot 420-600 u out -- past the row's bare 340, inside the doubled ring -- takes the
+                // whole 45, placed round the centre the ring was drawn on once it is drawn.
+                var hbWave = boss.S("wave");
+                var hbRingBad = new List<string>();
+                for (int k = 0; k < 3; k++)
+                {
+                    boss.Position = hbHome;
+                    me2.Position = boss.Position + Vector2.Up.Rotated(VaryAngle()) * Vary(900f, 1100f); me2.Velocity = Vector2.Zero;
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    double hbW0 = me2.DamageBySource.GetValueOrDefault("boss:wave");
+                    int hbWf = hbWave.Fired;
+                    hbWave.Due = 0.01;
+                    for (int i = 0; i < 60 && hbWave.At == Boss.Phase.Idle; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    hbWave.Due = 999;
+                    float hbOut = Vary(420f, 600f);
+                    var hbAt = hbWave.To + Vector2.Up.Rotated(VaryAngle()) * hbOut;
+                    for (int i = 0; i < 60 * 4 && hbWave.At != Boss.Phase.Idle; i++) { me2.Position = hbAt; me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                    double hbWHit = me2.DamageBySource.GetValueOrDefault("boss:wave") - hbW0;
+                    if (hbWave.Fired != hbWf + 1 || hbWave.At != Boss.Phase.Idle || Math.Abs(hbWHit - 45) > 1e-6)
+                        hbRingBad.Add($"{hbOut:0} u out: {hbWHit:0}");
+                }
+                Check(hbSmall && hbRingBad.Count == 0 && Math.Abs(hbWave.M.Reach * boss.Type.Size - 680f) < 0.01f,
+                      $"its shockwave hits as far as its ring is drawn: at three bearings, a pilot 420-600 u from the centre (past the row's 340, inside the doubled 680) takes the whole 45{(hbRingBad.Count > 0 ? " -- " + string.Join("; ", hbRingBad) : "")}");
+
+                // A RAM LANDS ONCE A PASS: the 720 u hull at 1200 u/s is over a point for 0.6 s, longer
+                // than the 0.52 s a source is blocked for, and a pilot held still in its lane -- 360
+                // to 480 u down it, so the whole hull goes by -- takes the row's 40 once, not twice.
+                // The spot is taken off the lane once the lane is drawn, not before the wait.
+                var hbRam = boss.S("ram");
+                var hbRamBad = new List<string>();
+                for (int k = 0; k < 3; k++)
+                {
+                    boss.Position = hbHome;
+                    me2.Position = boss.Position + Vector2.Up.Rotated(VaryAngle()) * Vary(700f, 1000f); me2.Velocity = Vector2.Zero;
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    double hbR0 = me2.DamageBySource.GetValueOrDefault("boss:charge");
+                    hbRam.Due = 0.01;
+                    for (int i = 0; i < 60 && hbRam.At == Boss.Phase.Idle; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    hbRam.Due = 999;
+                    float hbAlong = Vary(360f, 480f);
+                    var hbSpot = boss.Position + (hbRam.To - boss.Position).Normalized() * hbAlong;
+                    for (int i = 0; i < 60 * 4 && hbRam.At != Boss.Phase.Idle; i++) { me2.Position = hbSpot; me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                    double hbRHit = me2.DamageBySource.GetValueOrDefault("boss:charge") - hbR0;
+                    if (hbRam.At != Boss.Phase.Idle || Math.Abs(hbRHit - 40) > 1e-6)
+                        hbRamBad.Add($"{hbAlong:0} u down the lane: {hbRHit:0}");
+                }
+                Check(hbSmall && hbRamBad.Count == 0,
+                      $"a pilot held still in the ram's lane, at three spots 360-480 u down it, takes the row's 40 once a pass, though the doubled hull is over it for 0.6 s{(hbRamBad.Count > 0 ? " -- " + string.Join("; ", hbRamBad) : "")}");
+
+                // IT CLOSES TO ITS HOLD-OFF OFF THE NOSE: 470 u, so its centre stops 470 + 360 = 830 u
+                // from the pilot. From three bearings, 1.3-1.8 times that out, it closes and stops there.
+                float hbStop = boss.Type.HoldOff + hbHalf;
+                var hbCloseBad = new List<string>();
+                for (int k = 0; k < 3; k++)
+                {
+                    boss.Position = hbHome;
+                    var hbP = boss.Position + Vector2.Up.Rotated(VaryAngle()) * (Vary(1.3f, 1.8f) * hbStop);
+                    int hbStill = 0; var hbWas = boss.Position;
+                    for (int i = 0; i < 60 * 30 && hbStill < 10; i++)
+                    {
+                        me2.Position = hbP; me2.Velocity = Vector2.Zero;
+                        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                        hbStill = boss.Position.DistanceTo(hbWas) < 1e-4f ? hbStill + 1 : 0; hbWas = boss.Position;
+                    }
+                    float hbGap = boss.Position.DistanceTo(hbP);
+                    if (hbStill < 10 || Math.Abs(hbGap - hbStop) > 2f) hbCloseBad.Add($"stopped {hbGap:0.0} u off (still {hbStill} frames)");
+                }
+                Check(hbCloseBad.Count == 0 && Math.Abs(hbStop - 830f) < 0.01f,
+                      $"it closes on the pilot and stops with its centre {hbStop:0} u off -- its nose the row's 470 u hold-off away -- from three bearings{(hbCloseBad.Count > 0 ? " -- " + string.Join("; ", hbCloseBad) : "")}");
+
+                foreach (var hbMv in boss.Type.Moves) boss.S(hbMv.Id).Due = hbHeld[hbMv.Id];
+                Fx.ClearWarnings();
+                boss.Position = hbHome; boss.Rotation = hbHomeRot;
                 me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
             }
             // the kill: shared EXP for it and the mission, the bounty's credits, then home

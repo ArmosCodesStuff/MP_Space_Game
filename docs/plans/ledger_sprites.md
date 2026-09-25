@@ -382,12 +382,11 @@ interceptor_a/_b (+ the old spares cargo_1, fighter_tri_b). Jobs: J3c re-map, J4
   hack deleted, `H.SetZoom` + `BossFramed` in its place; 65/66's boss re-faced before their ship
   placement), docs/DESIGN.md, docs/CHANGES.md.
 - Commit: the Job P commit (below).
-- **D23** The ram's double hit (chargeDmg 80, not 40) is real physics, not a check bug: at 2x, the
-  hull takes 0.6 s to cross a fixed point, longer than the 0.52 s a source is blocked for. Fixed at
-  the check (the pilot sidesteps the instant the row's 40 lands once, same as the beam check
-  already did), not in Boss.cs -- the row's "40 on contact" is the design truth, and CLAUDE.md's own
-  framing of this exact scenario ("a boss check may now hit where it grazed... fix the check's
-  geometry") named this as the intended shape of the fix.
+- **D23** The ram's double hit (chargeDmg 80, not 40) was a GAME bug the doubled hull exposed: at 2x
+  the hull takes 0.6 s to cross a fixed point, longer than the 0.52 s a source is blocked for, so a
+  pilot left in the lane (webbed, say) took the row's 40 twice. Fixed in Boss.cs by A4 (merge gate
+  1): a dash strikes each ship once (`Slot.Struck`); the check's sidestep is gone and a held-still
+  pilot must take exactly 40.
 - **D24** Frame 80's raiders pick the nearest reachable target and turn onto it every frame
   (`Raider._Process`), fast enough to swing most of the way round inside the pose's own wait --
   `SetProcess(false)` after the final pose was the fix that should work (no `_PhysicsProcess`, no
@@ -552,3 +551,34 @@ uncommitted paths: J4's edits (no POST) and J5 started without a PRE.
 - **engine-unproven: rungs 3-5 owed in the final test phase** (J4, J5, the merge and A3b; the lane's
   final chain quick,solo,solo,six,screens, the new/rewritten checks on two seeds).
 - Next: none in this batch; the final test phase, then the merge gate.
+
+### A4 merge gate 1 fixes (six problems) -- PRE
+- Tier opus. Intent: (1) the ram strikes each hittable at most once per dash (Slot.Struck, cleared in
+  Aimed/Dash), the rammedClear sidestep goes, a held-still pilot takes exactly 40 from 3 lane spots;
+  CHANGES + D23 corrected. (2) a ring-reach check at Vary(420,600) from 3 bearings. (3) an Approach
+  check (3 bearings, Vary(1.3,1.8) x (HoldOff+L/2)) and the spawn position asserted on entry.
+  (4) Find measured from the hull (m.Find + Length/2), a just-inside/just-outside check from 3
+  bearings; CHANGES + DESIGN. (5) Ships.cs mount comments say what each mount IS. (6) CHANGES Known
+  broken on frame 80 matches D24.
+- Start: e72fe191b14c4e2ae4dcb9661c2f24b6d8d087a6
+- Files: scripts/Boss.cs 80eeedd5d82d · scripts/Ships.cs ded07e1c1678 · tools/smoketest/SmokeTest.cs.txt
+  1f5abe3ce996 · docs/CHANGES.md d54d43af4cbd · docs/DESIGN.md 0b1bcbc91001 · ledger 6324d3568335
+
+### A4 -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. **engine-unproven: rungs 3-5 owed in the
+  final test phase** (the lane's chain quick,solo,solo,six,screens; each new check on two seeds).
+- (1) Boss.cs: `Slot.Struck`, cleared in Aimed (Dash), a dash strikes each hittable once; the
+  rammedClear sidestep deleted; CHANGES + D23 rewritten. (2)(3)(4) one new block after the stealth
+  block (all clocks parked, boss put back after each): guns Find past the hull (3 bearings, in/out
+  20-60 u), the ring at 420-600 u (3 bearings, placed after the ring is drawn), the held-still ram
+  (3 spots 360-480 u down the lane, taken after the lane is drawn), the approach stop at HoldOff+L/2
+  (3 bearings, 1.3-1.8x); the spawn position asserted on arena entry. Find is `m.Find + Length/2`
+  (CHANGES, DESIGN). (5) Ships.cs's four mount comments say what each mount is. (6) The gate read D24
+  as "it works"; D24 says the freeze did NOT visibly hold. The contradiction was the Shots.cs.txt
+  comment claiming it held: that comment and CHANGES' Known broken now both match D24.
+- Files: scripts/Boss.cs, scripts/Ships.cs, tools/smoketest/SmokeTest.cs.txt,
+  tools/screens/Shots.cs.txt (comment only), docs/CHANGES.md, docs/DESIGN.md, this ledger.
+- Fail on e72fe19: "rams for 40, once" and "held still ... 40 once a pass" (80 there); "guns look
+  900 u past its hull" (1200-1240 u > 900 there). The ring, approach and spawn checks pass at
+  e72fe19 and fail without the code the gate named.
+- Next: the final test phase, then the merge gate again.

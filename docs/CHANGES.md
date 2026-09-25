@@ -566,6 +566,12 @@ Everything a move places about the hull now reads the row where it is used (Boss
   half-widths (234 u; 117);
 - every stand-off is measured from the NOSE: the hold-off (Rusty 470, Drake 440 -- each the old 650 u
   from the centre of its old hull), the shotgun's warp 390 (600), the throw's 1090 (1300);
+- how far a move LOOKS (`Find`) is measured from the hull too, `Find + L/2` from the centre: the Rusty's
+  guns 900 u past its nose (1260 u from its centre), the Drake's main 1100 u (1520) -- the owner's
+  ruling that what is placed around a boss scales with it;
+- a ram strikes each ship it covers ONCE a dash (`Boss.Slot.Struck`): the 720 u hull at 1200 u/s is over
+  a point for 0.6 s, longer than the 0.52 s a source is blocked for, so a pilot left in the lane (webbed
+  by the beam's escorts, say) would take the row's 40 twice;
 - the boss spawns with its nose on `Hub.ArenaCentre`, so it starts no nearer the party.
 Frames 38/39/42 and 63-66 put the ship a gap off the nose and zoom (through `Hub.ZoomLevel`) to fit
 the whole hull.
@@ -577,9 +583,12 @@ scaled), the beam / ram / shotgun / throw row checks (escorts 13/7 = 260 u, ram 
 finders (280 u), "two escorts launch ... 260 u out", the two lock pushes (past 470 + 360 u), "level 2 is
 the Drake Bastion ... 840 u long", the live shotgun (its nose's standoff, a 234 u ring) and throw (held
 180 + body + 40, backed off its nose's standoff) checks, and the guest's rock hold. "The charge rams for
-40": the doubled hull takes 0.6 s to pass a fixed point, longer than the 0.52 s a source is blocked for,
-so a pilot that never moves now eats the ram twice; the check carries the pilot off the line the instant
-the row's damage lands once, the same sidestep the beam check already used.
+40, once" (no sidestep: the pilot stays where the ram finds it). New (merge gate 1, engine-unproven):
+"the boss spawns with its nose on the arena's centre"; "its guns look 900 u past its hull" (three
+bearings, 20-60 u either side of 1260 u); "its shockwave hits as far as its ring is drawn" (420-600 u
+out, three bearings); "a pilot held still in the ram's lane ... takes the row's 40 once a pass" (three
+spots 360-480 u down it); "it closes on the pilot and stops with its centre 830 u off" (three bearings,
+1.3-1.8 times that out).
 
 **Resolved (Job P, 2026-09-25 -- the owner's two open questions, built as defaults):**
 - **The shockwave scales with the hull.** `BossType.Size` (the row's own BossSize, 1 for a row never
@@ -620,10 +629,11 @@ off its launcher's keel, was 4.0-6.6 off the pods), "every raider's art ... flam
 
 **Proven (Job P, 2026-09-25):** rung 3 (those three, two seeds) and rung 4 (frames 0, 12, 13, 16b, 16c,
 27, 28-28e, 46, 48, 59, 59b, 80 by eye: the pod's one flame, the gatherers' tints on one drone, the wing,
-all correct). **Known broken:** frame 80's demo row (`Shots.cs.txt`) turns its raiders to face the
-nearest reachable target every frame it runs (`Raider._Process`), fast enough to swing well off "nose
-up" inside the pose's own wait; `SetProcess(false)` after the final pose was tried and did not hold the
-row still -- the cause is still open. Every raider's own hull, tint and bell count read correctly close
+all correct). **Known broken:** frame 80's demo row (`Shots.cs.txt`): every raider turns onto the
+nearest reachable target each frame it runs (`Raider._Process`). The frame re-poses the row nose-up and
+stops each raider's `_Process` (`SetProcess(false)`) before the snap, and frame 80 read by eye with that
+freeze in place still showed the row swung off nose-up (ledger_sprites D24) -- what still turns them is
+open; the next screens run says whether it holds. Every raider's own hull, tint and bell count read correctly close
 up (checked by eye, cropped); it is the ROW'S layout that reads as a diagonal pile-up, not the art.
 
 ### The base's fleet and the carrier's wing wear the owner's new sprites (2026-09-25, in the WarShips_Version_L fork, branch wt/art)

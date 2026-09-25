@@ -174,7 +174,7 @@ public static class Classes
             Art = new ClassArt {
                 // battleship_bb05 (the pack, J5): 4 mains on the flanking twins (the two forward
                 // rows, both sides -- Q3's default), the barrels of all 6 painted twins patched
-                // clean (Q4); PD on the aft domes; k measured off the new housing (was 2.5/5.5)
+                // clean (Q4); PD on the aft domes; the turret scale k measured off the art's own housing
                 Texture = "res://battleship_hull.png", Length = 378f, HalfWidth = 43.875f,
                 Mains = new Vector2[] { new(-23.99f, -74.28f), new(23.99f, -74.28f), new(-23.99f, -36.27f), new(23.99f, -36.27f) },
                 Pds   = new Vector2[] { new(-58.99f, 71.73f), new(58.99f, 71.73f) },
@@ -200,9 +200,9 @@ public static class Classes
                 ItemDef.Own(GearSlot.Utility, "cv_bomber_bay", "Bomber Bay", "the bomber wing", "bomber_count"),
             },
             Art = new ClassArt {
-                // carrier_a (the pack, J5): the flank PD pair re-seated on the new hull; the stern
-                // PD and the whole deck (Bay*/RunwayBow/EngineInset) kept at today's figures --
-                // lowest-confidence row of the twelve (POST, ledger_sprites.md)
+                // carrier_a (the pack, J5): a PD pair on the flanks amidships and one on the stern
+                // centreline; the deck (Bay*/RunwayBow/EngineInset) is the bays abreast amidships,
+                // the runway run from the bow and the engines inset at the stern
                 Texture = "res://carrier_player.png", Length = 283.5f, HalfWidth = 40.02f,
                 BayX = 25.01f, BayY = 8.34f, BaySpacing = 46.69f, RunwayBow = 110.06f, EngineInset = 8f,
                 Pds = new Vector2[] { new(-30.01f, -0.21f), new(30.01f, -0.21f), new(0f, 134.22f) },
@@ -344,8 +344,8 @@ public static class Classes
                 new() { Group = "Shockwave", Id = "wave_cooldown", Label = "Cooldown",       Base = 30, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
-                // frigate_c (the pack, J5): the main moved from the bow to the stern, onto the ring
-                // turret the new art actually draws there (nothing sat at the old forward mount)
+                // frigate_c (the pack, J5): the main sits aft, on the ring turret the art draws at
+                // the stern, with the PD pair either side of it
                 Texture = "res://freight_bastion_hull.png", Length = 230f, HalfWidth = 49.34f,
                 Mains = new Vector2[] { new(0.0f, 53.48f) },
                 Pds   = new Vector2[] { new(-27.1f, 64.4f), new(27.1f, 64.4f) },
@@ -513,8 +513,8 @@ public static class Classes
                 new() { Group = "Echo", Id = "echo_cooldown", Label = "Cooldown",       Base = 15, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
-                // fighter_f (the pack, J5): the main moved onto the paired barrels the new art
-                // draws on both wings (the flavour, "fires twice"; still one game mount, centred)
+                // fighter_f (the pack, J5): one main on the centreline stands for the paired
+                // barrels the art draws on both wings (the flavour, "fires twice")
                 Texture = "res://light_echo_hull.png", Length = 70f, HalfWidth = 14.68f,
                 Mains = new Vector2[] { new(0.0f, -23.39f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f, PdRing = 1.95f },

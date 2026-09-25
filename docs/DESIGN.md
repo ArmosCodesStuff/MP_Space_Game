@@ -761,8 +761,12 @@ under the base. A route or a range that moves must keep the 500.
   are `Missions.BossSize` (2, the owner's "2 or 3x") times their art's measure, Length, HalfWidth and
   bells alike, and everything a move places about the hull reads the row at use: the nose (L/2), the
   ram's lane (2 HW), the rock's hold (`Boss.FlankHold`: HW + body + gap), the escorts and the warp ring
-  (in half-widths), and every stand-off (`HoldOff`, a warp's `Standoff`) measured from the NOSE, so a
-  bigger hull stands no nearer the party. The boss spawns with its nose on `Hub.ArenaCentre`. What
+  (in half-widths), and every stand-off (`HoldOff`, a warp's `Standoff`) and every look (`Find`, taken as
+  `Find + L/2` from the centre) measured from the NOSE, so a bigger hull stands no nearer the party and
+  its guns reach as far past it (the owner: what is placed around a boss scales with it). A ram
+  (`MoveWay.Dash`) strikes each ship once a dash (`Boss.Slot.Struck`): a long hull is over a point for
+  longer than `PlayerShip.HitGap`, and without it a pilot left in the lane takes the row twice. The
+  boss spawns with its nose on `Hub.ArenaCentre`. What
   does NOT scale: reaches, ranges and bodies (the beam's 70 u, the rock) -- except a Ring move's own
   telegraph (`BossType.Size` x `Reach`, at use in `Boss.cs`): it is drawn round the hull itself, so the
   Lancer's shockwave reaches 680 u (340 x 2), the owner's open question, 2026-09-25, resolved as a

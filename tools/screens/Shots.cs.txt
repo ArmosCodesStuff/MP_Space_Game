@@ -693,11 +693,11 @@ public partial class _Shots : Node
             await W(0.3);
             foreach (var r in line) { r.Position = Spot(line.IndexOf(r)); r.Rotation = 0f; }
             await Frame(yard + new Vector2(0, 60), 1.3f);
-            // FROZEN, NOT JUST POSED: every raider here picks the nearest reachable target and turns
-            // onto it every frame it runs (Raider._Process), fast enough to swing most of the way
-            // round inside the wait below -- a row meant to stand nose-up, read clean, ended up a
-            // diagonal pile-up. SetProcess(false) stops the turn (and the targeting) without
-            // stopping the draw, so the pose set here is the pose the frame shows.
+            // POSED, THEN FROZEN: every raider here picks the nearest reachable target and turns onto
+            // it every frame it runs (Raider._Process), fast enough to swing most of the way round
+            // inside the wait below. SetProcess(false) stops that turn without stopping the draw;
+            // the frame's last read by eye still showed the row off nose-up (CHANGES.md, Known
+            // broken), so something else still turns them.
             foreach (var r in line) { r.Position = Spot(line.IndexOf(r)); r.Rotation = 0f; r.SetProcess(false); }
             await W(0.2); await Snap("80_every_enemy_hull");
             foreach (var r in line.ToList()) r.TakeDamage(1e12);
