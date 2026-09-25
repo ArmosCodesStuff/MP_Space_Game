@@ -19,7 +19,7 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
    4 F8, F10; 5 F12, F11, F14, F19; 6 the 12 classes by tier 6a-6d, each ClassDef.Abilities in learn order). Then lane I (items) once curve merges.
 2. TEST PHASE, once everything is merged: the slots proof, then quick,solo,solo,six,screens (+ six,six) across slots, fix low, then the bar
    once, VERIFIED:, push version-l and main, release; frames to the owner (the art lane's Drake, Rusty, siege, player ships).
-3. Delete worktrees WarShips_wt_walls, WarShips_wt_net, WarShips_wt_slots, WarShips_wt_test after the merges.
+3. Delete each lane's worktree once it is merged (walls, net, slots, art, test removed 2026-09-25; branches kept).
 Done: ART MERGED (A5 7717267 passed gate 3's code; coordinator applied its one comment fix A6 761a2ad; quick art_mergeq green;
   engine-unproven; Drake throw now nose 1300 u off = 200 u past gun reach, tell the owner if asked). Slots merged 25aefc1 (gate 2 passed at a22c187; its 2 notes applied in e104a5a). Engine-unproven: its proof opens the test phase.
 
@@ -27,7 +27,7 @@ Done: ART MERGED (A5 7717267 passed gate 3's code; coordinator applied its one c
 - none open
 
 ## Notes
-- Keep the version-l tree CLEAN while w3gvr44ua runs: its merge step refuses a dirty tree. Commit ledger edits at once.
+- Keep the version-l tree CLEAN while wthoe9tj1 / wojzfsouf run: their merge steps refuse a dirty tree. Commit ledger edits at once.
 - Merge risks: whichever of kits/art merges second resolves ClassArt.PdRing (kits removed it) and Ships.cs mount literals (list: ledger_sprites J5 POST); Ships.cs art rows vs kits rows; kits/art vs net's SmokeTest.cs.txt and Net.cs.
 - Follow-up from net gate 2 (not blocking): these constant tables are Lists or Dictionaries, so the fingerprint never hashes them:
   NetIds.Widths, Spawns.All (the wire kind index), Hints.All, Sfx._gap and Abilities.Reserved. The fix is to make them arrays or row tables.
