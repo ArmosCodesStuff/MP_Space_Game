@@ -44,3 +44,22 @@ tools/smoketest/SmokeTest.cs.txt. HEAD a02fc10. Hashes: SmokeTest 9949bb6009a1bf
 Verdict: typecheck 0 errors, quick ALL CHECKS PASSED. Files: scripts/Par.cs, SmokeTest.cs.txt
 (CurveParChecks, called after BossScaleChecks). engine-unproven: rungs owed in the final test phase.
 Next: J2.
+
+## J2 PRE — tier opus
+Intent: the scale switch (Missions.S/LevelStep deleted; HullMult/DamageMult/BountyEach via Par; boss
+rows 3222/2968; siege base 1.0x / pylon 0.125x the Lancer row; Waves + Raider Strength a level;
+ThreatStrength deleted, Standing via Par.LevelAtHull; TIO text); harness old-truth rewrites.
+HEAD aad83ea. Hashes:
+  scripts/Missions.cs e1afdde80028cfa002f541da418c2d1353546c7f
+  scripts/Boss.cs 85c742d66f5a2b475ea3bc1ace5a3ee6b0b053d8
+  scripts/Emplacements.cs deab186ba364edf207f5c6949b6267beedda37aa
+  scripts/Waves.cs 728a92f569938cb4bb75c6451b21fa2635b72a6e
+  scripts/Raider.cs ae7dd1a11793580c1cb8974cd962308cd66898e7
+  scripts/TioWindow.cs f104c80d32a526e20887e75bc50c2e3b0f6b9b78
+  tools/smoketest/SmokeTest.cs.txt a5a3852e3367a82dd173b44a59d8c3fc3ad081e3
+## J2 POST
+Verdict: typecheck 0 errors, quick ALL CHECKS PASSED; diff read. Files: Missions, Boss (2 escort lines +
+comment), Emplacements, Waves, Raider (Strength comment, MaxHull, new Volley used by both Strikes),
+TioWindow, SmokeTest. engine-unproven: rungs owed in the final test phase (solo x2: the rewritten boss,
+raid, siege, escort and TIO checks; six: the guest bounty share 1500 x HullScale(2); frame 35 TIO text).
+Next: J3.

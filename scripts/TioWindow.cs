@@ -61,7 +61,7 @@ public partial class TioWindow : PanelContainer
         if (Hub == null) return;
         int top = Missions.Unlocked(Missions.Kind);          // this operation's own ladder
         int lv = Missions.Level, party = System.Math.Max(1, Hub.PartySize);
-        Ui.SetText(_tier, $"LEVEL {lv}  ·  ×{Missions.S(lv):0.00}" + (lv == top ? "  (newest)" : ""));
+        Ui.SetText(_tier, $"LEVEL {lv}  ·  ×{Par.HullScale(lv):0.00}" + (lv == top ? "  (newest)" : ""));
         _down.Disabled = !Net.IsHost || lv <= 1 || Hub.Mission != Hub.MissionState.Idle;
         _up.Disabled = !Net.IsHost || lv >= top || Hub.Mission != Hub.MissionState.Idle;
         var kind = Missions.KindOf(Missions.Kind);

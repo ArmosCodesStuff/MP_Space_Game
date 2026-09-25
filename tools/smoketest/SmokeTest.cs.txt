@@ -1464,6 +1464,7 @@ public partial class _Test : Node
         CurveParChecks();
         BuildChecks();
         await RecyclerChecks();
+        CurveRaiderChecks();
 
         // Every class is touched first: Load() fills the loadout for ALL of them, so a character that
         // had only ever used one would differ after a round trip for that reason alone and say
@@ -3164,6 +3165,25 @@ public partial class _Test : Node
         }
     }
 
+    // A RAIDER'S STRENGTH IS A LEVEL (lane F): its hull on Par's craft scale, its laser volley on
+    // Par's damage scale, its missile the row's flat figure -- a light and a heavy at three varied
+    // levels, whole and fractional, spawned the way every wave spawns them (Hub.SpawnRaider).
+    void CurveRaiderChecks()
+    {
+        foreach (int kind in new[] { Enemies.Webifier, Enemies.Gunship })
+            for (int k = 0; k < 3; k++)
+            {
+                double L = k == 0 ? (int)Vary(2f, 20f) : Vary(20f, 70f);
+                var r = H.SpawnRaider(Hub.BasePos + new Vector2(Vary(-2500f, 2500f), -3900f), kind, 0, L);
+                if (r == null) { Check(false, $"a level-{L:0.0} raider could not be spawned"); continue; }
+                var d = Enemies.Of(kind);
+                Check(Math.Abs(r.Strength - L) < 1e-12 && Math.Abs(r.MaxHull - d.Hull * Par.CraftScale(L)) < 1e-9 && Math.Abs(r.Hp - r.MaxHull) < 1e-9
+                      && Math.Abs(r.Volley - d.Dps * d.Barrels * d.ShotEvery * Par.DamageScale(L)) < 1e-9 && r.Volley > d.Dps * d.Barrels * d.ShotEvery,
+                      $"a level-{L:0.00} {(r.Heavy ? "heavy" : "light")}: hull {r.MaxHull:0.0} ({d.Hull} x{Par.CraftScale(L):0.000}), a volley of {r.Volley:0.00} (x{Par.DamageScale(L):0.000}); its missile stays the row's {d.MissileDamage:0}");
+                H.RaiderDown(r);
+            }
+    }
+
     // ── THE RECYCLER: a hold turned back into salvage, and a lock so it cannot eat what you fly ──
     // A part could not be got rid of at all before this: a hold filled with commons a pilot would
     // never fit again, and salvage had nothing to buy but a refit and gear levels.
@@ -4667,22 +4687,23 @@ public partial class _Test : Node
         bool meNearer = hunters.Count > 0 && hunters.All(r => r.Position.DistanceTo(Me.Position) < r.Position.DistanceTo(hauler.Position));
         Check(H.Raiders.Count - huntR0 == 3 && hunters.Count == 3 && hunters.All(r => r.Target == hauler) && meNearer && Math.Abs(firstWaveAt - 5.0) < 0.05,
               $"5 s in, a wave of 3 hunts the hauler -- not the ship that is nearer to them ({H.Raiders.Count - huntR0} spawned at {firstWaveAt:0.00} s, {hunters.Count(r => r.Target == hauler)} on it)");
-        Check(hunters.All(r => !r.Heavy && Math.Abs(r.MaxHull - 0.5 * 25 * r.Strength) < 1e-9 && Math.Abs(r.Hp - r.MaxHull) < 1e-9),
+        Check(hunters.All(r => !r.Heavy && Math.Abs(r.MaxHull - 0.5 * 25 * Par.CraftScale(r.Strength)) < 1e-9 && Math.Abs(r.Hp - r.MaxHull) < 1e-9),
               $"the first wave is light fighters only, at half hull ({string.Join(", ", hunters.Select(r => $"{(r.Heavy ? "heavy" : "light")} {r.Hp:0.0}"))})");
         // THE ESCORT'S THREAT sets each wave: a quarter each from the load (a level per 1000 cr it will
         // fetch escorted), the party (half its mean level, half its ships' toughness -- a level per 10%
         // of hull over its class's own), the highest boss, and the route (half a level a wave)
         Check(Math.Abs(Waves.EscortThreat(0, 1, 1, 0, 0) - 1.0) < 1e-9 && Math.Abs(Waves.EscortThreat(4000, 5, 3, 5, 8) - 4.75) < 1e-9,
               "an escort's threat: 1 for a fresh base's first wave; 4.75 for 4000 cr aboard, a level-5 party of toughness 3, the level-5 boss beaten, the ninth wave");
-        Check(Math.Abs(Waves.ThreatStrength(4.75) - Math.Pow(Missions.LevelStep, 3.75)) < 1e-9 && Waves.ThreatLights(1.0) == 3 && Waves.ThreatLights(4.75) == 4 && Waves.ThreatLights(40) == 6
+        Check(Waves.ThreatLights(1.0) == 3 && Waves.ThreatLights(4.75) == 4 && Waves.ThreatLights(40) == 6
               && Math.Abs(Waves.ThreatAgility(4.75) - 1.0375) < 1e-9 && Math.Abs(Waves.ThreatAgility(40) - 1.1) < 1e-9,
-              "...which sets the hunters' hull and damage (the level scale), their numbers (a light more every 3 levels, 3 more at most) and, very slightly, their speed and turning (1% a level, 10% at most)");
+              "...which sets their numbers (a light more every 3 levels, 3 more at most) and, very slightly, their speed and turning (1% a level, 10% at most)");
         {
             double ownHull = new ShipStats(Me.Class)["hull"];
-            double tough = 1 + Math.Log(Math.Max(1, Me.MaxHp / ownHull)) / Math.Log(Missions.LevelStep);
+            double tough = Par.LevelAtHull(Me.MaxHp / ownHull);
             double threat = 0.25 * ((1 + 300 * 5 / 1000.0) + (0.5 * Character.Level + 0.5 * tough) + Math.Max(1, Missions.HighestBeaten(Missions.Bounty)) + 1);
-            Check(hunters.All(r => Math.Abs(r.Strength - Math.Pow(Missions.LevelStep, threat - 1)) < 1e-9 && Math.Abs(r.Agility - (1 + Math.Min(0.1, 0.01 * (threat - 1)))) < 1e-9),
-                  $"the first wave carries THIS escort's threat: 300 units at x5 aboard, this pilot (level {Character.Level}), the highest boss, the first wave ({threat:0.000}; x{hunters.FirstOrDefault()?.Strength:0.000})");
+            // THE THREAT IS THEIR LEVEL (Raider.Strength): hull on Par's craft scale, as a boss's raiders
+            Check(hunters.All(r => Math.Abs(r.Strength - threat) < 1e-9 && Math.Abs(r.MaxHull - 0.5 * 25 * Par.CraftScale(threat)) < 1e-9 && Math.Abs(r.Agility - (1 + Math.Min(0.1, 0.01 * (threat - 1)))) < 1e-9),
+                  $"the first wave carries THIS escort's threat as their level: 300 units at x5 aboard, this pilot (level {Character.Level}), the highest boss, the first wave ({threat:0.000}; level {hunters.FirstOrDefault()?.Strength:0.000}, hull x{Par.CraftScale(threat):0.000})");
         }
         Me.Position = Hub.BasePos + new Vector2(-2600, 1800); Me.Velocity = Vector2.Zero;
         hauler.T = 24.9;
@@ -4690,7 +4711,7 @@ public partial class _Test : Node
         await Wait(0.2);
         var wave2 = H.Raiders.Where(r => r.Quarry == hauler).ToList();
         var heavy2 = wave2.FirstOrDefault(r => r.Heavy);
-        Check(before25 == 3 && wave2.Count == 7 && wave2.Count(r => r.Heavy) == 1 && heavy2 != null && Math.Abs(heavy2.MaxHull - 0.5 * Enemies.Of(heavy2.Kind).Hull * heavy2.Strength) < 1e-9,
+        Check(before25 == 3 && wave2.Count == 7 && wave2.Count(r => r.Heavy) == 1 && heavy2 != null && Math.Abs(heavy2.MaxHull - 0.5 * Enemies.Of(heavy2.Kind).Hull * Par.CraftScale(heavy2.Strength)) < 1e-9,
               $"the next wave 20 s later, at 25 s, brings a heavy (at half hull): 3 hunters just before, 7 after ({before25}, {wave2.Count}, {wave2.Count(r => r.Heavy)} heavy)");
         hauler.T = 44.9; await Wait(0.2);
         Check(H.Raiders.Count(r => r.Quarry == hauler) == 10 && H.Raiders.Count(r => r.Quarry == hauler && r.Heavy) == 1,
@@ -6487,14 +6508,15 @@ public partial class _Test : Node
             Check(up == 2 && Character.Level == 3 && Character.Exp == 600 && Character.Points == 2, "2600 EXP from level 1: level 3, 600 over, 2 points");
             await WallChecksLive();
             // the approved formula, in literal numbers (so the checks can fail)
-            // THE ONE PLACE THE LEVEL'S SCALE IS PROVED AGAINST A LITERAL. 2.5% a level, not the
-            // 10% it was: measured against the owner's target of a pilot on par after four boss
-            // kills at a level with gear at about 65% of the salvage ladder, a tenth a level meant
-            // the boss grew forty-fold over forty levels against points worth +45%. Every other
-            // check reads Missions.S rather than repeating a factor that can move again.
-            Check(Math.Abs(Missions.S(1) - 1) < 1e-12 && Math.Abs(Missions.S(5) - Math.Pow(1.025, 4)) < 1e-9
-                  && Math.Abs(Missions.LevelStep - 1.025) < 1e-12 && Math.Abs(Missions.S(41) - 2.685) < 0.001,
-                  $"boss levels start at 1 and climb 2.5% each: S(5) = {Missions.S(5):0.0000}, and forty levels is x{Missions.S(41):0.00} where a tenth a level was x45");
+            // A MISSION'S LEVEL IS PAR'S SCALE (Par's literals are proved once, in CurveParChecks): hull on
+            // the boss scale, damage on par's hull, credits on the hull -- at three varied levels.
+            for (int k = 0; k < 3; k++)
+            {
+                int L = (int)Vary(2f, 60f);
+                Check(Math.Abs(Missions.HullMult(L, 1) - Par.HullScale(L)) < 1e-12 && Math.Abs(Missions.DamageMult(L, 1) - Par.DamageScale(L)) < 1e-12
+                      && Math.Abs(Missions.BountyEach(Missions.Bounty, L, 1) - 2000 * Par.HullScale(L)) < 1e-9 && Math.Abs(Missions.HullMult(L, 2) - 1.6 * Par.HullScale(L)) < 1e-12,
+                      $"a level-{L} mission: hull x{Missions.HullMult(L, 1):0.000} (Par's boss scale), damage x{Missions.DamageMult(L, 1):0.000} (par's hull), {Missions.BountyEach(Missions.Bounty, L, 1):0} credits, x1.6 hull for two");
+            }
             Check(Math.Abs(Missions.HullMult(1, 3) - 2.2) < 1e-9 && Math.Abs(Missions.DamageMult(1, 3) - 1.4) < 1e-9, "a party of 3: boss hull x2.2, damage x1.4");
             // 300 at the base now, and NOTHING at all for a boss under half this pilot's level:
             // a level-5 pilot is taught nothing by a level 1 or 2 boss, however many it kills.
@@ -7059,7 +7081,7 @@ public partial class _Test : Node
                 Check(mixed.Count(r => r.Heavy) == 0 && pins.Count >= 5
                       && pins.Select(r => r.Kind).Distinct().Count() == 2
                       && pins.GroupBy(r => r.Kind).Min(g => g.Count()) == 2
-                      && pins.All(r => Math.Abs(r.MaxHull - 0.5 * Enemies.Of(r.Kind).Hull * r.Strength) < 1e-9),
+                      && pins.All(r => Math.Abs(r.MaxHull - 0.5 * Enemies.Of(r.Kind).Hull * Par.CraftScale(r.Strength)) < 1e-9),
                       $"a wave MIXES TWO PINNER KINDS -- the rotation's next row, two of them, at half hull ({string.Join(" + ", pins.GroupBy(r => r.Kind).Select(g => $"{g.Count()} {Enemies.Of(g.Key).Name}"))})");
                 foreach (var r in mixed) r.TakeDamage(1e9);
                 await Wait(0.2);
@@ -8691,11 +8713,11 @@ public partial class _Test : Node
                       $"a boss's moves are a table of rows, in the order a frame resolves them ({string.Join(",", lan.Moves.Select(m => m.Id))} / {string.Join(",", dra.Moves.Select(m => m.Id))})");
                 // its art, its shape and what it closes on are the row's too, as EnemyDef carries
                 // a raider's -- they were abstract members of a boss class each
-                Check(lan.Hull == 760 && lan.Length == 360f && lan.HalfWidth == 70f && lan.Sprite == "res://boss_raider.png"
-                      && dra.Hull == 700 && dra.Length == 420f && dra.HalfWidth == 90f && dra.Sprite == "res://boss_drake.png"
+                Check(lan.Hull == 3222 && lan.Length == 360f && lan.HalfWidth == 70f && lan.Sprite == "res://boss_raider.png"
+                      && dra.Hull == 2968 && dra.Length == 420f && dra.HalfWidth == 90f && dra.Sprite == "res://boss_drake.png"
                       && lan.HoldOff == 650f && lan.CloseSpeed == 30f && Math.Abs(lan.TurnRate - 0.3f) < 1e-6
                       && dra.HoldOff == 650f && dra.CloseSpeed == 30f && Math.Abs(dra.TurnRate - 0.3f) < 1e-6,
-                      "a boss's hull, art and approach are its row's: 760 / 360 / 70 and 700 / 420 / 90, both closing to 650 u at 30 u/s and turning at 0.3 rad/s");
+                      "a boss's hull, art and approach are its row's: 3222 / 360 / 70 and 2968 / 420 / 90, both closing to 650 u at 30 u/s and turning at 0.3 rad/s");
                 var gn = L("guns");
                 Check(gn.Way == MoveWay.Bolt && gn.Every == 1.2 && gn.First == 2.0 && gn.Damage == 3.6 && gn.Find == 900f
                       && gn.Waits == MoveWait.Nothing && !gn.Busy && !gn.Super && gn.Source == "boss:guns"
@@ -8774,7 +8796,7 @@ public partial class _Test : Node
             Check(Count<BasePanel>() == 0, "neither B nor the button opens a base menu out there");
             Check(Music.CombatZone, "the arena counts as combat for the music");
             Me.Position = boss.Position + new Vector2(0, 500); Me.Velocity = Vector2.Zero; Me.Rotation = 0;
-            Check(Math.Abs(boss.MaxHp - 760) < 1e-6 && Math.Abs(boss.S("guns").M.Damage / boss.S("guns").M.Every - 3) < 1e-9, "the boss: 760 hull at level 1 (solo); its guns 3 DPS");
+            Check(Math.Abs(boss.MaxHp - 3222) < 1e-6 && Math.Abs(boss.S("guns").M.Damage / boss.S("guns").M.Every - 3) < 1e-9, "the boss: 3222 hull at level 1 (solo); its guns 3 DPS");
             // stand in the beam on purpose with a thick hull (test only), and watch the rhythm
             // the boss's health bar: a chunk per hit, bouncing, whitening, fading; bursts merge
             var bar = Nodes<QuarryBar>().First();
@@ -8842,7 +8864,7 @@ public partial class _Test : Node
             var bnose = Vector2.Up.Rotated(boss.Rotation);
             var escAng = escorts.Select(r => Mathf.RadToDeg(bnose.AngleTo(r.Position - boss.Position))).OrderBy(x => x).ToList();
             Check(escorts.Count == 2 && Math.Abs(escAng[0] + 45) < 12 && Math.Abs(escAng[1] - 45) < 12
-                  && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= 3 * Missions.S(Missions.Level) + 1e-6),
+                  && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= 3 * Par.CraftScale(Missions.Level) + 1e-6),
                   $"two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), fragile");
             Check(escorts.All(r => r.Shivering), "the escorts shiver at the launch point before the run in");
             // ── A BOSS'S ESCORTS ARE NOT THE LANCER'S: one more every ten levels, to five ──
@@ -9194,8 +9216,8 @@ public partial class _Test : Node
                   $"while away the base earned 1/20 of its rate ({Yard.LastAwayGained("ore"):0.0} ore for {Yard.LastAway:0} s)");
             // levels: the win cleared level 1; docking at the TIO selects level 2
             Check(Character.BossCleared.TryGetValue("silver_lancer", out var cleared) && cleared.Contains(1), "the win records level 1 as cleared");
-            Check(Math.Abs(Missions.S(2) - Missions.LevelStep) < 1e-9 && Math.Abs(Missions.S(3) - Missions.LevelStep * Missions.LevelStep) < 1e-9,
-                  "each level is stronger, multiplicatively (the level-3 Lancer: its row x the level scale)");
+            Check(Par.HullScale(3) > Par.HullScale(2) && Par.HullScale(2) > 1 && Math.Abs(Missions.HullMult(3, 1) - Par.HullScale(3)) < 1e-12,
+                  $"each level is stronger, on Par's scale (the level-3 Lancer: its row x{Par.HullScale(3):0.000})");
             H.OpenTio(); await Wait(0.1);
             var tw2 = Nodes<TioWindow>().First();
             Check(Missions.Level == 2, "docking at the TIO selects the newest unlocked level (2)");
@@ -9219,9 +9241,9 @@ public partial class _Test : Node
                 var dk = H.Boss;
                 var me3 = Me; me3.MaxHp = 5000; me3.TakeDamage(-(5000 - me3.Hp)); me3.Velocity = Vector2.Zero; me3.Rotation = 0f;
                 var dspr = dk?.GetChildren().OfType<Sprite2D>().FirstOrDefault();
-                Check(dk != null && dk.Type.Id == "drake_bastion" && dk.Type.Name == "DRAKE BASTION" && Math.Abs(dk.MaxHp - 700 * Missions.S(2)) < 1e-6
+                Check(dk != null && dk.Type.Id == "drake_bastion" && dk.Type.Name == "DRAKE BASTION" && Math.Abs(dk.MaxHp - 2968 * Par.HullScale(2)) < 1e-6
                       && dspr != null && dspr.Texture.ResourcePath.EndsWith("boss_drake.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 420f) < 0.5f,
-                      $"level 2 is the Drake Bastion: 700 hull x the level's scale, 420 u long ({dk?.Type.Name}, {dk?.MaxHp:0})");
+                      $"level 2 is the Drake Bastion: 2968 hull x the level's scale, 420 u long ({dk?.Type.Name}, {dk?.MaxHp:0})");
                 if (dk != null)
                 {
                     // ITS CLOCKS: a throw every 30 s from 6 s, the shotgun every 15 s from 17 s -- 11 s after a
@@ -9252,8 +9274,8 @@ public partial class _Test : Node
                     if (shell != null && GodotObject.IsInstanceValid(shell)) { var sp0 = shell.Position; for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); sspd = GodotObject.IsInstanceValid(shell) ? (shell.Position - sp0).Length() / (10f / 60f) : 0; }
                     for (int i = 0; i < 60 * 5 && Fired("boss:gun") == gun0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     double gunHit = Fired("boss:gun") - gun0;
-                    Check(shellAt.Count == 2 && Math.Abs(shellAt[1] - shellAt[0] - 2.5) < 0.05 && Math.Abs(sspd - 220) < 4 && Math.Abs(gunHit - 6 * Missions.S(2)) < 1e-6,
-                          $"its main gun: a slow shell (220 u/s) every 2.5 s, 6 a hit -- 2.4 DPS before the level's scale (here {6 * Missions.S(2):0.00}) ({sspd:0} u/s, {(shellAt.Count == 2 ? shellAt[1] - shellAt[0] : -1):0.00} s apart, {gunHit:0.00})");
+                    Check(shellAt.Count == 2 && Math.Abs(shellAt[1] - shellAt[0] - 2.5) < 0.05 && Math.Abs(sspd - 220) < 4 && Math.Abs(gunHit - 6 * Par.DamageScale(2)) < 1e-6,
+                          $"its main gun: a slow shell (220 u/s) every 2.5 s, 6 a hit -- 2.4 DPS before the level's scale (here {6 * Par.DamageScale(2):0.00}) ({sspd:0} u/s, {(shellAt.Count == 2 ? shellAt[1] - shellAt[0] : -1):0.00} s apart, {gunHit:0.00})");
                     // THE SCRAP SHOTGUN (started by hand): a warpRing where it will land -- 600 u from the pilot --
                     // then, held still, a fan of seven red lines for 1.875 s (1.25 x the Lancer's 1.5 s), then
                     // seven pieces of scrap down them: the same fixed fan, 10 degrees apart
@@ -9293,9 +9315,9 @@ public partial class _Test : Node
                     // full, and not one of them swallowed.
                     double all0 = Fired("boss:scrap");
                     for (int i = 0; i < 60 * 3; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                    double allDmg = Fired("boss:scrap") - all0, pieces = allDmg / (18.75 * Missions.S(2));
+                    double allDmg = Fired("boss:scrap") - all0, pieces = allDmg / (18.75 * Par.DamageScale(2));
                     Check(pieces >= 1 && Math.Abs(pieces - Math.Round(pieces)) < 1e-6,
-                          $"the piece aimed at the pilot strikes it, and every piece that lands is felt in full -- 15 x1.25 = 18.75, x the level's scale ({18.75 * Missions.S(2):0.00} each) ({allDmg:0.000} taken, {pieces:0} of the 7 struck)");
+                          $"the piece aimed at the pilot strikes it, and every piece that lands is felt in full -- 15 x1.25 = 18.75, x the level's scale ({18.75 * Par.DamageScale(2):0.00} each) ({allDmg:0.000} taken, {pieces:0} of the 7 struck)");
                     // THE ASTEROID THROW (started by hand): a rock beside it in its tractor, a red lane of the
                     // rock's width for 7.5 s (1.25 x the Lancer's 6 s charge), the boss held still -- then the
                     // throw: slow, then very fast (the first half of the flight covers an eighth of the lane),
@@ -9347,7 +9369,7 @@ public partial class _Test : Node
                     bool broke = false;
                     for (int i = 0; i < 60 * 3 && rock != null && GodotObject.IsInstanceValid(rock); i++) { broke |= rock.Done; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                     double rockDmg = me3.DamageBySource.GetValueOrDefault("boss:rock");
-                    Check(Math.Abs(half - 0.125) < 0.04 && broke && Math.Abs(laneLen - heave.Reach) < 1 && Math.Abs(rockDmg - 250 * Missions.S(2)) < 1e-6,
+                    Check(Math.Abs(half - 0.125) < 0.04 && broke && Math.Abs(laneLen - heave.Reach) < 1 && Math.Abs(rockDmg - 250 * Par.DamageScale(2)) < 1e-6,
                           $"thrown: half the flight covers an eighth of its {heave.Reach:0} u lane ({half:0.000}) -- the ease, whatever the level does to the length -- it strikes the pilot for its 250 at the level's scale ({rockDmg:0}), and breaks apart at the end ({broke})");
                 }
             }
@@ -9406,14 +9428,14 @@ public partial class _Test : Node
             Check(H.Raiders.Count == 0, "the raid is not there at once (every guest's world loads first)");
             // measured the frame they appear: a raider that spots a miner boosts inward at once
             for (int i = 0; i < 60 * 5 && H.Raiders.Count == 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            double sL = Math.Pow(Missions.LevelStep, failLevel - 1);
+            double sL = Par.CraftScale(failLevel);
             var raid = H.Raiders.ToList();
             GD.Print($"  raid: {raid.Count} raiders, level {failLevel} (x{sL:0.00}), {raid.Min(r => r.Position.DistanceTo(Hub.BasePos)):0}-{raid.Max(r => r.Position.DistanceTo(Hub.BasePos)):0} u out");
             Check(raid.Count == 8 && raid.Count(r => r.Heavy) == 2 && raid.Select(r => r.Patrol).Distinct().Count() == 2,
                   "a failed mission: the boss sends 2 patrols (3 lights and a heavy each)");
             Check(raid.All(r => Math.Abs(r.Position.DistanceTo(Hub.BasePos) - Hub.RaidEdge) < 110f), "in from the edge of the base's map (3200 u out)");
-            Check(raid.All(r => Math.Abs(r.Strength - sL) < 1e-9 && Math.Abs(r.MaxHull - Enemies.Of(r.Kind).Hull * sL) < 1e-6),
-                  $"at the failed boss's level: hull and damage x{sL:0.00} (LevelStep^(L-1), L = {failLevel})");
+            Check(raid.All(r => Math.Abs(r.Strength - failLevel) < 1e-9 && Math.Abs(r.MaxHull - Enemies.Of(r.Kind).Hull * sL) < 1e-6),
+                  $"at the failed boss's level: Strength IS the level ({failLevel}), hull x{sL:0.00} (Par's craft scale)");
             foreach (var r in raid) r.TakeDamage(1e9);
             await Wait(0.3);
             // the fighter-class autopilot, flown on its own (no player fighter class yet)
@@ -9501,13 +9523,12 @@ public partial class _Test : Node
                 var cruiseRow = Shots.Of(Shots.Cruise);
                 Check(cruiseRow.AtPlayers && cruiseRow.Guided && cruiseRow.Interceptable && cruiseRow.Tags == Tag.Hulled && cruiseRow.Label == "CRUISE MISSILE",
                       "its round is the cruise missile: fired at the pilots, guided, given an id -- and a body with a HULL, Tag.Hulled and not Tag.Missile");
-                // TWICE THE BOSS OF THIS LEVEL, at the same scale -- one hull formula, not a second.
-                // (The level's own scale is proved against its literal once, where it is defined.)
-                double bossAt3 = Missions.ForLevel(3).Hull * Missions.HullMult(3, 1);
-                Check(Math.Abs(pbase.MaxHp - 2 * bossAt3) < 1e-6,
-                      $"the pirate base is 2x the boss of its own level: 2 x {bossAt3:0.0} = {pbase.MaxHp:0.0} at level 3");
-                Check(pylons.All(p => Math.Abs(p.MaxHp - 400 * Missions.S(3)) < 1e-6),
-                      $"each pylon starts at 400 hull and climbs the same level scale (level 3: 400 x {Missions.S(3):0.000} = {pylons[0].MaxHp:0})");
+                // THE LANCER'S ROW, not the boss of this level (which alternated): 3222 and an eighth of
+                // it, on the level's boss scale (Par's literals are proved once, in CurveParChecks).
+                Check(Math.Abs(pbase.MaxHp - 3222 * Par.HullScale(3)) < 1e-6,
+                      $"the pirate base is the Lancer's row on the level's scale: 3222 x {Par.HullScale(3):0.000} = {pbase.MaxHp:0.0} at level 3");
+                Check(pylons.All(p => Math.Abs(p.MaxHp - 402.75 * Par.HullScale(3)) < 1e-6),
+                      $"each pylon is an eighth of it, 403, on the same scale (level 3: {pylons[0].MaxHp:0})");
 
                 // ITS GARRISON comes as an escort's hunters do -- the same one builder, a row of
                 // Waves.All -- but at FULL hull and the mission's own strength: the escort halves
@@ -9518,10 +9539,10 @@ public partial class _Test : Node
                 int raid0 = H.Raiders.Count;
                 H.GarrisonWave(Hub.ArenaCentre, 0); await Wait(0.3);
                 var wave = H.Raiders.Skip(raid0).ToList();
-                double siegeLv = Math.Pow(Missions.LevelStep, 3 - 1);
+                double siegeLv = Par.CraftScale(3);
                 Check(wave.Count == 4 && wave.Count(r => r.Heavy) == 1 && Math.Abs(Waves.HunterHull - 0.5) < 1e-9
-                      && wave.All(r => Math.Abs(r.Strength - siegeLv) < 1e-9 && Math.Abs(r.MaxHull - Enemies.Of(r.Kind).Hull * siegeLv) < 1e-6),
-                      $"a siege wave is 3 pinners and a standoff at FULL hull and x{siegeLv:0.00} -- not the escort's half ({wave.Count} raiders, {wave.Count(r => r.Heavy)} heavy)");
+                      && wave.All(r => Math.Abs(r.Strength - 3) < 1e-9 && Math.Abs(r.MaxHull - Enemies.Of(r.Kind).Hull * siegeLv) < 1e-6),
+                      $"a siege wave is 3 pinners and a standoff at FULL hull, level 3 (hull x{siegeLv:0.00}) -- not the escort's half ({wave.Count} raiders, {wave.Count(r => r.Heavy)} heavy)");
                 foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
                 await Wait(0.2);
 
@@ -10791,10 +10812,9 @@ public partial class _Test : Node
             await Wait(1.0);
             // its own base, plus its shares of three clears with two pilots -- the level-1 bounty,
             // 2000 x 1.5 / 2 = 1500; the level-1 siege, the same 1500; the level-2 bounty at the level's
-            // scale, 1500 x 1.025 = 1537.5 -- the last made while it was away, but split two ways all
-            // the same. (The scale is 1.025 a level because a boss that doubled every seven levels
-            // outran any pilot; the step itself is proved against its own literal where the curve is.)
-            double want = 12345 + 1500 + 1500 + 1537.5;
+            // scale, 1500 x Par.HullScale(2) = 1646.4 -- the last made while it was away, but split two
+            // ways all the same. (Par's scale is proved against its literals once, in CurveParChecks.)
+            double want = 12345 + 1500 + 1500 + 1500 * Par.HullScale(2);
             Check(!Hub.InArena && !Net.IsOnline && H.Yard != null && Math.Abs(H.Yard.Credits - want) < 1e-6,
                   $"arena guest: the host gone mid-arena, home offline with its own base and its bounty share ({H.Yard?.Credits:0} of {want:0})");
             // ...AND IT IS ON DISK, in THIS peer's own file. It used to read the host's: every

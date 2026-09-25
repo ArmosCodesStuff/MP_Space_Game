@@ -29,7 +29,7 @@ using System.Collections.Generic;
 //                 wave but a blockade -- is the base's perimeter, which is where they always went
 //   Crew          rows of (an enemy named outright OR a way to draw one, how many, where they sit)
 //   HullShare     the share of its row's hull each of them is built with
-//   Strength      where its hull-and-damage multiplier comes from
+//   Strength      its LEVEL, which sets its hull and damage on Par's scale (Raider.Strength)
 //   Agility       ...and its speed and turning
 //
 // HOW A TRIGGER PICKS ITS ROW (Waves.For): the LAST row whose trigger matches and whose `When`
@@ -79,7 +79,7 @@ public sealed class WaveBrief
     public int Index;             // which wave of its run this is (an escort's leg; 0 otherwise)
     public int Level = 1;         // the mission level behind it
     public double Threat;         // an escort's threat, when there is one
-    public double Scale = 1;      // a strength named outright (a called wave)
+    public double Scale = 1;      // a level named outright (a called wave)
     public Vector2 Origin;        // what the wave forms up around
     public Vector2 Anchor;        // the point a Fan is measured to, and a Spot sits on
     public Node2D Quarry;         // the one thing it hunts, or null for whatever it finds
@@ -102,7 +102,7 @@ public sealed class WaveDef
     public float Hold;
     public WaveCrew[] Crew;
     public double HullShare = 1;
-    public Func<WaveBrief, double> Strength;      // null: x1
+    public Func<WaveBrief, double> Strength;      // its level; null: level 1
     public Func<WaveBrief, double> Agility;       // null: x1
 }
 
@@ -113,12 +113,12 @@ public static class Waves
 
     // ── AN ESCORT'S THREAT, as a mission level: a quarter each from ──────────
     //   the load    1, and a level for every 1000 cr the cargo will fetch escorted (Hauler.Payout)
-    //   the party   half its pilots' mean level, half its ships' toughness -- 1, and a level for each
-    //               10% step its hull stands over its class's own (purchases and gear)
+    //   the party   half its pilots' mean level, half its ships' toughness -- the level par stands at
+    //               with that much hull over its class's own (Par.LevelAtHull; purchases and gear)
     //   the boss    the highest the base owner has beaten (1 before any)
     //   the route   how far along the escort the wave comes: 1 at the first, +0.5 a wave
-    // A fresh base's first wave with a light load is about 1.4. The threat makes the hunters' hull and
-    // damage (the missions' 10% a level), their numbers (a light more a patrol every 3 levels, 3 more
+    // A fresh base's first wave with a light load is about 1.4. The threat IS the hunters' level: their
+    // hull and damage (Par's scale, as a boss's), their numbers (a light more a patrol every 3 levels, 3 more
     // at most) and, very slightly, their speed and turning (1% a level, 10% at most).
     public const double CreditsPerThreat = 1000, ThreatPerWave = 0.5;
     public static double EscortThreat(double loadCredits, double partyLevel, double partyToughness, int highestBoss, int wave) =>
@@ -126,7 +126,6 @@ public static class Waves
               + (0.5 * partyLevel + 0.5 * partyToughness)
               + Math.Max(1, highestBoss)
               + (1 + ThreatPerWave * Math.Max(0, wave)));
-    public static double ThreatStrength(double threat) => Math.Pow(Missions.LevelStep, Math.Max(0, threat - 1));
     public static int ThreatLights(double threat) => 3 + Math.Min(3, (int)Math.Floor(Math.Max(0, threat - 1) / 3));
     public static double ThreatAgility(double threat) => 1 + Math.Min(0.1, 0.01 * Math.Max(0, threat - 1));
 
@@ -144,8 +143,9 @@ public static class Waves
             if (!GodotObject.IsInstanceValid(s)) continue;
             level += Math.Min(ThreatLevelCap,
                 s.Mine ? Character.Level : Net.I != null && Net.I.Players.TryGetValue(s.OwnerId, out var p) ? p.Level : 1);
+            // ...its toughness: the level par stands at with this much more hull than its class's own
             double own = new ShipStats(s.Class)["hull"];
-            toughness += 1 + Math.Log(Math.Max(1, own > 0 ? s.MaxHp / own : 1)) / Math.Log(Missions.LevelStep);
+            toughness += Par.LevelAtHull(own > 0 ? s.MaxHp / own : 1);
             n++;
         }
         return n == 0 ? (1, 1) : (level / n, toughness / n);
@@ -171,13 +171,13 @@ public static class Waves
 
     public static readonly WaveDef[] All =
     {
-        // A FAILED MISSION'S RAID. Level L (the failed boss's): raiders at S(L) = 1.025^(L-1), the
-        // boss's own scaling (Missions.S). 2 squads, and 1 more per extra pilot in the session, in from the
+        // A FAILED MISSION'S RAID. Level L (the failed boss's): raiders at level L, on the boss's
+        // own curve (Par). 2 squads, and 1 more per extra pilot in the session, in from the
         // map's edge (the clock that holds them 3 s is Raids.Delay).
         new() { Id = "raid", Trigger = WaveTrigger.Failed,
                 Squads = 2, SquadsPerPilot = 1,
                 Form = WaveForm.Ring, Radius = Hub.RaidEdge, Turn = 0.4f,
-                Strength = b => Missions.S(b.Level),
+                Strength = b => b.Level,
                 Crew = Patrol },
 
         // A SQUAD ASKED FOR OUTRIGHT, at a spot, at a strength named with it: the plain squad,
@@ -194,7 +194,7 @@ public static class Waves
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
                 HullShare = HunterHull,
-                Strength = b => ThreatStrength(b.Threat), Agility = b => ThreatAgility(b.Threat),
+                Strength = b => b.Threat, Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin } },
 
         // ...and every odd one brings a standoff with it (the second, the fourth, ...).
@@ -202,7 +202,7 @@ public static class Waves
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
                 HullShare = HunterHull,
-                Strength = b => ThreatStrength(b.Threat), Agility = b => ThreatAgility(b.Threat),
+                Strength = b => b.Threat, Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin, Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(0f, 90f), Vector2.Zero) } },
 
         // FROM THE SEVENTH WAVE ON the pinners come in TWO kinds: the next row of the rotation
@@ -212,7 +212,7 @@ public static class Waves
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
                 HullShare = HunterHull,
-                Strength = b => ThreatStrength(b.Threat), Agility = b => ThreatAgility(b.Threat),
+                Strength = b => b.Threat, Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin, Draw(EnemyWay.Pin, 1, _ => 2, new Vector2(0f, -70f), new Vector2(40f, 0f)) } },
 
         // ...AND FROM THE TENTH, TWO standoffs, 120 u apart: one drawn from the rotation and the
@@ -221,7 +221,7 @@ public static class Waves
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
                 HullShare = HunterHull,
-                Strength = b => ThreatStrength(b.Threat), Agility = b => ThreatAgility(b.Threat),
+                Strength = b => b.Threat, Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin,
                                Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(-60f, 90f), Vector2.Zero),
                                Named(Enemies.Gunship, _ => 1, new Vector2(60f, 90f), Vector2.Zero) } },
@@ -234,14 +234,14 @@ public static class Waves
         new() { Id = "siege", Trigger = WaveTrigger.Garrison,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Ring, Radius = GarrisonRing, Turn = 0.35f,
-                Strength = b => Missions.S(b.Level),
+                Strength = b => b.Level,
                 Crew = Patrol },
 
         // ...AND FROM THE THIRD WAVE ON a gunship comes with each squad.
         new() { Id = "siege_heavy", Trigger = WaveTrigger.Garrison, When = b => b.Index >= 2,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Ring, Radius = GarrisonRing, Turn = 0.35f,
-                Strength = b => Missions.S(b.Level),
+                Strength = b => b.Level,
                 Crew = new[] { Patrol[0], Patrol[1],
                                Named(Enemies.Gunship, _ => 1, new Vector2(0f, 160f), Vector2.Zero) } },
 
@@ -252,7 +252,7 @@ public static class Waves
         new() { Id = "blockade", Trigger = WaveTrigger.Blockade,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Spot, Hold = Lanes.Ring,
-                Strength = b => Missions.S(b.Level),
+                Strength = b => b.Level,
                 Crew = Patrol },
 
         // ...AND FROM THE THIRD ONE a gunship holds the lane with them: a late blockade is what
@@ -260,7 +260,7 @@ public static class Waves
         new() { Id = "blockade_heavy", Trigger = WaveTrigger.Blockade, When = b => b.Index >= 2,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Spot, Hold = Lanes.Ring,
-                Strength = b => Missions.S(b.Level),
+                Strength = b => b.Level,
                 Crew = new[] { Patrol[0], Patrol[1],
                                Named(Enemies.Gunship, _ => 1, new Vector2(0f, 160f), Vector2.Zero) } },
     };
