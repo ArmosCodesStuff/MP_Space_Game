@@ -6,20 +6,18 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 - test-phase / task wu5xd3g1m (wf_8c62491c-3b2, attempt 4 at 16:33, review []): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
   -> release. lands: 3 lines to the owner + frames (framesForOwner, netOwed); a stop -> ledger_test.md + journal, fix, relaunch per Next 1. Watchdog Monitor re-armed at expiry.
 
-## Landed (verdict first; delete the row once its action is done)
-- code-read 17:25 (17b94df, fable_code_read.md): do NOT rewrite (fix 2 wk vs 8-12). 4 root causes: NaN cascade Math.Sign at PlayerShip.cs:2299,
-  Turrets.cs:345, Hauler.cs:283, Prism.cs:105 (~48 sigs; triage a1 has only a1-turret-nan, deferred); CIWS DamageOf unwired PlayerShip.cs:343;
-  14 stale literals; 6 bugs; 9 traps. action: round-2 triage reads §4-5 first (script pointer for r>=2 + a message when it starts; Monitor b38t0d23z).
+## Landed (verdict first; delete the row once its action is done): none (code-read 17b94df: do not rewrite; round>=2 triage reads it)
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. 17:45 round-1 check group (4 rewrites in wt_fix0, be5797a..7824a8c) returned no engine run and no asserted: its group prompt was cut at the PG
-   cap (rules after the list). Script fixed (rules first, cap 1400+480n). When the a1-arena-stall merge lands (Monitor bwg01qjgb): TaskStop
-   wu5xd3g1m, kill orphan tp4a*/fa1* rungs, relaunch Workflow({scriptPath, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 4, review: []}})
-   (same attempt: every cached agent replays; only the check group re-runs), record the new task id here.
+1. 18:20 task wu5xd3g1m STOPPED (orphans killed). Script fixed: group rules before the list (cap 1700+480n), red-baseline proof rule RB in
+   round>=2 and escalation prompts, args.premerged merges a lane proved outside the run. Relaunch: Workflow({scriptPath, resumeFromRunId:
+   "wf_8c62491c-3b2", args: {attempt: 4, review: [], premerged: {"a1-arena-stall": {key: "fixa1a1arenastall", tree: "fix1"}}}}) (cached
+   agents replay; the check group re-runs; arena-stall c2790d9 merges), record the new task id in Running.
 2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
 
 ## Owner questions (one line each, with its default): none open (today's rulings: README, Agents).
 
 ## Notes (merge risks, promised follow-ups; nothing done, nothing historical)
 - Cards' OPEN lines for triage: BB fire-mode key (spec R, built G); Tender numbers have no spec file; DD `longlance`; no grapnel_rip sound.
+- Retrospective: a fix prompt with its evidence is ~2,000 chars (P cut fixOne's tail at 1,500 too); six is ~8 min now (arena roles 480 s).
 - Unverified work: origin/backup/unverified; version-l/main move only on a green bar. Lane defaults for the release notes: each lane ledger.
