@@ -808,6 +808,23 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                     Stats["buster_damage"], source: this, hitSource: "buster", size: 1.8f);
     }
 
+    // THE GRAVITY WELL (the Bastion's E, Wells.cs): down at the cursor, clamped to well_range on its bearing,
+    // pulling for well_time; every peer draws it from the one raise, for the same time.
+    public Vector2 WellPoint(Vector2 cursor)
+    {
+        var off = cursor - Position;
+        return off.Length() <= Stats["well_range"] ? cursor : Position + off.Normalized() * (float)Stats["well_range"];
+    }
+    public void CastWell()
+    {
+        if (Sl("well").Cool > 0 || MyHub is not { } h) return;
+        Sl("well").Cool = Cooling(Stats["well_cooldown"]);
+        var at = WellPoint(AimPoint);
+        h.Wells.Add(new Well { At = at, Radius = (float)Stats["well_radius"], Left = Stats["well_time"],
+                               Light = (float)Stats["well_light"], Heavy = (float)Stats["well_heavy"] });
+        Fx.Raise(Fx.Well, at, (float)Stats["well_radius"], Stats["well_time"]);
+    }
+
     // ── THE HEAVY FIGHTERS ──────────────────────────────────────────────
     // The railgun commits: while it charges the ship cannot turn or thrust (its row's Hold of x0,
     // taken after the lifts: see Held), and at the end everything on the line takes the whole of it.

@@ -4937,8 +4937,118 @@ public partial class _Test : Node
             lt.TakeDamage(1e12);
         }
         foreach (var e in spots) e.Statuses.Clear(Status.Disabled);
+        // (4) E on the base and on two pylons, from 400-700 u outside each: the structure under the well
+        // never moves, and a held light 120-220 u from its centre is dragged at least 90 u in 0.5 s (kits6b-J6)
+        var wellOn = new[] { pbase, pylons[0], pylons[1] };
+        for (int run = 0; run < 3; run++)
+        {
+            foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+            H.Wells.Clear();
+            var e = wellOn[run];
+            var outward = run == 0 ? Vector2.Right.Rotated(Mathf.Pi / 2 * run + Vary(-0.3f, 0.3f)) : (e.Position - pbase.Position).Normalized().Rotated(Vary(-0.5f, 0.5f));
+            var home = e.Position + outward * Vary(400f, 700f);
+            bs.Position = home; bs.Velocity = Vector2.Zero; bs.Hp = bs.MaxHp;
+            var lt = H.SpawnRaider(e.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(120f, 220f)); lt.Hp = 1e9; lt.ApplyStatus(Status.Disabled, 30);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bs.Position = home; bs.Velocity = Vector2.Zero;
+            var eWas = e.Position; float ltWas = lt.Position.DistanceTo(e.Position);
+            bs.Sl("well").Cool = 0;
+            bs.AimPoint = e.Position; bs.UseAbility("well", 0);
+            double t0 = bs.Clock;
+            while (bs.Clock - t0 < 0.5) { bs.Position = home; bs.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            float dragged = ltWas - lt.Position.DistanceTo(eWas), moved = e.Position.DistanceTo(eWas);
+            Check(H.Wells.Count == 1 && moved < 1f && dragged > 90f,
+                  $"gravity well on the {(run == 0 ? "base" : "pylon")}, run {run}: the structure moved {moved:0.0} u (want none), a light {ltWas:0} u from its centre dragged {dragged:0} u in 0.5 s");
+            lt.TakeDamage(1e12);
+        }
+        H.Wells.Clear();
         await SetClass(cls0);
         if (Me is { } back) { back.MaxHp = max0; back.Hp = max0; back.Position = at0; back.Velocity = Vector2.Zero; }
+    }
+
+    // ── 6b · THE GRAVITY WELL (kits6b-J6) ───────────────────────────────────────────────────────
+    // World, host, a fresh BASTION. Its sheet: cast up to 900 u, 280 u, 6 s, 200 u/s on a light, 100 on a
+    // heavy, 22 s; E is ability 3. What moves is a raiding craft and nothing that holds a spot or flies
+    // (Targeting.Pullable). Three runs from varied spots, the cursor 300-600, 700-880 and 1000-1300 u off
+    // (the last clamped to 900 on its bearing): the well goes down there and is drawn there at 280 u; a
+    // held light 150-250 u in is dragged at 200 u/s and a held gunship 150-250 u in at 100 u/s (timed from
+    // the first frame either moves, over 0.5 s), a light 300-380 u out stays where it is; the clock is 22
+    // and a second press is refused (COOLING); the well is gone 6 s after it went down. Then a webifier
+    // LATCHED on the bastion, the well 80-180 u from it: it stays latched and is not dragged.
+    async Task LaneA6bWellChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.FreightBastion);
+        var bn = Me; bn.AutopilotTo = null;
+        var sheet = new ShipStats(ShipClass.FreightBastion);
+        var own = Classes.Of(ShipClass.FreightBastion).Abilities.Where(a => !a.Weapon).Select(a => a.Id).ToList();
+        Check(Math.Abs(sheet["well_range"] - 900) < 1e-9 && Math.Abs(sheet["well_radius"] - 280) < 1e-9 && Math.Abs(sheet["well_time"] - 6) < 1e-9
+              && Math.Abs(sheet["well_light"] - 200) < 1e-9 && Math.Abs(sheet["well_heavy"] - 100) < 1e-9 && Math.Abs(sheet["well_cooldown"] - 22) < 1e-9
+              && own.Count == 3 && own[2] == "well" && Abilities.KeyFor(ShipClass.FreightBastion, "well") == global::Godot.Key.E
+              && Targeting.Pullable.Hits(new S2Tagged { Tags = Tag.Light }) && Targeting.Pullable.Hits(new S2Tagged { Tags = Tag.Heavy })
+              && !Targeting.Pullable.Hits(new S2Tagged { Tags = Tag.Boss | Tag.Heavy }) && !Targeting.Pullable.Hits(new S2Tagged { Tags = Tag.Structure })
+              && !Targeting.Pullable.Hits(new S2Tagged { Tags = Tag.Dummy | Tag.Light }) && !Targeting.Pullable.Hits(new S2Tagged { Tags = Tag.Missile })
+              && !Targeting.Pullable.Hits(new S2Tagged { Tags = Tag.Hulled }),
+              $"the bastion's gravity well: up to 900 u off, 280 u across its centre, 6 s, a light dragged 200 u/s and a heavy 100, every 22 s, ability 3 on E; it drags craft and never a boss, a structure, a dummy or anything in flight ({string.Join(", ", own)})");
+        var bands = new[] { (300f, 600f), (700f, 880f), (1000f, 1300f) };
+        for (int run = 0; run < 3; run++)
+        {
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+            H.Wells.Clear();
+            await Wait(0.3);
+            var home = VaryNear(yonder, 200f); float rot = VaryAngle();
+            var way = Vector2.Right.Rotated(VaryAngle());
+            float cursorD = Vary(bands[run].Item1, bands[run].Item2);
+            var cursor = home + way * cursorD;
+            var centre = home + way * Mathf.Min(cursorD, 900f);
+            void Hold() { bn.Position = home; bn.Velocity = Vector2.Zero; bn.Rotation = rot; }
+            Raider Held(Vector2 at, int kind) { var r = H.SpawnRaider(at, kind); r.Hp = 1e9; r.ApplyStatus(Status.Disabled, 30); return r; }
+            var l = Held(centre + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 250f), Enemies.Webifier);
+            var g = Held(centre + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 250f), Enemies.Gunship);
+            var o = Held(centre + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 380f), Enemies.Webifier);
+            Hold();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Hold();
+            var oWas = o.Position;
+            bn.Sl("well").Cool = 0;
+            bn.AimPoint = cursor; bn.UseAbility("well", 0);
+            double pressed = bn.Clock, cool = bn.Sl("well").Cool;
+            string refused = Abilities.Find(ShipClass.FreightBastion, "well").Refuse(bn, null);
+            bool placed = H.Wells.Count == 1 && H.Wells[0].At.DistanceTo(centre) < 1.5f;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool drawn = Nodes<FxNode>().Any(f => f.Id == Fx.Well && f.Position.DistanceTo(centre) < 1.5f && Math.Abs(f.Radius - 280f) < 1e-3f);
+            float lWas = l.Position.DistanceTo(centre), gWas = g.Position.DistanceTo(centre);
+            for (int i = 0; i < 60 && l.Position.DistanceTo(centre) > lWas - 0.5f; i++) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double t1 = bn.Clock; float l1 = l.Position.DistanceTo(centre), g1 = g.Position.DistanceTo(centre);
+            while (bn.Clock - t1 < 0.5) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double span = bn.Clock - t1;
+            double lRate = (l1 - l.Position.DistanceTo(centre)) / span, gRate = (g1 - g.Position.DistanceTo(centre)) / span;
+            float oMoved = o.Position.DistanceTo(oWas);
+            Check(placed && drawn && Math.Abs(lRate - 200) < 6 && Math.Abs(gRate - 100) < 4 && oMoved < 1f
+                  && Math.Abs(cool - bn.Cooling(22)) < 1e-6 && refused == "COOLING",
+                  $"well run {run}: a cursor {cursorD:0} u off puts it {H.Wells.FirstOrDefault().At.DistanceTo(home):0} u out ({placed}), drawn there at 280 u ({drawn}); a light {lWas:0} u in dragged {lRate:0.0} u/s (want 200), a gunship {gWas:0} u in {gRate:0.0} u/s (want 100), a light {oWas.DistanceTo(centre):0} u out moved {oMoved:0.0} u; its clock {cool:0.0} s (the sheet's 22: {bn.Cooling(22):0.0}), a second press {refused ?? "ALLOWED"}");
+            for (int i = 0; i < 60 * 8 && H.Wells.Count > 0; i++) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double lasted = bn.Clock - pressed;
+            Check(H.Wells.Count == 0 && Math.Abs(lasted - 6) < 0.1,
+                  $"well run {run}: gone {lasted:0.00} s after it went down (want 6)");
+            foreach (var r in new[] { l, g, o }) r.TakeDamage(1e12);
+            // the latched: a webifier on the bastion's hull, the well dropped 80-180 u from it
+            var w = H.SpawnRaider(home + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f)); w.Quarry = bn; w.Hp = 1e9;
+            for (int i = 0; i < 60 * 6 && !w.Latched; i++) { Hold(); bn.Hp = bn.MaxHp; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            bool latched0 = w.Latched;
+            var wAt = w.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(80f, 180f);
+            float wWas = w.Position.DistanceTo(wAt);
+            bn.Sl("well").Cool = 0;
+            bn.AimPoint = wAt; bn.UseAbility("well", 0);
+            double tw = bn.Clock; bool stayed = true;
+            while (bn.Clock - tw < 1.0) { Hold(); bn.Hp = bn.MaxHp; stayed &= w.Latched; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            float wDrag = wWas - w.Position.DistanceTo(wAt);
+            Check(latched0 && stayed && H.Wells.Count == 1 && wDrag < 10f,
+                  $"well run {run}: a webifier latched on the hull ({latched0}) with the well {wWas:0} u off stays latched ({stayed}) and is not dragged ({wDrag:0.0} u toward it in 1 s; a loose light would come 200)");
+            w.TakeDamage(1e12);
+            H.Wells.Clear();
+            bn.Sl("well").Cool = 0;
+        }
+        bn.Position = yonder; bn.Velocity = Vector2.Zero;
     }
 
     // ── 6b · TIME ON TARGET ACROSS THE WIRE (kits6b-J2, rung 5; kits_v31 8's second run) ─────────
@@ -11567,15 +11677,15 @@ public partial class _Test : Node
                 // long, how wide and what it sounds like are the MOVE's and come with the raise,
                 // because one boss move plays its cue with no warning at all.
                 var warnLane = Fx.Of(Fx.WarnLane); var warnZone = Fx.Of(Fx.WarnZone); var aimZone = Fx.Of(Fx.AimZone);
-                Check(Fx.All.Length == 16 && warnLane.Warn && warnZone.Warn && aimZone.Warn
+                Check(Fx.All.Length == 17 && Fx.Well == 16 && warnLane.Warn && warnZone.Warn && aimZone.Warn
                       && warnLane.Shape == FxShape.Lane && warnZone.Shape == FxShape.Zone && aimZone.Shape == FxShape.Zone
                       && warnLane.Sound == null && warnZone.Sound == null && aimZone.Sound == null
-                      && new[] { Fx.Burst, Fx.Lost, Fx.Rebuilt, Fx.Wave, Fx.Emp, Fx.Echo, Fx.Rail, Fx.Tot }.All(i => !Fx.Of(i).Warn)
+                      && new[] { Fx.Burst, Fx.Lost, Fx.Rebuilt, Fx.Wave, Fx.Emp, Fx.Echo, Fx.Rail, Fx.Tot, Fx.Well }.All(i => !Fx.Of(i).Warn)
                       && Fx.All.Count(x => x.Warn) == 3 && Fx.World == 0 && Fx.Flash == 0.35
                       // ...and the friendly one is the SAME telegraph in another colour: where one
                       // of YOUR shots will land reads nothing like where one of THEIRS will.
                       && aimZone.Tint != warnZone.Tint && warnLane.Tint == warnZone.Tint,
-                      $"sixteen rows of Fx.All (the last the freighter's time on target, kits6b-J2), thirteen effects and three telegraphs: a red lane and a red zone whose clock and sounds are the raise's, and the same zone in your own colours for where your own shot lands ({Fx.All.Length} rows, {Fx.All.Count(x => x.Warn)} telegraphs)");
+                      $"seventeen rows of Fx.All (the last two the freighter's time on target and the bastion's gravity well, kits6b), fourteen effects and three telegraphs: a red lane and a red zone whose clock and sounds are the raise's, and the same zone in your own colours for where your own shot lands ({Fx.All.Length} rows, {Fx.All.Count(x => x.Warn)} telegraphs)");
                 // the sweep the shell and the rock share: a step longer than a hull is how a shot
                 // passes through it between frames
                 {
@@ -11588,7 +11698,7 @@ public partial class _Test : Node
                           $"Shots.Sweep walks a 60 u step in ten 6 u tests, stops at the first touch, and tests only the end point when a row asks for no sweep ({seen}, {once})");
                 }
 
-                Check(Fx.All.Length == 16 && Fx.Of(Fx.Wave).Shape == FxShape.Ring
+                Check(Fx.All.Length == 17 && Fx.Of(Fx.Wave).Shape == FxShape.Ring && Fx.Of(Fx.Well).Shape == FxShape.Vortex
                       && Fx.Of(Fx.Emp).Shape == FxShape.Spokes && Fx.Of(Fx.Echo).Shape == FxShape.Spokes
                       && Fx.Of(Fx.Rail).Shape == FxShape.Bar && Fx.Of(Fx.Tot).Shape == FxShape.Bar && Fx.Of(Fx.Burst).Shape == FxShape.Burst
                       && Fx.Of(Fx.Rebuilt).Tint != Fx.Of(Fx.Lost).Tint,
@@ -11680,6 +11790,7 @@ public partial class _Test : Node
             await LaneA6bRedeployChecks(yonder);
             await LaneA6bMortarChecks(yonder);
             await LaneA6bBusterChecks(yonder);
+            await LaneA6bWellChecks(yonder);
             await LaneARaiderCallChecks(yonder);
             await LaneADecoyChecks(yonder);
             await LaneATowChecks(yonder);
@@ -12092,6 +12203,7 @@ public partial class _Test : Node
                     ["overdrive"] = sp => Math.Abs(sp.FireRate - (float)sp.Stats["overdrive_mult"]) < 1e-3f,
                     ["shockwave"] = sp => sp.Sl("shockwave").Cool > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Wave),
                     ["buster"]    = sp => sp.Sl("buster").Cool > 0 && Nodes<Shot>().Any(x => x.Kind == Shots.Buster && ReferenceEquals(x.Source, sp)),
+                    ["well"]      = sp => sp.Sl("well").Cool > 0 && H.Wells.Count > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Well),
                     ["railgun"]   = sp => sp.Held == 0f && sp.Sl("railgun").Left > sp.Stats["rail_charge"] - 0.1,
                     ["rush"]      = sp => sp.Statuses.Has(Status.Hardened) && Math.Abs(sp.SpeedMult - (float)sp.Stats["rush_mult"]) < 1e-3f,
                     ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && InFlight().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
@@ -12223,6 +12335,7 @@ public partial class _Test : Node
                     foreach (var standing in H.Deployed.ToList())
                         if (standing.OwnerId == sweepShip.OwnerId) H.DeployedTaken(standing);
                     Sink(sweepMark);
+                    H.Wells.Clear();                                   // a gravity well (kits 6b) pulls nothing into the next class's sweep
                     await Wait(0.1);
                 }
 

@@ -71,6 +71,10 @@ public static class Targeting
     // WHAT A SHOCKWAVE REACHES (the bastion's): everything but a body in flight. Of it, the Immovable is
     // HELD (Status.Disabled) and the rest is Throwable -- thrown clear.
     public static readonly TargetFilter Shaken = new(forbid: Tag.Missile | Tag.Hulled);
+    // WHAT A GRAVITY WELL DRAGS (Wells.cs): raiding craft, light or heavy -- never a boss, a structure, a
+    // practice dummy or anything in flight.
+    public static readonly TargetFilter Pullable = new(require: Tag.Light | Tag.Heavy,
+                                                       forbid: Tag.Boss | Tag.Structure | Tag.Dummy | Tag.Missile | Tag.Hulled);
     // WHAT A TURRET LEFT STANDING TAKES: anything hostile -- a missile, a raider of any weight, a
     // boss, a station -- ranked as point defence ranks (Turret.Rank), so missiles and small craft
     // still come first. Point defence's own filter would keep it off a heavy, a boss and a pylon,

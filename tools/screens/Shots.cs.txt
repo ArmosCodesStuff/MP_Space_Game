@@ -846,6 +846,7 @@ public partial class _Shots : Node
             await LaneA6bRedeployFrame(fship, yard);
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
             await LaneA6bMortarFrame(hub, yard);
+            await LaneA6bWellFrame(hub, yard);
             await Class(ShipClass.Battleship); await W(0.3);
             await FieldsFrames(hub, yard);
 
@@ -1056,6 +1057,24 @@ public partial class _Shots : Node
                          bs.Position, at, bs.NetId);
         await W(0.7); await Snap("79f_mortar_circle");
         await W(1.0);
+    }
+
+    // 79g: the bastion's gravity well 500 u ahead, three held lights and a held gunship inside its 280 u
+    // ring being drawn in, and one light outside it left where it is. The well's own draw (Fx.Well).
+    async Task LaneA6bWellFrame(Hub hub, Vector2 yard)
+    {
+        var bs = hub.GetNode<PlayerShip>("Ship_1"); bs.Position = yard; bs.Velocity = Vector2.Zero; bs.Rotation = 0f;
+        var at = yard + new Vector2(0, -500);
+        var craft = new System.Collections.Generic.List<Raider>();
+        for (int i = 0; i < 3; i++) craft.Add(hub.SpawnRaider(at + Vector2.Up.Rotated(Mathf.Tau * i / 3f) * 240f));
+        craft.Add(hub.SpawnRaider(at + new Vector2(-170f, 170f), Enemies.Gunship));
+        craft.Add(hub.SpawnRaider(at + new Vector2(380f, 0f)));
+        foreach (var r in craft) { r.Hp = 1e9; r.ApplyStatus(Status.Disabled, 10); }
+        bs.Sl("well").Cool = 0; bs.AimPoint = at; bs.UseAbility("well", 0);
+        await W(0.6); await Snap("79g_gravity_well");
+        hub.Wells.Clear();
+        foreach (var r in craft) hub.RaiderDown(r);
+        await W(0.3);
     }
 
     async Task LaneBDriveFrames()

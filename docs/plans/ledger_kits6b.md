@@ -266,3 +266,26 @@ Done: J2, J3, J4 (a3265f7, 43b0953, 19cfffa). Next is kits6b-J5; no PRE written.
   LaneAOutDoorBossChecks), LaneA6bSiegeChecks (siege, before THE SHIELD: pylon 360, shielded base 90, shockwave holds).
   Test phase owes: solo x2.
 - Next: kits6b-J6 (Gravity well).
+
+### kits6b-J6 · PRE · BA Gravity well (D39) -- tier opus
+- Intent: Wells.cs (new: struct Well {At, Radius, Left, Light, Heavy} + Wells.Tick) and Hub.Wells ticked on the host
+  in Hub._Process; Targeting.Pullable (Light|Heavy; never Dummy, Boss, Structure, Missile, Hulled); a latched
+  (ISquadMember.Latched) or towed (ITowable.Towed) craft is not pulled. Ab.Well (E, ability 3): PlayerShip.CastWell --
+  the cursor clamped to well_range 900, radius well_radius 280, well_time 6, well_light 200 / well_heavy 100 u/s,
+  cd well_cooldown 22. Fx row well (16, appended) with a new FxShape.Vortex; Fx.Raise gains a time (an effect's own
+  life, 0 = its row's), so every peer draws the well for the caster's well_time. Old truths: Fx.All.Length 16 -> 17
+  (two checks), witness sweep + "well". Checks LaneA6bWellChecks (solo), a well run in LaneA6bSiegeChecks (base and
+  pylons unmoved), frame 79g_gravity_well.
+- Files: Fx.cs, Wells.cs (new), Hub.cs, Targeting.cs, Abilities.cs, Ships.cs, PlayerShip.cs, SmokeTest.cs.txt, Shots.cs.txt.
+- HEAD a4effa95af0e2e7d75191cb4379938d2c2d554e5 · f3fec06 e90e46f 8e95eaf d61827a aa8ab71 0c1dfc1 09bf923 7e98230
+### kits6b-J6 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Wells.cs (Well + Wells.Tick), Hub.Wells ticked on the host; Targeting.Pullable; Ab.Well on E (ability 3),
+  PlayerShip.WellPoint/CastWell; Bastion rows well_range 900 / radius 280 / time 6 / light 200 / heavy 100 / cooldown
+  22; Abilities {Guns, Buster, Shockwave, Well}. Fx.Well = 16 (appended), FxShape.Vortex (appended), Fx.Raise(.., time):
+  a non-warning raise may carry its own life (FxNode.Life), so every peer draws the well for the caster's well_time.
+- Old truths rewritten: Fx.All.Length 16 -> 17 (two checks, + Well not a telegraph, Vortex); witness sweep + "well"
+  (and the put-back clears H.Wells).
+- Checks written: LaneA6bWellChecks (solo, after LaneA6bBusterChecks), the well run (4) in LaneA6bSiegeChecks, frame
+  79g_gravity_well (Shots.cs.txt LaneA6bWellFrame). Test phase owes: solo x2, screens.
+- Next: kits6b-J7 (Tender Mending lance; D37 needs slice 4's Mend.Give).

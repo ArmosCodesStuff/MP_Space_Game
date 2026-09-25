@@ -344,7 +344,7 @@ public static class Classes
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Overdrive, Ab.Deploy } },
         new() { Id = ShipClass.FreightBastion, Name = "BASTION", Ready = true, Fit = Fit.Guns | Fit.Pd, Primary = Primary.Lob, LobSide = Missiles.Mortar,
-            Blurb = "A siege mortar lobbed onto the cursor, a bunker buster for what holds a spot, two point-defence turrets, and a shockwave that throws what is near it clear, or holds a boss or a structure still.",
+            Blurb = "A siege mortar lobbed onto the cursor, a bunker buster for what holds a spot, two point-defence turrets, a shockwave that throws what is near it clear, or holds a boss or a structure still, and a gravity well that drags craft together under the mortar.",
             Hint = "BASTION  ·  the mortar lands on the cursor, 150-1100 u",
             Drive = Drives.Boost,
             Nums = new() {
@@ -375,6 +375,12 @@ public static class Classes
                 new() { Group = "Shockwave", Id = "wave_push",     Label = "Throws them",    Base = 1000, Unit = "u", Dec = 0 },
                 new() { Group = "Shockwave", Id = "wave_disable",  Label = "Holds a boss or structure", Base = 3, Unit = "s", Dec = 1 },
                 new() { Group = "Shockwave", Id = "wave_cooldown", Label = "Cooldown",       Base = 30, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Gravity well", Id = "well_range",    Label = "Cast up to",       Base = 900, Unit = "u", Dec = 0 },
+                new() { Group = "Gravity well", Id = "well_radius",   Label = "Radius",           Base = 280, Unit = "u", Dec = 0 },
+                new() { Group = "Gravity well", Id = "well_time",     Label = "Lasts",            Base = 6, Unit = "s", Dec = 1 },
+                new() { Group = "Gravity well", Id = "well_light",    Label = "Pulls a light",    Base = 200, Unit = "u/s", Dec = 0 },
+                new() { Group = "Gravity well", Id = "well_heavy",    Label = "Pulls a heavy",    Base = 100, Unit = "u/s", Dec = 0 },
+                new() { Group = "Gravity well", Id = "well_cooldown", Label = "Cooldown",         Base = 22, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 // frigate_c (the pack, J5): the main sits aft, on the ring turret the art draws at
@@ -383,7 +389,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0.0f, 53.48f) },
                 Pds   = new Vector2[] { new(-27.1f, 64.4f), new(27.1f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
-            Abilities = new[] { Ab.Guns, Ab.Buster, Ab.Shockwave } },
+            Abilities = new[] { Ab.Guns, Ab.Buster, Ab.Shockwave, Ab.Well } },
 
         // -- page 3: heavy fighters --------------------------------------------
         new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.Guns,

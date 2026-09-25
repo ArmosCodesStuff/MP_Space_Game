@@ -317,6 +317,15 @@ public static class Ab
         Show = (s, _) => Timed(s, "shockwave", "wave_cooldown", "READY"),
     };
 
+    public static readonly AbilityDef Well = new()
+    {
+        Id = "well", Name = "Gravity well", Short = "WELL", Default = Key.E,
+        Blurb = "A well at the cursor that drags loose raiding craft into its centre -- the light ones twice as fast. Bosses, structures and anything latched stay put.",
+        Press = (s, _) => s.CastWell(),
+        Refuse = (s, _) => s.Sl("well").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "well", "well_cooldown", "READY"),
+    };
+
     // ── the heavy fighters ───────────────────────────────────────────────────
     public static readonly AbilityDef Railgun = new()
     {

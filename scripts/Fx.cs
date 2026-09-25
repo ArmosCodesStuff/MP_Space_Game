@@ -38,6 +38,7 @@ public enum FxShape
     Sparks,    // Count hot sparks sprayed from A toward To's side, over the first half second
     Puffs,     // Count grey puffs left along the chunk's own path (the same seed as its Debris)
     Scar,      // a dark jagged patch at A, in the anchor's own frame, so it turns with the hull
+    Vortex,    // a steady disc at A with rings drawn in to its centre: something pulls here, as long as the raise says
 }
 
 public class FxDef
@@ -86,7 +87,7 @@ public static class Fx
     public const int Burst = 0, Lost = 1, Rebuilt = 2, Wave = 3, Emp = 4, Echo = 5, Rail = 6,
                      WarnLane = 7, WarnZone = 8, AimZone = 9, TauntRing = 10,
                      Rip = 11, RipSparks = 12, RipSmoke = 13, Scar = 14,
-                     Tot = 15;
+                     Tot = 15, Well = 16;
     // WHAT A WARNING RIDES: the world itself, or the NetId of the hull it is drawn on. A beam's
     // and a dash's lane are drawn in the BOSS'S OWN FRAME and parented to it, so the line it drew
     // is the line it fires down however the hull turns; everything else is pinned to the ground
@@ -137,6 +138,8 @@ public static class Fx
         new() { Id = "scar",       Shape = FxShape.Scar,   Tint = new(0.10f, 0.07f, 0.06f), Life = 10.0, Cap = 3 },
         // the freighter's Time on target: each line it converged on the paint, in the spotter's amber
         new() { Id = "tot",        Shape = FxShape.Bar,    Tint = new(1f, 0.78f, 0.35f), Life = 0.35, Width = 5f, Fill = false },
+        // the bastion's gravity well (Wells.cs): its reach, for the caster's well_time (the raise's own life)
+        new() { Id = "well",       Shape = FxShape.Vortex, Tint = new(0.72f, 0.48f, 1f), Life = 6.0, Width = 2f },
     };
 
     public static FxDef Of(int id) => All[id >= 0 && id < All.Length ? id : Burst];
@@ -146,14 +149,15 @@ public static class Fx
     // that world, like every other hook here.
     public static System.Action<FxRaise> On;
 
-    // `at` is where it happens; `radius` how far it reaches; `to` the far end of a bar.
+    // `at` is where it happens; `radius` how far it reaches; `to` the far end of a bar; `time` an effect's
+    // own life where the raise decides it (a well lasts its caster's well_time), 0 for its row's Life.
     //
     // ONLY THE SIMULATOR RAISES. The hook puts it up here and tells every guest through one RPC
     // (Hub.NetFx), so a guest that also raised its own -- the burst on a turret it saw removed,
     // the blast at the end of a missile it was drawing, a miner's loss -- drew the same effect
     // twice. The single player and the title screen are their own simulator and are unaffected.
-    public static void Raise(int id, Vector2 at, float radius = 30f)
-    { if (Net.Sim) On?.Invoke(new FxRaise { Id = id, At = at, To = at, Size = radius }); }
+    public static void Raise(int id, Vector2 at, float radius = 30f, double time = 0)
+    { if (Net.Sim) On?.Invoke(new FxRaise { Id = id, At = at, To = at, Size = radius, Time = time }); }
     public static void Line(int id, Vector2 a, Vector2 b)
     { if (Net.Sim) On?.Invoke(new FxRaise { Id = id, At = a, To = b }); }
 
@@ -251,7 +255,7 @@ public partial class FxNode : Node2D
     public double Elapsed => _t;
     public bool Warn => Fx.Of(Id).Warn;
     private FxDef D => Fx.Of(Id);
-    private double Life => D.Warn ? Time + Hold + Fx.Flash : D.Life;
+    private double Life => D.Warn ? Time + Hold + Fx.Flash : Time > 0 ? Time : D.Life;
 
     // In the live list while in the tree, so a Loose piece leaving its hull for the world stays in it.
     public override void _EnterTree() => Fx.Entered(this);
@@ -347,7 +351,7 @@ public partial class FxNode : Node2D
         var d = D;
         // A WARNING FILLS over the whole wind-up, including whatever of it had gone before this
         // copy went up; an effect runs out over its row's Life.
-        float k = (float)Mathf.Clamp(d.Warn ? (Since + _t) / System.Math.Max(1e-6, Since + Time) : _t / d.Life, 0, 1);
+        float k = (float)Mathf.Clamp(d.Warn ? (Since + _t) / System.Math.Max(1e-6, Since + Time) : _t / Life, 0, 1);
         float fade = 1 - k;
         var c = d.Tint;
         // A warning pulses faster as the moment comes, flashes white-hot as the attack lands, and
@@ -398,6 +402,18 @@ public partial class FxNode : Node2D
                 if (!firing)   // the wind-up creeps down the lane's length
                     DrawColoredPolygon(new[] { side, b * k + side, b * k - side, -side }, new Color(c.R, c.G, c.B, 0.22f));
                 DrawPolyline(new[] { side, b + side, b - side, -side, side }, edge, 2.5f);
+                break;
+            }
+            case FxShape.Vortex:
+            {   // steady for its life, fading over its last half second; three rings run in to the centre
+                float a = (float)Mathf.Clamp((Life - _t) / 0.5, 0, 1);
+                DrawCircle(Vector2.Zero, Radius, new Color(c.R, c.G, c.B, 0.10f * a));
+                DrawArc(Vector2.Zero, Radius, 0, Mathf.Tau, 96, new Color(c.R, c.G, c.B, 0.8f * a), d.Width);
+                for (int i = 0; i < 3; i++)
+                {
+                    float r = Radius * (1f - Mathf.PosMod((float)_t * 0.8f + i / 3f, 1f));
+                    DrawArc(Vector2.Zero, r, 0, Mathf.Tau, 64, new Color(c.R, c.G, c.B, 0.5f * a * r / Radius), d.Width);
+                }
                 break;
             }
             case FxShape.Zone:
