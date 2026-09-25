@@ -599,8 +599,8 @@ it sees between two reports (`Drives.Priced`): a fallen charge bit past the flig
 made, and any snap over 600 u with no bit at all; only warp hulls. **Traps:** a relocation the host
 makes must call `PlayerShip.Relocated` (both `NetPlace` sends do), or a returning pilot is disabled for
 arriving; the smoke test's host roles move guests' warp hulls by hand, so they set
-`Drives.PriceSnaps = false` outside `LaneBHostDrives`. The nine BOOST on the ability path (one F1 lift
-on top, thrust and the slide). The slide (F24): Shift + A/D on a hull whose `strafe_speed` > 0,
+`Drives.PriceSnaps = false` outside `LaneBHostDrives`. The nine BOOST on the ability path (two F1 lifts:
+surge_lift on top speed and thrust, surge_strafe on the slide (AbilityDef.StrafeStat, PlayerShip.StrafeMult)). The slide (F24): Shift + A/D on a hull whose `strafe_speed` > 0,
 read from the stat, never the class; holds multiply after the lifted sum (`PlayerShip.StrafeTop`); the
 host reads a report's speed held to hypot(top, strafe) x 1.1 (`Drives.Clamp`).
 

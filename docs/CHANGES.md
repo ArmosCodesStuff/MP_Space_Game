@@ -604,7 +604,7 @@ relocation the host makes, a report from a peer not yet counted in the host's wo
 are never priced; a release while the slot cools jumps nothing); 20 s from the jump. The pilot sees the safe ring, the
 charge ring, the amber-to-red band with 2 s / 4 s / 6 s ticks, the landing ghost and its readout; the
 slot and the hull bar read `WARP 1850 u`, `DISABLED 2.8 s`, `WARP 12 s`. **Boost** (the nine): tap V --
-+50% top speed, thrust and slide for 3 s (one F1 lift, `surge_lift`), 15 s from the press; refused
++50% top speed and thrust (`surge_lift`) and +50% slide (`surge_strafe`) for 3 s, 15 s from the press; refused
 ANCHORED (a hold of x0) and in stasis; allowed webbed, where the web's 20% is taken after the lift.
 The host's speed clamp reads a report held to hypot(top, strafe) x 1.1. The title battleship dodges on
 the same warp, held to 500 u. Hints: warp, boost, strafe; the controls line names the drive.

@@ -253,3 +253,8 @@ Decisions (defaults, owner questions):
 - Behaviour to watch in the test phase: a heavy gunship reads the pin, so in a Web Breaker ship's free part of a
   round it turns for the map's edge and comes back on the next hold.
 Next: none; the lane's merge gate re-runs.
+
+## items-J-gate2 PRE
+Job: items gate 2 record; tier opus; intent: fix stale surge_lift/slide record (invariant C); files docs/DESIGN.md 9acda2cf0ac09a38c978364e6b23e795c36f1136, docs/CHANGES.md 50391b1ff6fe4628894b21403772c83cdfa7ff58; HEAD fed46ad08b56df7d3343c25b29750bd9ff3e266d
+## items-J-gate2 POST
+Verdict: done; typecheck + quick green; docs only. Next: merge gate re-runs.
