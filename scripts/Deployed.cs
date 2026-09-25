@@ -39,7 +39,7 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
     public Vector2 AimAt => Position;
     public float FastSwing => 0f;
     public IReadOnlyList<Turret> Siblings => _mounts;
-    public void NoteDealt(double d, Vector2 at) => Ship?.NoteDealt(d, at);
+    public void NoteDealt(double d, IHittable target, string weapon) => Ship?.NoteDealt(d, target, weapon);
     public PlayerShip Credit => Ship;
 
     public TurretSpec Spec(bool pd) => new()

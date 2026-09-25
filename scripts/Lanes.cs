@@ -287,7 +287,7 @@ public partial class LaneGun : Node2D, ITurretHost
     public Vector2 AimAt => _aim;
     public float FastSwing => 0f;
     public IReadOnlyList<Turret> Siblings => _mounts;
-    public void NoteDealt(double d, Vector2 at) { }     // it keeps no tally: it is nobody's ship
+    public void NoteDealt(double d, IHittable target, string weapon) { }  // no tally: nobody's ship
     public PlayerShip Credit => null;
     // THE MOUNT, NOT THE ROUND. This gun's shot is a missile and never leaves the barrel as a
     // shell, so the spec is its art, its swing and its reach; nothing ever calls Turret.Shoot on

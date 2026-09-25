@@ -74,7 +74,7 @@ public interface ITurretHost
     Vector2 AimAt { get; }                      // where the main guns point
     float FastSwing { get; }                    // 0, or a turn rate that overrides the spec's
     IReadOnlyList<Turret> Siblings { get; }     // PD turrets that may have claimed a target
-    void NoteDealt(double d, Vector2 at);       // what this gun just did, and where it landed
+    void NoteDealt(double d, IHittable target, string weapon);  // what this gun just did, and to what
     PlayerShip Credit { get; }                  // whose shell it is, for the tally (may be null)
 }
 
@@ -168,7 +168,7 @@ public partial class Turret : Node2D
             if (!StillThere(tgt)) { Target = null; break; }
             var spec = S;
             _cd += spec.Interval;
-            tgt.TakeDamage(spec.Damage); Host.NoteDealt(spec.Damage, tgt.Position);
+            Dealt.Deal(tgt, spec.Damage, Host, Host is PlayerShip ? Dealt.Pd : Dealt.Turret);
             Combat.Flash(wp + Vector2.Right.Rotated(GlobalRotation) * spec.Barrel, tgt.Position, spec.Beam);
         }
     }

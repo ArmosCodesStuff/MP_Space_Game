@@ -87,7 +87,7 @@ public partial class Hauler : UtilityShip, ITurretHost
     public Vector2 AimAt => Position;                // it has no main guns
     public float FastSwing => 0f;
     public IReadOnlyList<Turret> Siblings => _pdMounts;
-    public void NoteDealt(double d, Vector2 at) { }  // it keeps no combat clock and no echo
+    public void NoteDealt(double d, IHittable target, string weapon) { }  // no combat clock, no echo
     public PlayerShip Credit => null;                // its shots are the base's, not a pilot's
     public TurretSpec Spec(bool pd) => new()
     {

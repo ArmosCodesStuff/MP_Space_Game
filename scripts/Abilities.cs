@@ -60,6 +60,14 @@ public class AbilityDef
     // (PlayerShip.Sl): the echo detonates Sl("echo").Own, so no number has to be carried here.
     public Action<PlayerShip> Elapsed, Expire;
 
+    // WHAT THIS ROW HEARS OF ITS OWN SHIP'S BLOWS, WHILE IT RUNS (F18): every weapon's hit comes
+    // through PlayerShip.NoteDealt (the hostile damage door, Dealt.Deal), which calls this on every
+    // row whose Left > 0 (and While, if it narrows the run) -- the target, how much, and the
+    // weapon's id (Dealt.*, or a shot row's own). The echo is the one row that uses it today: it
+    // stores the damage and where it landed in its own slot (PlayerShip.Sl("echo").Own / .At)
+    // rather than NoteDealt knowing the echo by name.
+    public Action<PlayerShip, IHittable, double, string> OnDealt;
+
     // WHILE IT RUNS, what it lifts. A row that speeds a ship's guns or its hull up names the stat
     // id that says by how much (x2: twice as fast); PlayerShip.FireRate and PlayerShip.SpeedMult
     // ADD every running row that names one (PlayerShip.LiftShares, the sheet's own rule), which
@@ -299,6 +307,7 @@ public static class Ab
         Id = "echo", Name = "Bullet echo", Short = "ECHO", Default = Key.F,
         Blurb = "The echo remembers the damage you deal, then detonates all of it where your last shot landed.",
         Press = (s, _) => s.StartEcho(),
+        OnDealt = (s, t, d, w) => { ref var e = ref s.Sl("echo"); e.Own += d; e.At = t.Position; },
         Expire = s => s.Detonate(),
         Refuse = (s, _) => s.Sl("echo").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => s.Sl("echo").Left > 0

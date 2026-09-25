@@ -1883,6 +1883,117 @@ public partial class _Test : Node
         Combat.ShotFired = hook;
     }
 
+    // THE HOSTILE DAMAGE DOOR (F4 + F18, D17): every player-side blow now goes through Dealt.Deal,
+    // which deals the damage then credits the shooter by a weapon id (PlayerShip.DealtBy). Proved as
+    // an EQUALITY over one window -- never a hit count or a DPS, so there is no knife edge in how
+    // many shots land in it: what the target lost across the window must be exactly what
+    // DealtBy[weapon] grew by in it. From three varied spots each: the BB's main guns ("shell") and
+    // its own point defence ("pd") together, a freighter's dropped turret ("turret", credited to its
+    // OWNER, never the turret itself), the railgun ("rail") and the warden's hunters, a torpedo
+    // ("torpedo"). The echo's own storage and blast are unchanged plumbing and stay proved by its
+    // existing checks above (what it remembers, and puts down where the last of it landed).
+    async Task LaneADamageDoorChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.Battleship);
+        {
+            var bs = Me;
+            for (int run = 0; run < 3; run++)
+            {
+                var at = VaryNear(yonder, 300f);
+                bs.Position = at; bs.Velocity = Vector2.Zero; bs.Rotation = VaryAngle();
+                var mainTgt = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f), Enemies.Gunship);
+                mainTgt.Hp = 1e9;                                        // a heavy: point defence never picks it
+                var pdTgt = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 250f), Enemies.Webifier);
+                pdTgt.Hp = 1e9;                                          // a light: point defence's alone here
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double mainHp0 = mainTgt.Hp, mainDealt0 = bs.DealtBy.GetValueOrDefault("shell");
+                double pdHp0 = pdTgt.Hp, pdDealt0 = bs.DealtBy.GetValueOrDefault("pd");
+                // a real Space hold, not the field set directly: LocalFlight polls the keyboard
+                // itself every frame and would otherwise zero Trigger right back on the next one.
+                AimWorld(mainTgt.Position); KeyDown(global::Godot.Key.Space);
+                for (int i = 0; i < 150; i++) { AimWorld(mainTgt.Position); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                KeyUp(global::Godot.Key.Space);
+                double mainLost = mainHp0 - mainTgt.Hp, mainCredited = bs.DealtBy.GetValueOrDefault("shell") - mainDealt0;
+                double pdLost = pdHp0 - pdTgt.Hp, pdCredited = bs.DealtBy.GetValueOrDefault("pd") - pdDealt0;
+                Check(mainLost > 0 && Math.Abs(mainLost - mainCredited) < 1e-6,
+                      $"the BB's main guns, the pilot {at.DistanceTo(mainTgt.Position):0} u off: DealtBy[\"shell\"] grew {mainCredited:0.0}, the target lost {mainLost:0.0}");
+                Check(pdLost > 0 && Math.Abs(pdLost - pdCredited) < 1e-6,
+                      $"the same BB's point defence, {at.DistanceTo(pdTgt.Position):0} u off: DealtBy[\"pd\"] grew {pdCredited:0.0}, the target lost {pdLost:0.0}");
+                mainTgt.TakeDamage(1e12); pdTgt.TakeDamage(1e12);
+            }
+        }
+
+        await SetClass(ShipClass.FreightHauler);
+        {
+            for (int run = 0; run < 3; run++)
+            {
+                var fr = Me; var at = VaryNear(yonder, 300f);
+                fr.Position = at; fr.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                fr.Sl("deploy").Cool = 0; fr.UseAbility("deploy", 0); await Wait(0.1);
+                var gun = H.Deployed.FirstOrDefault(t => t.OwnerId == fr.OwnerId);
+                var centre = gun?.Position ?? at;
+                var tgt = H.SpawnRaider(centre + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 300f), Enemies.Gunship);
+                tgt.Hp = 1e9;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double hp0 = tgt.Hp, dealt0 = fr.DealtBy.GetValueOrDefault("turret");
+                for (int i = 0; i < 150; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double lost = hp0 - tgt.Hp, credited = fr.DealtBy.GetValueOrDefault("turret") - dealt0;
+                Check(lost > 0 && Math.Abs(lost - credited) < 1e-6 && gun != null,
+                      $"a freighter's dropped turret, {centre.DistanceTo(tgt.Position):0} u off: DealtBy[\"turret\"] on its OWNER (not the turret) grew {credited:0.0}, the target lost {lost:0.0}");
+                tgt.TakeDamage(1e12);
+                gun?.TakeDamage(1e9);                                    // clear it before the next run's FirstOrDefault
+            }
+        }
+
+        await SetClass(ShipClass.HeavySniper);
+        {
+            var sn = Me;
+            for (int run = 0; run < 3; run++)
+            {
+                var at = VaryNear(yonder, 300f);
+                sn.Position = at; sn.Velocity = Vector2.Zero; sn.Rotation = VaryAngle();
+                var dir = Vector2.Up.Rotated(sn.Rotation);               // the railgun fires along the hull's heading
+                var tgt = H.SpawnRaider(at + dir * Vary(200f, 400f), Enemies.Gunship);
+                tgt.Hp = 1e9;
+                sn.Sl("railgun").Left = 0; sn.Sl("railgun").Cool = 0;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double hp0 = tgt.Hp, dealt0 = sn.DealtBy.GetValueOrDefault("rail");
+                sn.UseAbility("railgun", 0);
+                for (int i = 0; i < 30 && sn.Sl("railgun").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                sn.Sl("railgun").Left = 0.001;                           // spend the charge now
+                for (int i = 0; i < 30 && sn.Sl("railgun").Left > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                await Wait(0.1);
+                double lost = hp0 - tgt.Hp, credited = sn.DealtBy.GetValueOrDefault("rail") - dealt0;
+                Check(lost > 0 && Math.Abs(lost - credited) < 1e-6,
+                      $"the railgun, the pilot {at.DistanceTo(tgt.Position):0} u off along its heading: DealtBy[\"rail\"] grew {credited:0.0}, the target lost {lost:0.0}");
+                tgt.TakeDamage(1e12);
+                sn.Sl("railgun").Cool = 0;
+            }
+        }
+
+        await SetClass(ShipClass.HeavyWarden);
+        {
+            var wd = Me;
+            for (int run = 0; run < 3; run++)
+            {
+                var at = VaryNear(yonder, 300f);
+                wd.Position = at; wd.Velocity = Vector2.Zero;
+                var tgt = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 350f), Enemies.Gunship);
+                tgt.Hp = 1e9;
+                wd.Sl("hunters").Left = 0; wd.Sl("hunters").Cool = 0;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double hp0 = tgt.Hp, dealt0 = wd.DealtBy.GetValueOrDefault("torpedo");
+                wd.UseAbility("hunters", 0);
+                for (int i = 0; i < 180; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                double lost = hp0 - tgt.Hp, credited = wd.DealtBy.GetValueOrDefault("torpedo") - dealt0;
+                Check(lost > 0 && Math.Abs(lost - credited) < 1e-6,
+                      $"a torpedo, the warden's hunters {at.DistanceTo(tgt.Position):0} u off: DealtBy[\"torpedo\"] grew {credited:0.0}, the target lost {lost:0.0}");
+                tgt.TakeDamage(1e12);
+                wd.Sl("hunters").Cool = 0;
+            }
+        }
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -6028,6 +6139,7 @@ public partial class _Test : Node
             await LaneAPassivePdChecks(yonder);
             await LaneAPdRepickChecks(yonder);
             await LaneAOutDoorChecks(yonder);
+            await LaneADamageDoorChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);
@@ -6161,7 +6273,7 @@ public partial class _Test : Node
             var near2 = H.SpawnRaider(yonder + new Vector2(260, 0)); near2.Hp = 4000;
             await Wait(0.1);
             ec.UseAbility("echo", 0); await Wait(0.1);
-            ec.NoteDealt(90, mark.Position);                       // as a shell of its own would
+            ec.NoteDealt(90, mark, "shell");                       // as a shell of its own would
             Check(Math.Abs(ec.Sl("echo").Own - 90) < 1e-6, $"the echo remembers what it deals ({ec.Sl("echo").Own:0})");
             double m0 = mark.Hp, n0 = near2.Hp;
             var markHome = mark.Position; var nearHome = near2.Position;
@@ -6258,7 +6370,7 @@ public partial class _Test : Node
                     XcHold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); XcHold();
                     var xcCm = XCruise(xcAt + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 400f));
                     xcShip.UseAbility("echo", 0); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                    xcShip.NoteDealt(24, xcCm.Position);                 // a hit of its own landing there, as a shell's would
+                    xcShip.NoteDealt(24, xcCm, "shell");                 // a hit of its own landing there, as a shell's would
                     double xcDrop = await XFirstBlow(xcCm, 7, XcHold);
                     Check(Math.Abs(xcDrop - 24 * xcShip.Stats["echo_share"]) < 1e-6,
                           $"the echo puts down what it remembered on a cruise missile: 24 dealt where it stands, {xcDrop:0.0} off its 30 hull at the echo's x{xcShip.Stats["echo_share"]:0.00}");
@@ -6800,7 +6912,7 @@ public partial class _Test : Node
                             pilot.Sl("echo").Cool = 0;
                             doAbility.Invoke(pilot, new object[] { "echo", 0 });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                            pilot.NoteDealt(80, landedAt);             // as a shell of its own would
+                            pilot.NoteDealt(80, new StandIn { Position = landedAt }, "shell");  // as a shell of its own would
                             pilot.Sl("echo").Left = 0.001;
                             await Wait(0.12);
                             double blastWas = 80 * pilot.Stats["echo_share"];
@@ -9850,7 +9962,7 @@ public partial class SpawnProbe : Node2D { public int NetId; }
 public class StandIn : IHittable, ITagged
 {
     public int NetId => 0;
-    public Vector2 Position => Vector2.Zero;
+    public Vector2 Position { get; set; } = Vector2.Zero;
     public float HitRadius => 8f;
     public bool Alive => true;
     public Tag Tags { get; set; }

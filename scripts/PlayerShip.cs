@@ -67,6 +67,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private readonly System.Collections.Generic.Dictionary<string, double> _lastHitBy = new();
     private double _sweepAt;                     // the clock time the next sweep of _lastHitBy is due at
     public readonly System.Collections.Generic.Dictionary<string, double> DamageBySource = new();   // host: damage taken, by source
+    public readonly System.Collections.Generic.Dictionary<string, double> DealtBy = new();           // host: damage dealt, by weapon id (Dealt.Deal)
     private double _combatT;
     public bool InCombat => _combatT > 0;
     // SECONDS SINCE THE LAST BLOW, as far as the clock above can tell. It runs down from
@@ -122,7 +123,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private int _strikesOut;
 
     // ── what this ship's own class brings ────────────────────────────────
-    private Vector2 _echoAt;                      // where this ship's last shot landed
 
     // WHAT LIFTS ITS RATE OF FIRE, and WHAT LIFTS ITS SPEED, right now -- the tender's overdrive,
     // the warrior's rush, the dart's boost, the wraith's veil. Every running ability that names a
@@ -187,7 +187,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     //
     // Slot 0 is the SPARE: an id this class does not carry lands there, so asking a battleship
     // about its magazine is harmless rather than a crash.
-    public struct Slot { public double Left, Cool, Own; public int N; }
+    public struct Slot { public double Left, Cool, Own; public int N; public Vector2 At; }
     private Slot[] _slots = new Slot[1];                 // the spare alone, until the class is fitted
     private readonly Dictionary<string, int> _slotAt = new();
     public ref Slot Sl(string id) => ref _slots[_slotAt.TryGetValue(id, out int i) ? i : 0];
@@ -220,14 +220,20 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // wind-up -- half a turn in its time -- or at their own rate if that is already faster.
     public float FastSwing => BroadsideTracking ? (float)(Math.PI / Math.Max(0.05, Stats["broadside_windup"])) : 0f;
     public IReadOnlyList<Turret> Siblings => PdTurrets;
-    // WHAT THIS SHIP JUST DEALT, and where it landed. Every weapon that knows whose it is comes
-    // through here -- a turret, a shell, a torpedo -- so the echo has one place to listen and
-    // "it is in combat" has one place to be set.
-    public void NoteDealt(double d, Vector2 at)
+    // WHAT THIS SHIP JUST DEALT, and to what (F18). Every weapon that knows whose it is comes
+    // through here -- a turret, a shell, a torpedo -- so "it is in combat" has one place to be set,
+    // the tally (DealtBy) has one place to grow, and every RUNNING ability hears it through its own
+    // row (AbilityDef.OnDealt) rather than this method special-casing the echo by name.
+    public void NoteDealt(double d, IHittable target, string weapon)
     {
         NoteCombat();
-        ref var echo = ref Sl("echo");
-        if (echo.Left > 0) { echo.Own += d; _echoAt = at; }
+        DealtBy[weapon] = DealtBy.GetValueOrDefault(weapon) + d;
+        foreach (var def in Abilities.For(Class))
+        {
+            if (def.OnDealt == null || Sl(def.Id).Left <= 0) continue;
+            if (def.While != null && !def.While(this)) continue;
+            def.OnDealt(this, target, d, weapon);
+        }
     }
     public PlayerShip Credit => this;
 
@@ -615,8 +621,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         {
             if (Combat.DistToSegment(h.Position, a, b) <= halfWidth + h.HitRadius)
             {
-                h.TakeDamage(Stats["rail_damage"]);
-                NoteDealt(Stats["rail_damage"], h.Position);
+                Dealt.Deal(h, Stats["rail_damage"], this, Dealt.Rail);
                 if (h is Node2D n) Popups.NoteImpact(n, h.Position);
             }
         }
@@ -640,8 +645,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
         {
             if (h.Position.DistanceTo(Position) > reach) continue;
-            h.TakeDamage(Stats["emp_damage"]);
-            NoteDealt(Stats["emp_damage"], h.Position);
+            Dealt.Deal(h, Stats["emp_damage"], this, Dealt.Emp);
             if (!TagExt.Is(h, Tag.Boss)) (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["emp_stun"]);
         }
         Fx.Raise(Fx.Emp, Position, reach);
@@ -694,32 +698,33 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         ApplyStatus(Status.Evading, Stats["roll_time"]);
     }
 
-    // The echo remembers what this ship dealt (NoteDealt) and puts all of it down at once, where
-    // the last of it landed.
+    // The echo remembers what this ship dealt, through its own row's OnDealt (AbilityDef.OnDealt,
+    // called by NoteDealt while Sl("echo").Left > 0), and puts all of it down at once, where the
+    // last of it landed (Slot.At).
     public void StartEcho()
     {
         if (Sl("echo").Cool > 0) return;
         ref var e = ref Sl("echo");
-        e.Left = Stats["echo_time"]; e.Own = 0; e.Cool = Cooling(Stats["echo_cooldown"]);
-        _echoAt = Position;
+        e.Left = Stats["echo_time"]; e.Own = 0; e.Cool = Cooling(Stats["echo_cooldown"]); e.At = Position;
     }
-    // The echo's time is up (the Echo row's Expire, on the host). What it remembered is its OWN
-    // slot's Own, so the row hands it nothing but the ship and no number travels through the tick.
+    // The echo's time is up (the Echo row's Expire, on the host; Left is already 0 here, so this
+    // blast does not re-store itself through NoteDealt). What it remembered is its OWN slot's Own
+    // and At, so the row hands it nothing but the ship and no number travels through the tick.
     public void Detonate()
     {
         ref var e = ref Sl("echo");
-        double stored = e.Own; e.Own = 0;
+        double stored = e.Own; e.Own = 0; var at = e.At;
         if (stored <= 0) return;
         double blast = stored * Stats["echo_share"];
         float reach = (float)Stats["echo_radius"];
+        NoteCombat();                                       // detonating is combat, whether or not it lands
         foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
         {
-            if (h.Position.DistanceTo(_echoAt) > reach) continue;
-            h.TakeDamage(blast);
+            if (h.Position.DistanceTo(at) > reach) continue;
+            Dealt.Deal(h, blast, this, Dealt.Echo);
             if (h is Node2D n) Popups.NoteImpact(n, h.Position);
         }
-        NoteCombat();
-        Fx.Raise(Fx.Echo, _echoAt, reach);                  // on every peer, where it remembered
+        Fx.Raise(Fx.Echo, at, reach);                       // on every peer, where it remembered
     }
 
     public void GoDark()

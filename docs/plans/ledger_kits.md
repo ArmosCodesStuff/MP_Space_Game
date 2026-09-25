@@ -268,6 +268,56 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
   entry; J4's and job 1c's Rungs/Known broken lines made true).
 - Checkpoint: the commit after this entry ("Kits lane A Job P"). Next: J5 (F4 + F18, D17, Handover 4).
 
+### J5 · PRE · F4 + F18, the hostile damage door (D17, Handover 4's map)
+- Intent: one static function every player-side blow on a hostile goes through: `Dealt.Deal(IHittable
+  target, double d, ITurretHost by, string weapon)` (new file scripts/Dealt.cs) does target.TakeDamage
+  then the credit. `ITurretHost.NoteDealt` gains the target and the weapon id; PlayerShip.NoteDealt
+  keeps NoteCombat, adds `DealtBy[weapon]` (new dict, host: damage dealt by weapon id) and runs F18:
+  every RUNNING ability row's `AbilityDef.OnDealt(ship, target, d, weapon)` (Sl(id).Left > 0, While
+  holds). New `AbilityDef.OnDealt` field. The echo's arm in NoteDealt is deleted; the Echo row's
+  OnDealt stores d and where it landed in a new `Slot.At` (replaces `_echoAt`). Weapon ids: where the
+  blow already carries a row, the row's own id (`Shots.Of(kind).Id`: "shell", "torpedo", "missile",
+  "cruise"); else a new `Dealt.*` const (Pd, Turret, Rail, Emp, Echo, Fighter, Outpost). Sites: Turrets
+  .cs:171 (PD tick, PlayerShip -> Pd else Turret), Shots.cs Strike (shot's own row id, guarded by
+  IsInstanceValid(Source)), PlayerShip rail/emp/echo, ShipClasses.cs:317 (wing fighter strafe ->
+  Fighter; the wing's torpedo throw already goes through Shots.cs, untouched), Missiles.cs:94 (the
+  outpost side's Land -> Outpost, no credit). A hostile hitting a player (Incoming/Hit) is NOT this
+  door -- untouched. Checks: `LaneADamageDoorChecks` (D17): from 3 varied spots, DealtBy[weapon] ==
+  hull lost for the BB's main guns, PD, a freighter's dropped turret (credited to its owner), the
+  railgun and a torpedo; the echo stores exactly what was dealt while it runs and nothing after
+  (existing echo checks unchanged, their old truth). Harness NoteDealt(d, pos) direct calls (~6164,
+  6261, 6803 per Handover 4) rewritten to the new signature.
+- Files: scripts/Dealt.cs (new), scripts/Turrets.cs, scripts/Shots.cs, scripts/PlayerShip.cs,
+  scripts/ShipClasses.cs, scripts/Missiles.cs, scripts/Deployed.cs, scripts/Emplacements.cs,
+  scripts/Hauler.cs, scripts/Lanes.cs, scripts/Abilities.cs; tools/smoketest/SmokeTest.cs.txt;
+  docs/CHANGES.md; this ledger.
+- Model tier: sonnet (writer continuing from a green Job P).
+- Start: 51ed3aef8f4dfc68de2bdedac228ca2841bd7a90
+- Hashes: Turrets f694b3b5 · Shots bd821a43 · PlayerShip 0b618790 · ShipClasses cee7908c ·
+  Missiles 89ffa009 · Deployed 741fcba1 · Emplacements 5898f5d1 · Hauler fdc37920 · Lanes c63461b5 ·
+  Abilities 771130ca · SmokeTest 9e067a36 · CHANGES 7a0da921
+
+### J5 · POST
+- Verdict: green. Rung 1 and rung 2 (`verify.ps1 -Quick`, ALL CHECKS PASSED, UNUSED 0) on the code
+  as found (already written, PRE recorded, uncommitted -- see the interrupted-job note below). Chain
+  quick, solo, solo hit one red first pass (rung 3, tag kits_j5a): all 3 varied "the BB's main guns"
+  checks, `DealtBy["shell"]` and the target's hull both 0 -- the point-defence and every other new
+  check in the same method passed. Cause: CHECK, not the door. The check set `bs.Trigger = true` and
+  `bs.AimPoint` on the Slot fields directly; `PlayerShip.LocalFlight` (the ship being piloted, called
+  every `_Process`) polls the real keyboard and overwrites `Trigger` from `Input.IsKeyPressed` on the
+  very next frame regardless, so the manually-set `true` never survived a frame -- `FireControl` saw
+  `Trigger == false` throughout and never fired (the passing PD check is independent of Trigger: F16
+  made it passive). Fixed in the CHECK: `AimWorld(mainTgt.Position)` + `KeyDown(Key.Space)` /
+  `KeyUp(Key.Space)`, the same real-input pattern the destroyer's own main-gun check already uses
+  (SmokeTest ~3787), aiming every frame in case the target moves. Re-ran the full chain clean (tag
+  kits_j5b): quick green, solo green (seed 11400714819323521943), solo green (seed
+  11400714819323500130). All of `LaneADamageDoorChecks` (BB main guns + PD, freighter turret credited
+  to its owner, railgun, warden torpedo) proved on two seeds; every existing echo check (Detonate /
+  NoteDealt plumbing, now through the door) is unchanged and still green.
+- Files: as the PRE, all touched, plus SmokeTest.cs.txt's `LaneADamageDoorChecks` main-gun block
+  (the Trigger/AimPoint fix above); CHANGES.md (Unreleased entry, this batch); this ledger (POST).
+- Checkpoint: the commit after this entry ("Kits lane A J5"). Next: J6 (F1 Add + Ramp, D18).
+
 ## Engine rungs owed to the main session (run in the worktree, rebased, one engine at a time)
 
 | after | rung | seeds | look for (PASS lines) |
@@ -280,6 +330,7 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
 | J3b job 1b | 3 (`-Solo`) | 11400714819323522083 and one other | the four that failed: "carrier PD: three turrets on three different LIGHT targets -- never a plain dummy" · "three lights, 1 DPS each (3.0 +- 0.7)" · "a DISABLED warden at N deg, turning at N deg/s on A/D when it is disabled: ... turn it 0.00 deg" x3 (each turning > 20 deg/s) · new "BATTLESHIP / CARRIER / DESTROYER: a point-defence mount gives way to something free that betters what it holds" x3. Neighbours the re-pick could move: "with more turrets than light targets, the spare turret still never takes a plain dummy", "each battleship PD turret picks its own target", the 7 x passive-PD table lines, "a battleship's point defence picks a cruise missile ... before a light raider", "a turret left standing takes the small craft first", "a hunter called off while the fighters and point defence are on it", "pinned: A does not turn it" |
 | J4 F17 | 3 (`-Solo`) | two different seeds | new: "the outgoing door's table" · 3 x "a webifier's laser goes out through the door" (Suppressed 1.50 / Jammed 0.00 / Dazzled 3.00) · 3 x "a Suppressed gunship ... holds its missile" (0-2 frames after the lapse) · "Suppressed reaches a boss; Dazzled and Jammed ..." · 3 x "a Suppressed boss: its shockwave ... 31.5 ... beam ... 50 ... 45" · 3 x "a Suppressed base's launcher ... its round carries". Neighbours: the Lancer arena's stealth block (right after), the siege's "ONLY THE BASE DROPS" (after the base check), the WARRIOR block (after the door checks; 3 gunship blasts land 12 s later ~4500 u from base) |
 | J1c | 3 (`-Solo`) | 11400714819323522083 and one other | 3 x "a DISABLED warden at N deg, turning at N deg/s ...: ... turn it 0.00 deg" with N > 25 |
+| J5 F4+F18 | 3 (`-Solo`) | 11400714819323521943 and 11400714819323500130 | new `LaneADamageDoorChecks`: 3 x "the BB's main guns ... DealtBy[\"shell\"]" · 3 x "the same BB's point defence ... DealtBy[\"pd\"]" · 3 x "a freighter's dropped turret ... DealtBy[\"turret\"] on its OWNER" · 3 x "the railgun ... DealtBy[\"rail\"]" · 3 x "a torpedo, the warden's hunters ... DealtBy[\"torpedo\"]". Unchanged neighbours: the echo's own checks (what it remembers, where it puts it down) at their old truth, now proved through the door |
 
 ## Handover 4: the fourth agent did J4 and job 1c, and stops before J5 (context)
 

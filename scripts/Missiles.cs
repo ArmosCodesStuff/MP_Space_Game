@@ -91,7 +91,7 @@ public static class Missiles
                 Body = new Color(0.28f, 0.34f, 0.42f), Nose = new Color(0.45f, 0.85f, 1f),
                 Glow = new Color(0.70f, 0.95f, 1f),
                 Pool = _ => Combat.Hostiles.OfType<Node2D>(), Prey = Targeting.Craft,
-                Land = (n, d, at, src) => (n as IHittable)?.TakeDamage(d) },
+                Land = (n, d, at, src) => { if (n is IHittable h) Dealt.Deal(h, d, null, Dealt.Outpost); } },
     };
 
     public static MissileSide Of(int side) => All[side >= 0 && side < All.Length ? side : Raid];

@@ -167,7 +167,7 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
     public Vector2 AimAt => _aim;
     public float FastSwing => 0f;
     public System.Collections.Generic.IReadOnlyList<Turret> Siblings => _mounts;
-    public void NoteDealt(double d, Vector2 at) { }
+    public void NoteDealt(double d, IHittable target, string weapon) { }
     public PlayerShip Credit => null;
     // read as each round leaves (Turret.Shoot), so its damage goes out through the door
     // (StatusSet.Out) with whatever is on this hull at that moment

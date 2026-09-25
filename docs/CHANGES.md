@@ -468,6 +468,36 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Class kits, lane A J5: the hostile damage door, F4 + F18 (2026-09-25, worktree wt/kits)
+
+One static function every player-side blow on a hostile now goes through: `Dealt.Deal(IHittable
+target, double d, ITurretHost by, string weapon)` (new `scripts/Dealt.cs`) does `target.TakeDamage`
+then credits the shooter. `ITurretHost.NoteDealt` gains the target and a weapon id in place of a
+position; `PlayerShip.NoteDealt` keeps `NoteCombat`, adds `DealtBy[weapon]` (host: damage dealt, by
+weapon id) and runs **F18**: every RUNNING ability row's `AbilityDef.OnDealt(ship, target, d,
+weapon)` hears it (`Sl(id).Left > 0`, `While` narrows it). Weapon ids: a blow that already carries a
+row uses the row's own id ("shell", "torpedo", "cruise"); everything else names a `Dealt.*` const
+(Pd, Turret, Rail, Emp, Echo, Fighter, Outpost). Sites: the main-gun / PD turret tick (Turrets.cs), a
+shot's own Strike (Shots.cs), the railgun / EMP / echo blasts (PlayerShip.cs), the wing's fighter
+strafe (ShipClasses.cs), a friendly missile's Land (Missiles.cs). The base's own laser
+(BaseDefense.cs) is NOT this door -- nobody's ship, no credit. The echo's arm in `NoteDealt` is
+deleted: the Echo row's `OnDealt` stores what it dealt and where in a new `Slot.At` (replaces the
+ship's own `_echoAt` field), read back by `Detonate`.
+
+**Checks:** new `LaneADamageDoorChecks` (D17): from three varied spots each, `DealtBy[weapon]`
+grown equals the hull the target lost, over one window -- a battleship's main guns ("shell") and its
+own point defence ("pd") together, a freighter's dropped turret ("turret", credited to its OWNER,
+never the turret itself), the sniper's railgun ("rail"), a warden hunter's torpedo ("torpedo"). One
+bug found at rung 3 and fixed in the check, not the door: the main-gun block set `Trigger` and
+`AimPoint` directly, which `PlayerShip.LocalFlight` (polling the real keyboard every `_Process`)
+overwrote back to false on the very next frame -- fixed with a real `AimWorld` + `KeyDown(Space)`
+hold, the same pattern the destroyer's own main-gun check already uses. Every existing echo check
+(what it remembers, where it puts it down) is unchanged at its old truth, now proved through the
+door. **Rungs:** 1 and 2 in the worktree; rung 3 green on two seeds (11400714819323521943,
+11400714819323500130).
+
+**Known broken:** nothing known.
+
 ### Class kits, lane A Job P: J4 and job 1c proved at rung 3; a stale wire-count literal fixed (2026-09-25, worktree wt/kits)
 
 Nothing had run in the engine since 606201f. The chain quick, solo@11400714819323522083, solo found
