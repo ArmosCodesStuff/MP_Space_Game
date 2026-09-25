@@ -6639,13 +6639,13 @@ public partial class _Test : Node
                       && lan.HoldOff == 650f && lan.CloseSpeed == 30f && Math.Abs(lan.TurnRate - 0.3f) < 1e-6
                       && dra.HoldOff == 650f && dra.CloseSpeed == 30f && Math.Abs(dra.TurnRate - 0.3f) < 1e-6,
                       "a boss's hull, art and approach are its row's: 760 / 360 / 70 and 700 / 420 / 90, both closing to 650 u at 30 u/s and turning at 0.3 rad/s");
-                // THE PACK'S ART ON THE BOSSES: grey art, so each wears a tint -- the average colour of
-                // the art it replaced (the Rusty's rusted red, the Drake's scorched bronze) -- each
-                // texture is trimmed to its drawing, and its bells are listed off the art: the Rusty's
-                // two, the Drake's five (four and a shorter one on the keel).
-                Check(lan.Tint == new Color(0.33f, 0.25f, 0.26f) && dra.Tint == new Color(0.52f, 0.35f, 0.29f)
+                // THE PACK'S ART ON THE BOSSES: grey art, so each wears a tint -- the owner's red, the
+                // swatch's mean RGB 172, 7, 2 = (0.67, 0.03, 0.01), red highlights over black shadows --
+                // each texture is trimmed to its drawing, and its bells are listed off the art: the
+                // Rusty's two, the Drake's five (four and a shorter one on the keel).
+                Check(lan.Tint == new Color(0.67f, 0.03f, 0.01f) && dra.Tint == new Color(0.67f, 0.03f, 0.01f)
                       && Trimmed(lan.Texture) && Trimmed(dra.Texture) && lan.Nozzles.Length == 2 && dra.Nozzles.Length == 5,
-                      $"a boss wears its tint on the pack's grey art, trimmed, its bells listed (Rusty {lan.Nozzles.Length}, Drake {dra.Nozzles.Length})");
+                      $"a boss wears the owner's red on the pack's grey art, trimmed, its bells listed (Rusty {lan.Nozzles.Length}, Drake {dra.Nozzles.Length})");
                 var gn = L("guns");
                 Check(gn.Way == MoveWay.Bolt && gn.Every == 1.2 && gn.First == 2.0 && gn.Damage == 3.6 && gn.Find == 900f
                       && gn.Waits == MoveWait.Nothing && !gn.Busy && !gn.Super && gn.Source == "boss:guns"
@@ -7170,8 +7170,8 @@ public partial class _Test : Node
                 var dspr = dk?.GetChildren().OfType<Sprite2D>().FirstOrDefault();
                 Check(dk != null && dk.Type.Id == "drake_bastion" && dk.Type.Name == "DRAKE BASTION" && Math.Abs(dk.MaxHp - 700 * Missions.S(2)) < 1e-6
                       && dspr != null && dspr.Texture.ResourcePath.EndsWith("boss_drake.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 420f) < 0.5f
-                      && dspr.Modulate == new Color(0.52f, 0.35f, 0.29f),
-                      $"level 2 is the Drake Bastion: 700 hull x the level's scale, 420 u long, in its scorched bronze ({dk?.Type.Name}, {dk?.MaxHp:0}, {dspr?.Modulate})");
+                      && dspr.Modulate == new Color(0.67f, 0.03f, 0.01f),
+                      $"level 2 is the Drake Bastion: 700 hull x the level's scale, 420 u long, in the owner's red ({dk?.Type.Name}, {dk?.MaxHp:0}, {dspr?.Modulate})");
                 if (dk != null)
                 {
                     // ITS CLOCKS: a throw every 30 s from 6 s, the shotgun every 15 s from 17 s -- 11 s after a

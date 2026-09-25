@@ -167,6 +167,40 @@ in this lane; the main session owes rungs 3 and 4 (listed at the end).
   dome, flames on the bells (hauler 2, drones 3, fighter 5, bomber 2), gatherer tints, courier size.
 - Next: J3b boss red.
 
+### J3b boss red -- PRE
+- Intent: both boss rows wear the owner's swatch red (0.67, 0.03, 0.01) as one named colour in
+  Missions.cs; the two harness checks asserting the old tints rewritten to the swatch literal; DESIGN
+  and CHANGES (J2's reversed tint text and its Known broken alternative) brought to what is true.
+- Start: daa98516eef31182a14c54e0f0476e702358e67e
+- Files: scripts/Missions.cs 7f87c9aac007 · tools/smoketest/SmokeTest.cs.txt 665da2c3cfa1 ·
+  docs/DESIGN.md e31b47441acc · docs/CHANGES.md 5f4f47e9da77
+
+### J3b boss red -- POST
+- Verdict: `-Quick` ALL CHECKS PASSED. Rungs 3/4 owed.
+- Files: Missions.cs (private `BossRed` (0.67, 0.03, 0.01) on both rows), SmokeTest (2 checks
+  rewritten to the swatch literal, their messages "the owner's red"), DESIGN.md (Art bosses; the
+  Rusty line in the balance list), CHANGES.md (J3b entry; J2's reversed tint text and its 0.65x
+  Known-broken alternative deleted).
+- Commit: the J3b commit.
+- **D15** Pure multiply, no lift. Rendered on the game's space colour (11, 15, 24) with a scratch
+  tint tool: both hulls read, hull mean RGB 111, 5, 2, highlights near the swatch (R ~160-170) and
+  shadows black -- the "red and black" asked for. The lift that keeps the hue, (1.0, 0.045, 0.015),
+  puts the hull's MEAN at the swatch (166, 7, 2) but loses black; it is CHANGES' Known broken
+  fallback, one line (BossRed).
+- Rung 3 owed: "a boss wears the owner's red on the pack's grey art, trimmed, its bells listed";
+  "level 2 is the Drake Bastion ... in the owner's red" (two seeds each).
+- Rung 4 owed: 38, 42, 62-66 by eye -- is the red hull readable on space and under the arena's effects?
+
+## STOPPED after J3b (coordinator: the owner is re-picking the sprite mapping). J4 and J5 NOT started.
+- The J1-J3 mappings stay as built; the main session re-maps from the owner's picks (each is one
+  `$Finished` row + the row's Texture in its table; marks and nozzles re-measured by the tool).
+- J4/J5 notes above ("How to continue") still hold, with one correction for J4: the tree moved --
+  `EmplacementDef` now has ONE `Gun` on a mount at its centre (the base's cruise launcher), no
+  `Guns`/`GunRing`, and the base "carries NO GUNS" by design, so sprites.md's `Mounts[4]` is obsolete;
+  J4 is a re-art (Sprite -> HullArt Texture, Main -> Tint, L 560 -> 483 / 220 -> 300). Check
+  `Combat.KeelCovers` first: with L <= 2 HW both hulls are circles of HW, so the length change should
+  not move a hit shape. Lane F (curve) edits the siege rows' numbers in Emplacements.cs.
+
 ### OWED to the main session (nothing here has run above rung 2)
 - Rung 3 (`tools\smoketest\run.ps1 -Solo`, two seeds for the new checks):
   - new "the title screen's foes wear their raider rows' tints, the Web on its own art"
@@ -183,3 +217,4 @@ in this lane; the main session owes rungs 3 and 4 (listed at the end).
   bell), 38/39 arena telegraphs, 42_boss_bar_chunk, 62_arena_loot, 63-66 Drake frames. Look for:
   turrets on their painted seats, flames on the bells, tint brightness (raiders read BRIGHTER, D7;
   bosses DARKER, D9).
+- J3 and J3b: the rung-3 checks and rung-4 frames each owes are listed in its POST above.

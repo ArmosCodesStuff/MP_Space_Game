@@ -500,25 +500,37 @@ salvager-scan and hauler-clears-the-station checks read the rows (`Def.Length`, 
 (zoom 3) already show one close. The hauler's wider Extent lets a raider reach it from about 17 u
 further off its keel; the gatherers' moved by +2.2 / -0.8 u.
 
-### The bosses wear the owner's new sprites, each in a tint (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+### The bosses are red and black (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+The owner's ruling, from a swatch (mean RGB 172, 7, 2; "I like this and black probably"): both boss rows
+wear `Missions.BossRed` = (0.67, 0.03, 0.01), which multiplies the pack's grey to red highlights over
+black shadows. It replaces sprites.md Q5's tints (the old art's average colours). A pure multiply: drawn
+on the game's space colour it reads (the hull averages RGB 111, 5, 2 against 11, 15, 24), so the value
+was not lifted.
+
+**Checks:** "a boss wears the owner's red on the pack's grey art, trimmed, its bells listed" and "level 2
+is the Drake Bastion ... in the owner's red" assert the swatch literal (0.67, 0.03, 0.01).
+
+**Known broken (J3b):** UNPROVEN at rung 3 (those two) and rung 4 (frames 38, 42, 62-66 by eye). If a
+frame reads the hull too dark, the lift that keeps the hue is (1.0, 0.045, 0.015): the hull then
+averages the swatch's own red (RGB 166, 7, 2), with less black.
+
+### The bosses wear the owner's new sprites (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
 
 The Rusty Bucket is the pack's `frigate_a` and the Drake Bastion its `flagship`, at their lengths (360,
 420) and half-widths (70, 90), so every hit size and the Drake's 310 u throw literal stand. The pack is
-grey, so each boss row carries a tint, the average colour of the art it replaced (sprites.md Q5): the
-Rusty (0.33, 0.25, 0.26), the Drake (0.52, 0.35, 0.29). The Rusty's white skull went with its old art.
+grey, so each boss row carries a tint (the owner's red, above). The Rusty's white skull went with its
+old art.
 `BossType` derives from `HullArt` (its `Sprite` is `Texture`) and lists its bells (2 and 5); a boss
 draws no flame, as before. Their painted guns stay: a boss has no moving turret.
 
 **Checks:** "a boss's hull, art and approach are its row's" rewritten (`Texture`, not `Sprite`); new "a
-boss wears its tint on the pack's grey art, trimmed, its bells listed"; "level 2 is the Drake Bastion"
+boss wears the owner's red on the pack's grey art, trimmed, its bells listed" (named for its tint since J3b); "level 2 is the Drake Bastion"
 now also asserts its sprite's tint. The harness's two hand-made boss rows name `Texture`. The trim test
 is one helper, `Trimmed`, which the raider check now uses too.
 
 **Known broken (J2):** UNPROVEN at rung 3 (the three checks above) and rung 4 (frames 38, 39, 42,
-62-66 by eye). The tints are the old art's AVERAGE colour, and the new grey averages 0.65 under the
-drawing, so both bosses draw at about 0.65x that colour: darker than before. If the frames read too
-dark, the tint that keeps the old average is the row's divided by 0.65: Rusty (0.51, 0.38, 0.40),
-Drake (0.80, 0.54, 0.45).
+62-66 by eye).
 
 ### The raiders wear the owner's new sprites, one flame to a bell (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
 

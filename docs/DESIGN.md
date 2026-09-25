@@ -278,8 +278,8 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 - **B (DONE; escorts 3 hull)**: the beam charges **6 s**; meanwhile the boss launches **2 light fighters, 45° to port and to
   starboard**, straight at the player, their boost lasting until they reach it (a pin to hold the pilot
   in the beam unless point defence — or, for a fighter pilot, their guns — kills them); live **3 s**,
-  **0.25 s ticks, 50** (half the old tick, twice as long); the boss the pack's `frigate_a` in a **rusted
-  red** tint (its skull went with its old art).
+  **0.25 s ticks, 50** (half the old tick, twice as long); the boss the pack's `frigate_a` in the owner's
+  **red and black** (its skull went with its old art).
 - **C (DONE — carrier measured 19.07 DPS; guns 5.9 a shell; control 1080 u)**: **battleship total DPS = 1.25 × carrier's**; **carrier range = 1.5 × battleship's**; the
   battleship's main guns fire **shells at 520 u/s** (their own stat since gear came: a missile rack
   must not change the guns), **not tracking**.
@@ -751,8 +751,9 @@ under the base. A route or a range that moves must keep the 500.
   hull with the rack stripped; its turret on the clean aft deck), the lancerkin `frigate_d` (its turret
   on the plate aft of its tubes), and the title screen's Web `crescent_a` in the webifier's red. Their
   painted guns stay: too small to see under a turret. **Bosses** (the pack): the Rusty Bucket
-  `frigate_a`, the Drake Bastion `flagship`, each in a tint -- the average colour of the art it
-  replaced, since the pack is grey -- with their painted guns (a boss has no moving turret) and their
+  `frigate_a`, the Drake Bastion `flagship`, both RED AND BLACK (the owner's ruling): the pack's grey
+  multiplied by the owner's swatch red (0.67, 0.03, 0.01), so highlights come out that red and shadows
+  black; a pure multiply, since the hull reads on space without a lift -- with their painted guns (a boss has no moving turret) and their
   bells listed on the row (2 and 5; a boss draws no flame). HalfWidth 70 and 90 did not move, so the
   Drake's 310 u throw literal stands. **The fleet** (the pack): the hauler `cargo_4` (`Hauler.Art`; its
   six painted cargo frames are the six pods, its point defence on the bow dome), the miner

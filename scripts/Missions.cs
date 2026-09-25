@@ -52,6 +52,11 @@ public static class Missions
         public float TurnRate = 0.3f;       // its native turn (rad/s)
         public BossMove[] Moves;
     }
+    // THE BOSSES ARE RED AND BLACK: the owner's swatch (mean RGB 172, 7, 2) multiplying the pack's
+    // grey, so the art's highlights come out that red and its shadows black. Declared before
+    // Bosses: a static field's initialiser runs in the order it is written.
+    private static readonly Color BossRed = new(0.67f, 0.03f, 0.01f);
+
     public static readonly BossType[] Bosses =
     {
         // ITS ID IS NOT ITS NAME. "silver_lancer" is a save key -- Character.BossCleared writes it
@@ -59,11 +64,11 @@ public static class Missions
         // the name above it is free. The code that holds its moves is Lancer.cs for the same
         // reason: it is named for the id on disk, not for the words on the screen.
         new() { Id = "silver_lancer", Name = "RUSTY BUCKET", Hull = 760,
-                Texture = "res://boss_raider.png", Tint = new Color(0.33f, 0.25f, 0.26f),   // a rusted red
+                Texture = "res://boss_raider.png", Tint = BossRed,
                 Nozzles = new Nozzle[] { new(-30.30f, 178.81f, 39.21f), new(31.19f, 178.81f, 38.61f) },
                 Length = 360f, HalfWidth = 70f, Moves = Lancer.Moves },
         new() { Id = "drake_bastion", Name = "DRAKE BASTION", Hull = 700,
-                Texture = "res://boss_drake.png", Tint = new Color(0.52f, 0.35f, 0.29f),    // a scorched bronze
+                Texture = "res://boss_drake.png", Tint = BossRed,
                 Nozzles = new Nozzle[] { new(-53.82f, 209.38f, 20.78f), new(-28.54f, 208.76f, 20.47f), new(-3.57f, 191.39f, 15.82f),
                                          new(19.85f, 208.45f, 19.85f), new(50.25f, 208.45f, 22.33f) },
                 Length = 420f, HalfWidth = 90f, Moves = Drake.Moves },
