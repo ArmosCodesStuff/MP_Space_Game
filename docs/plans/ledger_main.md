@@ -3,10 +3,8 @@
 Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
-- test-phase / task wu5xd3g1m (wf_8c62491c-3b2, attempt 4 at 16:33, review [] = all 5 scopes merged, last lt 68ad42c): rounds (5 chains, triage, pooled fixes) -> seed sweep ->
-  extras -> bar -> release. lands: 3 lines to the owner + the frames (framesForOwner, netOwed); a stop -> docs/plans/ledger_test.md
-  and the journal, fix, relaunch: Workflow({scriptPath: <scripts>\test-phase.js, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 2, review: []}}).
-  Watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout) re-armed at each expiry while it runs.
+- test-phase / task wu5xd3g1m (wf_8c62491c-3b2, attempt 4 at 16:33, review []): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
+  -> release. lands: 3 lines to the owner + frames (framesForOwner, netOwed); a stop -> ledger_test.md + journal, fix, relaunch per Next 1. Watchdog Monitor re-armed at expiry.
 
 ## Landed (verdict first; delete the row once its action is done)
 - code-read 17:25 (17b94df, fable_code_read.md): do NOT rewrite (fix 2 wk vs 8-12). 4 root causes: NaN cascade Math.Sign at PlayerShip.cs:2299,
@@ -14,7 +12,10 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   14 stale literals; 6 bugs; 9 traps. action: round-2 triage reads §4-5 first (script pointer for r>=2 + a message when it starts; Monitor b38t0d23z).
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. Wait for task wu5xd3g1m; take its return as above (slots proved 16:40: random seeds on slot 3, box ports bound).
+1. 17:45 round-1 check group (4 rewrites in wt_fix0, be5797a..7824a8c) returned no engine run and no asserted: its group prompt was cut at the PG
+   cap (rules after the list). Script fixed (rules first, cap 1400+480n). When the a1-arena-stall merge lands (Monitor bwg01qjgb): TaskStop
+   wu5xd3g1m, kill orphan tp4a*/fa1* rungs, relaunch Workflow({scriptPath, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 4, review: []}})
+   (same attempt: every cached agent replays; only the check group re-runs), record the new task id here.
 2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
 
 ## Owner questions (one line each, with its default): none open (today's rulings: README, Agents).
