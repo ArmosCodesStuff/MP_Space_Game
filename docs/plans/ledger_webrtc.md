@@ -950,3 +950,22 @@ per-row gap/backlog printed. **R5** pack/install/play/snapshot/manifest NOTES te
 Env: `typecheck\typecheck.ps1` from typecheck/, `.\verify.ps1 -Quick` at the repo root (log to a new
 name outside the tree). Python edits: write the script to the scratchpad with the Write tool (a bash
 heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu once this job).
+
+#### R2c PRE
+- job R2c, tier opus (fresh agent from the R2c handoff). HEAD 4d90422. Intent: the roles moved (§10.3):
+  `guest` joins BY INVITE through the courier (host posts `Message(LastInvite)` to invite-{P(27115)}-{n},
+  the guest waits Vary(0.5,3) s and submits it to the JOIN box, posts its reply; the host takes reply 0
+  through the clipboard seam, the rest through the ReplyBox); under -Wan the GUEST rewrites both codes to
+  a box pair (it knows Wan; the host gets `wan` too for its waits); `guest2` knocks as another build
+  (`PretendAt.Code`, refused over TCP, no WebRTC peer on any frame), then `Auth`, then joins; the host
+  counts the two refusals apart; `JoinedBy` per role; the paste guest's drop (no attempt for 20 s, §3.9's
+  text both ends, a fresh invite) and return into its held place with its token; the live-holder
+  replacement (the guest orphans its live peer and joins a fresh invite at once: the host lets the old
+  link go and hands the place over, no "dropped", no fresh invite). Net fix found reading: a peer let go
+  because its pilot is back under another id is not a paste drop (no fresh invite). run.ps1: `$gx` to the
+  host, role limit 120 -> 180 s for the three-player set, expected engine lines as named rows.
+- files: scripts/Net.cs a18ed578, scripts/SessionMenu.cs 02b0223a (JOIN box named "JoinBox"),
+  tools/smoketest/SmokeTest.cs.txt 4818ac3e, tools/smoketest/run.ps1 37cb0c81, ledger a0e9ab6a.
+- checks planned: rung 5 host `R2cHostCourier` / `R2cHostReturns`, guest `R2cJoinByInvite` /
+  `R2cGuestReturns`, guest2's other-build knock; rewritten: the host's refusal count (split in two), the
+  guest's end (the drop now precedes "Host closed").
