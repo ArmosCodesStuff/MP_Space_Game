@@ -378,6 +378,13 @@ public static class Dps
         Note = s => $"{s["pepper_damage"]:0.0} a dart every {s["pepper_interval"]:0.000} s off two rails, up to x{s["pepper_cap"]:0.0} as the top speed climbs past {s["price_top"]:0} u/s",
     };
 
+    // THE DART'S ROD at the sheet's price, averaged over its cooldown (the host prices each rod from the sprint's top)
+    public static readonly DpsSource Rod = new()
+    {
+        Label = "Rod from God, averaged over its cooldown", Rate = s => s["rod_damage"] / s["rod_cooldown"],
+        Note = s => $"{s["rod_damage"]:0} through everything on its line every {s["rod_cooldown"]:0.0} s, up to x{s["rod_cap"]:0.0} as the sprint's top speed climbs past {s["price_top"]:0} u/s",
+    };
+
     public static readonly DpsSource Hunters = new()
     {
         Label = "Hunter-seekers, averaged over their cooldown",

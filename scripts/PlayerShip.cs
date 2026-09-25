@@ -142,7 +142,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public float StrafeMult => (float)Stat.Scale(Lifts(Lift.Strafe));
     // REACH: every running row's ReachStat, the same rule (the anchor's x1.4 on the railgun's line)
     public float ReachMult => (float)Stat.Scale(Lifts(Lift.Reach));
-    private enum Lift { Rate, Speed, Strafe, Reach }
+    // THE PUSH AHEAD: the speed lifts' shares PLUS every running row's ThrustStat (the sprint's x3), the same rule --
+    // a sprint under the boost is x3.5. Steer's thrust reads it; the top speed never does.
+    public float ThrustMult => (float)Stat.Scale(Lifts(Lift.Speed) + Lifts(Lift.Thrust));
+    private enum Lift { Rate, Speed, Strafe, Reach, Thrust }
     private readonly List<double> _lifts = new();
     private double Lifts(Lift kind)
     {
@@ -150,7 +153,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
-            string stat = kind switch { Lift.Rate => def.RateStat, Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, _ => def.StrafeStat ?? def.SpeedStat };
+            string stat = kind switch { Lift.Rate => def.RateStat, Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, Lift.Thrust => def.ThrustStat, _ => def.StrafeStat ?? def.SpeedStat };
             if (stat != null && sl.Left > 0 && (def.While == null || def.While(this))) _lifts.Add(Stats[stat]);
             // a RAMP's running total is already a share (F1, D18): 1 + it reads the same as any
             // other lift's raw multiplier would, and it keeps lifting through its post-run drain,
@@ -756,6 +759,45 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                 d = p.SpendBubble(d);
         return d;
     }
+
+    // A TIMED ROW'S PRESS (host): its Left from `time`, its cooldown from `cool`, both from the press. The sprint.
+    public void Run(string id, string time, string cool)
+    {
+        ref var sl = ref Sl(id);
+        if (!Net.Sim || !Alive || sl.Left > 0 || sl.Cool > 0) return;
+        sl.Left = Stats[time]; sl.Cool = Cooling(Stats[cool]);
+    }
+
+    // WHILE A FORCING ROW RUNS (AbilityDef.Forces) the throttle is held open (LocalFlight): the sprint.
+    public bool Forced
+    {
+        get
+        {
+            foreach (var def in Abilities.For(Class)) if (def.Forces && Sl(def.Id).Left > 0) return true;
+            return false;
+        }
+    }
+
+    // THE TOP SPEED `def`'s run gave it, the moment the run is over: TopNow with the row's own flat add still in
+    // (its Left is already 0 when its Expire runs). What a parting round is priced at.
+    public float TopOf(AbilityDef def) => TopSpeed((float)Stats["max_speed"], SpeedMult, SpeedAdds() + (def.SpeedAdd != null ? Stats[def.SpeedAdd] : 0), 1f);
+
+    // A PARTING ROUND (AbilityDef.Parting, host, from the row's Expire): one round of the row's own spec down the nose,
+    // priced at the top its run gave. A wreck fires nothing.
+    public void Part(string id)
+    {
+        if (!Alive || Abilities.Find(Class, id) is not { Parting: { } row } def) return;
+        Bores.Launch(this, row, 0, Bores.DamageAt(this, row, TopOf(def)), id);
+    }
+
+    // ITS RECOIL (every peer, from the row's Elapsed; the owner's flight is the one that moves): the hull keeps the
+    // Parting row's Recoil share of its speed -- from the owner's NEXT helm frame (LocalFlight), so the round, launched
+    // this frame (Expire runs after Elapsed), leaves with the speed the run ended at.
+    public void Recoil(string id)
+    {
+        if (Mine && Alive && Abilities.Find(Class, id) is { Parting.Recoil: { } keep }) _kick = (float)Stats[keep];
+    }
+    private float _kick;
 
     public void StartOverdrive()
     {
@@ -1547,6 +1589,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // ── the owner steers it: naval handling ──────────────────────────────────
     private void LocalFlight(float dt)
     {
+        if (_kick > 0) { if (Alive) Velocity *= _kick; _kick = 0; }   // a parting round's recoil (Recoil)
         if (!Alive)
         {   // in stasis the hull stays put; the pod flies (EscapePod reads the keys)
             Velocity = Vector2.Zero;
@@ -1572,6 +1615,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         else if (AutopilotTo is { } dest)
             (throttle, rudder) = Autopilot.Capital(Position, Rotation, Velocity, (float)Stats["max_speed"], dest, 60f);
         if (Pinned) { throttle = 1f; rudder = 0f; strafe = 0f; AutopilotTo = null; }   // forced thrust, no rudder, no slide
+        else if (Forced) { throttle = 1f; AutopilotTo = null; }                          // a sprint: forced thrust, the rudder free
         Thrusting = throttle != 0f;
         // A HELM MOVE (F8) flies the hull by its own law while it lasts; a dash carries the hull instead
         // of the helm; otherwise the helm steers
@@ -1643,7 +1687,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // against 0.35, which is 371 u/s where a 2.5x lift on its 190 promises 475. Astern is
         // not lifted, and neither is its cap.
         float lift = SpeedMult;
-        if (throttle > 0) along += (float)Stats["thrust"] * lift * throttle * dt;
+        if (throttle > 0) along += (float)Stats["thrust"] * ThrustMult * throttle * dt;
         else if (throttle < 0) along += (float)Stats["reverse_thrust"] * throttle * dt;
         along -= along * Mathf.Clamp((float)Stats["water_drag"] * dt, 0f, 1f);
         // F1's Add lands on the CAP alone (TopSpeed), same as the lift itself does not touch astern.

@@ -436,6 +436,7 @@ public partial class _Shots : Node
         await LaneA6cBladeFrames();
         await LaneA6cPrismFrames();
         await LaneA6dPepperFrames();
+        await LaneA6dRodFrames();
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -1084,6 +1085,26 @@ public partial class _Shots : Node
         await Snap("76b_dart_pepperbox");
         ds.Trigger = false; ds.Demo = demo;
         await W(1.6);
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
+    }
+
+    // SLICE 6d: the Dart sprinted 3 s from rest, and its rod 0.25 s after it left the nose, the hull kicked back to 30% (76c).
+    async Task LaneA6dRodFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        Character.Class = ShipClass.LightDart; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var ds = H.GetNode<PlayerShip>("Ship_1");
+        bool demo = ds.Demo; ds.Demo = true;
+        var at = new Vector2(-900, 1100); const float rot = 0.4f;
+        ds.Position = at; ds.Rotation = rot; ds.Velocity = Vector2.Zero; ds.Sl("rod").Cool = 0;
+        cam.Zoom = new Vector2(1.0f, 1.0f);
+        ds.UseAbility("rod", 0);
+        await W(3.25);
+        await Snap("76c_dart_sprint_rod");
+        ds.Demo = demo; ds.Velocity = Vector2.Zero;
+        await W(5.0);
         Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
         cam.Zoom = z0;
     }

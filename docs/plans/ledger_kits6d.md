@@ -214,3 +214,32 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
 - J2 pointers: PlayerShip LocalFlight `if (Pinned) { throttle = 1f; ... }` (~1566, add `|| Forced` there, rudder free),
   Lifts()/Lift enum (~146, add Lift.Thrust read in Steer where SpeedMult lifts thrust), SpeedAdds (F1, first user = sprint_add),
   Bores.Launch(s, row, rail, damage, weapon) for the rod (a BoreSpec with Shot = new `rod` row, Turn null, PriceCap rod_cap).
+
+## kits6d-J2 · PRE
+- tier opus; intent: Rod from God (DL5): Lift.Thrust + AbilityDef.ThrustStat, AbilityDef.Forces (throttle forced open, S dead,
+  rudder and slide free), SpeedAdd's first row (sprint_add), BoreSpec.Recoil + AbilityDef.Parting (a round of its own fired
+  down the nose as the run ends, priced at the top the run gave: PlayerShip.Part), Shots row `rod` appended (Stops 0), Dps.Rod.
+- HEAD e1c136d02446bc6f0c0ba79d242c8bdde5d8a5f6
+- scripts/Abilities.cs 2197a875630aac2a29ca26137b3e04f8794cbc17
+- scripts/PlayerShip.cs 038c1299100629dd17eb12fc21a0591962f4f67b
+- scripts/Shots.cs 827124d407d8f3635ac72a8d880d5de86a4e64eb
+- scripts/Bores.cs c12b48743a0f6e2cce3bb7c512f93082055b2422
+- scripts/Ships.cs 9994e51721eebdc8ad5fd495568b6c3ce9f05d4b
+- scripts/Stats.cs 85fb7d8c7447aa76ec7ebaa5e21b8c3726a19620
+- tools/smoketest/SmokeTest.cs.txt e99f684e3448458b5db199dad8969e6a67f7ba80
+- tools/screens/Shots.cs.txt d644c09deb2330ff2b51ddcbf0fb8a81baf2c931
+
+## kits6d-J2 · POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- built: AbilityDef.ThrustStat (Lift.Thrust; PlayerShip.ThrustMult = Scale(speed shares + thrust shares), Steer's push),
+  AbilityDef.Forces (PlayerShip.Forced; LocalFlight forces throttle 1, rudder and slide free), AbilityDef.Parting (BoreSpec +
+  Recoil): PlayerShip.Run (a timed press), Part (host, Expire: one round priced at TopOf(def) = TopNow with the row's own
+  SpeedAdd, since Left is 0 at Expire; a wreck fires none), Recoil (Elapsed, owner: the kick lands on the NEXT LocalFlight
+  frame so the rod launched this frame keeps the run's speed). Ab.Rod (F, ability 1), Shots row `rod` = 10 (Stops 0,
+  ShotLook.Rod appended), Dps.Rod (rod_damage / rod_cooldown).
+- checks: LaneA6dRodRowChecks (rows, price literals 249.2/339.2/360/360 + 3 varied, the lifts add x3.5 / 490), LaneA6dRodChecks
+  (sprint from rest x3 with S held, rudder on run 1: water curve at 0.25 s, peak 360, rod at 3.0 s, 249.2, 30% kept, cool 9,
+  second press refused; through {1,3,3} once each + seeker flown through + one past 1400 u; boosted x3.5/490/339.2 x3; wrecked
+  mid-sprint no rod x3); sweep witness ["rod"]; rung 5 LaneA6dRodHostWatch/HostChecks (host price within 1%) +
+  LaneA6dRodGuestChecks (forced within 0.5 s, past 300 u/s, rod seen); frame 76c_dart_sprint_rod (LaneA6dRodFrames).
+- next: kits6d-J3 (Ramjet).

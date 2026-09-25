@@ -95,6 +95,13 @@ public class AbilityDef
     // names one, and its SpeedStat otherwise: the boost's slide is a row of its own (surge_strafe), so
     // gear can lift the slide without the top speed (Convoy Rig) or the top speed without the slide.
     public string RateStat, SpeedStat, StrafeStat;
+    // WHILE IT RUNS, what it lifts the PUSH AHEAD by and nothing else (the Dart's sprint, x3): a thrust-only lift,
+    // added to SpeedStat's shares (PlayerShip.ThrustMult), so the boost's +50% on a sprint is x3.5. The top speed is
+    // SpeedStat's and SpeedAdd's, never this.
+    public string ThrustStat;
+    // WHILE IT RUNS, THE THROTTLE IS FORCED OPEN (PlayerShip.Forced, read by LocalFlight as a web's pin is): S does
+    // nothing, the rudder and the slide stay the pilot's. The Dart's sprint.
+    public bool Forces;
     // WHILE IT RUNS, what it lifts the REACH of the ship's weapons by (the anchor's x1.4), added like every
     // other lift (PlayerShip.ReachMult). A gun that reads it multiplies its own range row: the railgun.
     public string ReachStat;
@@ -138,6 +145,10 @@ public class AbilityDef
     // A GUN DOWN THE NOSE (Bores.cs): set on a Hold weapon row, whose trigger fires the spec's rounds off its
     // rails at the ship's Cadence of the row's Every (Bores.Tick, host). The Dart's Pepperbox.
     public BoreSpec Bore;
+    // A ROUND OF ITS OWN FIRED DOWN THE NOSE AS ITS RUN ENDS (Bores.cs; PlayerShip.Part from the row's Expire, host),
+    // priced at the top speed the run gave (the row's own SpeedAdd still counted); its Recoil, if it names one, is
+    // the share of the hull's speed kept after (owner-side, from the row's Elapsed). The Rod from God.
+    public BoreSpec Parting;
     // A CHARGED ROW: it holds Charges (a stat id) presses; its slot's N counts those spent, and one comes back
     // every Recharge seconds (a stat id), one at a time (PlayerShip.Spend, and TickAbilities' Cool). The tether.
     public string Charges, Recharge;
@@ -525,6 +536,24 @@ public static class Ab
                               Range = "pepper_range", Turn = "pepper_turn", PriceTop = "price_top", PriceCap = "pepper_cap",
                               Rails = new[] { -5f, 5f } },
         Show = (s, _) => new SlotState { Line = $"x{Bores.Price(1, s.TopNow, s.Stats["price_top"], s.Stats["pepper_cap"]):0.00}", Lit = s.Trigger },
+    };
+
+    // ROD FROM GOD (the Dart's F, kits_v2's card): a 3 s sprint -- thrust x3, top +100 u/s, the throttle forced open
+    // (S dead, the rudder free) -- and as it ends a rod down the nose at 300 u/s plus the ship's own, 1400 u, through
+    // every hostile body on its line once (never a missile): 180 x clamp(top / 260, 1, 2) at the top the sprint gave.
+    // The hull keeps 30% of its speed after. 12 s from the press. Wrecked mid-sprint: no rod.
+    public static readonly AbilityDef Rod = new()
+    {
+        Id = "rod", Name = "Rod from God", Short = "ROD", Default = Key.F,
+        Blurb = "Sprint for 3 s, thrust x3 and 100 u/s over your top, the throttle wide open; as it ends a rod leaves the nose and goes through everything in 1400 u. The faster you were going, the harder it hits: up to twice at 520 u/s. You keep 30% of your speed after.",
+        ThrustStat = "sprint_thrust", SpeedAdd = "sprint_add", Forces = true,
+        Parting = new BoreSpec { Shot = Shots.Rod, Damage = "rod_damage", Speed = "rod_speed", Range = "rod_range",
+                                 PriceTop = "price_top", PriceCap = "rod_cap", Recoil = "rod_recoil" },
+        Press = (s, _) => s.Run("rod", "sprint_time", "rod_cooldown"),
+        Elapsed = s => s.Recoil("rod"),
+        Expire = s => s.Part("rod"),
+        Refuse = (s, _) => s.Sl("rod").Left > 0 ? "SPRINTING" : s.Sl("rod").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "rod", "rod_cooldown", "SPRINT"),
     };
 
     public static readonly AbilityDef Echo = new()

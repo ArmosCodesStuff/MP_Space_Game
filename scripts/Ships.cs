@@ -533,7 +533,7 @@ public static class Classes
             Damage = new() { ["pepper_damage"] = 0.375 },
             Reach = new() { ["pepper_range"] = 1 },
             Cycle = new() { ["pepper_interval"] = 1 },
-            Weapons = new[] { Dps.Pepper },
+            Weapons = new[] { Dps.Pepper, Dps.Rod },
             Kit = new[] {
                 ItemDef.Own(GearSlot.Weapon, "light_pepperbox", "Pepperbox Rails", "the pepperbox: its darts, their rate and their reach", "pepper_damage"),
                 ItemDef.Own(GearSlot.Utility, "light_roll_thrusters", "Sprint Thrusters", "the sprint, and the rod at its end", "sprint_time"),
@@ -574,7 +574,7 @@ public static class Classes
             Art = new ClassArt {
                 Texture = "res://light_dart_hull.png", Length = 70f, HalfWidth = 16.78f,
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
-            Abilities = new[] { Ab.Pepperbox } },
+            Abilities = new[] { Ab.Pepperbox, Ab.Rod } },
         new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
             Blurb = "Its echo remembers the damage it deals, then detonates the lot where the last shot landed.",
             Hint = "ECHO  ·  mouse aims the main gun",

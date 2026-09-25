@@ -7635,6 +7635,169 @@ public partial class _Test : Node
         dt.Demo = demo; dt.Trigger = false; dt.Position = yonder; dt.Velocity = Vector2.Zero;
     }
 
+    // ── SLICE 6d, THE DART'S ROD FROM GOD (kits_v2's card; v31 §3.4 and §7: the speed lifts add). Its rows and the
+    // price on literals (249.2 at the sprint's 360, 339.2 at a boosted 490, 360 at the cap); then from 3 varied
+    // situations each: the sprint from rest with S held -- thrust x3 (the water's own curve at 0.25 s), S dead, the rudder
+    // free, the top 360 and never past it, 3.0 s +- a frame, the rod as it ends priced at 360, 30% +- 2% of the speed
+    // kept, 12 s from the press and a second press refused; the rod through {1, 3, 3} held hostiles once each, a seeker
+    // on its line flown through, one past 1400 u untouched; a boosted sprint's thrust x3.5, top 490 and rod 339.2;
+    // wrecked mid-sprint: no rod.
+    void LaneA6dRodRowChecks()
+    {
+        var sh = new ShipStats(ShipClass.LightDart);
+        var dart = Classes.Of(ShipClass.LightDart);
+        Check(sh["sprint_time"] == 3 && sh["sprint_thrust"] == 3 && sh["sprint_add"] == 100 && sh["rod_damage"] == 180 && sh["rod_cap"] == 2
+              && sh["rod_speed"] == 300 && sh["rod_range"] == 1400 && Math.Abs(sh["rod_recoil"] - 0.30) < 1e-9 && sh["rod_cooldown"] == 12
+              && dart.Abilities.Length >= 2 && dart.Abilities[1] == Ab.Rod && Ab.Rod.Forces && Ab.Rod.Parting?.Shot == Shots.Rod
+              && Ab.Rod.ThrustStat == "sprint_thrust" && Ab.Rod.SpeedAdd == "sprint_add" && Ab.Rod.SpeedStat == null
+              && Shots.Of(Shots.Rod).Stops == 0 && !Shots.Of(Shots.Rod).Guided && !Shots.Of(Shots.Rod).AtPlayers,
+              $"the rod's rows: a {sh["sprint_time"]:0.0} s sprint at thrust x{sh["sprint_thrust"]:0.0} and +{sh["sprint_add"]:0} u/s, forced; the rod {sh["rod_damage"]:0} up to x{sh["rod_cap"]:0.0}, {sh["rod_speed"]:0} u/s + the ship's, {sh["rod_range"]:0} u through everything; {sh["rod_recoil"]:0.00} kept; {sh["rod_cooldown"]:0} s; the Dart's ability 1");
+        // THE PRICE on literals, and 3 varied tops; the lifts ADD (x3 thrust with the boost's +50% is x3.5; the top 490)
+        var lit = new[] { (360.0, 249.2), (490.0, 339.2), (520.0, 360.0), (640.0, 360.0) };
+        bool litOk = lit.All(p => Math.Abs(Bores.Price(180, p.Item1, 260, 2) - p.Item2) < 0.05);
+        string seen = ""; bool varOk = true;
+        foreach (var (lo, hi) in new[] { (150f, 259f), (261f, 519f), (521f, 800f) })
+        {
+            double top = Vary(lo, hi), got = Bores.Price(180, top, 260, 2);
+            varOk &= Math.Abs(got - 180 * Math.Clamp(top / 260, 1, 2)) < 1e-9; seen += $"{top:0}->{got:0.0}; ";
+        }
+        bool adds = Math.Abs(Stat.Scale(PlayerShip.LiftShares(new[] { 3.0 })) - 3.0) < 1e-9 && Math.Abs(Stat.Scale(PlayerShip.LiftShares(new[] { 3.0, 1.5 })) - 3.5) < 1e-9
+                    && Math.Abs(PlayerShip.TopSpeed(260, 1f, 100, 1f) - 360f) < 1e-3f && Math.Abs(PlayerShip.TopSpeed(260, 1.5f, 100, 1f) - 490f) < 1e-3f;
+        Check(litOk && varOk && adds, $"the rod's price: 249.2 / 339.2 / 360 / 360 at 360 / 490 / 520 / 640 u/s; varied: {seen}the sprint's thrust x3, x3.5 boosted; top 360, 490 boosted");
+    }
+
+    async Task LaneA6dRodChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightDart);
+        var dt = Me; bool demo = dt.Demo; dt.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        HashSet<Shot> Rods() => Nodes<Shot>().Where(x => x.Kind == Shots.Rod).ToHashSet();
+        Shot NewRod(HashSet<Shot> was) => Nodes<Shot>().FirstOrDefault(x => x.Kind == Shots.Rod && !was.Contains(x));
+        var stasis = typeof(PlayerShip).GetField("_stasis", BindingFlags.NonPublic | BindingFlags.Instance);
+        double rodDmg = dt.Stats["rod_damage"];
+        float drag = (float)dt.Stats["water_drag"], push = (float)(dt.Stats["thrust"] * 3);
+
+        // THE SPRINT FROM REST, S held all the way (dead), the rudder held on one run (free); timed from the press
+        for (int run = 0; run < 3; run++)
+        {
+            dt.Demo = false;
+            float rot = VaryAngle();
+            dt.Position = VaryNear(yonder, 300f); dt.Rotation = rot; dt.Velocity = Vector2.Zero;
+            dt.Sl("rod").Cool = 0; dt.Sl("rod").Left = 0;
+            await Frame();
+            var was = Rods();
+            KeyDown(global::Godot.Key.S);
+            if (run == 1) KeyDown(global::Godot.Key.A);
+            dt.UseAbility("rod", 0);
+            double clock = 0, fr = 1.0 / 60, coolAtRod = -1, left1 = -1, cool1 = -1, relLeft = -1, relCool = -1, tRod = -1;
+            float at25 = -1, want25 = 0, peak = 0, last = 0, lastAtRod = 0, after = -1; Shot rod = null; float rotAtRod = rot;
+            for (int i = 0; i < 60 * 5 && after < 0; i++)
+            {
+                last = dt.Velocity.Length();
+                await Frame();
+                fr = GetProcessDeltaTime(); clock += fr;
+                if (rod != null) { after = dt.Velocity.Length(); break; }
+                if (at25 < 0 && clock >= 0.25) { at25 = dt.SpeedAhead; want25 = push / drag * (1 - Mathf.Exp(-drag * (float)clock)); }
+                peak = Mathf.Max(peak, dt.Velocity.Length());
+                if (left1 < 0 && clock >= 1.0)
+                {   // a second press mid-sprint is refused: neither its time nor its cooldown goes up
+                    left1 = dt.Sl("rod").Left; cool1 = dt.Sl("rod").Cool;
+                    dt.UseAbility("rod", 0);
+                    relLeft = dt.Sl("rod").Left; relCool = dt.Sl("rod").Cool;
+                }
+                if ((rod = NewRod(was)) != null) { coolAtRod = dt.Sl("rod").Cool; rotAtRod = dt.Rotation; tRod = clock; lastAtRod = dt.Velocity.Length(); }
+            }
+            KeyUp(global::Godot.Key.S); if (run == 1) KeyUp(global::Godot.Key.A);
+            double priced = Bores.Price(rodDmg, 360, 260, 2);
+            float kept = lastAtRod > 0 ? after / lastAtRod : 0;
+            bool turned = Mathf.Abs(Mathf.AngleDifference(rot, rotAtRod)) > 0.3f;
+            Check(rod != null && want25 > 0 && Math.Abs(at25 - want25) <= want25 * 0.06f && peak >= 355f && peak <= 361f
+                  && Math.Abs(tRod - 3.0) <= 1.5 * fr + 1e-3 && Math.Abs(rod.Damage - priced) < 1e-6 && Math.Abs(priced - 249.23) < 0.01
+                  && Math.Abs(kept - 0.30f) <= 0.02f && Math.Abs(coolAtRod - (12 - 3)) <= 0.1 && relLeft <= left1 && relCool <= cool1 && turned == (run == 1),
+                  $"a sprint from rest with S held{(run == 1 ? " and the rudder hard over" : "")}: {at25:0} u/s at 0.25 s (thrust x3: {want25:0}), peak {peak:0} (360), the rod at {tRod:0.00} s (3.0) carrying {rod?.Damage:0.0} (249.2 at 360), {kept * 100:0}% of the speed kept (30), the cooldown {coolAtRod:0.0} (9: 12 from the press), a second press refused ({relLeft:0.00}<={left1:0.00}), turned {Mathf.RadToDeg(Mathf.AngleDifference(rot, rotAtRod)):0}°");
+            dt.Velocity = Vector2.Zero;
+            await Wait(0.5);
+        }
+
+        // THROUGH EVERYTHING ON ITS LINE, ONCE EACH: {1, 3, 3} held hostiles, a seeker on the line flown through, one past
+        // 1400 u untouched. The sprint's last moment is set by hand (its Left 0.02 s), the ship held still: priced at 360.
+        dt.Demo = true;
+        foreach (int bodies in new[] { 1, 3, 3 })
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero; dt.Sl("rod").Cool = 0;
+            var spots = new List<Vector2>(); var foes = new List<Raider>();
+            for (int b = 0; b < bodies; b++) { var sp = at + nose * (Vary(250f, 330f) + b * Vary(280f, 330f)); spots.Add(sp); foes.Add(HeldI(sp, Enemies.Gunship)); }
+            var farSpot = at + nose * Vary(1560f, 1640f); var far = HeldI(farSpot, Enemies.Gunship);
+            var seekerAt = at + nose * Vary(130f, 190f);
+            var seeker = Combat.Fire(Shots.Seeker, seekerAt, -nose.Rotated(Mathf.Pi / 2), 1f, 5000f, 1, hitSource: $"test:6d_rodseeker#{bodies}{Vary(0f, 1f):0.0000}");
+            await Frame();
+            var h0 = foes.Select(f => f.Hp).ToList(); double far0 = far.Hp;
+            dt.Sl("rod").Left = 0.02;
+            for (int i = 0; i < 60 * 6; i++)
+            {
+                dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero;
+                for (int b = 0; b < bodies; b++) foes[b].Position = spots[b];
+                far.Position = farSpot; if (IsInstanceValid(seeker)) seeker.Position = seekerAt;
+                await Frame();
+            }
+            double want = Bores.Price(rodDmg, 360, 260, 2);
+            var took = foes.Select((f, b) => h0[b] - f.Hp).ToList();
+            bool seekerLives = IsInstanceValid(seeker) && seeker.Alive;
+            Check(took.All(d => Math.Abs(d - want) < 1e-6) && far.Hp == far0 && seekerLives,
+                  $"the rod through {bodies} held hostile(s) on its line: each took {string.Join(" / ", took.Select(d => d.ToString("0.0")))} ({want:0.0}, once); one {farSpot.DistanceTo(at):0} u off nothing ({far0 - far.Hp:0}); the seeker it passed still flies ({seekerLives})");
+            foreach (var f in foes) f.TakeDamage(1e12);
+            far.TakeDamage(1e12); if (IsInstanceValid(seeker)) seeker.Intercept();
+        }
+
+        // THE BOOST ADDS (v31 §3.4, §7): a boosted sprint pushes x3.5, tops out at 490, and its rod carries 339.2
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero; dt.Sl("rod").Cool = 0;
+            var spot = at + nose * Vary(300f, 700f); var foe = HeldI(spot, Enemies.Gunship);
+            string boost = dt.Drive.Id;
+            dt.Sl(boost).Left = Vary(1.0f, 2.5f); dt.Sl("rod").Left = Vary(0.4f, 0.9f);
+            float thrustX = dt.ThrustMult, top = dt.TopNow;
+            await Frame();
+            double h0 = foe.Hp; var was = Rods();
+            dt.Sl(boost).Left = 3; dt.Sl("rod").Left = 0.02;
+            Shot rod = null;
+            for (int i = 0; i < 60 * 4; i++)
+            {
+                dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero; foe.Position = spot;
+                if (dt.Sl(boost).Left < 1) dt.Sl(boost).Left = 1;
+                await Frame();
+                rod ??= NewRod(was);
+            }
+            dt.Sl(boost).Left = 0;
+            double want = Bores.Price(rodDmg, 490, 260, 2);
+            Check(Math.Abs(thrustX - 3.5f) < 1e-3f && Math.Abs(top - 490f) < 0.5f && rod != null && Math.Abs(rod.Damage - want) < 1e-6
+                  && Math.Abs(want - 339.23) < 0.01 && Math.Abs(h0 - foe.Hp - want) < 1e-6,
+                  $"a boosted sprint: thrust x{thrustX:0.00} (3.5), top {top:0} (490); its rod carries {rod?.Damage:0.0} and lands {h0 - foe.Hp:0.0} (339.2)");
+            foe.TakeDamage(1e12);
+        }
+
+        // WRECKED MID-SPRINT: no rod leaves the wreck
+        for (int run = 0; run < 3; run++)
+        {
+            dt.Position = VaryNear(yonder, 300f); dt.Rotation = VaryAngle(); dt.Velocity = Vector2.Zero;
+            dt.Sl("rod").Cool = 0; dt.Sl("rod").Left = 0;
+            await Frame();
+            var was = Rods();
+            dt.UseAbility("rod", 0);
+            float wreckAt = Vary(0.3f, 2.6f);
+            await Wait(wreckAt);
+            dt.Restore(0, false, 30);
+            await Wait(3.6 - wreckAt);
+            var rod = NewRod(was);
+            Check(rod == null, $"a Dart wrecked {wreckAt:0.00} s into its sprint fires no rod ({(rod == null ? "none" : "one left")})");
+            stasis.SetValue(dt, 0.0); dt.Reboard(); dt.Hp = dt.MaxHp; dt.Sl("rod").Left = 0;
+            await Frame();
+        }
+        dt.Demo = demo; dt.Velocity = Vector2.Zero; dt.Position = yonder; dt.Sl("rod").Cool = 0;
+    }
+
     // ── SLICE 6d, RUNG 5: A GUEST'S PEPPERBOX. The guest (LaneA6dPepperGuestChecks) flies a DART at rest, its cursor
     // on a varied point 400-600 u off the nose, and holds the trigger 2 s: its own world shows the host's darts
     // (cosmetic copies, Commanded onto ITS cursor) -- 12 +- 2 of them, each within 10° of the bearing to the cursor
@@ -7697,6 +7860,50 @@ public partial class _Test : Node
         me.Trigger = false; me.Demo = demo;
         Check(copies.Count >= 10 && copies.Count <= 14 && steered >= judged - 1 && judged >= 8,
               $"arena guest: its pepperbox held 2 s -- {copies.Count} of the host's darts in its world (12 +- 2), {steered} of {judged} within 10° of the bearing to its cursor 0.3 s into their flight");
+    }
+
+    // ── SLICE 6d, RUNG 5: A GUEST'S SPRINT AND ROD. The guest (LaneA6dRodGuestChecks), after its pepperbox, presses F
+    // on a varied heading: its own copy is forced open within 0.5 s of the press (one round trip) and flies it past
+    // 300 u/s; its world shows the rod. The host (LaneA6dRodHostWatch) fires the rod from ITS copy of the guest's Dart,
+    // priced at the sprint's 360 from its own lifts: 249.2 within 1%.
+    sealed class LaneA6dRodSeen { public double Damage = -1; public bool Done; }
+    LateSampler LaneA6dRodHostWatch(LaneA6dRodSeen seen)
+    {
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (seen.Done || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.LightDart } g) return false;
+            if (Nodes<Shot>().FirstOrDefault(x => x.Kind == Shots.Rod && x.Source == g) is not { } rod) return false;
+            seen.Damage = rod.Damage; seen.Done = true;
+            return true;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6dRodHostChecks(LateSampler watch, LaneA6dRodSeen seen)
+    {
+        await RealTime(() => seen.Done, Wan ? 60 : 30);
+        watch.QueueFree();
+        Check(seen.Done && Math.Abs(seen.Damage - 249.23) <= 249.23 * 0.01,
+              $"arena host: the guest's rod leaves the host's copy of its Dart carrying {seen.Damage:0.0} (249.2 at the sprint's 360, within 1%)");
+    }
+    async Task LaneA6dRodGuestChecks()
+    {
+        var me = Me; me.AutopilotTo = null; bool demo = me.Demo; me.Demo = true;
+        me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+        await Wait(0.3);
+        var was = Nodes<Shot>().Where(x => x.Kind == Shots.Rod).ToHashSet();
+        me.UseAbility("rod", 0);
+        double t = 0, tForced = -1; float peak = 0; bool sawRod = false;
+        for (; t < 5.0 && !sawRod; t += GetProcessDeltaTime())
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            if (tForced < 0 && me.Forced) tForced = t;
+            peak = Mathf.Max(peak, me.SpeedAhead);
+            sawRod = Nodes<Shot>().Any(x => x.Kind == Shots.Rod && !was.Contains(x));
+        }
+        me.Demo = demo; me.Velocity = Vector2.Zero;
+        Check(tForced >= 0 && tForced <= 0.5 && peak > 300f && sawRod,
+              $"arena guest: its sprint forced open {tForced:0.00} s after the press (within 0.5), flown to {peak:0} u/s (past 300), and the host's rod seen in its world ({sawRod})");
     }
 
     async Task LaneA4WreckChecks()
@@ -13658,6 +13865,8 @@ public partial class _Test : Node
             // ── DART: the pepperbox (slice 6d) ──
             LaneA6dPepperRowChecks();
             await LaneA6dPepperChecks(yonder);
+            LaneA6dRodRowChecks();
+            await LaneA6dRodChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -14032,6 +14241,7 @@ public partial class _Test : Node
                     ["prism"]     = sp => sp.Sl("prism").Left > sp.Stats["prism_time"] - 0.1 && sp.Prismatic && sp.Stilled && Math.Abs(sp.Held - 0.5f) < 1e-3f,
                     ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && InFlight().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
                     ["pepperbox"] = sp => sp.Trigger && Abilities.Find(sp.Class, "pepperbox").State(sp, null).Lit,
+                    ["rod"]       = sp => sp.Sl("rod").Left > sp.Stats["sprint_time"] - 0.1 && sp.Forced && sp.Sl("rod").Cool > sp.Stats["rod_cooldown"] - 0.1,
                     ["echo"]      = sp => sp.Sl("echo").Left > sp.Stats["echo_time"] - 0.1,
                     ["stealth"]   = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("stealth").Left > sp.Stats["stealth_time"] - 0.1,
                     ["anchor"]    = sp => sp.Sl("anchor").Left > sp.Stats["anchor_time"] - 0.1 && sp.Held == 0f,
@@ -17257,6 +17467,8 @@ public partial class _Test : Node
             var reloadWatch = LaneA6cReloadHostWatch(reloadSeen);           // slice 6c: ...and then fires a railgun, timing its reloads
             var pepperSeen = new LaneA6dPepperSeen();
             var pepperWatch = LaneA6dPepperHostWatch(pepperSeen);           // slice 6d: ...and, after its curtain, holds a Dart's pepperbox
+            var rodSeen = new LaneA6dRodSeen();
+            var rodWatch = LaneA6dRodHostWatch(rodSeen);                    // slice 6d: ...then sprints it and fires the rod
             await LaneBHostDrives();                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
             await LaneA6cLungeHostChecks(lungeWatch, lungeSeen);
             await LaneA6cPrismHostChecks(prismWatch, prismSeen);
@@ -17275,6 +17487,7 @@ public partial class _Test : Node
                   && Abilities.For(ShipClass.HeavyWarrior).Length == Classes.Of(ShipClass.HeavyWarrior).Abilities.Length + 7,
                   $"arena host: hosting as a WARRIOR -- its stock 300 hull, no chips, its own rows, the drive and six open slots ({hw.MaxHp:0})");
             await LaneA6dPepperHostChecks(pepperWatch, pepperSeen);          // slice 6d: the guest's pepperbox, before it refits to a freighter
+            await LaneA6dRodHostChecks(rodWatch, rodSeen);                  // slice 6d: the guest's rod, priced on the host
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
                                  && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
             var fg = H.Ships.FirstOrDefault(s => !s.Mine);
@@ -17564,6 +17777,7 @@ public partial class _Test : Node
             await LaneA6cTauntGuestChecks();                                // slice 6c: a guest's taunt, the host's guard on its hull
             await LaneA6cCurtainGuestChecks();                              // slice 6c: a guest's curtain, drawn where the host laid it
             await LaneA6dPepperGuestChecks();                               // slice 6d: a guest's pepperbox (its host half: LaneA6dPepperHostChecks)
+            await LaneA6dRodGuestChecks();                                  // slice 6d: a guest's sprint and rod (its host half: LaneA6dRodHostChecks)
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.
