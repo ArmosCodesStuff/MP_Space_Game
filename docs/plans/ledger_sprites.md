@@ -305,6 +305,20 @@ interceptor_a/_b (+ the old spares cargo_1, fighter_tri_b). Jobs: J3c re-map, J4
 - Rung 4 owed: 38, 39, 42, 62-66 -- the whole hull in frame (zoom ~0.47 / ~0.38), telegraphs.
 - Next: J4 siege.
 
+## STOPPED after J3d (context past ~150k). J4 and J5 go to a FRESH agent that reads this file.
+- Every "How to continue" note above still holds, with the owner's picks: J4's pylon is
+  `drone_sensor`, the SAME pack file as the Pod (J3c) -> ONE game file for both rows (D18): rename
+  `enemy_pod_hull.png` in the same edit to a name true of both (the art: e.g. `drone_sensor.png`),
+  one `$Finished` row, Enemies.cs Pod row + Emplacements.cs pylon row load it; `pirate_pylon.png`
+  and `pirate_base.png` deleted when nothing loads them. The Pod's bell is (-0.21, 23.27) at 52 u; the
+  pylon (L 300) lists its bell off the same art x 300/52 if emplacements draw none (check first).
+- J4 correction (above) stands: `EmplacementDef` has ONE `Gun` at its centre; no `Mounts`.
+- J5: Carrier `carrier_a` (90 deg CCW, MEDIUM confidence: look at the turned art before building),
+  Wraith `fighter_unit_a` (90 deg CCW); sprites.md §2's carrier figures were read off carrier_b and
+  must be re-measured. Kits lane: `ClassArt.PdRing` is gone on its branch -- do not use it; touch
+  only Texture/Length-art/marks/nozzle lines; list every seat moved in the POST.
+- Boss size is now `Missions.BossSize` (J3d): nothing in J4/J5 should read boss lengths.
+
 ### OWED to the main session (nothing here has run above rung 2)
 - Rung 3 (`tools\smoketest\run.ps1 -Solo`, two seeds for the new checks):
   - new "the title screen's foes wear their raider rows' tints, the Web on its own art"
