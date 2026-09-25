@@ -3,17 +3,14 @@
 Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\claude\C--Users-logan-Downloads-WarShips-Version-L\31bcb796-5d47-41e0-ad68-ba3af2cf375b\scratchpad
 (their summary.txt is UTF-16: read with powershell Get-Content). New batches write to %TEMP%\warships_rungs.
 
-## Running
-- wf_e2b4eda1-d12 / task wq9tnfn98, "lanes-walls-art" (old way). Returns {walls, gate, merge, art}; walls already merged (29b154e).
-  art: J4 siege, J5 player ships. On return: check the camera never zooms past the player's max (moved only), send the owner the frames.
-  COORDINATOR NOTE 2 (UTF-16 summaries) appended to wt_art's ledger_sprites.md.
-- wf_1bf3d281-818 / task wp5moexdp, "lane-kits-k" (new way). K1: NOTE 2's check fix (diagnosis wx9xf98c3, 5/5: the J7 CHECK was wrong --
-  first-tick zero lead + pinned pilot under forced thrust drifting off the blast; hvL's stray blast passed "flight 10 s"), commit J6+J7, J7 POST
-  corrected; K2: merge version-l (net R1); chain quick,solo,solo,six,screens; opus gate; haiku merge. Returns {kits, gate, merge}.
-  merge=false: merge by hand. gate fail or red: one fix batch from its problems. (w79l6jmmg was stopped by the owner at ~2 h.)
-- wf_d333d7cd-747 / task w7j1zzr40, "lane-slots" (relaunch; worktree WarShips_wt_slots). S1 done at 985d4d8 (rungs.ps1 -Slot/-Slots,
-  per-tree lock, UTF-8 summary). Now: S2 harness --port-shift / P(), S3 docs, 3-chain proof, opus gate, haiku merge (net is in, so it may
-  merge itself). Returns {slots{slots=proven default}, gate, merge}. merge=false: merge by hand.
+## Running (all Opus 5.5 since the owner's ruling; the sonnet runs wq9tnfn98, wp5moexdp, w7j1zzr40 were stopped and relaunched)
+- wf_6344aaed-93f / task w7kg87hb8, "lane-kits-k". K1 done (da21442: J6+J7 with NOTE 2's check fix). Now K2 merge version-l, chain
+  quick,solo,solo,six,screens, gate, merge. Returns {kits, gate, merge}. merge=false: merge by hand. gate fail or red: one fix batch.
+- wf_8b775b3f-dcc / task w8nx1q179, "lane-slots". S1 (985d4d8) + S2 (df86959) done. Now S3 docs, the 3-chain proof (it HOLDS slot 0's lock
+  meanwhile, so kits/art chains wait), gate, merge. Returns {slots{slots=proven default}, gate, merge}. merge=false: merge by hand.
+- wf_6a56d393-8cf / task wcbd6tt6b, "lane-art-j45". J4 (PRE, no POST; j4_1 green) + J5 (started WITHOUT a PRE by the stopped writer; 41 dirty
+  paths) settled, merge version-l, chain quick,solo,solo,six,screens, gate (camera ruling), merge. Returns {art{frames}, gate, merge}.
+  On return: send the owner the frames (copied to %TEMP%\warships_frames_art); merge=false: merge by hand.
 
 ## Next
 1. Merge slots, kits, art into version-l (net merged: eb5b2cb, after the coordinator fixed gate 3's two comment defects in fa20b7f).

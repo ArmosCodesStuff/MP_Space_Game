@@ -124,6 +124,9 @@ Sprites
   (0.67, 0.03, 0.01), over the grey art so the shadows go black; value lifted only as far as a frame
   needs to read against space.
 
+Agents (owner, 2026-09-25)
+- Every agent runs Opus 5.5, "just to be safe" (replaces the earlier "lowest tier you can trust"); effort still set per call.
+
 Testing (owner, standing)
 - Every change carries its check (CLAUDE.md §6). After the features: new Python scenario tools and
   smoke tests covering every mechanic for every class, every ability, and interactions between

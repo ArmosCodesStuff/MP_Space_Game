@@ -44,14 +44,9 @@ parallel; jobs inside a lane run in order. Take results as they land; stop strag
 
 The cost is the context re-read on every turn and by every agent, not the output.
 
-1. **Lowest tier you can trust, `model` and `effort` set on every call** (owner, 2026-09-25). Effort:
-   low for haiku, medium for sonnet builds, high only for an opus gate or an unexplained failure.
-   Escalate ONE tier after one failed attempt, having read why; record the tier in the ledger PRE.
-   - haiku (low effort): grep, copy, reading a log for its verdict, re-running a check, applying exact
-     edits someone wrote, a merge whose resolution is written down.
-   - sonnet: building from a written plan or ledger (a slice, a sprite re-map, a row, a named failing
-     check), a read-only sweep of a subsystem.
-   - opus: design, a failure nobody has explained, authority and wire work, the merge gate.
+1. **Every agent runs Opus 5.5 (`model: 'opus'`), `effort` set on every call** (owner, 2026-09-25, "just to
+   be safe"; it replaces "lowest tier"). Effort: low for git-only steps (a merge, a grep), medium for builds
+   and sweeps, high for a merge gate, a diagnosis or a second attempt after a red (the one escalation).
 2. **Prompts** give paths, the job, the chain, the return schema, and only the rules that bite here, plus one
    line: an owner message that reaches the agent mid-run is for the coordinator; never stop or wait for it.
    **Returns** are a verdict and a pointer: `status` (done / stopped_context / red / blocked), `head`,
