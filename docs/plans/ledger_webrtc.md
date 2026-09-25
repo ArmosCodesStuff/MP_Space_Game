@@ -717,3 +717,26 @@ S2 is not built (no ledger entry, no commit; P4's `Held` return still precedes B
   the rewritten level-with-the-sector check (passes a new trip); rung 5 ArenaMp `S2HeldBossHost` /
   `S2HeldBossGuest` (P4 + the host ignoring a stale report, P9), `S2TurretRekeyed` (P10).
 - next: S2b, the rejoin token.
+
+#### S2b PRE
+- job S2b, tier opus. Intent: P10b, the rejoin token (JOB 0). HEAD aef72cd. Files: scripts/Hub.cs
+  894bf72e, scripts/Session.cs 0b1d74bd, scripts/Net.cs 92949cc7, tools/smoketest/SmokeTest.cs.txt eca57f36.
+
+#### S2b POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED. engine-unproven: rungs owed
+  in the final test phase.
+- `Session.Tokens` (host: character id -> 32-hex token, cleared by `End`), `Session.Rejoin` (guest: the
+  token it holds; NOT cleared by `End`, a drop ends the guest's session), `TokenFor`, `MayClaim(id,
+  token, liveHolder)`. Hub: `NetIdentity` gains `token`; the claim is `MayClaim`; a live holder beaten
+  by the token is let go (`Net.Hang`, new: the one hang-up, R2 turns its body into `Link.Hang`) and
+  its place handed over in `OnPlayerLeft` (`_replacing`); the host sends `NetToken` (Reliable, Hub,
+  channel 0) once a pilot's id is taken. `SendIdentity` carries `Session.Rejoin`.
+- Default taken: the token lives for the game process (a restarted game has none, and an id with a
+  token issued can then no longer be claimed by name until the host's session ends). Recorded as a
+  test-phase watch item, not built further.
+- checks written (not run): solo `S2TokenChecks` (4: no token by name; 32 hex one per pilot; only the
+  token claims, gone or live; End forgets), the loose-Hub identity check's argument list; rung 5
+  ArenaMp host "claimed its place with the rejoin token", aguest "came back holding the rejoin token".
+  NOT written: the live-holder replacement at rung 5 (a guest back before the host notices its old
+  link die) -- it needs the R2 watchdog's 8 s silence; R2's paste-guest return check owes it.
+- next: R2a.

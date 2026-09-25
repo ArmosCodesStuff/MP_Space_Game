@@ -4226,7 +4226,7 @@ public partial class _Test : Node
                 typeof(Hub).GetMethod("NetShipState", BindingFlags.NonPublic | BindingFlags.Instance)
                            .Invoke(loose, new object[] { 5, 0f, 0f, 0f, 0f, 0f, 0f, 0f, false, false, 0f, 0f, 0f, false });
                 typeof(Hub).GetMethod("NetIdentity", BindingFlags.NonPublic | BindingFlags.Instance)
-                           .Invoke(loose, new object[] { 5, "X", Colors.White, Colors.White, 0, new int[0], 1, 1, new string[0], new string[0], new int[0], "x" });
+                           .Invoke(loose, new object[] { 5, "X", Colors.White, Colors.White, 0, new int[0], 1, 1, new string[0], new string[0], new int[0], "x", "" });
                 dropped &= !Net.FromPlayer(loose, out int who) && who == 0;
             }
             catch (Exception) { dropped = false; }
@@ -10202,10 +10202,30 @@ public partial class _Test : Node
               && Hub.Refit(ShipClass.Battleship, ShipClass.Battleship, arena: true, inCombat: true) == ShipClass.Battleship,
               "a class announced at home out of combat is taken, and so is a pilot's first announcement anywhere (P8)");
     }
+    // P10b (solo): the rejoin token. A token is one per pilot, 32 hex characters, the same each time
+    // it is asked for; a place is claimed by it, from 3 situations -- no token issued, the old
+    // connection gone, the old connection still live.
+    void S2TokenChecks()
+    {
+        Session.Tokens.Clear();
+        string a = "s2-pilot-" + Rng.Randi(), b = a + "-other";
+        Check(Session.MayClaim(a, "", liveHolder: false) && !Session.MayClaim(a, "", liveHolder: true),
+              "no token issued: a held place is claimed by the pilot's id, and a live pilot's is not (P10b)");
+        string ta = Session.TokenFor(a), tb = Session.TokenFor(b);
+        Check(ta.Length == 32 && ta.All(Uri.IsHexDigit) && Session.TokenFor(a) == ta && tb != ta,
+              $"a rejoin token is 32 hex characters, one per pilot, the same each time it is asked for ({ta.Length}; P10b)");
+        Check(Session.MayClaim(a, ta, liveHolder: false) && Session.MayClaim(a, ta, liveHolder: true)
+              && !Session.MayClaim(a, "", liveHolder: false) && !Session.MayClaim(a, tb, liveHolder: false) && !Session.MayClaim(a, tb, liveHolder: true),
+              "a token issued: only it claims the place, gone or still live; no token or another pilot's is refused (P10b)");
+        Session.End();
+        Check(Session.Tokens.Count == 0 && Session.MayClaim(a, "", liveHolder: false),
+              "a session over forgets the tokens it issued (P10b)");
+    }
     // P9 (solo): a trip already made is not made again. (The rewritten check above it: a new trip to
     // the very sector it is in IS made -- a retried mission reloads.)
     async Task S2TripChecks()
     {
+        S2TokenChecks();
         var h0 = H; int trip = Session.HeardTrip;
         Priv(H, "NetSector", (int)Hub.Sector, Missions.Kind, Missions.Level, trip);
         await Wait(1.0);
@@ -10525,6 +10545,9 @@ public partial class _Test : Node
                                  && back.Position.DistanceTo(new Vector2(900, 300)) < 50, Wan ? 25 : 15);
             var ag2 = H.Ships.FirstOrDefault(s => !s.Mine);
             await S2TurretRekeyed(s2Turret, agOld, ag2);
+            Check(ag2 != null && Net.I.Players.TryGetValue(ag2.OwnerId, out var agInfo) && agInfo.CharacterId.Length > 0
+                  && Session.Tokens.ContainsKey(agInfo.CharacterId),
+                  "arena host: the guest back under a new id claimed its place with the rejoin token this host issued it (P10b)");
             Check(ag2 != null && ag2.OwnerId != agOld && ag2.Position.DistanceTo(new Vector2(900, 300)) < 50,
                   $"arena host: it came back into the arena, where it was ({ag2?.Position.DistanceTo(new Vector2(900, 300)):0} u off; its world {(ag2 == null ? "-" : Hub.PeerSector(ag2.OwnerId)?.ToString())}; at {ag2?.Position})");
             // A STALL IS NOT A DROP. The guest checks what it was paid, its whole world freezes for 6 s
@@ -10796,6 +10819,7 @@ public partial class _Test : Node
             Check(!Net.IsOnline && !Hub.InArena && Net.I.Reconnecting, "arena guest: dropped mid-arena, home to its own world, trying to get back in");
             await RealTime(() => Hub.InArena && Net.IsOnline && Net.LocalId != 1, 12);
             Check(Hub.InArena && Net.IsOnline && Net.LocalId != agOldId, "arena guest: back in under a new id -- into the arena, where the party is");
+            Check(Session.Rejoin.Length == 32, $"arena guest: it came back holding the rejoin token its host issued ({Session.Rejoin.Length} characters; P10b)");
             await RealTime(() => Me != null && Me.Position.DistanceTo(new Vector2(900, 300)) < 50, 5);
             Check(Me != null && Me.Position.DistanceTo(new Vector2(900, 300)) < 50,
                   $"arena guest: put back where it was when it dropped ({Me?.Position.DistanceTo(new Vector2(900, 300)):0} u off; at {Me?.Position})");

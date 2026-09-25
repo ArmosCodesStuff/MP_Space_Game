@@ -720,6 +720,7 @@ public partial class Hub : Node2D
         }
         Session.Sectors.Remove(peer);
         DespawnFor(peer);                        // which reports the roster, the ship already gone
+        if (_replacing.Remove(peer, out var heir)) TryRestoreHold(heir);   // its place, to the pilot back with its token
     }
     private void TryRestoreHold(int peer)
     {
@@ -818,14 +819,15 @@ public partial class Hub : Node2D
         // THE LEVELS GO WITH THE GEAR, as two lists in step (one dictionary's keys and values, which
         // enumerate in the same order): every peer lifts this pilot's parts by this pilot's levels.
         var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level, Character.Peak,
-                                   Character.LoadoutFor(Character.Class), Character.GearLevel.Keys.ToArray(), Character.GearLevel.Values.ToArray(), Character.Id };
+                                   Character.LoadoutFor(Character.Class), Character.GearLevel.Keys.ToArray(), Character.GearLevel.Values.ToArray(), Character.Id,
+                                   Session.Rejoin };
         if (toPeer == 0) Rpc(nameof(NetIdentity), args);
         else             RpcId(toPeer, nameof(NetIdentity), args);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, int peak, string[] equip,
-                             string[] gearIds, int[] gearLevels, string characterId)
+                             string[] gearIds, int[] gearLevels, string characterId, string token)
     {
         // a peer may only describe itself
         if (Net.SenderOf(this) != peer || Net.I == null) return;
@@ -841,13 +843,15 @@ public partial class Hub : Node2D
         bought = Progression.Afford(bought, level);
         characterId ??= "";
         if (characterId.Length > 64) characterId = "";
-        // A HELD PLACE IS NOT CLAIMABLE BY NAME. The character id is the guest's own word -- the
-        // host has no other way to know a returning pilot -- so a peer announcing the id of a
-        // pilot ALREADY in the party took its place the moment that pilot dropped: its party slot,
-        // its READY, its position, and every kill owed to it. An id another live peer is flying
-        // belongs to that peer; this one simply has no hold.
-        if (characterId.Length > 0 && Net.I.Players.Any(kv => kv.Key != peer && kv.Value.CharacterId == characterId))
-            characterId = "";
+        // A HELD PLACE IS NOT CLAIMABLE BY NAME. The character id is the guest's own word, so a
+        // peer announcing the id of a pilot ALREADY in the party took its place the moment that
+        // pilot dropped: its party slot, its READY, its position, and every kill owed to it. The
+        // place is the REJOIN TOKEN's (Session.MayClaim): an id another live peer is flying
+        // belongs to that peer unless this one holds its token -- the same pilot back before the
+        // host saw its old connection die, which is then let go and its place handed over (P10b).
+        int holder = characterId.Length == 0 ? 0 : Net.I.Players.FirstOrDefault(kv => kv.Key != peer && kv.Value.CharacterId == characterId).Key;
+        if (characterId.Length > 0 && !Session.MayClaim(characterId, token ?? "", holder != 0)) characterId = "";
+        else if (holder != 0 && Net.IsHost) { _replacing[holder] = peer; Net.I.Hang(holder); }
         var cship = _ships.TryGetValue(peer, out var cs) && IsInstanceValid(cs) ? cs : null;
         var klass = Refit(p.HasIdentity ? p.Class : null, Classes.Sanitize(cls), InArena, cship?.InCombat == true);
         (p.Name, p.Main, p.Accent, p.Class, p.Bought, p.Equip, p.CharacterId, p.HasIdentity) =
@@ -858,8 +862,13 @@ public partial class Hub : Node2D
         p.Level = System.Math.Max(1, level);                    // a claim; what it may SPEND is capped above
         p.Peak = Progression.Claim(System.Math.Max(peak, level));   // ...and what it OPENS (Unlocks), by the same cap
         if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) ApplyIdentity(s);
+        if (Net.IsHost && characterId.Length > 0 && holder == 0) RpcId(peer, nameof(NetToken), Session.TokenFor(characterId));
         TryRestoreHold(peer);
     }
+    // the pilot's rejoin token, from the host that issued it (Session.Rejoin)
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetToken(string token) { if (!Net.IsHost) Session.Rejoin = token ?? ""; }
+    private readonly Dictionary<int, int> _replacing = new();  // an old connection let go -> the peer its place goes to
 
     // A CLASS IS CHANGED AT REFIT, never in a fight (audit P8). A class change rebuilds the ship: a
     // full hull and every cooldown at zero. Honest pilots change class only at home (REFIT), so a

@@ -181,6 +181,9 @@ public partial class Net : Node
     // The smoke test's way to be a different build, to prove the refusal on a real connection.
     public static int? PretendProtocol;
 
+    // THE HOST LETS ONE PEER GO: the one hang-up every refusal and replacement goes through.
+    public void Hang(int peer) => (_peer as ENetMultiplayerPeer)?.GetPeer(peer)?.PeerDisconnectLater();
+
     private void OnAuth(long id, byte[] data)
     {
         int theirs = data.Length == 4 ? BitConverter.ToInt32(data) : -1;
@@ -191,7 +194,7 @@ public partial class Net : Node
         if (!Connecting)
         {
             Say($"Refused a player on a different build of the game (theirs {theirs:x8}, this one {Protocol:x8}).");
-            (_peer as ENetMultiplayerPeer)?.GetPeer((int)id)?.PeerDisconnectLater();
+            Hang((int)id);
         }
         else GoOffline($"That host is on a different build of the game (theirs {theirs:x8}, yours {PretendProtocol ?? Protocol:x8}): "
                      + "you both need the same release (Esc menu, bottom). Playing offline.");

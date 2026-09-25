@@ -62,7 +62,30 @@ public static class Session
     public static int NextWorld() => ++_worlds;          // this world, of all the host has built
 
     // A session over (offline, a guest now, the main menu): all three go with it.
-    public static void End() { Sectors.Clear(); Places.Clear(); Kills.Clear(); HeardTrip = -1; }
+    public static void End() { Sectors.Clear(); Places.Clear(); Kills.Clear(); Tokens.Clear(); HeardTrip = -1; }
+
+    // THE REJOIN TOKEN (audit P10b). A pilot's character id is its own word, so on its own it let
+    // anyone who knew it take a held place, and it could not take back a place whose old connection
+    // the host had not yet seen die. The host issues each pilot a token once it is in (Hub.NetToken);
+    // the pilot keeps it (Rejoin: never forgotten by End, since a drop ends the guest's session) and
+    // sends it with its identity. Once a token is issued for an id, that id's place is the token's.
+    // It is carried after connection, never in an invite code (network_webrtc.md §3.9).
+    public static readonly Dictionary<string, string> Tokens = new();
+    public static string Rejoin = "";
+    public static string TokenFor(string id)
+    {
+        if (!Tokens.TryGetValue(id, out var t))
+            Tokens[id] = t = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
+        return t;
+    }
+    // May a peer announcing `id` with `token` have that pilot's place? A live peer still holding it
+    // gives it up only to its token; otherwise an id with no token issued is claimed by name, as
+    // before there were tokens.
+    public static bool MayClaim(string id, string token, bool liveHolder)
+    {
+        bool issued = Tokens.TryGetValue(id, out var t), match = issued && t == token;
+        return liveHolder ? match : !issued || match;
+    }
 
     public static Hub.SectorKind? SectorOf(int id) => Sectors.TryGetValue(id, out var s) ? s : null;
 
