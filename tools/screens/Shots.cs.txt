@@ -1126,7 +1126,8 @@ public partial class _Shots : Node
 
     // 79h / 79i (kits6b-J7): the Tender's mending lance held on Space, the cursor on a held gunship 420 u
     // ahead -- the red beam out of the main barrel onto it (79h_lance_burn); then a sentry of its own at 60 of
-    // 120 put on the line 220 u out -- the green beam stopping on the sentry (79i_lance_mend).
+    // 120 put on the line 220 u out -- the green beam stopping on the sentry (79i_lance_mend). Then its two
+    // fields (79j, 79k).
     async Task LaneA6bLanceFrames(Hub hub, Vector2 yard)
     {
         Character.Class = ShipClass.FreightTender; P(hub, "ApplyLocalIdentity"); await W(0.3);
@@ -1144,6 +1145,14 @@ public partial class _Shots : Node
         if (post != null) hub.DeployedTaken(post);
         hub.RaiderDown(foe);
         await W(0.3);
+        // 79j / 79k (kits6b-J8): F, the overdrive field's amber 500 u ring round the tender; then Q, the repair
+        // field's green ring over it
+        td.Sl("overdrive").Cool = 0; td.UseAbility("overdrive", 0);
+        await W(0.4); await Snap("79j_overdrive_field");
+        td.Sl("repair").Cool = 0; td.UseAbility("repair", 0);
+        await W(0.4); await Snap("79k_repair_field");
+        td.Sl("overdrive").Left = 0; td.Sl("repair").Left = 0;
+        await W(0.2);
     }
 
     // SLICE 6c: the Warrior's blade held (its 160 u, ±55° wedge and the sweep across it), then its whirlwind (the 210 u ring).

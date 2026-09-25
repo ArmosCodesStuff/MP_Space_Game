@@ -139,7 +139,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     //   Lifts ADD (LiftShares; the owner's ruling): two x2 buffs at once are x3, not x4. A product
     // would have compounded every rate part the item pass adds.
     //   The rate reaches the reloads through ONE door, Cadence, which adds the lifts' shares to
-    // the reload's own bonus -- so a part's +100% under an overdrive's x2 is x3 as well: the main
+    // the reload's own bonus -- so a part's +100% under a x2 lift is x3 as well: the main
     // guns (FireControl), the point defence (Spec), every turret it has out (Deployed.Spec) and
     // every craft of its wing. SpeedMult lifts the top speed AND the thrust (Steer); StrafeMult the
     // slide's speed and thrust, by each row's StrafeStat where it names one (the boost's surge_strafe).
@@ -150,13 +150,26 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public float ReachMult => (float)Stat.Scale(Lifts(Lift.Reach));
     private enum Lift { Rate, Speed, Strafe, Reach }
     private readonly List<double> _lifts = new();
+    private static string LiftStat(AbilityDef def, Lift kind) =>
+        kind switch { Lift.Rate => def.RateStat, Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, _ => def.StrafeStat ?? def.SpeedStat };
     private double Lifts(Lift kind)
     {
         _lifts.Clear();
+        // A FIELD'S LIFTS (AbilityDef.Aura, kits6b-J8): every OTHER live pilot's running Aura row whose radius this
+        // hull stands inside lifts it by that pilot's own figure, beside this ship's own rows
+        foreach (var h in Combat.Players)
+        {
+            if (h is not PlayerShip p || ReferenceEquals(p, this) || !p.Alive) continue;
+            foreach (var def in Abilities.For(p.Class))
+            {
+                if (def.Aura == null || LiftStat(def, kind) is not { } their || p.Sl(def.Id).Left <= 0) continue;
+                if ((def.While == null || def.While(p)) && Position.DistanceTo(p.Position) <= p.Stats[def.Aura]) _lifts.Add(p.Stats[their]);
+            }
+        }
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
-            string stat = kind switch { Lift.Rate => def.RateStat, Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, _ => def.StrafeStat ?? def.SpeedStat };
+            string stat = LiftStat(def, kind);
             if (stat != null && sl.Left > 0 && (def.While == null || def.While(this))) _lifts.Add(Stats[stat]);
             // a RAMP's running total is already a share (F1, D18): 1 + it reads the same as any
             // other lift's raw multiplier would, and it keeps lifting through its post-run drain,
@@ -799,6 +812,72 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         o.Left = Stats["overdrive_time"]; o.Cool = Cooling(Stats["overdrive_cooldown"]);
     }
 
+    // A COOLDOWN RUN DOWN BY `secs`: the clock's own step (TickAbilities, every frame) and a Resupply's cut (D45) are
+    // this one rule -- a CHARGED row (AbilityDef.Charges) gets a charge back when it reaches 0, and the next starts if
+    // any is still out.
+    private void CoolBy(AbilityDef def, ref Slot sl, double secs)
+    {
+        sl.Cool = Math.Max(0, sl.Cool - secs);
+        if (sl.Cool <= 0 && def.Charges != null && sl.N > 0 && --sl.N > 0) sl.Cool = Cooling(Stats[def.Recharge]);
+    }
+
+    // THE PILOTS A FIELD'S PRESS REACHES (AbilityDef.Aura): every live pilot within its radius of this hull, this one
+    // included.
+    public IEnumerable<PlayerShip> InAura(AbilityDef def)
+    {
+        if (def?.Aura == null) yield break;
+        float r = (float)Stats[def.Aura];
+        foreach (var h in Combat.Players)
+            if (h is PlayerShip p && p.Alive && (ReferenceEquals(p, this) || p.Position.DistanceTo(Position) <= r)) yield return p;
+    }
+    // WHAT A CUT WOULD TAKE: the ability rows still cooling on the pilots in `id`'s aura (their ClassDef.Abilities,
+    // never the drive, never a row of the id itself). On every peer: the slots are the host's report.
+    public int CoolingInAura(string id)
+    {
+        int n = 0;
+        foreach (var p in InAura(Abilities.Find(Class, id)))
+            foreach (var def in Classes.Of(p.Class).Abilities)
+                if (def.Id != id && p.Sl(def.Id).Cool > 0) n++;
+        return n;
+    }
+    // RESUPPLY (D45), on the host: the row's Cuts seconds off every cooldown CoolingInAura counts, through CoolBy, then
+    // its own cooldown -- or, nothing cooling, nothing at all (refused, and free). Returns how many it cut.
+    public int Resupply(string id)
+    {
+        var def = Abilities.Find(Class, id);
+        if (def?.Cuts == null || !Net.Sim || Sl(id).Cool > 0 || CoolingInAura(id) == 0) return 0;
+        double secs = Stats[def.Cuts];
+        int n = 0;
+        foreach (var p in InAura(def).ToList())
+            foreach (var row in Classes.Of(p.Class).Abilities)
+            {
+                if (row.Id == id) continue;
+                ref var sl = ref p.Sl(row.Id);
+                if (sl.Cool <= 0) continue;
+                p.CoolBy(row, ref sl, secs);
+                n++;
+            }
+        Spend(def);
+        return n;
+    }
+
+    // THE REPAIR FIELD (kits6b-J8), on the host: up for repair_time, its cooldown set; every frame it runs (its row's
+    // Tick) every friendly hull within field_radius of this one -- this one too -- is mended repair_share of its
+    // MAXIMUM a second (Mend.Give, credited "repair"). A wreck or a craft lost is no friendly hull (Mend).
+    public void StartRepair()
+    {
+        ref var r = ref Sl("repair");
+        if (r.Cool > 0) return;
+        r.Left = Stats["repair_time"]; r.Cool = Cooling(Stats["repair_cooldown"]);
+    }
+    public void RepairTick(double dt)
+    {
+        float reach = (float)Stats["field_radius"];
+        double share = Stats["repair_share"] * dt;
+        foreach (var m in Mend.Friendlies(MyHub).ToList())
+            if (m.Position.DistanceTo(Position) <= reach) Mend.Give(m, share * m.HullMax, this, "repair");
+    }
+
     // TIME ON TARGET (D36), on the host: every gun of this pilot's that can reach the paint lands one
     // Lines.Tot line on it in this one tick -- the spotter (the main barrel's tip toward the paint) and
     // each LANDED sentry (Hub.Deployed; a throw in flight is no gun) within tot_reach of it. Each line
@@ -1316,12 +1395,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
-            if (sl.Cool > 0)
-            {
-                sl.Cool = Math.Max(0, sl.Cool - delta);
-                // A CHARGED ROW (AbilityDef.Charges): a charge back, and the next one starts if any is still out
-                if (sl.Cool <= 0 && def.Charges != null && sl.N > 0 && --sl.N > 0) sl.Cool = Cooling(Stats[def.Recharge]);
-            }
+            if (sl.Cool > 0) CoolBy(def, ref sl, delta);
             // A RAMP's running total (F1, D18) steps every frame regardless of Left, so it keeps
             // draining after the row stops -- Steer already ran this frame (LocalFlight, above),
             // so _yawRate is this frame's, not last frame's. OWNER-STEPPED: only the peer that
@@ -1338,6 +1412,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                                        holding, cond, yawShare, delta);
             }
             if (sl.Left <= 0) continue;
+            if (Net.Sim) def.Tick?.Invoke(this, Math.Min(delta, sl.Left));   // a field's frame (AbilityDef.Tick): never past its time
             sl.Left -= delta;
             if (sl.Left > 0) continue;
             sl.Left = 0;

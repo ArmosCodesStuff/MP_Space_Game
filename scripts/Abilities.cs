@@ -145,6 +145,17 @@ public class AbilityDef
     // THE COOLDOWN A PRESS SETS (a stat id), for a row whose press spends through PlayerShip.Spend (Pops, Lays):
     // the flares, the curtain.
     public string Cooldown;
+    // A FIELD (kits6b-J8): WHILE IT RUNS, its lifts (RateStat, SpeedStat, ...) reach every other live pilot within
+    // this stat's radius of the ship too, added to that pilot's own by the same share rule (PlayerShip.Lifts): the
+    // Tender's Overdrive. A row that Cuts reaches every pilot inside it, the presser included.
+    public string Aura;
+    // WHILE IT RUNS, ON THE HOST, EVERY FRAME: handed the ship and the frame's share of what is left (never more
+    // than Left), so a field's whole effect is its time exactly (TickAbilities). The Repair field.
+    public Action<PlayerShip, double> Tick;
+    // A PRESS THAT CUTS COOLING (D45): this stat's seconds off every cooldown still running on every pilot in its
+    // Aura -- the rows of its ClassDef.Abilities, never its drive, never a row of the pressing row's own id -- the
+    // way the clock would have run them (PlayerShip.CoolBy). Nothing cooling anywhere: refused, and free. The Resupply.
+    public string Cuts;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
@@ -375,14 +386,40 @@ public static class Ab
         Show = (s, _) => Timed(s, "redeploy", "redeploy_cooldown", "READY"),
     };
 
+    // THE OVERDRIVE FIELD (the Tender's ability 1, kits6b-J8): for its time every gun of yours, and of every pilot within
+    // field_radius -- their sentries and craft through them -- fires overdrive_mult as fast (an Aura row).
     public static readonly AbilityDef Overdrive = new()
     {
-        Id = "overdrive", Name = "Overdrive", Short = "OVERDRIVE", Default = Key.F,
-        Blurb = "Everything you own fires faster: your gun, your point defence, every turret out.",
+        Id = "overdrive", Name = "Overdrive field", Short = "OVERDRIVE", Default = Key.F,
+        Blurb = "For eight seconds you and every friendly pilot near you fire half again as fast -- guns, point defence, sentries and craft.",
         Press = (s, _) => s.StartOverdrive(),
-        RateStat = "overdrive_mult",
+        RateStat = "overdrive_mult", Aura = "field_radius",
         Refuse = (s, _) => s.Sl("overdrive").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => Timed(s, "overdrive", "overdrive_cooldown", $"x{s.Stats["overdrive_mult"]:0.#}"),
+    };
+
+    // THE REPAIR FIELD (the Tender's ability 2, kits6b-J8): for repair_time every friendly hull within field_radius --
+    // you, a pilot, a sentry, the fleet -- is mended repair_share of its MAXIMUM a second (Mend, "repair").
+    public static readonly AbilityDef Repair = new()
+    {
+        Id = "repair", Name = "Repair field", Short = "REPAIR", Default = Key.Q, Aura = "field_radius",
+        Blurb = "For eight seconds every friendly hull near you -- yours too -- is repaired 2% of its full hull a second.",
+        Press = (s, _) => s.StartRepair(),
+        Tick = (s, dt) => s.RepairTick(dt),
+        Refuse = (s, _) => s.Sl("repair").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "repair", "repair_cooldown", "UP"),
+    };
+
+    // RESUPPLY (the Tender's ability 3, kits6b-J8, D45): 8 s off every ability still cooling on every pilot within
+    // field_radius, you included -- never a drive, never a Resupply.
+    public static readonly AbilityDef Resupply = new()
+    {
+        Id = "resupply", Name = "Resupply", Short = "RESUPPLY", Default = Key.E, Aura = "field_radius", Cuts = "resupply_cut",
+        Cooldown = "resupply_cooldown",
+        Blurb = "Takes eight seconds off every ability still cooling -- yours and every friendly pilot's near you. Not the drive.",
+        Press = (s, _) => s.Resupply("resupply"),
+        Refuse = (s, _) => s.Sl("resupply").Cool > 0 ? "COOLING" : s.CoolingInAura("resupply") == 0 ? "NOTHING COOLING" : null,
+        Show = (s, _) => Timed(s, "resupply", "resupply_cooldown", "READY"),
     };
 
     public static readonly AbilityDef Buster = new()

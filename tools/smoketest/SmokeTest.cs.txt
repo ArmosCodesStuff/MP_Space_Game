@@ -5227,6 +5227,294 @@ public partial class _Test : Node
         td.Demo = demo; td.Position = yonder; td.Velocity = Vector2.Zero;
     }
 
+    // ── 6b · THE TENDER'S FIELDS: second pilots beside it (kits6b-J8) ─────────────────────────────────
+    // A MATE: a pilot of `c` added to the hub by hand (as LaneA6cTauntEmplacementChecks does), in Combat.Players
+    // like any other, with its own seat id; LaneA6bHold keeps it exactly where it is put (it is not this peer's).
+    PlayerShip LaneA6bMate(ShipClass c, int seat, Vector2 at)
+    {
+        var mate = new PlayerShip { Name = $"TenderMate{seat}" };
+        H.AddChild(mate);
+        mate.Init(seat, at);
+        mate.SetIdentity($"Mate{seat}", Colors.Gray, Colors.Gray, c);
+        mate.Hp = mate.MaxHp;
+        return mate;
+    }
+    void LaneA6bHold(PlayerShip p, Vector2 at)
+    {
+        var lf = BindingFlags.NonPublic | BindingFlags.Instance;
+        p.Position = at; p.Velocity = Vector2.Zero;
+        typeof(PlayerShip).GetField("_netPos", lf)?.SetValue(p, at);
+        typeof(PlayerShip).GetField("_netVel", lf)?.SetValue(p, Vector2.Zero);
+    }
+
+    // ── 6b · THE OVERDRIVE FIELD (kits6b-J8, D38) ──────────────────────────────────────────────────────
+    // The sheet once (x1.5, 8 s, cd 24, 500 u, F, ability 1). Three runs, the tender at a varied spot, a
+    // battleship pilot on a varied bearing: F -- the tender fires x1.5 and so does the battleship 300-480 u
+    // off (its gun's own interval / 1.5), and not once it stands 520-700 u off; moved back in, lifted again;
+    // the field's time run out (its Left cut to 0.05-0.15 s), both x1 again while the cooldown runs on.
+    // Run 1 adds a freighter pilot 300-480 u off with a sentry of its own: its sentry's gun fires x1.5 (the
+    // sentry is lifted through its pilot, D38). Run 2 adds a second tender 300-480 u off with ITS field up:
+    // each stands in the other's, and each fires x2.0 -- 1 + 0.5 + 0.5, the fields add, never x2.25.
+    async Task LaneA6bOverdriveFieldChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.FreightTender);
+        var td = Me; td.AutopilotTo = null; bool demo = td.Demo; td.Demo = true;
+        var sheet = new ShipStats(ShipClass.FreightTender);
+        var own = Classes.Of(ShipClass.FreightTender).Abilities.Where(a => !a.Weapon).Select(a => a.Id).ToList();
+        Check(Math.Abs(sheet["overdrive_mult"] - 1.5) < 1e-9 && Math.Abs(sheet["overdrive_time"] - 8) < 1e-9 && Math.Abs(sheet["overdrive_cooldown"] - 24) < 1e-9
+              && Math.Abs(sheet["field_radius"] - 500) < 1e-9 && Ab.Overdrive.Aura == "field_radius" && own.Count == 3 && own[0] == "overdrive"
+              && Abilities.KeyFor(ShipClass.FreightTender, "overdrive") == global::Godot.Key.F,
+              $"the overdrive field: x{sheet["overdrive_mult"]:0.#} for {sheet["overdrive_time"]:0} s every {sheet["overdrive_cooldown"]:0} s over {sheet["field_radius"]:0} u; ability 1 on F ({string.Join(", ", own)})");
+        var bb = LaneA6bMate(ShipClass.Battleship, 2, yonder + new Vector2(0, 3000));
+        PlayerShip fr = null, tw = null; DeployedTurret frPost = null;
+        async Task Frame(Vector2 home, Vector2 bbAt, Vector2 frAt, Vector2 twAt)
+        {
+            td.Position = home; td.Velocity = Vector2.Zero;
+            LaneA6bHold(bb, bbAt);
+            if (fr != null) LaneA6bHold(fr, frAt);
+            if (tw != null) LaneA6bHold(tw, twAt);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        for (int run = 0; run < 3; run++)
+        {
+            var home = VaryNear(yonder, 200f);
+            var way = Vector2.Right.Rotated(VaryAngle());
+            var inAt = home + way * Vary(300f, 480f);
+            var outAt = home + way.Rotated(Vary(-0.5f, 0.5f)) * Vary(520f, 700f);
+            var frAt = home + way.Rotated(Vary(1.5f, 2.5f)) * Vary(300f, 480f);
+            var twAt = home + way.Rotated(Mathf.Pi + Vary(-0.3f, 0.3f)) * Vary(300f, 480f);   // opposite the battleship: never inside both fields
+            if (run == 1)
+            {
+                fr = LaneA6bMate(ShipClass.FreightHauler, 3, frAt);
+                frPost = H.Drop(fr, frAt + Vector2.Right.Rotated(VaryAngle()) * Vary(700f, 900f), 120);
+            }
+            if (run == 2) tw = LaneA6bMate(ShipClass.FreightTender, 4, twAt);
+            td.Sl("overdrive").Left = 0; td.Sl("overdrive").Cool = 0;
+            await Frame(home, inAt, frAt, twAt); await Frame(home, inAt, frAt, twAt);
+            double bbGun = bb.Stats["main_interval"];
+            bool before = Math.Abs(bb.FireRate - 1f) < 1e-6 && Math.Abs(td.FireRate - 1f) < 1e-6;
+            td.UseAbility("overdrive", 0);
+            if (tw != null) { tw.Sl("overdrive").Cool = 0; tw.StartOverdrive(); }
+            await Frame(home, inAt, frAt, twAt);
+            float want = run == 2 ? 2f : 1.5f, tdR = td.FireRate, bbR = bb.FireRate;
+            bool lifted = Math.Abs(td.FireRate - want) < 1e-6 && Math.Abs(bb.FireRate - 1.5f) < 1e-6
+                          && Math.Abs(bb.Cadence("main_interval") - bbGun / 1.5) < 1e-9;
+            bool sentry = run != 1 || (frPost != null && Math.Abs(fr.FireRate - 1.5f) < 1e-6
+                                       && Math.Abs(frPost.Spec(true).Interval - fr.Stats["deploy_interval"] / 1.5) < 1e-9);
+            bool twin = run != 2 || Math.Abs(tw.FireRate - 2f) < 1e-6;
+            await Frame(home, outAt, frAt, twAt);
+            bool outside = Math.Abs(bb.FireRate - 1f) < 1e-6 && bb.Position.DistanceTo(home) > 500f;
+            await Frame(home, inAt, frAt, twAt);
+            bool back = Math.Abs(bb.FireRate - 1.5f) < 1e-6;
+            Check(before && lifted && sentry && twin && outside && back,
+                  $"overdrive field run {run}: the tender x{tdR:0.##} (want x{want:0.#}), a battleship {inAt.DistanceTo(home):0} u off x{bbR:0.##} (its gun {bbGun:0.00} -> {bbGun / 1.5:0.000} s), "
+                  + $"at {outAt.DistanceTo(home):0} u x1 ({outside}), back in x1.5 ({back})"
+                  + (run == 1 ? $"; a freighter pilot {frAt.DistanceTo(home):0} u off x1.5 and its sentry's gun too ({sentry})" : "")
+                  + (run == 2 ? $"; a second tender {twAt.DistanceTo(home):0} u off with its own field up: both x2.0, the fields added ({td.FireRate:0.##}, {tw.FireRate:0.##})" : ""));
+            td.Sl("overdrive").Left = Vary(0.05f, 0.15f);
+            if (tw != null) tw.Sl("overdrive").Left = 0.05;
+            for (int i = 0; i < 20; i++) await Frame(home, inAt, frAt, twAt);
+            Check(Math.Abs(td.FireRate - 1f) < 1e-6 && Math.Abs(bb.FireRate - 1f) < 1e-6 && td.Sl("overdrive").Cool > 20,
+                  $"overdrive field run {run}: its time out, the tender and the battleship beside it are x1 again ({td.FireRate:0.##}, {bb.FireRate:0.##}) and the cooldown runs on ({td.Sl("overdrive").Cool:0.0} s)");
+        }
+        if (frPost != null) H.DeployedTaken(frPost);
+        foreach (var m in new[] { bb, fr, tw }) if (m != null) m.QueueFree();
+        await Wait(0.1);
+        td.Sl("overdrive").Left = 0; td.Sl("overdrive").Cool = 0;
+        td.Demo = demo; td.Position = yonder; td.Velocity = Vector2.Zero;
+    }
+
+    // ── 6b · THE REPAIR FIELD (kits6b-J8) ────────────────────────────────────────────────────────────
+    // The sheet once (2% of a full hull a second, 8 s, cd 30, 500 u, Q, ability 2). Three runs, the tender at a
+    // varied spot at 40-60% of its hull, a battleship pilot 300-480 u off at 50%, a sentry 250-450 u off at 40-80
+    // of 120, one 530-700 u off at 40-80, and one 100-300 u off at 119 of 120. Q, timed from the first frame the
+    // field is up: run 0 holds the whole 8 s -- the near sentry gains exactly 19.2 (120 x 2% x 8), the far one
+    // nothing, the one at 119 stops at 120; the pilot and the tender each gain at least 16% of theirs (their own
+    // regeneration on top), and "repair" is credited what landed. Runs 1 and 2 hold 2.0 s: the near sentry gains
+    // 2.4 a second (+-0.05), the far one nothing; then the second press is refused COOLING at 30.
+    async Task LaneA6bRepairFieldChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.FreightTender);
+        var td = Me; td.AutopilotTo = null; bool demo = td.Demo; td.Demo = true;
+        var sheet = new ShipStats(ShipClass.FreightTender);
+        var own = Classes.Of(ShipClass.FreightTender).Abilities.Where(a => !a.Weapon).Select(a => a.Id).ToList();
+        Check(Math.Abs(sheet["repair_share"] - 0.02) < 1e-9 && Math.Abs(sheet["repair_time"] - 8) < 1e-9 && Math.Abs(sheet["repair_cooldown"] - 30) < 1e-9
+              && own.Count == 3 && own[1] == "repair" && Abilities.KeyFor(ShipClass.FreightTender, "repair") == global::Godot.Key.Q && Ab.Repair.Tick != null,
+              $"the repair field: {sheet["repair_share"] * 100:0.#}% of a full hull a second for {sheet["repair_time"]:0} s every {sheet["repair_cooldown"]:0} s; ability 2 on Q ({string.Join(", ", own)})");
+        var bb = LaneA6bMate(ShipClass.Battleship, 2, yonder + new Vector2(0, 3000));
+        for (int run = 0; run < 3; run++)
+        {
+            foreach (var dp in H.Deployed.ToList()) H.DeployedTaken(dp);
+            var home = VaryNear(yonder, 200f);
+            var way = Vector2.Right.Rotated(VaryAngle());
+            var bbAt = home + way * Vary(300f, 480f);
+            td.Position = home; td.Velocity = Vector2.Zero;
+            td.Hp = td.MaxHp * Vary(0.4f, 0.6f);
+            bb.Hp = bb.MaxHp * 0.5;
+            var near = H.Drop(td, home + way.Rotated(Vary(1.2f, 2.0f)) * Vary(250f, 450f), Vary(40f, 80f), 120);
+            var far = H.Drop(td, home + way.Rotated(Vary(-2.0f, -1.2f)) * Vary(530f, 700f), Vary(40f, 80f), 120);
+            var full = H.Drop(td, home + way.Rotated(Vary(2.6f, 3.4f)) * Vary(100f, 300f), 119, 120);
+            async Task Frame() { td.Position = home; td.Velocity = Vector2.Zero; LaneA6bHold(bb, bbAt); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await Frame(); await Frame();
+            td.Sl("repair").Left = 0; td.Sl("repair").Cool = 0;
+            double credit0 = td.MendedBy.GetValueOrDefault("repair");
+            td.UseAbility("repair", 0);
+            for (int i = 0; i < 30 && td.Sl("repair").Left <= 0; i++) await Frame();
+            // the first frame it is up: its first frame's share has already landed, so the clock starts there
+            double n0 = near.Hp, f0 = far.Hp, t0 = td.Clock, bb0 = bb.Hp, td0 = td.Hp, left0 = td.Sl("repair").Left;
+            if (run == 0)
+            {
+                for (int i = 0; i < 60 * 10 && td.Sl("repair").Left > 0; i++) await Frame();
+                await Frame();
+                double gained = near.Hp - n0, landedLast = 120 * 0.02 * left0;
+                double credited = td.MendedBy.GetValueOrDefault("repair") - credit0;
+                Check(Math.Abs(gained - landedLast) < 1e-6 && Math.Abs(far.Hp - f0) < 1e-12 && Math.Abs(full.Hp - 120) < 1e-9
+                      && bb.Hp - bb0 >= bb.MaxHp * 0.02 * left0 - 1e-6 && td.Hp - td0 >= td.MaxHp * 0.02 * left0 - 1e-6 && credited > gained,
+                      $"repair field run {run}: over its whole time the near sentry gains {gained:0.00} of 120 (want {landedLast:0.00}: 2% x {left0:0.00} s left after its first frame, 19.2 in all), the far one {far.Hp - f0:0.00}, the one at 119 stops at {full.Hp:0.00}; "
+                      + $"the battleship +{(bb.Hp - bb0) / bb.MaxHp * 100:0.0}% and the tender +{(td.Hp - td0) / td.MaxHp * 100:0.0}% (each at least 2% a second), {credited:0.0} credited");
+            }
+            else
+            {
+                for (int i = 0; i < 120; i++) await Frame();
+                double dt = td.Clock - t0, rate = (near.Hp - n0) / dt;
+                Check(Math.Abs(rate - 2.4) < 0.05 && Math.Abs(far.Hp - f0) < 1e-12 && td.Sl("repair").Cool > td.Cooling(30) - 3
+                      && Abilities.Find(ShipClass.FreightTender, "repair").Refuse(td, null) == "COOLING",
+                      $"repair field run {run}: the near sentry {near.Position.DistanceTo(home):0} u off gains {rate:0.00} a second (2.4, of its 120), the one {far.Position.DistanceTo(home):0} u off nothing; a second press COOLING");
+            }
+            foreach (var dp in H.Deployed.ToList()) H.DeployedTaken(dp);
+            td.Sl("repair").Left = 0; td.Sl("repair").Cool = 0;
+        }
+        bb.QueueFree();
+        await Wait(0.1);
+        td.Hp = td.MaxHp;
+        td.Demo = demo; td.Position = yonder; td.Velocity = Vector2.Zero;
+    }
+
+    // ── 6b · RESUPPLY (kits6b-J8, D45) ─────────────────────────────────────────────────────────────────
+    // The sheet once (8 s, cd 30, E, ability 3 -- the walls read overdrive, repair, resupply in that order).
+    // Nothing cooling anywhere: E is refused NOTHING COOLING, and the press spends nothing. Three runs, the
+    // tender at a varied spot, a sniper pilot 300-480 u off, a battleship pilot 520-700 u off:
+    //   the tender's overdrive cooling 10-20 s ends 8 s less, its repair field cooling 1-7 s is ready, its
+    //   drive's cooldown (5-15 s) is where it was; the sniper's anchor cooling 10-12 s ends 8 s less and its
+    //   tether, both charges spent and 2-6 s from the first back, has one back and the next recharging
+    //   (its tether_recharge); the battleship's broadside cooling 15-20 s is untouched. Resupply's own cooldown
+    //   is 30 and a second press is refused COOLING.
+    async Task LaneA6bResupplyChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.FreightTender);
+        var td = Me; td.AutopilotTo = null; bool demo = td.Demo; td.Demo = true;
+        var sheet = new ShipStats(ShipClass.FreightTender);
+        var own = Classes.Of(ShipClass.FreightTender).Abilities.Where(a => !a.Weapon).Select(a => a.Id).ToList();
+        Check(Math.Abs(sheet["resupply_cut"] - 8) < 1e-9 && Math.Abs(sheet["resupply_cooldown"] - 30) < 1e-9
+              && string.Join(",", own) == "overdrive,repair,resupply" && Abilities.KeyFor(ShipClass.FreightTender, "resupply") == global::Godot.Key.E
+              && Ab.Resupply.Cuts == "resupply_cut" && Ab.Resupply.Aura == "field_radius",
+              $"resupply: {sheet["resupply_cut"]:0} s off every cooldown in {sheet["field_radius"]:0} u, every {sheet["resupply_cooldown"]:0} s; ability 3 on E, the walls reading {string.Join(", ", own)}");
+        var sn = LaneA6bMate(ShipClass.HeavySniper, 2, yonder + new Vector2(0, 3000));
+        var bb = LaneA6bMate(ShipClass.Battleship, 3, yonder + new Vector2(0, -3000));
+        string drive = Drives.RowOf(ShipClass.FreightTender).Select(d => d.Id).FirstOrDefault();
+        var row = Abilities.Find(ShipClass.FreightTender, "resupply");
+        for (int run = 0; run < 3; run++)
+        {
+            var home = VaryNear(yonder, 200f);
+            var way = Vector2.Right.Rotated(VaryAngle());
+            var snAt = home + way * Vary(300f, 480f);
+            var bbAt = home + way.Rotated(Vary(1.5f, 3.0f)) * Vary(520f, 700f);
+            async Task Frame() { td.Position = home; td.Velocity = Vector2.Zero; LaneA6bHold(sn, snAt); LaneA6bHold(bb, bbAt); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            foreach (var p in new[] { td, sn, bb })
+                foreach (var ab in Abilities.For(p.Class)) { p.Sl(ab.Id).Cool = 0; p.Sl(ab.Id).Left = 0; p.Sl(ab.Id).N = 0; }
+            await Frame(); await Frame();
+            string nothing = row.Refuse(td, null);
+            td.UseAbility("resupply", 0); await Frame();
+            bool free = nothing == "NOTHING COOLING" && td.Sl("resupply").Cool == 0;
+            double od = Vary(10f, 20f), rp = Vary(1f, 7f), dv = Vary(5f, 15f), an = Vary(10f, 12f), te = Vary(2f, 6f), bs = Vary(15f, 20f);
+            td.Sl("overdrive").Cool = od; td.Sl("repair").Cool = rp;
+            if (drive != null) td.Sl(drive).Cool = dv;
+            sn.Sl("anchor").Cool = an; sn.Sl("tether").N = 2; sn.Sl("tether").Cool = te;
+            bb.Sl("broadside").Cool = bs;
+            double c0 = td.Clock;
+            td.UseAbility("resupply", 0);
+            double el = td.Clock - c0;       // the press lands this frame, before any clock has run
+            bool mine = Math.Abs(td.Sl("overdrive").Cool - (od - 8)) < 1e-6 && td.Sl("repair").Cool == 0
+                        && (drive == null || Math.Abs(td.Sl(drive).Cool - dv) < 1e-6);
+            bool his = Math.Abs(sn.Sl("anchor").Cool - (an - 8)) < 1e-6 && sn.Sl("tether").N == 1
+                       && Math.Abs(sn.Sl("tether").Cool - sn.Cooling(sn.Stats["tether_recharge"])) < 1e-6;
+            bool farOff = Math.Abs(bb.Sl("broadside").Cool - bs) < 1e-6;
+            bool spent = Math.Abs(td.Sl("resupply").Cool - td.Cooling(30)) < 1e-6 && row.Refuse(td, null) == "COOLING";
+            Check(free && mine && his && farOff && spent && el == 0 && drive != null,
+                  $"resupply run {run}: nothing cooling, E refused {nothing} and free ({free}); then its overdrive {od:0.0} -> {td.Sl("overdrive").Cool:0.0}, its repair {rp:0.0} -> {td.Sl("repair").Cool:0.0}, its drive ({drive}) {dv:0.0} untouched ({mine}); "
+                  + $"the sniper {snAt.DistanceTo(home):0} u off: anchor {an:0.0} -> {sn.Sl("anchor").Cool:0.0}, tether a charge back ({sn.Sl("tether").N} spent, {sn.Sl("tether").Cool:0.0} s to the next) ({his}); "
+                  + $"the battleship {bbAt.DistanceTo(home):0} u off untouched ({farOff}); resupply cooling {td.Sl("resupply").Cool:0.0} and refused again ({spent})");
+            await Frame();
+        }
+        foreach (var p in new[] { td, sn, bb })
+            foreach (var ab in Abilities.For(p.Class)) { p.Sl(ab.Id).Cool = 0; p.Sl(ab.Id).Left = 0; p.Sl(ab.Id).N = 0; }
+        sn.QueueFree(); bb.QueueFree();
+        await Wait(0.1);
+        td.Demo = demo; td.Position = yonder; td.Velocity = Vector2.Zero;
+    }
+
+    // ── 6b · THE TENDER'S FIELDS ACROSS THE WIRE (kits6b-J8, rung 5) ─────────────────────────────────
+    // HOST: the guest's destroyer (its class settled) at 50-60% of its hull with its first ability cooling
+    // 18-22 s -- given a second to reach the guest -- and the host flying a TENDER 250-420 u from it on a
+    // host-varied bearing presses F, Q and E. The host's copy of the guest: its cooldown exactly 8 s lower at
+    // once, its rate of fire x1.5, and its hull mended at least 2% of its maximum a second over 1.5 s.
+    async Task LaneA6bFieldsHost()
+    {
+        await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.Destroyer }, Wan ? 20 : 12);
+        var g = H.Ships.FirstOrDefault(s => !s.Mine && s.Class == ShipClass.Destroyer);
+        if (g == null) { Check(false, "arena host: the guest's destroyer, for the tender's fields"); return; }
+        await SetClass(ShipClass.FreightTender);
+        var te = Me; te.AutopilotTo = null;
+        te.Position = g.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 420f); te.Velocity = Vector2.Zero;
+        string cut = Classes.Of(ShipClass.Destroyer).Abilities.Where(a => !a.Weapon).Select(a => a.Id).First();
+        g.Hp = g.MaxHp * Vary(0.5f, 0.6f);
+        g.Sl(cut).Cool = Vary(18f, 22f);
+        foreach (var id in new[] { "overdrive", "repair", "resupply" }) { te.Sl(id).Cool = 0; te.Sl(id).Left = 0; }
+        await Wait(Wan ? 2.0 : 1.0);                               // the cooldown in the guest's hands before it is cut
+        double coolBefore = g.Sl(cut).Cool, hp0 = g.Hp, c0 = te.Clock;
+        te.UseAbility("overdrive", 0); te.UseAbility("repair", 0); te.UseAbility("resupply", 0);
+        double coolAfter = g.Sl(cut).Cool;
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        float rate = g.FireRate; float apart = g.Position.DistanceTo(te.Position);
+        await Wait(1.5);
+        double gain = (g.Hp - hp0) / g.MaxHp / Math.Max(1e-6, te.Clock - c0);
+        Check(Math.Abs(coolBefore - coolAfter - 8) < 1e-6 && Math.Abs(rate - 1.5f) < 1e-6 && gain >= 0.02 - 1e-3 && te.MendedBy.GetValueOrDefault("repair") > 0,
+              $"arena host: the tender {apart:0} u from the guest's destroyer -- its {cut} cooldown {coolBefore:0.0} -> {coolAfter:0.0} s (8 off), its rate x{rate:0.##} (1.5), its hull +{gain * 100:0.00}% a second (2%)");
+        foreach (var id in new[] { "overdrive", "repair" }) te.Sl(id).Left = 0;
+    }
+
+    // GUEST: this pilot's destroyer beside the host's tender. What it sees is the host's word: its ability's
+    // cooldown falls 7.5 s or more between two frames (the cut, in the host's report); the tender's copy here
+    // draws both of its 500 u rings (Fields.Up: the overdrive and the repair field); and while they are up its
+    // own hull climbs 1.5% of its maximum a second or more (the host's repair, over a second at least).
+    async Task LaneA6bFieldsGuest()
+    {
+        string cut = Classes.Of(ShipClass.Destroyer).Abilities.Where(a => !a.Weapon).Select(a => a.Id).First();
+        bool sawCut = false, sawRings = false; double hpAt = -1, clockAt = 0, climb = 0, lastCool = -1, biggest = 0;
+        var watch = new LateSampler { Probe = () =>
+        {
+            var m = Me; if (m == null) return false;
+            double c = m.Sl(cut).Cool;
+            if (lastCool >= 0) { biggest = Math.Max(biggest, lastCool - c); if (lastCool - c >= 7.5) sawCut = true; }
+            lastCool = c;
+            var te = H.Ships.FirstOrDefault(s => !s.Mine && s.Class == ShipClass.FreightTender);
+            if (te == null) return false;
+            var up = Fields.Up(te).ToList();
+            if (up.Any(f => f.Row.Id == "overdrive" && Math.Abs(f.Radius - 500f) < 1e-3) && up.Any(f => f.Row.Id == "repair" && Math.Abs(f.Radius - 500f) < 1e-3))
+            {
+                sawRings = true;
+                if (hpAt < 0) { hpAt = m.Hp; clockAt = m.Clock; }
+                else if (m.Clock - clockAt >= 1.0) climb = Math.Max(climb, (m.Hp - hpAt) / m.MaxHp / (m.Clock - clockAt));
+            }
+            return false;
+        } };
+        AddChild(watch);
+        await RealTime(() => sawCut && sawRings && climb >= 0.015, Wan ? 20 : 12);
+        watch.QueueFree();
+        Check(sawCut && sawRings && climb >= 0.015,
+              $"arena guest: beside the host's tender its {cut} cooldown fell {biggest:0.0} s in one step (8 cut), both 500 u rings drawn here ({sawRings}), and its hull climbed {climb * 100:0.00}% a second under the repair field (2%)");
+    }
+
     // ── 6b · TIME ON TARGET ACROSS THE WIRE (kits6b-J2, rung 5; kits_v31 8's second run) ─────────
     // HOST: the guest's freighter (three sentries standing 0-600 u off it) paints the held gunship
     // 560-700 u off (host-varied spots); the guest presses F. Every line is the host's: the gunship
@@ -14270,6 +14558,9 @@ public partial class _Test : Node
             await LaneA6bBusterChecks(yonder);
             await LaneA6bWellChecks(yonder);
             await LaneA6bLanceChecks(yonder);
+            await LaneA6bOverdriveFieldChecks(yonder);
+            await LaneA6bRepairFieldChecks(yonder);
+            await LaneA6bResupplyChecks(yonder);
             await LaneARaiderCallChecks(yonder);
             await LaneADecoyChecks(yonder);
             await LaneATowChecks(yonder);
@@ -14674,6 +14965,7 @@ public partial class _Test : Node
                 // battleship and destroyer DPS checks earlier in this run; what is asked of a
                 // HOLD row here is that its own key reaches the ship at all.)
                 int sweepShots = 0, sweepTurrets = 0, sweepMag = 0;
+                string sweepCut = null;          // a row a press that Cuts is given cooling (kits6b-J8: what resupply needs)
                 bool sweepMode = false;
                 Raider sweepMark = null;
                 var witness = new Dictionary<string, Func<PlayerShip, bool>>
@@ -14696,6 +14988,10 @@ public partial class _Test : Node
                     ["redeploy"]  = sp => sp.Sl("redeploy").Cool > 0 && sp.OwnLanded().Count == 0 && sp.TurretsOut >= 1,
                     ["tot"]       = sp => sp.Sl("tot").Cool > 0 && sp.DealtBy.GetValueOrDefault(Dealt.Tot) > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Tot),
                     ["overdrive"] = sp => Math.Abs(sp.FireRate - (float)sp.Stats["overdrive_mult"]) < 1e-3f && Math.Abs(sp.Stats["overdrive_mult"] - 1.5) < 1e-9,
+                    // the Tender's repair field (kits6b-J8): up for its time, its cooldown set, and its ring up (Fields)
+                    ["repair"]    = sp => sp.Sl("repair").Left > sp.Stats["repair_time"] - 0.1 && sp.Sl("repair").Cool > 0 && Fields.Up(sp).Any(f => f.Row.Id == "repair"),
+                    // resupply (D45): the other ability the sweep set cooling (sweepCut) is 8 s lower, and its own cooldown set
+                    ["resupply"]  = sp => sp.Sl("resupply").Cool > 0 && sweepCut != null && Math.Abs(sp.Sl(sweepCut).Cool - 12) < 0.1,
                     ["shockwave"] = sp => sp.Sl("shockwave").Cool > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Wave),
                     ["buster"]    = sp => sp.Sl("buster").Cool > 0 && Nodes<Shot>().Any(x => x.Kind == Shots.Buster && ReferenceEquals(x.Source, sp)),
                     ["well"]      = sp => sp.Sl("well").Cool > 0 && H.Wells.Count > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Well),
@@ -14785,6 +15081,9 @@ public partial class _Test : Node
                         // ...and a hull that throws sentries one standing (what redeploy needs), 200-300 u off its cursor (never recalled by R)
                         if (cls.Has(Fit.Deploy) && sweepShip.OwnLanded().Count == 0)
                             H.Drop(sweepShip, sweepShip.AimPoint + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 300f), sweepShip.Stats["deploy_hull"]);
+                        // ...and a row that Cuts cooling another of its class's rows cooling 20 s (what resupply needs)
+                        sweepCut = abil.Cuts != null ? cls.Abilities.Where(o => o != abil && !o.Weapon).Select(o => o.Id).FirstOrDefault() : null;
+                        if (sweepCut != null) sweepShip.Sl(sweepCut).Cool = 20;
                         if (isHold)
                         {   // a HOLD row has no Press at all: its own key goes down and stays down
                             KeyDown(abKey);
@@ -14827,6 +15126,7 @@ public partial class _Test : Node
 
                         // nothing this press started may run on into the next one
                         sweepShip.Sl(abil.Id).Left = 0; sweepShip.Sl(abil.Id).Cool = 0; sweepShip.Sl(abil.Id).Own = 0;
+                        if (sweepCut != null) sweepShip.Sl(sweepCut).Cool = 0;
                     }
 
                     // THE WORLD PUT BACK, so the class after this one starts where this one did:
@@ -18095,6 +18395,7 @@ public partial class _Test : Node
                       $"arena host: a sniper's railgun fired {railShip.Position.DistanceTo(railEar.Position):0} u from the guest, for it to hear");
                 await Wait(0.3);
             }
+            await LaneA6bFieldsHost();                                        // 6b: the tender's fields on the guest's destroyer (its guest half: LaneA6bFieldsGuest)
             await SetClass(ShipClass.Battleship);                            // the hull the rest of this scenario flies
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.Destroyer }, Wan ? 20 : 12);
             await ToArena("arena host", "mission 1");
@@ -18410,6 +18711,7 @@ public partial class _Test : Node
             await RealTime(() => Sfx.Played.GetValueOrDefault("rail") > railHeard0, Wan ? 20 : 12);
             Check(Sfx.Played.GetValueOrDefault("rail") > railHeard0,
                   $"arena guest: a railgun the host fired near this ship is heard here ({Sfx.Played.GetValueOrDefault("rail") - railHeard0} reports since joining)");
+            await LaneA6bFieldsGuest();                        // 6b: the host's tender beside this destroyer (its host half: LaneA6bFieldsHost)
             await ToArena("arena guest", "mission 1");
             var s2Held = S2HeldBossGuest();
             await GuestSeesTheFight();

@@ -527,6 +527,9 @@ public static class Fields
         new() { Id = "prism", Slot = "prism", Look = FieldLook.Wedge, HullShare = 1.1f, Tint = new(0.75f, 0.95f, 1f) },
         // the Tender's mending lance (kits6b-J7): the beam while the trigger holds, pale on nothing, on every peer
         new() { Id = "lance", Slot = PlayerShip.LanceSlot, Look = FieldLook.Lance, Tint = new(0.85f, 0.95f, 1f) },
+        // the Tender's fields (kits6b-J8): what the overdrive lifts and what the repair field mends, the same 500 u
+        new() { Id = "overdrive", Slot = "overdrive", Look = FieldLook.Ring, RadiusStat = "field_radius", Tint = new(1f, 0.72f, 0.3f) },
+        new() { Id = "repair", Slot = "repair", Look = FieldLook.Ring, RadiusStat = "field_radius", Tint = new(0.45f, 1f, 0.55f) },
     };
 
     public static FieldDef Of(string id) => System.Array.Find(All, f => f.Id == id);

@@ -42,11 +42,14 @@ public static class Mend
         return took;
     }
 
-    // EVERY FRIENDLY HULL A HEAL CAN REACH, where the world is `hub`: what a raid can reach (the pilots,
-    // the sentries out, the base's fleet at home -- Hub.RaiderTargets) that can be mended.
+    // EVERY FRIENDLY HULL A HEAL CAN REACH, where the world is `hub`: every pilot (Combat.Players) and what
+    // a raid can reach there (the sentries out, the base's fleet at home -- Hub.RaiderTargets) that can be
+    // mended, each once.
     public static IEnumerable<IMendable> Friendlies(Hub hub)
     {
+        var seen = new HashSet<IMendable>();
+        foreach (var h in Combat.Players) if (h is IMendable m && m.Mendable && seen.Add(m)) yield return m;
         if (hub == null) yield break;
-        foreach (var n in hub.RaiderTargets()) if (n is IMendable m && m.Mendable) yield return m;
+        foreach (var n in hub.RaiderTargets()) if (n is IMendable m && m.Mendable && seen.Add(m)) yield return m;
     }
 }

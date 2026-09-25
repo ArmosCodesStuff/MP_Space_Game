@@ -368,3 +368,22 @@ Done: J2, J3, J4 (a3265f7, 43b0953, 19cfffa). Next is kits6b-J5; no PRE written.
   LaneA6bFieldsHost/Guest (rung 5), frames 79j_overdrive_field / 79k_repair_field, witnesses repair / resupply.
 - Files: Abilities.cs bd2d34a, PlayerShip.cs 72f5c56, Ships.cs 26d3ebe, Fx.cs 3bc4aa3, SmokeTest.cs.txt 17049fa,
   Shots.cs.txt fa87369. HEAD 814b9d2f2498ac58ea30c13da96a732ddc8f945b.
+### kits6b-J8 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. AbilityDef.Aura / Tick / Cuts; PlayerShip.Lifts adds every other live pilot's running Aura row it
+  stands inside (LiftStat), TickAbilities runs a row's Tick on the host with min(frame, Left), CoolBy is the one
+  cooling step (the clock's and the cut's), InAura / CoolingInAura / Resupply (D45) / StartRepair / RepairTick.
+  Mend.Friendlies now takes the pilots from Combat.Players (a pilot a hub list does not hold is still one) plus
+  RaiderTargets, each once. Ab.Overdrive is the field (Aura field_radius, x1.5), Ab.Repair (Q), Ab.Resupply (E);
+  Tender rows field_radius 500, repair_share 0.02 / time 8 / cd 30, resupply_cut 8 / cd 30; Abilities {Lance,
+  Overdrive, Repair, Resupply}; Fields rows overdrive + repair (Ring, 500 u). Comments refreshed (Deployed.cs,
+  PlayerShip.cs, Stats.cs: no "overdrive doubles").
+- Checks written: LaneA6bOverdriveFieldChecks, LaneA6bRepairFieldChecks, LaneA6bResupplyChecks (solo, after
+  LaneA6bLanceChecks; mates by LaneA6bMate/LaneA6bHold); LaneA6bFieldsHost (arena host, after the railgun, before
+  it flies the battleship) / LaneA6bFieldsGuest (arena guest, after the railgun is heard); witnesses repair and
+  resupply (+ sweepCut: a row that Cuts is given another row cooling 20 s); frames 79j_overdrive_field,
+  79k_repair_field. Test phase owes: solo x2, six x2, screens.
+- Defaults taken: D38 stands (an ally's sentries and craft are lifted through their pilot standing in the field,
+  not by where the sentry stands); field_radius / repair_* / resupply_* join no item role (Items.Roles), as TOT and
+  the Buster did not -- the items lane's call.
+- Next: kits6b-J10 (the record).

@@ -10,7 +10,7 @@ using System.Collections.Generic;
 // station -- and a practice dummy only while nothing that can die is in reach (Targeting.Sentry).
 //
 // Its gun is its OWNER's sheet (deploy_damage, deploy_interval, deploy_range), read every tick --
-// so a level bought while three are out improves all three -- and its owner's overdrive doubles
+// so a level bought while three are out improves all three -- and an overdrive field its owner stands in lifts
 // their rate of fire with its own.
 //
 // HOST-OWNED. The host drops it, tells every guest (Hub.NetDeploy), and only the host's copy
