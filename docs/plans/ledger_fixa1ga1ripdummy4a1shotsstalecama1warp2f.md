@@ -44,6 +44,16 @@ Checks: _Shots.LaneA6dRodFrames (76c) and every frame after it.
 `asserted`: 800 u at 2.0 s held, 2400 u at 4.0 s (Drives.Reach, kits_v31 §3.4). Proved: `typecheck.ps1`
 0 errors; `verify.ps1 -Quick`. Checks: WarpHold, LaneBWarpChecks.
 
+Re-proof (round `_p`) found the held=4.0s case still knife-edge: `want`=2400 sits exactly on the safe
+cap, so the frame-quantized reach lands ~13 u over it (2413) and the game correctly owes a small
+`Disabled`/`DriveLock`, but the HOLDS loop's `wantOff` used the nominal `want` (`want > 2400f ? 6.0 :
+0.0`) instead of the actual reach, so it demanded 0 owed and failed on `(me.DriveLock > 0) ==
+(wantOff > 0)`. Fixed by deriving `wantOff` from `Drives.DisabledFor(Math.Max(0, moved.Length() -
+2400.0))`, matching the pattern already used two blocks down for the OVERSHOOT loop. `asserted`: 800 u
+at 2.0 s held, 2413 u at 4.0 s held (13 u over the 2400 safe cap, correctly priced by
+`Drives.DisabledFor`, never a flat 0). Proved PASS at seed 11400714819323333590, seed 11400714819323392986
+and fresh seed 433784216. Checks: WarpHold, LaneBWarpChecks.
+
 ## POST a1-heavy-target
 
 `hv`'s spawn bearing is now held within ~57 deg of straight out from the base (`hmOutward.Angle() +

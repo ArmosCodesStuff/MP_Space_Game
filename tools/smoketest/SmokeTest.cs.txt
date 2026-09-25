@@ -3320,7 +3320,10 @@ public partial class _Test : Node
                       $"V held {held:0.0} s and released inside the 1.0 s spool: cancelled -- {moved.Length():0.0} u moved, no cooldown ({cool:0.0} s)");
             else
             {
-                double wantOff = want > 2400f ? 6.0 : 0.0;
+                // wantOff from the actual reach, never the nominal `want`: held=4.0 targets the safe
+                // cap itself, so a frame-quantized charge can land a few u past it (knife edge) even
+                // when `want` is not over -- the price the drive actually owes follows what it moved.
+                double wantOff = Drives.DisabledFor(Math.Max(0.0, moved.Length() - 2400.0));
                 Check(Math.Abs(moved.Length() - want) < 20f && Mathf.Abs(bow.AngleTo(moved)) < 0.02f && Math.Abs(cool - 20) < 0.2
                       && Math.Abs(off - wantOff) < 0.15 && (me.DriveLock > 0) == (wantOff > 0) && me.Velocity.Length() < 1f,
                       $"V held {held:0.0} s at {Mathf.RadToDeg(me.Rotation):0} deg: {moved.Length():0} u along the bow (want {want:0} ±20), stopped dead, 20 s to recharge ({cool:0.0}), disabled {off:0.0} s (want {wantOff:0})");
