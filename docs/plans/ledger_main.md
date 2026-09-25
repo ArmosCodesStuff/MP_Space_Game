@@ -9,9 +9,10 @@
 - fable-critique-2 / task w8qdfovp6 (wf_f703a3a3-c3e): testing, hand-offs + compaction, verbiage -> scratchpad/fable2/REPORT2.md,
   CLAUDE.md v2 + CLAUDE.diff.md, process/, tools/. When it lands: REPORT2 to the owner; apply at the next batch boundary; report in 3 lines.
 
-- fable-review / task wt3jwclpl (wf_3bcc353d-382): 5 Fable reviewers (cap, fr, hv, lt, net+authority) over the Opus build's checks and
-  code -> tasks. When it lands: DROP severity-1 count-only tasks ("a third check"; owner: speed, the count is Fable's judgment), pass the
-  rest as args.tasks to test-phase.js (fixed before round 1). The blanket 3+ audit stage is OFF (args.audit unset).
+- DONE fable-review: 46 findings in docs/plans/review_tasks.json, 37 kept (severity >= 2; kept=true), 9 dropped (owner: speed). Top:
+  Warden PD 10 DPS/mount vs the ruling's 1 (hv-R6c-1); a guest DD's warp mid-grapple rips 5 s late on the host (cap-R1); a rejoin
+  without the token is not refused (net-RV1); Dealt.Deal credits blows on a dead target (net-RV3). test-phase.js applies them per scope
+  (args.review: one Opus fix agent per scope, one proving chain each) before round 1. The blanket 3+ audit is OFF (args.audit unset).
 
 ## Next
 1. When test-prep, critique-2 and fable-review have all landed: apply critique-2's test-phase.js / tester.md changes (owner: overhaul
