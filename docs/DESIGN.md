@@ -559,6 +559,22 @@ and 25% larger: 378 u and a 43.875 u half-beam. The carrier is 25% smaller (283.
 25% smaller again (212.6 u). The hit capsule is the drawn hull. New ships spawn half the longest
 class below the pad (`Hub.SpawnClear`), so any class starts clear of the base.
 
+### The class kits: the signed spec lives in docs/plans (2026-09-24)
+
+The twelve kits the class batch builds (one primary and three abilities a class, the capitals' warp,
+the V drive, strafe, the foundations F1-F24) are signed off in three layers, each amending the one
+before, and are NOT copied here:
+
+- `docs/plans/kits_v2.md`: every class card in full, the foundation table (§5) and the OutGuards rows.
+- `docs/plans/kits_v3.md`: the owner's v2 changes (Supercarrier, Grapnel pull and rip, Taunt, Ramjet,
+  the enemy heavies' twin laser, chips, capital warp); foundations as changes to v2 §5.
+- `docs/plans/kits_v31.md`: every later ruling folded in; foundations as changes to v3 §5; the build
+  order (§8, nine lanes) the batch follows. **Where the three disagree, the newest wins**, and the
+  owner's rulings in `docs/plans/README.md` win over all three.
+
+Numbers for the curve, bosses, raids, chips and items are `numbers_curve_raids_items.md`'s, not the
+kits'. Progress, decisions taken where the spec is silent, and the engine rungs owed: `docs/plans/ledger_kits.md`.
+
 ### The helm: capital ships handle like naval ships
 
 The developer's call: *no strafing, a turning radius, move as if in a medium* — and *slow*: speeds

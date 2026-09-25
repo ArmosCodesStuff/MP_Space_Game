@@ -14,11 +14,14 @@ temporary "scratchpad" folder refer to the originals of these same files.
 | file | what it is | status |
 |---|---|---|
 | `kits_v31.md` | the 12 class kits, every owner change folded in; power table; build order (9 lanes) | signed off with changes; §10 decisions 6, 8, 9, 14, 15 settled, the rest open (defaults stand) |
+| `kits_v3.md` | the v3 sign-off (the scratchpad's `kits3/signoff_v3.md`, unchanged): the base `kits_v31.md` cites as "v3 §x"; foundations §5, build order §7 | signed off; superseded where `kits_v31.md` says so |
+| `kits_v2.md` | the v2 sign-off (the scratchpad's `signoff_v2.md`, unchanged): the full class cards and the foundation table v3 §5 amends | signed off; superseded where v3 / v3.1 say so |
+| `ledger_kits.md` | the class-kits batch, lane A: jobs, decisions, the engine rungs owed | in progress |
 | `sniper_active_reload.md` | the Sniper's one-round chamber with an active reload on Space | designed; one question (below) |
 | `level_walls.md` | abilities and chip slots unlocked by pilot level | approved (6 chip slots on every hull) |
 | `numbers_curve_raids_items.md` | the progression curve with a chip-free reference pilot, raids/adds pacing, and the items by hull category at +10% a tier | designed and reconciled with the kits (§8); D6/D7 settled, the rest open (defaults stand) |
 | `progression_curve.md` | the earlier curve design (its defaults were approved) | superseded in its numbers by the file above |
-| `raids_squads_adds.md` | raid squads in formation and boss-fight adds, EXP for adds | defaults approved; owner changes in the rulings below |
+| `raids_squads_adds.md` | raids v2 (the scratchpad's `raids_v2.md`, byte-identical): raid squads in formation and boss-fight adds, EXP for adds | defaults approved; owner changes in the rulings below |
 | `network_webrtc.md` | multiplayer over the official Godot WebRTC plugin, invite codes, Google/Cloudflare STUN only | designed (v2); 3 questions (below) |
 | `network_webrtc_spike.md` | proof that webrtc-native 1.2.1 loads and connects in this project's .NET setup, editor and export | done |
 | `network_audit_connection.md`, `network_audit_protocol.md` | why real two-machine play never worked, and the protocol bugs found | reference |

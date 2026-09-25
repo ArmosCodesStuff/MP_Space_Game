@@ -41,7 +41,7 @@ Design only: no game code was edited, built or run. The numbers are from `models
 - The Supercarrier engages "anything": vs a boss, nothing changes.
 - The Warden's Taunt guard is not hull, so TTD does not see it.
 
-**Class inputs** (realistic DPS against a lone boss, stock, no chips). They come from the kits v3 power table (`kits3/signoff_v3.md` §4), with two changes:
+**Class inputs** (realistic DPS against a lone boss, stock, no chips). They come from the kits v3 power table (`kits_v3.md` §4), with two changes:
 - **Freighter 56.0**: Time on target goes hitscan at kits v3.1's 8.0 realistic (paint up 90%, sentries in reach 85%; §8 R5).
 - **DD rip**: 1% of the boss's total hull + 10 per cast-off, one every 21 s, used 80% of the time. That is 2.3% of a boss per fight. It opens at PL6 with the Grapnel.
 - **The Dart is 72.0** (kits v3.1: 71.9): every top-speed lift prices the Pepperbox and the rod, the V boost included (weapon and rod each +2.6 over v3's 66.8; §8 R6).
