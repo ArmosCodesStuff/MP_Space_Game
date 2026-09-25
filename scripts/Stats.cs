@@ -144,9 +144,8 @@ public class ShipStats
         if (Def.Has(Fit.Guns))
         {   // cursor-aimed turrets: the battleship's four, the destroyer's two
             Add("Main guns", "main_count",    "Barrels",            4, "", 0);
-            // THE 50 DPS PASS: every class averages about 50. The battleship is the steady one, from range:
-            // 4 x 17.9 every 2 s (its rate halved) is 35.8, and its broadside 14.3 more; the destroyer's
-            // guns are the smaller half of a bursty 50 (2 x 7.5 a second, 15).
+            // the sheet's defaults; each class's own figures are in its row (Ships.cs): the battleship's 4 x 12.5
+            // every 2 s from 1000 u, the destroyer's director battery 2 x 11.25 every 0.5 s from 700 u
             Add("Main guns", "main_damage",   "Damage per shot",    17.9, "", 2);
             Add("Main guns", "main_interval", "Reload (per barrel)",2.0, "s", 2, inverse: true);
             Add("Main guns", "main_range",    "Range",              1000, "u", 0);
@@ -162,19 +161,6 @@ public class ShipStats
             Add("Broadside", "broadside_gap",      "Between volleys",         0.25, "s", 2, inverse: true);
             Add("Broadside", "broadside_cooldown", "Cooldown after",          12, "s", 1, inverse: true);   // 24 shells x1.25 a 13.75 s cycle: 27.3 DPS (v1)
         }
-        if (Def.Has(Fit.Missiles))
-        {   // F: a guided BURST of three, one at the target and two launched wide that curve in onto
-            // it (PlayerShip.FireMissile). A magazine of bursts, reloaded by hand (R).
-            // the destroyer's burst: 3 bursts of 3 at 49, 0.4 s apart, then 9 s to reload -- 441 in 9.8 s, 45 DPS
-            Add("Missile", "missile_damage",   "Damage (each)",     49.0, "", 1);
-            Add("Missile", "missile_mag",      "Magazine (bursts)", 3, "", 0);
-            Add("Missile", "missile_refire",   "Between bursts",    0.4, "s", 1, inverse: true);
-            Add("Missile", "missile_reload",   "Reload (R)",        9.0, "s", 1, inverse: true);
-            Add("Missile", "missile_range",    "Range",             900, "u", 0);
-            Add("Missile", "missile_speed",    "Speed",             200, "u/s", 0);
-            Add("Missile", "missile_turn",     "Guidance (turn)",   1.5, "rad/s", 2);
-        }
-
         if (Def.Has(Fit.Pd))
         {   // PASSIVE: every mount fires whenever the ship is alive, with no key, no window and no
             // recharge -- 1 DPS a mount. Battleship and destroyer mounts are heavier and swing slower
@@ -263,11 +249,6 @@ public class ShipStats
     public double PdDpsPerTurret   => Def.Has(Fit.Pd) ? this["pd_damage"] / this["pd_interval"] : 0;
     // Passive, so what it deals while firing is what it sustains: there is no window to share.
     public double PdDps            => PdDpsPerTurret * this["pd_count"];
-    // A full magazine of bursts, fired as fast as it allows, then reloaded: damage per cycle over cycle time.
-    public double MissileDps => Def.Has(Fit.Missiles)
-        ? this["missile_mag"] * PlayerShip.BurstSides.Length * this["missile_damage"]
-          / (this["missile_reload"] + (this["missile_mag"] - 1) * this["missile_refire"])
-        : 0;
     // One broadside's shells, and its whole cycle: the wind-up, the volleys, then the cooldown.
     public double BroadsideDamage => this["broadside_volleys"] * this["main_count"] * this["main_damage"] * this["broadside_mult"];
     public double BroadsideCycle  => this["broadside_windup"] + (this["broadside_volleys"] - 1) * this["broadside_gap"] + this["broadside_cooldown"];
@@ -298,8 +279,7 @@ public class ShipStats
     {
         get { foreach (var w in Def.Weapons) yield return new DpsLine(w.Label, w.Rate(this), !w.Burst, w.Note?.Invoke(this) ?? ""); }
     }
-    // The rate it can hold forever: every line that is not a burst. The window added MainDps,
-    // MissileDps, BroadsideDps and PdDps, which is nine of the twelve classes short.
+    // The rate it can hold forever: every line that is not a burst (ClassDef.Weapons, never a fixed list of figures).
     public double SustainedDps
     {
         get { double t = 0; foreach (var l in DamageLines) if (l.Sustained) t += l.Dps; return t; }
@@ -326,11 +306,12 @@ public static class Dps
                   + $"= {s.BroadsideDamage:0.0} damage, every {s.BroadsideCycle:0.0} s",
     };
 
-    public static readonly DpsSource Missiles = new()
+    // THE LONG LANCE (Ab.Lance): one torpedo each cooldown, if it lands.
+    public static readonly DpsSource Lance = new()
     {
-        Label = "Missiles, averaged over a reload", Rate = s => s.MissileDps,
-        Note = s => $"{s["missile_mag"]:0} bursts of {PlayerShip.BurstSides.Length} at {s["missile_damage"]:0.0}, "
-                  + $"reloaded in {s["missile_reload"]:0.0} s",
+        Label = "Long Lance, averaged over its cooldown, if it lands",
+        Rate = s => s["lance_cooldown"] > 0 ? s["lance_damage"] / s["lance_cooldown"] : 0,
+        Note = s => $"{s["lance_damage"]:0} every {s["lance_cooldown"]:0.0} s, straight off the bow at {s["lance_speed"]:0} u/s",
     };
 
     public static readonly DpsSource Pd = new()

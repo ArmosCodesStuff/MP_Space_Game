@@ -684,23 +684,23 @@ public partial class _Shots : Node
             await Snap("54_shells_in_flight");
             zp.SetValue(H, z0); await W(1.5);
         }
-        // the destroyer's missile burst: three off the nose, the outer two launched wide and curving in;
-        // then one missile close up (the camera rides a stand-in over it)
+        // the destroyer's Long Lance: one heavy torpedo straight off the bow toward the dummy;
+        // then the torpedo close up (the camera rides a stand-in over it)
         {
             Character.Class = ShipClass.Destroyer; P(H, "ApplyLocalIdentity"); await W(0.3);
             var ms = H.GetNode<PlayerShip>("Ship_1"); var md = H.GetNode<TargetDummy>("TargetDummy1");
             ms.Position = md.Position + new Vector2(0, 700); ms.Velocity = Vector2.Zero; ms.Rotation = 0f; await W(0.8);
             H.SelectTarget(md);
             var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 1.4f);
-            ms.UseAbility("missile", md.NetId); await W(0.9);
-            await Snap("43_missile_burst");
+            ms.Sl("lance").Cool = 0; ms.UseAbility("lance", md.NetId); await W(0.9);
+            await Snap("43_lance_away");
             zp.SetValue(H, z0);
             var mt = H.GetChildren().OfType<Shot>().FirstOrDefault(x => x.Heavy);
             if (mt != null)
             {
                 ms.Visible = false; GetViewport().GetCamera2D().Zoom = new Vector2(5f, 5f);
                 for (int i = 0; i < 20; i++) { ms.Position = mt.GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-                await Snap("43b_missile_closeup");
+                await Snap("43b_lance_closeup");
                 ms.Visible = true; GetViewport().GetCamera2D().Zoom = new Vector2(0.9f, 0.9f);
             }
             await W(3.0);
@@ -798,13 +798,13 @@ public partial class _Shots : Node
             await W(0.45); await Snap("22b_broadside_volley");
             await W(1.2);
             await Snap("23_bar_battleship_cooldown");
-            // destroyer: the magazine spent, then reloading
+            // destroyer: the Long Lance away, its slot cooling; a second F refused COOLING
             await Class(ShipClass.Destroyer);
             await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);
             hub.SelectTarget(d1);
-            Key(global::Godot.Key.F); await W(0.8); Key(global::Godot.Key.F); await W(0.8);
-            await Snap("23b_bar_destroyer_empty");
-            Key(global::Godot.Key.R); await W(3.0); await Snap("23c_bar_destroyer_reloading");
+            Key(global::Godot.Key.F); await W(0.8);
+            await Snap("23b_bar_destroyer_lance_cooling");
+            Key(global::Godot.Key.F); await W(0.1); await Snap("23c_bar_destroyer_lance_refused");
             hub.BeginPlacement("TEST", _ => { });
             Input.WarpMouse(GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * (Me().Position + new Vector2(160, -120))));
             await W(0.3); await Snap("24_placement_ring");

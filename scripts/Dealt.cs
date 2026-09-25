@@ -8,7 +8,7 @@
 //
 // WEAPON IDS name what dealt the blow, for PlayerShip.DealtBy and AbilityDef.OnDealt. Where the
 // blow already carries a row of its own, the row's OWN id is used (Shots.Of(kind).Id): a main gun's
-// shell is "shell", a hunter or a bomber's torpedo "torpedo", the destroyer's burst "missile", the
+// shell is "shell", a hunter or a bomber's torpedo "torpedo", the destroyer's Long Lance "lance", the
 // siege base's cruise-missile launcher "cruise", a wing craft's shot its Wings.All row's
 // ("fighter", "patrol", "gunship"). Everything else names its own id here.
 // ─────────────────────────────────────────────────────────────────────────────

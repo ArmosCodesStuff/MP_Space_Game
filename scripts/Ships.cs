@@ -35,7 +35,6 @@ public enum Fit
     None = 0,
     Guns = 1,          // cursor-aimed main turrets
     Broadside = 2,     // every main gun, volley after volley (F)
-    Missiles = 4,      // a magazine of guided bursts
     Wing = 8,          // fighters and bombers from a deck
     Pd = 16,           // point-defence turrets: passive, firing whenever the ship is alive
     Deploy = 32,       // it drops turrets of its own and picks them up again (the freighters)
@@ -234,25 +233,34 @@ public static class Classes
             },
             Abilities = new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Gunships, Ab.Supercarrier } },
 
-        new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true, Targets = 3, Fit = Fit.Guns | Fit.Missiles | Fit.Pd,
-            Blurb = "Fastest of the line. Two cursor-aimed main guns, missile bursts of three, two point-defence turrets.",
-            Hint = "DESTROYER  ·  mouse aims the main guns",
+        new() { Id = ShipClass.Destroyer, Name = "DESTROYER", Ready = true, Targets = 3, Fit = Fit.Guns | Fit.Pd,
+            Blurb = "Fastest of the line. A two-gun director battery that leads a selected target, a long-range torpedo, two point-defence turrets.",
+            Hint = "DESTROYER  ·  mouse aims the main guns; a selected target is led",
             Drive = Drives.Warp,
             Nums = new() {
-                ["hull"] = 250,
+                ["hull"] = 395,
                 ["thrust"] = 63, ["reverse_thrust"] = 27, ["max_speed"] = 117, ["reverse_speed"] = 40.5,
-                ["turn_radius"] = 107, ["turn_rate"] = 1.08,
-                ["main_count"] = 2, ["main_damage"] = 7.5, ["main_interval"] = 1.0, ["main_range"] = 720, ["shell_speed"] = 520,
+                ["turn_radius"] = 95, ["turn_rate"] = 1.2,
+                // the director battery (v1): 2 x 11.25 every 0.5 s = 45.0 DPS at 700 u, shells 760 u/s, turrets 2.09 rad/s
+                ["main_count"] = 2, ["main_damage"] = 11.25, ["main_interval"] = 0.5, ["main_range"] = 700, ["shell_speed"] = 760,
+                ["main_turn"] = 2.09,
                 ["pd_count"] = 2,
             },
-                // the 0: gear reaches the missiles, the pilot's points do not -- as it was
-            Damage = new() { ["main_damage"] = 1, ["missile_damage"] = 0 },
-            Reach = new() { ["main_range"] = 1, ["missile_range"] = 1, ["pd_range"] = 1 },
-            Cycle = new() { ["main_interval"] = 1, ["missile_reload"] = 1, ["pd_interval"] = 1 },
-            Weapons = new[] { Dps.Main, Dps.Missiles, Dps.Pd },
+                // the 0: gear reaches the Lance, the pilot's points do not -- as the missiles were
+            Damage = new() { ["main_damage"] = 1, ["lance_damage"] = 0 },
+            Reach = new() { ["main_range"] = 1, ["lance_range"] = 1, ["pd_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1, ["pd_interval"] = 1 },
+            Weapons = new[] { Dps.Main, Dps.Lance, Dps.Pd },
             Kit = new[] {
-                ItemDef.Own(GearSlot.Weapon, "dd_main_battery", "Mk I Twin Turrets", "the two main turrets", "missile_mag"),
-                ItemDef.Own(GearSlot.Utility, "dd_missile_rack", "Missile Rack", "the missile bursts and their magazine", "missile_mag"),
+                ItemDef.Own(GearSlot.Weapon, "dd_main_battery", "Mk I Twin Turrets", "the two director turrets", "lance_damage"),
+                ItemDef.Own(GearSlot.Utility, "dd_missile_rack", "Torpedo Tube", "the Long Lance's tube", "lance_damage"),
+            },
+            Rows = new StatRow[] {
+                new() { Group = "Main guns", Id = "director_lead", Label = "Leads a selected target within (x range)", Base = 1.2, Unit = "x", Dec = 2 },
+                new() { Group = "Long Lance", Id = "lance_damage",   Label = "Damage",   Base = 300, Unit = "", Dec = 0 },
+                new() { Group = "Long Lance", Id = "lance_speed",    Label = "Speed",    Base = 170, Unit = "u/s", Dec = 0 },
+                new() { Group = "Long Lance", Id = "lance_range",    Label = "Run",      Base = 3000, Unit = "u", Dec = 0 },
+                new() { Group = "Long Lance", Id = "lance_cooldown", Label = "Cooldown", Base = 18, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 // destroyer_dd22 (the pack, J5): both mains on the keel gun cluster near the bow,
@@ -261,7 +269,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0.20f, -14.20f), new(0.20f, 17.81f) },
                 Pds   = new Vector2[] { new(-30.81f, 5.82f), new(30.81f, 5.82f) },
                 TurretTexScale = 1.3085f / 5.5f, MainBarrel = 16.03f, PdBarrel = 7.2f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Missile, Ab.Reload } },
+            Abilities = new[] { Ab.Guns, Ab.Lance } },
 
         // -- page 2: freight, which carries its own defences -------------------
         new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,

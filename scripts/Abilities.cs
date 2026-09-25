@@ -159,6 +159,9 @@ public class AbilityDef
     // row flown at a target (the pilot's picks, else the selected), one round the carrier for a ToHull row -- and runs
     // the row's LifeStat. Nothing sent spends nothing. The gunships, the Supercarrier.
     public WingKind? Sends;
+    // A BOW SHOT (BowShot below, PlayerShip.FireAlong): pressed, one round of a Shots.All row leaves the nose straight
+    // along the heading, and its Cooldown starts from the press. The Long Lance.
+    public BowShot Bow;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
@@ -196,6 +199,14 @@ public class RampSpec
 public class DashSpec
 {
     public string Reach, Time, Damage, Guard, Cooldown;   // u, s, per body, x damage taken, s
+}
+
+// A BOW SHOT: one round of the Shots.All row Kind, off the nose along the heading (PlayerShip.FireAlong), at the
+// ship's own damage, speed and range stats. A row names stat ids, never numbers:
+public class BowShot
+{
+    public int Kind;
+    public string Damage, Speed, Range;   // per round, u/s, u
 }
 
 // A STANCE: a Status held for Time (PlayerShip.Stance), dropped by a second press or by any other of the
@@ -252,32 +263,18 @@ public static class Ab
         },
     };
 
-    public static readonly AbilityDef Missile = new()
+    // THE LONG LANCE (the Destroyer's F, v1): one torpedo straight off the bow along the heading -- 300, 170 u/s, a
+    // 3000 u run -- that stops on the first hostile it touches and never on a missile (Shots row "lance"); 18 s from
+    // the press. A bow-shot row (AbilityDef.Bow, PlayerShip.FireAlong): never refused but COOLING.
+    public static readonly AbilityDef Lance = new()
     {
-        Id = "missile", Name = "Missile burst", Short = "MSL", Default = Key.F,
-        Blurb = "Three guided missiles: one at the target, two wide that curve in. Needs a target in range; uses the magazine.",
-        Press = (s, t) => s.FireMissile(t),
-        Refuse = (s, t) => t == null ? "NO TARGET"
-                         : s.Position.DistanceTo(t.Position) > s.Stats["missile_range"] ? "OUT OF RANGE" : null,
-        Show = (s, _) =>
-        {
-            var st = new SlotState { Line = s.Reloading ? "RELOADING"
-                                          : s.MissilesLoaded == 0 ? "EMPTY · R"
-                                          : $"{s.MissilesLoaded}/{s.Stats["missile_mag"]:0}" };
-            if (s.Reloading) st.Busy = (float)(s.MissileReloadLeft / s.Stats["missile_reload"]);
-            return st;
-        },
-    };
-
-    public static readonly AbilityDef Reload = new()
-    {
-        Weapon = true, Id = "reload", Name = "Reload missiles", Short = "RELOAD", Default = Key.R,
-        Blurb = "Refills the magazine. Nothing fires while it runs.",
-        Press = (s, _) => s.StartReload(),
-        Expire = s => s.Sl("missile").N = (int)s.Stats["missile_mag"],   // loaded: the magazine full
-        Show = (s, _) => s.Reloading
-            ? new SlotState { Line = $"{s.MissileReloadLeft:0.0}s", Busy = (float)(s.MissileReloadLeft / s.Stats["missile_reload"]) }
-            : new SlotState { Line = s.MissilesLoaded >= (int)s.Stats["missile_mag"] ? "FULL" : "READY" },
+        Id = "lance", Name = "Long Lance", Short = "LANCE", Default = Key.F,
+        Blurb = "One heavy torpedo straight off the bow: 300 damage to the first hostile it meets, up to 3000 u out. Slow; lead with the hull.",
+        Bow = new BowShot { Kind = Shots.Lance, Damage = "lance_damage", Speed = "lance_speed", Range = "lance_range" },
+        Cooldown = "lance_cooldown",
+        Press = (s, _) => s.FireAlong("lance"),
+        Refuse = (s, _) => s.Sl("lance").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "lance", "lance_cooldown", "LANCE"),
     };
 
     public static readonly AbilityDef Attack = new()

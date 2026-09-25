@@ -140,14 +140,14 @@ public static class Combat
         => Fire(scrap ? Shots.Scrap : Shots.Slug, from, dir, speed, range, damage, radius,
                 hitSource: hitSource, variant: variant);
 
-    // Unguided torpedoes pass targetId 0; a missile passes its target and a small turn rate, and
-    // heavy for its looks. hostile = fired BY an enemy, so it seeks and hits player ships -- and it
+    // Unguided torpedoes pass targetId 0; a missile passes its target and a small turn rate.
+    // hostile = fired BY an enemy, so it seeks and hits player ships -- and it
     // gets an id, so point defence can shoot it down on every peer at once. source: the player
     // ship that fired it (host only), credited with combat on a hit.
     public static void LaunchTorpedo(Vector2 from, Vector2 dir, float speed, float range, double damage,
-                                     int targetId = 0, float turnRate = 0f, bool heavy = false, bool hostile = false,
+                                     int targetId = 0, float turnRate = 0f, bool hostile = false,
                                      PlayerShip source = null, string hitSource = null, float size = 1f)
-        => Fire(hostile ? Shots.Seeker : heavy ? Shots.Missile : Shots.Torpedo, from, dir, speed, range, damage,
+        => Fire(hostile ? Shots.Seeker : Shots.Torpedo, from, dir, speed, range, damage,
                 targetId: targetId, turnRate: turnRate, source: source, hitSource: hitSource, size: size);
 
     // Dropped by the world on its way out. EVERY hook set by that world must go: each one is a

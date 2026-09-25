@@ -342,3 +342,36 @@ fittings sweep's witness table ~13755, fitRows ~13797.
 - HEAD 8d2c8b8570aa2936a7a6820b06268122a9004b9a · Ships.cs f55ab21b · Abilities.cs c1453e69 · PlayerShip.cs 0307607f ·
   Stats.cs 985dc811 · Shots.cs c44dd017 · Combat.cs b1c74172 · Items.cs 69ab6bab · Dealt.cs 055f7437 · SmokeTest.cs.txt
   510f58d9 · Shots.cs.txt ba103b7f
+### kits6a-J7 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase.
+- Built: DD row (hull 395, turn 1.2 / radius 95, 2 x 11.25 / 0.5 s, 700 u, 760 u/s, main_turn 2.09, Rows director_lead
+  1.2 + lance_damage 300 / lance_speed 170 / lance_range 3000 / lance_cooldown 18; Fit Guns | Pd; Weapons Main, Lance,
+  Pd; kit parts Need lance_damage, dd_missile_rack renamed "Torpedo Tube", id kept). PlayerShip.Directed (owner-side
+  lead, 8 fixed-point passes on Missiles.Predict; AimPoint rides the state report). AbilityDef.Bow + BowShot +
+  PlayerShip.FireAlong; Ab.Lance (F); Shots row 4 "missile" -> "lance" (A6a-12, unguided, Sweep 6); Dps.Lance. A refit
+  onto a hull without Ab.FireMode clears Staggered (a BB left staggered came up as a DD with no key to undo it).
+  DELETED: Fit.Missiles, Ab.Missile / Ab.Reload, MissilesLoaded / Reloading / StartReload / BurstSides / FireMissile,
+  Stats Missile group / MissileDps / Dps.Missiles, LaunchTorpedo's heavy flag (callers: PlayerShip hunters,
+  TargetDummy.cs -- outside the PRE's list, a caller fix -- and two harness lines). Items @output lance_damage.
+- A6a-12 (new decision): the Lance is Shots row 4 renamed in place, not an appended row: the missile burst was its one
+  user and leaves; the wire index stays. The four v2 gear ids (dd_salvo / buster / seeker / loader) do not exist in
+  this tree's item table (Items.cs lines are category stems): owed to lane I (items), not built.
+- Checks NEW: LaneA6aDirectorChecks (rows; aim within 2 u of the 760 u/s intercept at {0, 100-150, 250-300} u/s x
+  {150-300, 600-690, 800-835} u, cursor at 845-900 u / nothing selected / the BB; a BB left staggered comes up a DD
+  firing salvoes; 3 live runs on a crossing gunship: selected >= 6 of 10 shells land, cursor-aimed <= 2),
+  LaneA6aLanceChecks (rows, learn order; 3 runs: one unguided Lance on the heading at 170 +- 3, exactly 300 credited
+  "lance", 18.0 s, COOLING, no second), LaneA6aLanceHitChecks (3 runs, PD reach off: a seeker on the line passed, a
+  webifier takes 300, the dummy behind 0). Frames REWRITTEN: 43_lance_away, 43b_lance_closeup,
+  23b_bar_destroyer_lance_cooling, 23c_bar_destroyer_lance_refused (were 43_missile_burst, 43b_missile_closeup, 23b/23c
+  magazine / reload). The sweep: witness "lance" (missile / reload gone), fitRows (Guns -> guns; Fit.Missiles row gone;
+  firemode never without guns), reach case "lance_range" (missile_range gone).
+- Checks REWRITTEN (6.3): the DD solo block (bar guns / lance / warp, 395 hull, turn 1.2 / 95, the carrier's radius 140
+  -- J4 had missed it --, 45 + 16.67 + 2 DPS, the Lance on F, Salvo Core T1 300 -> 375, the kit tube back to 300);
+  LaneA4TargetsChecks lends Ab.Lance TakesTargets (was Ab.Reload); the weapon-rows list and the walls' kit; the BB
+  total without MissileDps; EveryDamageStat (lance_damage for missile_damage); the Shots table (Lance heavy, unguided,
+  not interceptable); rung 5: the arena guest's DD 395 x 1.16 = 458.2 with the Lance past 300 (was 290 / 6 bursts),
+  the third player's BB 500 x 1.08 = 540 (was 324, 5 lines), the guest carrier 425 x 1.24 = 527 (was 248) -- hull
+  literals J1 / J4 had left.
+- Owed at rung 3: all three checks + the DD block; rung 4: the four DD frames; rung 5: the 458.2 / 540 / 527 lines.
+- Next: kits6a-J8 (Suppress). The DD's ability 2 and 3 walls log PEND until J8 / J9.

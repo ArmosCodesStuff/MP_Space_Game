@@ -263,12 +263,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private readonly Dictionary<string, (Slot slot, double clock)> _slotsAway = new();   // every slot a class change put away, and when (FitClass)
     public ref Slot Sl(string id) => ref _slots[_slotAt.TryGetValue(id, out int i) ? i : 0];
 
-    // Missiles (destroyer): a magazine of bursts, reloaded by hand.
-    public int MissilesLoaded => Sl("missile").N;
-    public double MissileReloadLeft => Sl("reload").Left;
-    public bool Reloading => MissileReloadLeft > 0;
-    private bool CanFireMissile => Stats.Def.Has(Fit.Missiles) && MissilesLoaded > 0 && !Reloading && Sl("missile").Cool <= 0;
-
     // The broadside (battleship): a wind-up while the turrets swing onto the cursor, then every main
     // gun fires, volley after volley, then the cooldown. The host acts on it; every peer counts the
     // timers down between reports, so a guest's bar and turrets move smoothly.
@@ -379,20 +373,20 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         MaxHp = Stats["hull"];
         Hp = Alive ? Math.Max(1, frac * MaxHp) : MaxHp;
         _hullWatch = default;                      // a refit, not damage
-        // The class's slots, index 0 the spare: a new one with every timer at zero and the magazine full.
+        // The class's slots, index 0 the spare: a new one with every timer at zero.
         var list = Abilities.For(Class);
         _slots = new Slot[list.Length + 1];
         _slotAt.Clear();
         for (int i = 0; i < list.Length; i++) _slotAt[list[i].Id] = i + 1;
+        if (Array.IndexOf(list, Ab.FireMode) < 0) Staggered = false;   // a hull with no fire mode (the destroyer) fires salvoes
         _netSlotLeft = new float[_slots.Length]; _netSlotCool = new float[_slots.Length];
         _netSlotOwn = new float[_slots.Length]; _netSlotN = new int[_slots.Length];
-        Sl("missile").N = (int)Stats["missile_mag"];
         foreach (var (id, at) in _slotAt)
             if (_slotsAway.Remove(id, out var kept))
             {
                 ref var s = ref _slots[at];
                 s.Cool = Math.Max(0, kept.slot.Cool - (_clock - kept.clock));
-                s.N = kept.slot.N;                 // a magazine over the new sheet's is cut to it (FitWings)
+                s.N = kept.slot.N;                 // its count (charges spent, a chamber) as it was
             }
         // a chamber is fitted seated (a reload that was running ended with the refit), and the owner's view with it
         foreach (var def in list) if (def.Reload is { } rl) ActiveReload.Seat(this, rl);
@@ -441,7 +435,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         while (WingCount(WingKind.Bomber) > wantB) RemoveWing(WingKind.Bomber);
         if (WingCount(WingKind.Bomber) != hadB) { StrikeTarget = null; _strikesOut = 0; }
         if (!Net.Sim) return;
-        Sl("missile").N = Math.Min(MissilesLoaded, (int)Stats["missile_mag"]);
         foreach (var w in _wings) if (w.Def.AmmoStat != null) w.Ammo = Math.Min(w.Ammo, (int)Stats[w.Def.AmmoStat]);
     }
 
@@ -662,11 +655,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private bool PressHeld(AbilityDef def) => Disabled && !def.WhenWrecked;
     public void Reboard() { if (CanReboard) { Alive = true; Hp = MaxHp * ReboardHull; _stasis = 0; } }
     public void StartBroadside() { if (BroadsideReady) Sl("broadside").Left = Stats["broadside_windup"]; }
-    public void StartReload()
-    {
-        if (Stats.Def.Has(Fit.Missiles) && !Reloading && MissilesLoaded < (int)Stats["missile_mag"])
-            Sl("reload").Left = Stats["missile_reload"];
-    }
     public void OrderAttack(IHittable t) { if (Stats.Def.Has(Fit.Wing) && t != null) { WingTarget = t; _attacking = true; } }
     public void RecallWing() { WingTarget = null; _attacking = false; }
     // ── THE FREIGHTERS ──────────────────────────────────────────────────
@@ -876,7 +864,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             float side = (i % 2 == 0 ? -1 : 1) * (12f + 8f * (i / 2));
             var dir = (t.Position - nose).Rotated(Mathf.DegToRad(side));
             Combat.LaunchTorpedo(nose, dir, (float)Stats["hunter_speed"], range * 1.6f, Stats["hunter_damage"],
-                                 t.NetId, (float)Stats["hunter_turn"], heavy: false, hostile: false, source: this);
+                                 t.NetId, (float)Stats["hunter_turn"], hostile: false, source: this);
         }
     }
 
@@ -1047,33 +1035,16 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (ReferenceEquals(StrikeTarget, t)) StrikeTarget = null;
     }
 
-    // A BURST (destroyer): three missiles off the nose, one straight at the target and two launched
-    // up to 70 degrees to either side, all guided -- each heading turns toward the target at
-    // missile_turn rad/s, so the outer two curve in onto it from the flanks. One burst spends one
-    // of the magazine.
-    //   A missile heading theta off a target d away can only come round onto it if d > 2 r sin(theta),
-    // r being its turning radius (speed / turn); any closer and it circles the target until its run
-    // ends. So close in, the fan narrows to what the missiles can still turn through, with a margin
-    // (BurstSplayFor): the full 70 degrees from about 250 u out on the kit's rack.
-    public static readonly int[] BurstSides = { 0, -1, 1 };
-    public const float BurstSplay = 70f;
-    public static float BurstSplayFor(float d, float speed, float turn)
+    // A BOW SHOT'S PRESS (AbilityDef.Bow), on the host: one round of its Shots.All row off the nose, straight along the
+    // heading, at the sheet's damage, speed and range; its Cooldown from the press. The Long Lance. The weapon id its
+    // blows carry is the row's own (Shots.Of(kind).Id), so a listener tells a Lance from a director shell.
+    public void FireAlong(string id)
     {
-        float reach = 0.8f * d / (2f * speed / Mathf.Max(0.01f, turn));
-        return reach >= Mathf.Sin(Mathf.DegToRad(BurstSplay)) ? BurstSplay : Mathf.RadToDeg(Mathf.Asin(reach));
-    }
-    public void FireMissile(IHittable t)
-    {
-        if (!Net.Sim || !CanFireMissile) return;
-        float range = (float)Stats["missile_range"];
-        if (t == null || Position.DistanceTo(t.Position) > range) return;   // a target in range, or nothing
-        Sl("missile").N--; Sl("missile").Cool = Stats["missile_refire"];
-        var nose = ToGlobal(new Vector2(0, -MyArt.Length * 0.5f));
-        float speed = (float)Stats["missile_speed"], turn = (float)Stats["missile_turn"];
-        float splay = BurstSplayFor(nose.DistanceTo(t.Position), speed, turn);
-        foreach (int side in BurstSides)
-            Combat.LaunchTorpedo(nose, (t.Position - nose).Rotated(Mathf.DegToRad(side * splay)), speed, range * 1.4f,
-                                 Stats["missile_damage"], t.NetId, turn, heavy: true, source: this);
+        var def = Abilities.Find(Class, id);
+        if (!Net.Sim || def?.Bow is not { } b || Sl(id).Cool > 0) return;
+        Combat.Fire(b.Kind, Aim.Nose(this, MyArt.Length * 0.5f), Vector2.Up.Rotated(Rotation), (float)Stats[b.Speed],
+                    (float)Stats[b.Range], Stats[b.Damage], source: this, hitSource: id);
+        if (def.Cooldown != null) Sl(id).Cool = Cooling(Stats[def.Cooldown]);
     }
 
     // ── THE ONE DOOR DAMAGE COMES THROUGH ───────────────────────────────
@@ -1618,15 +1589,35 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (HelmMoves.Fly(this, _helm, throttle, rudder, dt)) _yawRate = 0f;
         else if (!DashCarry(dt)) Steer(throttle, rudder, strafe, dt);
 
-        // the main guns aim at the cursor; the hull does not follow it
+        // the main guns aim at the cursor (or, a director's, lead the selected); the hull does not follow it
         if (!Demo) Trigger = false;              // a display ship's driver owns the trigger
         if (!locked)
         {
-            AimPoint = GetGlobalMousePosition();
+            AimPoint = Directed(GetGlobalMousePosition(), (GetParent() as Hub)?.Selected, dt);
             Trigger = Abilities.TriggerOf(Class) is { } trig && Stroke(trig, Input.IsKeyPressed(Abilities.KeyFor(Class, trig.Id)));
         }
 
         SendState(dt);
+    }
+
+    // THE DIRECTOR (a sheet whose director_lead is above 0: the destroyer's battery). With a hostile SELECTED within
+    // main_range x director_lead, the aim point is where a shell at shell_speed meets it on its present course
+    // (Missiles.Predict on a Lead watched frame to frame), so the guns lead it by themselves; with none, the cursor.
+    // Worked out on the owner and sent as its aim, as the cursor was: the host fires at it, no new wire.
+    private Lead _director;
+    private IHittable _directed;
+    public Vector2 Directed(Vector2 cursor, IHittable selected, double dt)
+    {
+        double lead = Stats["director_lead"];
+        if (lead <= 0 || selected is not { Alive: true } || Position.DistanceTo(selected.Position) > Stats["main_range"] * lead)
+        { _directed = null; return cursor; }
+        if (!ReferenceEquals(selected, _directed)) { _director = default; _directed = selected; }
+        _director.Watch(selected.Position, dt);
+        double speed = Math.Max(1, Stats["shell_speed"]);
+        var at = selected.Position;
+        // the flight to where it will be, taken again from that point: 8 passes settle to a unit or two at 400 u/s
+        for (int i = 0; i < 8; i++) at = Missiles.Predict(selected.Position, _director.Velocity, Position.DistanceTo(at) / speed);
+        return at;
     }
 
     private void SendState(float dt)

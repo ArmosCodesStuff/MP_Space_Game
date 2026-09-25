@@ -98,7 +98,7 @@ public static class Items
         ("@primary_range", new[] { "main_range", "fighter_range", "blade_reach" }),
         ("@tracking",      new[] { "main_turn", "fighter_turn" }),
         ("@shot_speed",    new[] { "shell_speed", "fighter_speed" }),
-        ("@output",        new[] { "broadside_mult", "torpedo_damage", "missile_damage", "bubble_pool", "overdrive_mult",
+        ("@output",        new[] { "broadside_mult", "torpedo_damage", "lance_damage", "bubble_pool", "overdrive_mult",
                                    "wave_push", "rail_damage", "hunter_damage", "echo_share", "lunge_damage", "whirl_damage" }),
         ("@area",          new[] { "bubble_radius", "wave_range", "echo_radius", "whirl_reach", "hunter_range", "launch_range", "taunt_reach" }),
         ("@duration",      new[] { "bubble_time", "overdrive_time", "wave_disable", "stealth_time", "roll_time", "echo_time", "whirl_time", "prism_time", "anchor_time", "tether_hold", "taunt_time",

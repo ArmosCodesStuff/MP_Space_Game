@@ -5541,6 +5541,201 @@ public partial class _Test : Node
         }
     }
 
+    // ── SLICE 6a: THE DIRECTOR BATTERY (the Destroyer's primary, v1): 2 x 11.25 every 0.5 s = 45.0 DPS at 700 u, shells
+    // 760 u/s; with a hostile SELECTED within 840 u (main_range x director_lead 1.2) the guns lead it by themselves, else
+    // they follow the cursor. PART 1, the aim itself (PlayerShip.Directed, fed frame by frame with the target moved by
+    // hand): lateral speeds {0, 100-150, 250-300} u/s on a VaryAngle course at VaryNear ranges {150-300, 600-690, 800-835}
+    // u -- the aim within 2 u of where a 760 u/s shell meets it; 845-900 u, nothing selected, or a hull with no director
+    // (the battleship): the cursor. PART 2, live (three runs, a held gunship crossing at 150-250 u/s 480-580 u off at a
+    // VaryAngle bearing, the cursor on the target): selected, at least 6 of the shells fired in 2.5 s land; unselected,
+    // the cursor's shells trail it and at most 2 land.
+    async Task LaneA6aDirectorChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        var dd = new ShipStats(ShipClass.Destroyer);
+        Check(dd["main_count"] == 2 && dd["main_damage"] == 11.25 && dd["main_interval"] == 0.5 && dd["main_range"] == 700 && dd["shell_speed"] == 760
+              && Math.Abs(dd["director_lead"] - 1.2) < 1e-9 && Math.Abs(dd["main_turn"] - 2.09) < 1e-9 && Math.Abs(dd.MainDps - 45.0) < 1e-9
+              && new ShipStats(ShipClass.Battleship)["director_lead"] == 0,
+              $"the director's rows (v1): 2 x 11.25 every 0.5 s = {dd.MainDps:0.0} DPS, 700 u, 760 u/s, turrets 2.09 rad/s, a lead within 1.2 x its range; no other hull leads");
+        await SetClass(ShipClass.Destroyer);
+        var s = Me; s.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        // where a shell at c from `from` meets a body at p moving at v: the positive root of |p - from + v t| = c t
+        static Vector2 Meet(Vector2 from, Vector2 p, Vector2 v, double c)
+        {
+            var d = p - from;
+            double a = v.Dot(v) - c * c, b = 2 * d.Dot(v), k = d.Dot(d);
+            double t = Math.Abs(a) < 1e-9 ? -k / b : (-b - Math.Sqrt(b * b - 4 * a * k)) / (2 * a);
+            return p + v * (float)t;
+        }
+        // PART 1: the aim, computed on the owner from what it watched
+        var probe = H.SpawnRaider(VaryNear(yonder, 900f), Enemies.Webifier); probe.Hp = 1e9; probe.ApplyStatus(Status.Disabled, 120);
+        await Frame();
+        s.Position = yonder; s.Velocity = Vector2.Zero;
+        var cursor = yonder + new Vector2(0, 2000);
+        var bands = new[] { (0f, 0f, 150f, 300f), (100f, 150f, 600f, 690f), (250f, 300f, 800f, 835f) };
+        for (int run = 0; run < 3; run++)
+        {
+            var (vLo, vHi, rLo, rHi) = bands[run];
+            float bearing = VaryAngle(), range = Vary(rLo, rHi), speed = Vary(vLo, vHi);
+            var los = Vector2.Right.Rotated(bearing);
+            var vel = los.Orthogonal() * (Vary(0f, 1f) < 0.5f ? -1f : 1f) * speed;
+            var p = s.Position + los * range;
+            Vector2 aim = cursor;
+            s.Directed(cursor, null, 1 / 60.0);                           // forgets whatever it led before
+            for (int f = 0; f < 12; f++) { p += vel / 60f; probe.Position = p; aim = s.Directed(cursor, probe, 1 / 60.0); }
+            var want = Meet(s.Position, p, vel, 760);
+            var far = s.Position + los * Vary(845f, 900f); probe.Position = far;
+            var beyond = s.Directed(cursor, probe, 1 / 60.0);
+            var none = s.Directed(cursor, null, 1 / 60.0);
+            Check(aim.DistanceTo(want) < 2f && (speed > 0 || aim.DistanceTo(p) < 0.01f) && beyond == cursor && none == cursor,
+                  $"director aim run {run}: a target {range:0} u off crossing at {speed:0} u/s -- the guns lead it to {aim.DistanceTo(p):0.0} u ahead, {aim.DistanceTo(want):0.00} u from where a 760 u/s shell meets it (< 2); at {s.Position.DistanceTo(far):0} u (past 840) and with nothing selected, the cursor");
+        }
+        await SetClass(ShipClass.Battleship);
+        var bb = Me; probe.Position = bb.Position + new Vector2(0, -400);
+        Check(bb.Directed(cursor, probe, 1 / 60.0) == cursor, "the battleship (no director_lead) aims at its cursor with a hostile selected 400 u off");
+        probe.TakeDamage(1e12);
+        // PART 2: live -- the host fires at the aim the owner sent, selected or not. The battleship left STAGGERED: the
+        // destroyer, which has no fire mode, comes up firing salvoes
+        bb.Staggered = true;
+        await SetClass(ShipClass.Destroyer);
+        s = Me; s.AutopilotTo = null;
+        Check(!s.Staggered && Abilities.Find(ShipClass.Destroyer, "firemode") == null,
+              "a battleship left staggered, refitted as a destroyer (no fire mode): its director fires salvoes");
+        for (int run = 0; run < 3; run++)
+        {
+            float bearing = VaryAngle(), range = Vary(480f, 580f), speed = Vary(150f, 250f);
+            var los = Vector2.Right.Rotated(bearing);
+            var side = los.Orthogonal() * (run % 2 == 0 ? 1f : -1f);
+            var at = VaryNear(yonder, 200f);
+            int landedLed = 0, landedCursor = 0;
+            for (int led = 1; led >= 0; led--)
+            {
+                void Hold() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = bearing + Mathf.Pi / 2f; }
+                Hold();
+                var start = at + los * range - side * 500f;
+                var tgt = H.SpawnRaider(start, Enemies.Gunship); tgt.Hp = 1e9; tgt.ApplyStatus(Status.Disabled, 60);
+                await Frame();
+                if (led == 1) H.SelectTarget(tgt); else H.ClearSelection();
+                double c0 = s.Clock;
+                while (s.Clock - c0 < 1.6) { Hold(); tgt.Position = start; AimWorld(tgt.Position); await Frame(); }
+                var p = start; c0 = s.Clock;
+                double hp0 = tgt.Hp; bool down = false; double downAt = 0;
+                while (s.Clock - c0 < 4.5)
+                {
+                    double t = s.Clock - c0;
+                    p = start + side * (float)(speed * t); tgt.Position = p; Hold(); AimWorld(p);
+                    if (!down && t >= 1.0) { KeyDown(global::Godot.Key.Space); down = true; downAt = s.Clock; }
+                    if (down && s.Clock - downAt >= 2.5) KeyUp(global::Godot.Key.Space);
+                    await Frame();
+                }
+                KeyUp(global::Godot.Key.Space);
+                int landed = (int)Math.Round((hp0 - tgt.Hp) / 11.25);
+                if (led == 1) landedLed = landed; else landedCursor = landed;
+                tgt.TakeDamage(1e12);
+                H.ClearSelection();
+                await Wait(0.3);
+            }
+            Check(landedLed >= 6 && landedCursor <= 2,
+                  $"director live run {run}: a gunship {range:0} u off crossing at {speed:0} u/s, 2.5 s of Space with the cursor on it -- selected, {landedLed} shells land (>= 6 of 10); not selected, {landedCursor} (<= 2)");
+        }
+    }
+
+    // ── SLICE 6a: THE LONG LANCE (the Destroyer's F, v1): one torpedo straight off the bow along the heading, 300, 170 u/s,
+    // a 3000 u run, stopping on the first hostile it touches; 18 s from the press, never refused but COOLING. Three
+    // runs (VaryNear spot, VaryAngle heading, a held gunship 400-900 u down the bow): F -- exactly one Lance, unguided, its
+    // course the heading (0.01 rad) at 170 +- 3 u/s; the gunship takes exactly 300, credited "lance"; the slot cools
+    // 18.0 s and a second F is refused COOLING with nothing fired; nothing was selected, so none is needed.
+    async Task LaneA6aLanceChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        var dd = new ShipStats(ShipClass.Destroyer);
+        Check(dd["lance_damage"] == 300 && dd["lance_speed"] == 170 && dd["lance_range"] == 3000 && dd["lance_cooldown"] == 18
+              && Ab.Lance.Default == global::Godot.Key.F && Ab.Lance.Bow.Kind == Shots.Lance && Shots.Of(Shots.Lance).Stops == 1 && !Shots.Of(Shots.Lance).Guided
+              && Unlocks.AbilityAt(Classes.Of(ShipClass.Destroyer).Abilities, Ab.Lance) == 1,
+              "the Long Lance's rows (v1): 300, 170 u/s, 3000 u, 18 s on F, one unguided round that stops on the first body; ability 1, open at level 1");
+        await SetClass(ShipClass.Destroyer);
+        var s = Me; s.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        List<Shot> Lances() => Nodes<Shot>().Where(x => x.Kind == Shots.Lance && x.Source == s).ToList();
+        H.ClearSelection();
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float heading = VaryAngle();
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = heading; }
+            s.Sl("lance").Cool = 0; Hold(); await Wait(0.2); Hold();
+            var nose = Vector2.Up.Rotated(heading);
+            var spot = at + nose * Vary(400f, 900f);
+            var tgt = H.SpawnRaider(spot, Enemies.Gunship); tgt.Hp = 1e9; tgt.ApplyStatus(Status.Disabled, 60);
+            await Frame();
+            double hp0 = tgt.Hp, credit0 = s.DealtBy.GetValueOrDefault("lance");
+            s.UseAbility("lance", 0);
+            await Frame(); await Frame();
+            var ls = Lances();
+            var l = ls.FirstOrDefault();
+            var p0 = l?.GlobalPosition ?? Vector2.Zero;
+            for (int i = 0; i < 10; i++) { Hold(); tgt.Position = spot; await Frame(); }
+            float spd = l != null && GodotObject.IsInstanceValid(l) ? (l.GlobalPosition - p0).Length() * 6f : 0f;
+            double cool = s.Sl("lance").Cool;
+            string refused = Abilities.Find(ShipClass.Destroyer, "lance").Refuse(s, null);
+            s.UseAbility("lance", 0); await Frame(); await Frame();
+            int after = Lances().Count;
+            for (int i = 0; i < 60 * 7 && tgt.Hp >= hp0; i++) { Hold(); tgt.Position = spot; await Frame(); }
+            await Frame();
+            Check(ls.Count == 1 && l.TargetId == 0 && Mathf.Abs(Mathf.AngleDifference(l.Dir.Angle(), nose.Angle())) < 0.01f && Math.Abs(spd - 170) <= 3
+                  && Math.Abs(hp0 - tgt.Hp - 300) < 1e-6 && Math.Abs(s.DealtBy.GetValueOrDefault("lance") - credit0 - 300) < 1e-6
+                  && Math.Abs(cool - 18) < 0.3 && refused == "COOLING" && after <= 1,
+                  $"Lance run {run}: F with nothing selected, heading {Mathf.RadToDeg(heading):0} deg -- {ls.Count} Lance off the bow at {spd:0.0} u/s (170), a gunship {spot.DistanceTo(at):0} u down the bow takes {hp0 - tgt.Hp:0.0} (300) credited \"lance\"; cooling {cool:0.0} s (18), a second F {refused} with {after} Lance in flight");
+            tgt.TakeDamage(1e12);
+            s.Sl("lance").Cool = 0;
+            await Wait(0.6);
+        }
+    }
+
+    // ── SLICE 6a: WHAT THE LANCE MEETS (v1: "stops on the first hostile it touches, never a missile"; kits_v2: a light in
+    // front of the boss takes it). Three runs (VaryNear spot, VaryAngle heading; point defence out of reach so only the
+    // Lance can touch the seeker): a hostile seeker 150-250 u down the bow, a webifier 350-500 u, the target dummy 650-800 u
+    // -- the seeker is passed (still flying, no intercept), the webifier takes exactly 300 and the dummy behind it nothing.
+    async Task LaneA6aLanceHitChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Destroyer);
+        var s = Me; s.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var dm = H.GetNode<TargetDummy>("TargetDummy1"); var dmHome = dm.Position;
+        double was = PdReachOff(s);
+        try
+        {
+            for (int run = 0; run < 3; run++)
+            {
+                var at = VaryNear(yonder, 300f); float heading = VaryAngle();
+                void Hold() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = heading; }
+                s.Sl("lance").Cool = 0; Hold(); await Wait(0.2); Hold();
+                var nose = Vector2.Up.Rotated(heading);
+                var skAt = at + nose * Vary(150f + 106f, 250f + 106f);
+                var webAt = at + nose * Vary(350f + 106f, 500f + 106f);
+                var dmAt = at + nose * Vary(650f + 106f, 800f + 106f);
+                var web = H.SpawnRaider(webAt, Enemies.Webifier); web.Hp = 1e9; web.ApplyStatus(Status.Disabled, 60);
+                dm.Position = dmAt; await Wait(TargetDummy.IdleReset + 0.2); dm.ResetMeter(); Hold();
+                int down0 = Shot.Intercepted;
+                // crossing the line slowly, aimed at nothing: only the Lance could strike it
+                var sk = Combat.Fire(Shots.Seeker, skAt, nose.Orthogonal(), 2f, 4000f, 25);
+                double hp0 = web.Hp;
+                s.UseAbility("lance", 0);
+                double c0 = s.Clock;
+                while (s.Clock - c0 < 4.5) { Hold(); web.Position = webAt; dm.Position = dmAt; await Frame(); }
+                bool skFlying = sk != null && GodotObject.IsInstanceValid(sk) && sk.Alive;
+                Check(skFlying && Shot.Intercepted == down0 && Math.Abs(hp0 - web.Hp - 300) < 1e-6 && dm.Total == 0,
+                      $"Lance meets run {run}: down a bow {Mathf.RadToDeg(heading):0} deg -- a seeker {skAt.DistanceTo(at):0} u out passed (still flying {skFlying}, {Shot.Intercepted - down0} intercepted), a webifier at {webAt.DistanceTo(at):0} u takes {hp0 - web.Hp:0.0} (300), the dummy behind at {dmAt.DistanceTo(at):0} u {dm.Total:0.0} (0)");
+                if (sk != null && GodotObject.IsInstanceValid(sk)) sk.Intercept();
+                web.TakeDamage(1e12);
+                s.Sl("lance").Cool = 0;
+                await Wait(0.6);
+            }
+        }
+        finally { s.Stats.SetBase("pd_range", was); dm.Position = dmHome; }
+    }
+
     async Task LaneA6cBladeChecks(Vector2 yonder)
     {
         var sh = new ShipStats(ShipClass.HeavyWarrior);
@@ -7983,8 +8178,8 @@ public partial class _Test : Node
     }
 
     // ── F8 THE PRESS'S PICKS (kits_v2 §5: the gunships' targets[], 1-3 of them) ─────────────────────────
-    // On the host's own destroyer (ClassDef.Targets 3), its R lent TakesTargets for the check (no row takes
-    // targets yet: 6a's gunships) and given it back in a finally, among six disabled gunship raiders 2500 u
+    // On the host's own destroyer (ClassDef.Targets 3), its F (the Long Lance) lent TakesTargets for the check (the
+    // destroyer carries no row that takes targets) and given it back in a finally, among six disabled gunship raiders 2500 u
     // and more out: the host holds the picks a press sends, in the order sent (one, two, three of them,
     // through the owner's own UseAbility); a claim past the three is cut, and a repeat counted once; a dead
     // or unknown id is dropped.
@@ -8005,13 +8200,13 @@ public partial class _Test : Node
         int[] Seen() => dd.Picked.Select(h => h.NetId).ToArray();
         int[] Shuffled(int count) => foes.Where(r => GodotObject.IsInstanceValid(r) && r.Alive).OrderBy(_ => Vary(0f, 1f)).Take(count).Select(r => r.NetId).ToArray();
         string Ids(int[] ids) => "{" + string.Join(",", ids) + "}";
-        Ab.Reload.TakesTargets = true;
+        Ab.Lance.TakesTargets = true;
         try
         {
             for (int k = 0; k < 3; k++)
             {   // ONE, TWO, THREE picked: the host holds them, in order
                 var picks = Shuffled(k + 1);
-                dd.UseAbility("reload", 0, picks);
+                dd.UseAbility("lance", 0, picks);
                 Check(picks.Length == k + 1 && Seen().SequenceEqual(picks),
                       $"F8 picks: {k + 1} picked {Ids(picks)}, the host holds {Ids(Seen())}");
             }
@@ -8020,7 +8215,7 @@ public partial class _Test : Node
                 var some = Shuffled(6);
                 var sent = k == 0 ? some.Take(4).ToArray() : k == 1 ? some : new[] { some[0], some[0], some[1], some[2], some[3] };
                 var want = sent.Distinct().Take(3).ToArray();
-                doAb.Invoke(dd, new object[] { "reload", 0, Vector2.Zero, sent });
+                doAb.Invoke(dd, new object[] { "lance", 0, Vector2.Zero, sent });
                 Check(Seen().SequenceEqual(want),
                       $"F8 picks: {Ids(sent)} claimed on a 3-pick hull: the host holds {Ids(Seen())} (want {Ids(want)})");
             }
@@ -8034,14 +8229,14 @@ public partial class _Test : Node
                 int unknown = 0x7FFF0000 + (int)Vary(1f, 9999f);
                 var sent = k == 0 ? new[] { deadId, live[0] } : k == 1 ? new[] { live[0], unknown, live[1] } : new[] { unknown, deadId, live[0] };
                 var want = k == 1 ? live : new[] { live[0] };
-                doAb.Invoke(dd, new object[] { "reload", 0, Vector2.Zero, sent });
+                doAb.Invoke(dd, new object[] { "lance", 0, Vector2.Zero, sent });
                 Check((!GodotObject.IsInstanceValid(dead) || !dead.Alive) && Seen().SequenceEqual(want),
                       $"F8 picks: {Ids(sent)} with a dead ({deadId}) or unknown id among them: the host holds {Ids(Seen())} (want {Ids(want)})");
             }
         }
         finally
         {
-            Ab.Reload.TakesTargets = false;
+            Ab.Lance.TakesTargets = false; dd.Sl("lance").Cool = 0;
             foreach (var r in foes) if (GodotObject.IsInstanceValid(r) && r.Alive) r.TakeDamage(1e12);
         }
     }
@@ -9855,11 +10050,11 @@ public partial class _Test : Node
         // skipping a weapon's own actions and the open hotkeys. The weapon rows are exactly these six (point defence is passive: no row).
         var weaponRows = typeof(Ab).GetFields(BindingFlags.Public | BindingFlags.Static)
                                    .Select(f => f.GetValue(null)).OfType<AbilityDef>().Where(a => a.Weapon).Select(a => a.Id).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        Check(weaponRows.SequenceEqual(new[] { "attack", "blade", "deploy", "firemode", "guns", "railgun", "recall", "reload" }),
-              $"never walled: the guns, the Warrior's blade, the Sniper's railgun, fire mode, the missile's reload, the wing's attack and recall, the sentry's throw and recall ({string.Join(",", weaponRows)})");
+        Check(weaponRows.SequenceEqual(new[] { "attack", "blade", "deploy", "firemode", "guns", "railgun", "recall" }),
+              $"never walled: the guns, the Warrior's blade, the Sniper's railgun, fire mode, the wing's attack and recall, the sentry's throw and recall ({string.Join(",", weaponRows)})");
         // ...and the rule, on real rows in three orders: weapon rows first, walled rows first, the two interleaved
         foreach (var (kit, want) in new[] {
-            (new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Missile, Ab.Reload, Ab.Anchor }, new[] { 1, 1, 1, 3, 1, 6 }),
+            (new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Lance, Ab.Deploy, Ab.Anchor }, new[] { 1, 1, 1, 3, 1, 6 }),
             (new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Hunters, Ab.Bubble, Ab.Echo }, new[] { 1, 1, 1, 3, 6, int.MaxValue }),
             (new[] { Ab.Echo, Ab.Guns, Ab.Stealth, Ab.Deploy, Ab.Hunters, Ab.FireMode }, new[] { 1, 1, 3, 1, 6, 1 }) })
         {
@@ -11147,7 +11342,7 @@ public partial class _Test : Node
             // a hostile missile crossing the pad is shot down without anyone opening a window
             int down0 = Shot.Intercepted;
             var mp = hauler.Position + new Vector2(0, -250);
-            Combat.LaunchTorpedo(mp, Vector2.Down, 40f, 600f, 5, 0, 0f, heavy: false, hostile: true);
+            Combat.LaunchTorpedo(mp, Vector2.Down, 40f, 600f, 5, 0, 0f, hostile: true);
             for (int i = 0; i < 60 * 8 && Shot.Intercepted == down0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Shot.Intercepted > down0, "and it shoots down a missile that comes at it, with nobody flying it");
             // ...and a CRUISE missile, whose body carries a hull: point defence takes that too, a shot at
@@ -11583,7 +11778,7 @@ public partial class _Test : Node
             // the balance (v1): guns 4 x 12.5 every 2 s = 25 DPS, and a broadside of 6 x 4 x 12.5 x 1.25 = 375 every
             // 13.75 s (the wind-up, five gaps, the cooldown): 52.27 DPS in all. The carrier reaches 1.5x as far.
             var bsS = new ShipStats(ShipClass.Battleship); var caS = new ShipStats(ShipClass.Carrier);
-            double bsTotal = bsS.MainDps + bsS.BroadsideDps + bsS.MissileDps;
+            double bsTotal = bsS.MainDps + bsS.BroadsideDps;
             Check(Math.Abs(bsS.MainDps - 25) < 1e-9 && Math.Abs(bsS.BroadsideDamage - 375) < 1e-9 && Math.Abs(bsS.BroadsideCycle - 13.75) < 1e-9
                   && Math.Abs(bsTotal - 52.27) < 0.001,
                   $"the battleship: guns 25 DPS and a 375-damage broadside every 13.75 s -- 52.27 DPS in all, no missile ({bsTotal:0.000})");
@@ -11703,7 +11898,7 @@ public partial class _Test : Node
             ship.Hp = ship.MaxHp;
         }
 
-        // ── THE DESTROYER: the owner's hull, the smallest of the three; two main guns, missile bursts, the fastest ──
+        // ── THE DESTROYER: the owner's hull; the director battery, the Long Lance; the fastest capital ──
         await SetClass(ShipClass.Destroyer); ship = Me;
         {
             var dspr = ship.GetChildren().OfType<Sprite2D>().First();
@@ -11713,20 +11908,24 @@ public partial class _Test : Node
                   && Math.Abs(Classes.Art(ShipClass.Carrier).Length - 283.5f) < 1e-4 && Math.Abs(Classes.Art(ShipClass.Battleship).Length - 378f) < 1e-4,
                   "the destroyer 25% smaller than the carrier (212.625 u), the carrier 25% smaller than the battleship (283.5 of 378); a 27.8 u half-beam; two main turrets, two PD");
             Check(help.Text.StartsWith("DESTROYER") && help.Text.Contains("mouse aims the main guns"), "controls line is destroyer-specific");
-            Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "missile", "reload", "warp" })
-                  && Abilities.KeyFor(ShipClass.Destroyer, "missile") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Destroyer, "reload") == global::Godot.Key.R,
-                  "the destroyer's bar: guns, fire mode, the missile burst on F, reload on R -- its point defence is passive, with no key");
+            Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "lance", "warp" })
+                  && Abilities.KeyFor(ShipClass.Destroyer, "lance") == global::Godot.Key.F
+                  && new[] { "firemode", "missile", "reload" }.All(id => Abilities.Find(ShipClass.Destroyer, id) == null),
+                  "the destroyer's bar (v1): the director battery, the Long Lance on F -- no fire mode, no missile burst, no reload; its point defence is passive, with no key");
             var ddS = new ShipStats(ShipClass.Destroyer); var bsS0 = new ShipStats(ShipClass.Battleship); var cvS0 = new ShipStats(ShipClass.Carrier);
             bool N9(double a, double b) => Math.Abs(a - b) < 1e-9;
-            Check(N9(ddS["hull"], 250) && N9(ship.MaxHp, 250) && N9(ddS["main_count"], 2) && N9(ddS["pd_count"], 2) && ddS["fighter_count"] == 0 && ddS["broadside_volleys"] == 0,
-                  $"250 hull on the ship as on the sheet (no chips), two main guns, two PD; no wing, no broadside ({ship.MaxHp:0.0})");
+            Check(N9(ddS["hull"], 395) && N9(ship.MaxHp, 395) && N9(ddS["main_count"], 2) && N9(ddS["pd_count"], 2) && ddS["fighter_count"] == 0 && ddS["broadside_volleys"] == 0
+                  && ddS["missile_mag"] == 0,
+                  $"395 hull on the ship as on the sheet (no chips), two main guns, two PD; no wing, no broadside, no magazine ({ship.MaxHp:0.0})");
             Check(N9(bsS0["max_speed"], 88) && N9(ddS["max_speed"], 117) && N9(cvS0["max_speed"], 99)
                   && N9(ddS["thrust"], 63) && N9(ddS["reverse_thrust"], 27) && N9(ddS["reverse_speed"], 40.5)
                   && N9(cvS0["thrust"], 49.5) && N9(cvS0["reverse_thrust"], 20.625) && N9(cvS0["reverse_speed"], 33)
-                  && N9(ddS["turn_radius"], 107) && N9(ddS["turn_rate"], 1.08) && N9(cvS0["turn_radius"], 127) && N9(cvS0["turn_rate"], 0.9),
-                  "speeds (F22): the destroyer 117 u/s, the carrier 99, the battleship 88; each class's accelerations and astern speed cut with it; turning unchanged");
-            Check(N9(ddS.MainDps, 15.0) && Math.Abs(ddS.MissileDps - 441.0 / 9.8) < 1e-9 && Math.Abs(ddS.MainDps + ddS.MissileDps - 60.0) < 0.001,
-                  $"the destroyer's damage: guns 11.8 DPS, bursts 2 x 3 x 5 every 16.6 s (1.81) -- 13.61 DPS ({ddS.MainDps + ddS.MissileDps:0.000})");
+                  && N9(ddS["turn_radius"], 95) && N9(ddS["turn_rate"], 1.2) && N9(cvS0["turn_radius"], 140) && N9(cvS0["turn_rate"], 0.9),
+                  "speeds (F22): the destroyer 117 u/s, the carrier 99, the battleship 88; each class's accelerations and astern speed cut with it; the destroyer turns 1.2 rad/s on 95 u, the carrier on 140");
+            double lanceRate = Dps.Lance.Rate(ddS);
+            Check(N9(ddS.MainDps, 45.0) && N9(ddS["main_range"], 700) && N9(ddS["shell_speed"], 760) && N9(ddS["main_turn"], 2.09) && N9(ddS["director_lead"], 1.2)
+                  && Math.Abs(lanceRate - 300.0 / 18) < 1e-9 && Math.Abs(ddS.SustainedDps - (45 + 300.0 / 18 + 2)) < 1e-9,
+                  $"the destroyer's damage (v1): the director 2 x 11.25 every 0.5 s = 45.0 DPS at 700 u, a Lance of 300 every 18 s (16.67), PD 2 -- {ddS.SustainedDps:0.000} in all");
             // the fastest: flat out for 4 s it is past anything a battleship can reach
             await Park(d1.Position + new Vector2(0, 600), Mathf.Pi);
             KeyDown(global::Godot.Key.W); await Wait(4.0);
@@ -11734,8 +11933,7 @@ public partial class _Test : Node
             KeyUp(global::Godot.Key.W); ship.Velocity = Vector2.Zero;
             Check(ddAhead > 0.95 * 117 && ddAhead > 88 * 1.1, $"W drives the destroyer to its 117 u/s -- past a battleship's 88 ({ddAhead:0} u/s)");
             await Park(d1.Position + new Vector2(0, 600));
-            ship.Staggered = false;
-            // its two guns: Space fires both (salvo)
+            // its two guns: Space fires both
             AimWorld(d1.Position); await Wait(1.5);
             var seenD = new System.Collections.Generic.HashSet<Shot>(Shells());
             KeyDown(global::Godot.Key.Space); await Wait(0.15); KeyUp(global::Godot.Key.Space);
@@ -11743,88 +11941,33 @@ public partial class _Test : Node
             Check(ddShells == 2, $"Space fires the destroyer's two main guns ({ddShells} shells)");
             await Wait(2.0);
 
-            // ── the missile BURST: a magazine of three bursts; a selected target in range, or it refuses ──
-            System.Collections.Generic.List<Shot> Burst() => InFlight().Where(x => x.Heavy && !x.HostileFire && Smoke(x).Count < 40).ToList();
-            string SlotMsg() => AbilityBar.StateOf(ship, "missile", H.Selected) is var st && st.Fail ? st.Line : null;
-            Check(ship.Stats["missile_mag"] == 3 && ship.MissilesLoaded == 3, "the destroyer starts with a magazine of three bursts");
-            // Esc only if something is selected: with nothing selected, Esc opens the Esc menu
+            // ── THE LONG LANCE on F: never refused for want of a target; one torpedo off the bow, then COOLING ──
+            System.Collections.Generic.List<Shot> Lances() => InFlight().Where(x => x.Kind == Shots.Lance && x.Source == ship).ToList();
             if (H.Selected != null) { Key(global::Godot.Key.Escape); await Wait(0.05); }
-            Key(global::Godot.Key.F); await Wait(0.05);
-            Check(Burst().Count == 0 && ship.MissilesLoaded == 3 && SlotMsg() == "NO TARGET", "no target: nothing fires, and the slot says NO TARGET");
-            await Wait(PlayerShip.FailShow + 0.1);
-            Check(SlotMsg() == null, "the message clears after a moment");
-            Click(Scr(d1.Position)); await Wait(0.05);
-            var keep = ship.Position; ship.Position = d1.Position + new Vector2(0, (float)ship.Stats["missile_range"] + 150f); ship.Velocity = Vector2.Zero;
-            Key(global::Godot.Key.F); await Wait(0.05);
-            Check(Burst().Count == 0 && ship.MissilesLoaded == 3 && SlotMsg() == "OUT OF RANGE", "target out of range: nothing fires, and the slot says OUT OF RANGE");
-            ship.Position = keep; ship.Velocity = Vector2.Zero; await Wait(0.1);
+            ship.Sl("lance").Cool = 0;
             await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
             Key(global::Godot.Key.F);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            var burst = Burst();
-            var toTarget = (d1.Position - ship.ToGlobal(new Vector2(0, -Classes.Art(ShipClass.Destroyer).Length * 0.5f))).Angle();
-            var offs = burst.Select(m => Mathf.RadToDeg(Mathf.AngleDifference(toTarget, m.Dir.Angle()))).OrderBy(a => a).ToList();
-            GD.Print($"  burst: {burst.Count} missiles at {string.Join(", ", offs.Select(a => a.ToString("0.0")))} degrees off the line to the target");
-            Check(burst.Count == 3 && burst.All(m => m.TargetId == d1.NetId && m.TurnRate == 1.5f) && ship.MissilesLoaded == 2 && d1.Total == 0
-                  && Math.Abs(offs[1]) < 3 && offs[0] < -64 && offs[0] > -71 && offs[2] > 64 && offs[2] < 71,
-                  "F launches a burst of three guided missiles: one at the target, two launched 70 degrees either side (magazine 2/3); nothing lands at once");
-            float mspd = 0;
-            if (burst.Count > 0)
-            {
-                var mp1 = burst[0].GlobalPosition; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                mspd = GodotObject.IsInstanceValid(burst[0]) ? (burst[0].GlobalPosition - mp1).Length() * 60f : 0;
-            }
-            Check(Math.Abs(mspd - 200) < 0.5f, $"they fly at 200 u/s ({mspd:0.0})");
-            for (int i = 0; i < 900 && d1.Total < 146.99; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Math.Abs(d1.Total - 147) < 0.01, $"all three land -- the outer two curve in: 3 x 49 = 147 ({d1.Total:0.00})");
-            Key(global::Godot.Key.F); await Wait(0.5);        // the 0.4 s between bursts
-            int before3 = Burst().Count;
-            Key(global::Godot.Key.F); await Wait(0.5);
-            Check(ship.MissilesLoaded == 0 && Burst().Count - before3 == 3, $"the third burst empties the magazine ({Burst().Count - before3} new missiles, {ship.MissilesLoaded} left)");
-            await Wait(0.7);
-            var flying = new System.Collections.Generic.HashSet<Shot>(InFlight());
+            var lances = Lances();
+            Check(lances.Count == 1 && lances[0].TargetId == 0 && Mathf.Abs(Mathf.AngleDifference(lances[0].Dir.Angle(), Vector2.Up.Angle())) < 0.01f
+                  && Math.Abs(ship.Sl("lance").Cool - 18) < 0.1 && AbilityBar.StateOf(ship, "lance", H.Selected).Busy > 0.9f,
+                  $"F with nothing selected: one unguided Lance straight off the bow, and 18 s to cool ({lances.Count}, {ship.Sl("lance").Cool:0.0} s)");
+            for (int i = 0; i < 60 * 6 && d1.Total < 299.99; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(d1.Total - 300) < 0.01, $"it runs 600 u down the bow into the dummy for 300 ({d1.Total:0.00})");
             Key(global::Godot.Key.F); await Wait(0.1);
-            Check(InFlight().All(flying.Contains), "empty magazine: F does nothing");
-            Key(global::Godot.Key.R); await Wait(0.1);
-            Check(ship.Reloading && AbilityBar.StateOf(ship, "reload", H.Selected).Busy > 0.9f, "R starts the reload; the bar shows it");
-            await Wait(9.2);
-            Check(!ship.Reloading && ship.MissilesLoaded == 3, "reload refills the magazine (3 bursts) after 9 s");
-            // guided: move the target sideways and watch the middle missile follow, no faster than 1.5 rad/s
-            Key(global::Godot.Key.F); await Wait(0.05);
-            var midM = Burst().OrderBy(m => Mathf.Abs(Mathf.AngleDifference(toTarget, m.Dir.Angle()))).FirstOrDefault(); var dhome = d1.Position;
-            d1.Position = dhome + new Vector2(260, 0);
-            float a0 = midM?.Dir.Angle() ?? 0; await Wait(1.0);
-            float turned = midM != null && GodotObject.IsInstanceValid(midM) ? Mathf.Abs(Mathf.AngleDifference(a0, midM.Dir.Angle())) : 0;
-            Check(turned > 0.05 && turned <= 1.51, $"it steers toward the target, no faster than 1.5 rad/s ({turned:0.000} rad in 1 s)");
-            await Wait(6.0); d1.Position = dhome;
+            Check(Lances().Count == 0 && AbilityBar.StateOf(ship, "lance", H.Selected) is { Fail: true, Line: "COOLING" }, "a second F while it cools: nothing, and the slot says COOLING");
+            await Wait(PlayerShip.FailShow + 0.1);
 
-            // A REFIT: the magazine never holds more than it has room for
+            // A REFIT: an ability-output part lifts the Lance, the kit tube puts it back
             var dl = Character.LoadoutFor(ShipClass.Destroyer); var dlKeep = (string[])dl.Clone();
             for (int k = Equipment.CoreSlots; k < Equipment.Slots; k++) dl[k] = "";
             dl[4] = "salvo_core_t1"; H.PilotChanged(); ship = Me;
-            Check(Math.Abs(ship.Stats["missile_damage"] - 61.25) < 1e-9 && Math.Abs(ship.Stats["missile_mag"] - 3) < 1e-9,
-                  $"Salvo Core T1 on the destroyer: every ability output +25%, a missile 49 -> 61.25, the magazine untouched ({ship.Stats["missile_damage"]}, {ship.Stats["missile_mag"]})");
-            // a magazine of 6 (no line moves a count here now: the pilot's own share does it)
-            Character.Bonuses["missile_mag"] = 1.0; H.PilotChanged(); ship = Me;
-            ship.Sl("missile").N = 6;
-            Character.Bonuses.Remove("missile_mag");
-            dl[4] = "dd_missile_rack"; H.PilotChanged();
-            Check(ship.MissilesLoaded == 3, $"back to the kit rack: a 3-burst magazine holds 3, not the 6 loaded before ({ship.MissilesLoaded})");
+            Check(Math.Abs(ship.Stats["lance_damage"] - 375) < 1e-9 && Math.Abs(ship.Stats["main_damage"] - 11.25) < 1e-9,
+                  $"Salvo Core T1 on the destroyer: every ability output +25%, the Lance 300 -> 375, the guns untouched ({ship.Stats["lance_damage"]}, {ship.Stats["main_damage"]})");
+            dl[4] = "dd_missile_rack"; H.PilotChanged(); ship = Me;
+            Check(Math.Abs(ship.Stats["lance_damage"] - 300) < 1e-9, $"back to the kit tube: the Lance 300 ({ship.Stats["lance_damage"]})");
             for (int k = 0; k < Equipment.Slots; k++) dl[k] = dlKeep[k];
-            H.PilotChanged(); ship = Me;
-
-            // CLOSE IN, the fan narrows so the outer two can still come round: at 70 degrees on a
-            // ~107 u turning circle they would circle a target 150 u off the nose until their run ended
-            ship.Position = d1.Position + new Vector2(0, 150f + Classes.Art(ShipClass.Destroyer).Length * 0.5f);
-            ship.Velocity = Vector2.Zero; ship.Rotation = 0f;
-            await Wait(TargetDummy.IdleReset + 0.2); d1.ResetMeter();
-            Key(global::Godot.Key.F);
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            var close = Burst();
-            float closeSplay = close.Count == 3 ? close.Max(m => Mathf.Abs(Mathf.RadToDeg(Mathf.AngleDifference(Vector2.Up.Angle(), m.Dir.Angle())))) : -1;
-            for (int i = 0; i < 60 * 4 && d1.Total < 146.99; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(close.Count == 3 && closeSplay > 20 && closeSplay < 50 && Math.Abs(d1.Total - 147) < 0.01,
-                  $"a target 150 u off the nose: the outer two launch narrower ({closeSplay:0} degrees) and all three land: 3 x 49 = 147 ({d1.Total:0.00})");
+            H.PilotChanged(); ship = Me; ship.Sl("lance").Cool = 0;
             await Park(d1.Position + new Vector2(0, 600));
         }
 
@@ -13634,7 +13777,7 @@ public partial class _Test : Node
             double bnReach = PdReachOff(bn);            // the WAVE on trial: the bastion's passive point defence out of reach (test only)
             int took0 = Shot.Intercepted;
             Combat.LaunchTorpedo(bn.Position + new Vector2(0, -140), Vector2.Down, 40f, 900f, 5, bn.NetId, 0.4f,
-                                 heavy: false, hostile: true);
+                                 hostile: true);
             await Wait(0.1);
             var seeker = Nodes<Shot>().FirstOrDefault(s => s.HostileFire && s.Kind == Shots.Seeker);
             var seekerWas = seeker?.Position ?? Vector2.Zero;
@@ -13743,11 +13886,11 @@ public partial class _Test : Node
                           && Math.Abs(Rise(ShipClass.Carrier, "torpedo_damage") - Six(ShipClass.Carrier, "torpedo_damage")) < 1e-9
                           && Rise(ShipClass.Carrier, "fighter_damage") == 0
                           && Math.Abs(Rise(ShipClass.Destroyer, "main_damage") - Six(ShipClass.Destroyer, "main_damage")) < 1e-9
-                          && Rise(ShipClass.Destroyer, "missile_damage") == 0,
-                          $"and the three original hulls take it where they always did -- 6% of the gun or the torpedoes (+{Rise(ShipClass.Battleship, "main_damage"):0.0} on the battleship) -- and nothing at all on the fighters, the missiles or the point defence, whose rows are declared at zero and stay there");
+                          && Rise(ShipClass.Destroyer, "lance_damage") == 0,
+                          $"and the three original hulls take it where they always did -- 6% of the gun or the torpedoes (+{Rise(ShipClass.Battleship, "main_damage"):0.0} on the battleship) -- and nothing at all on the fighters, the Lance or the point defence, whose rows are declared at zero and stay there");
                     // the gear that lifts "every weapon" reaches the same list, and nothing else
                     Check(string.Join(",", Classes.EveryDamageStat())
-                          == "blade_damage,deploy_damage,fighter_damage,hunter_damage,lunge_damage,main_damage,missile_damage,rail_damage,torpedo_damage,whirl_damage"
+                          == "blade_damage,deploy_damage,fighter_damage,hunter_damage,lance_damage,lunge_damage,main_damage,rail_damage,torpedo_damage,whirl_damage"
                           && Classes.All.Where(c => c.Ready).All(c => c.Damage.Count > 0)
                           && Classes.All.Where(c => c.Ready).All(c => c.Damage.Keys.All(k => new ShipStats(c.Id)[k] > 0)),
                           $"ten weapon stats in the whole game, every flyable class names at least one, and every one it names is a row on its own sheet");
@@ -13854,8 +13997,8 @@ public partial class _Test : Node
                       && !Shots.Of(Shots.Shell).AtPlayers && Shots.Of(Shots.Shell).Sweep == 6f && Shots.Of(Shots.Shell).Burst == 0
                       && Shots.Of(Shots.Slug).AtPlayers && Shots.Of(Shots.Scrap).AtPlayers
                       && Shots.Of(Shots.Slug).Burst == 0.25 && Shots.Of(Shots.Scrap).Look == ShotLook.Shard
-                      && Shots.Of(Shots.Missile).Heavy && !Shots.Of(Shots.Torpedo).Heavy
-                      && Shots.Of(Shots.Seeker).Interceptable && !Shots.Of(Shots.Missile).Interceptable
+                      && Shots.Of(Shots.Lance).Heavy && !Shots.Of(Shots.Torpedo).Heavy && !Shots.Of(Shots.Lance).Guided && Shots.Of(Shots.Lance).Id == "lance"
+                      && Shots.Of(Shots.Seeker).Interceptable && !Shots.Of(Shots.Lance).Interceptable
                       && Shots.All.Count(x => x.Smoke) == 4
                       && Shots.All.Count(x => x.Tags == Tag.Hulled) == 1 && Shots.Of(Shots.Cruise).Tags == Tag.Hulled,
                       "eight kinds of shot, each a row: a shell, a boss's slug and its scrap, a torpedo, a heavy missile, the seeker point defence exists for, the cruise missile anything may shoot down, and the round a prism reflects (straight, unguided, sweep 6, at the base's enemies)");
@@ -14053,6 +14196,9 @@ public partial class _Test : Node
             await LaneA6aSuperChecks(yonder);
             await LaneA6aSuperMissileChecks(yonder);
             await LaneA6aSuperWingsChecks(yonder);
+            await LaneA6aDirectorChecks(yonder);
+            await LaneA6aLanceChecks(yonder);
+            await LaneA6aLanceHitChecks(yonder);
 
             // ── WARRIOR: the blade (slice 6c) ──
             await LaneA6cBladeChecks(yonder);
@@ -14439,7 +14585,7 @@ public partial class _Test : Node
                 // check below. (The trigger's own path from key to shell is proved by the
                 // battleship and destroyer DPS checks earlier in this run; what is asked of a
                 // HOLD row here is that its own key reaches the ship at all.)
-                int sweepShots = 0, sweepTurrets = 0, sweepMag = 0;
+                int sweepShots = 0, sweepTurrets = 0;
                 bool sweepMode = false;
                 Raider sweepMark = null;
                 var witness = new Dictionary<string, Func<PlayerShip, bool>>
@@ -14449,8 +14595,7 @@ public partial class _Test : Node
                     // and it engages no slot at all.
                     ["firemode"]  = sp => sp.Staggered != sweepMode && sp.Sl("firemode").Left == 0 && sp.Sl("firemode").Cool == 0,
                     ["broadside"] = sp => sp.BroadsideTracking && sp.Sl("broadside").Left > sp.Stats["broadside_windup"] - 0.1,
-                    ["missile"]   = sp => sp.MissilesLoaded == sweepMag - 1 && InFlight().Count() >= sweepShots + PlayerShip.BurstSides.Length,
-                    ["reload"]    = sp => sp.Reloading && sp.Sl("reload").Left > sp.Stats["missile_reload"] - 0.1,
+                    ["lance"]     = sp => sp.Sl("lance").Cool > sp.Stats["lance_cooldown"] - 0.1 && InFlight().Any(x => x.Kind == Shots.Lance && x.Source == sp),
                     ["attack"]    = sp => ReferenceEquals(sp.WingTarget, sweepMark),
                     ["recall"]    = sp => sp.WingTarget == null,
                     ["bombers"]   = sp => ReferenceEquals(sp.StrikeTarget, sweepMark),
@@ -14490,9 +14635,8 @@ public partial class _Test : Node
                 // has NOT got the fitting, that ability must not be on its bar at all. One row per
                 // fitting, so a new ability of an existing kind is covered by adding its id here.
                 var fitRows = new (Fit fit, string[] ids)[] {
-                    (Fit.Guns,      new[] { "guns", "firemode" }),
+                    (Fit.Guns,      new[] { "guns" }),
                     (Fit.Broadside, new[] { "broadside" }),
-                    (Fit.Missiles,  new[] { "missile", "reload" }),
                     (Fit.Wing,      new[] { "attack", "recall", "bombers" }),
                     (Fit.Deploy,    new[] { "deploy" }),
                 };
@@ -14511,6 +14655,8 @@ public partial class _Test : Node
                     // without it (a light) mounts none.
                     var wrongFit = fitRows.Where(fr2 => fr2.ids.Any(id3 => (Abilities.Find(cls.Id, id3) != null) != cls.Has(fr2.fit)))
                                           .Select(fr2 => fr2.fit.ToString()).ToList();
+                    // the fire mode is a gun class's choice (the destroyer's director has none), never without guns
+                    if (Abilities.Find(cls.Id, "firemode") != null && !cls.Has(Fit.Guns)) wrongFit.Add("firemode without guns");
                     bool pdRight = Abilities.Find(cls.Id, "pd") == null && sweepShip.PdOnline
                                    && (sweepShip.PdTurrets.Count > 0) == cls.Has(Fit.Pd);
                     Check(wrongFit.Count == 0 && pdRight,
@@ -14538,7 +14684,6 @@ public partial class _Test : Node
                         sweepShots = InFlight().Count();
                         sweepTurrets = sweepShip.TurretsOut;
                         sweepMode = sweepShip.Staggered;
-                        sweepMag = sweepShip.MissilesLoaded;
                         var abKey = Abilities.KeyFor(cls.Id, abil.Id);
                         bool isHold = abil.Kind == AbilityKind.Hold;
                         if (isHold)
@@ -14594,7 +14739,6 @@ public partial class _Test : Node
                         sweepShip.Sl(abil.Id).Left = 0; sweepShip.Sl(abil.Id).Cool = 0;
                         sweepShip.Sl(abil.Id).Own = 0; sweepShip.Sl(abil.Id).N = 0;
                     }
-                    sweepShip.Sl("missile").N = (int)sweepShip.Stats["missile_mag"];
                     foreach (var flag in new[] { Status.Disabled, Status.Evading, Status.Hardened, Status.Untargetable, Status.Parrying })
                         sweepShip.Statuses.Clear(flag);
                     sweepShip.RecallWing();
@@ -14676,23 +14820,20 @@ public partial class _Test : Node
                             Sink(mkIn);
                             break;
                         }
-                        case "missile_range":
+                        case "lance_range":
                         {
-                            var mkIn = await Marker(pilot.Position + way * (float)(reach * Vary(0.55f, 0.90f)));
-                            var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.15f, 1.45f)));
-                            int flying0 = InFlight().Count();
-                            pilot.Sl("missile").N = (int)pilot.Stats["missile_mag"]; pilot.Sl("missile").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "missile", mkIn.NetId, Vector2.Zero, System.Array.Empty<int>() });
-                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                            int flew = InFlight().Count() - flying0;
-                            pilot.Sl("missile").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "missile", mkOut.NetId, Vector2.Zero, System.Array.Empty<int>() });
-                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                            int flewMore = InFlight().Count() - flying0 - flew;
-                            proved = flew >= PlayerShip.BurstSides.Length && flewMore == 0;
-                            told = $"a burst of {flew} away at {pilot.Position.DistanceTo(mkIn.Position):0} u and {flewMore} away at {pilot.Position.DistanceTo(mkOut.Position):0} u";
+                            // A bow shot's OWN round (AbilityDef.Bow): its row of Shots.All, the ship's damage and run, through
+                            // Combat.Fire as FireAlong makes it -- only the speed is the harness's (four runs a second).
+                            var bow = Abilities.Find(pilot.Class, "lance").Bow;
+                            var mkIn = await Marker(pilot.Position + way * (float)(reach * Vary(0.80f, 0.92f)));
+                            var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.25f, 1.45f)));
+                            double inWas = mkIn.Hp, outWas = mkOut.Hp;
+                            Combat.Fire(bow.Kind, pilot.Position, way, (float)reach * 4f, (float)pilot.Stats[bow.Range], pilot.Stats[bow.Damage], source: pilot);
+                            Combat.Fire(bow.Kind, pilot.Position, wide, (float)reach * 4f, (float)pilot.Stats[bow.Range], pilot.Stats[bow.Damage], source: pilot);
+                            await Wait(0.45);
+                            proved = mkIn.Hp < inWas && mkOut.Hp == outWas;
+                            told = $"a Lance lands {pilot.Position.DistanceTo(mkIn.Position):0} u out ({inWas - mkIn.Hp:0.0} taken) and dies short of {pilot.Position.DistanceTo(mkOut.Position):0} u ({outWas - mkOut.Hp:0.0} taken)";
                             Sink(mkIn); Sink(mkOut);
-                            pilot.Sl("missile").N = (int)pilot.Stats["missile_mag"]; pilot.Sl("missile").Cool = 0;
                             break;
                         }
                         case "control_range":
@@ -17812,8 +17953,8 @@ public partial class _Test : Node
             Check(Math.Abs(H.Boss.HullMult - 1.6) < 1e-9 && Math.Abs(H.Boss.DamageMult - 1.2) < 1e-9,
                   $"arena host: a party of two faces a boss scaled for two (hull x1.6, damage x1.2; x{H.Boss.HullMult:0.00}, x{H.Boss.DamageMult:0.00})");
             var gship = H.Ships.FirstOrDefault(s => !s.Mine);
-            Check(gship != null && gship.Class == ShipClass.Destroyer && Math.Abs(gship.MaxHp - 290) < 1e-6 && Math.Abs(gship.Stats["missile_mag"] - 6) < 1e-9,
-                  $"arena host: the guest's destroyer and its own gear came into the arena with it (290 hull from two Armour Chips I, a Salvo Rack III's 6 bursts; {gship?.Class}, {gship?.MaxHp:0.0}, {gship?.Stats["missile_mag"]:0})");
+            Check(gship != null && gship.Class == ShipClass.Destroyer && Math.Abs(gship.MaxHp - 458.2) < 1e-6 && gship.Stats["lance_damage"] > 300.5,
+                  $"arena host: the guest's destroyer and its own gear came into the arena with it (395 x 1.16 = 458.2 hull from two Armour Chips I, a Salvo Core III's Lance past 300; {gship?.Class}, {gship?.MaxHp:0.0}, {gship?.Stats["lance_damage"]:0.0})");
             // A CRUISE MISSILE CROSSES PEERS: the base's own round (Shots.Cruise) through the one
             // launch on the wire, a hull only the host keeps, and a fall every peer hears of. At the
             // guest from 2600 u at a seeded bearing -- 240 u of that is all it closes before it is
@@ -17977,7 +18118,7 @@ public partial class _Test : Node
         {
             Character.Name = "Arena Guest";
             // Gear the host can only know from this pilot's announcement: two Armour Chips I on a
-            // destroyer (250 x 1.16 = 290 hull, not the stock 250). The host checks it survives the
+            // destroyer (395 x 1.16 = 458.2 hull, not the stock 395). The host checks it survives the
             // move into the arena.
             Character.Class = ShipClass.Destroyer;
             var agl = Character.LoadoutFor(ShipClass.Destroyer); agl[5] = "chip_armour_t1"; agl[6] = "chip_armour_t1";
@@ -18716,10 +18857,10 @@ public partial class _Test : Node
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
             // A GUEST'S CHIPS ARE HELD TO ITS OWN WALLS (level_walls check 15): the third player claims
             // peak 3 -- one chip slot open -- with five chips fitted, and the host's copy of its
-            // battleship flies the first alone, an Armour Chip I: 300 x 1.08 = 324 hull (all five would be 318).
+            // battleship flies the first alone, an Armour Chip I: 500 x 1.08 = 540 hull (all five would be 530).
             var thirdW = ships.FirstOrDefault(s => s.Pilot == "Third");
-            Check(thirdW != null && thirdW.Peak == 3 && Math.Abs(thirdW.MaxHp - 324) < 1e-6,
-                  $"host: a guest at peak 3 with five chips fitted flies one: 324 hull on the host's copy (peak {thirdW?.Peak}, {thirdW?.MaxHp:0.##})");
+            Check(thirdW != null && thirdW.Peak == 3 && Math.Abs(thirdW.MaxHp - 540) < 1e-6,
+                  $"host: a guest at peak 3 with five chips fitted flies one: 540 hull on the host's copy (peak {thirdW?.Peak}, {thirdW?.MaxHp:0.##})");
             // Each guest is known by its CHARACTER: a returning pilot gets a new peer id, not a new self
             var gInfo = Net.I.Players.Values.FirstOrDefault(p => p.Name == "Guesty"); var tInfo = Net.I.Players.Values.FirstOrDefault(p => p.Name == "Third");
             Check(gInfo != null && gInfo.CharacterId.EndsWith("-guest") && tInfo != null && tInfo.CharacterId.EndsWith("-guest2"),
@@ -18935,7 +19076,7 @@ public partial class _Test : Node
             var tokenWatch = GateFixTokenWatch();
             Character.Name = "Third"; Character.Class = ShipClass.Battleship;
             // FIVE CHIPS AT PEAK 3 (level_walls check 15), written past its own window: one chip slot
-            // is open at level 3, so every copy of this ship flies the first chip alone (324 hull).
+            // is open at level 3, so every copy of this ship flies the first chip alone (540 hull).
             Character.Peak = 3;
             var tl = Character.LoadoutFor(ShipClass.Battleship);
             (tl[5], tl[6], tl[7], tl[8], tl[9]) = ("chip_armour_t1", "chip_combat_t1", "chip_combat_t1", "chip_armour_t1", "chip_engine_t1");
@@ -18974,9 +19115,9 @@ public partial class _Test : Node
             Check(all.Count == 3 && all.Any(s => s.Pilot == "HostPilot") && all.Any(s => s.Pilot == "Guesty"),
                   $"third player sees the host and the other guest ({string.Join(", ", all.Select(s => s.Pilot))})");
             Check(all.Count(s => s.Mine) == 1 && all.First(s => s.Mine).OwnerId == Net.LocalId, "third player flies its own ship");
-            await RealTime(() => Me != null && Math.Abs(Me.MaxHp - 324) < 1e-6, 5);
-            Check(Me != null && Me.Peak == 3 && Math.Abs(Me.MaxHp - 324) < 1e-6,
-                  $"third player: at peak 3 its five chips fly as one, on its own copy as on the host's (324 hull; peak {Me?.Peak}, {Me?.MaxHp:0.##})");
+            await RealTime(() => Me != null && Math.Abs(Me.MaxHp - 540) < 1e-6, 5);
+            Check(Me != null && Me.Peak == 3 && Math.Abs(Me.MaxHp - 540) < 1e-6,
+                  $"third player: at peak 3 its five chips fly as one, on its own copy as on the host's (540 hull; peak {Me?.Peak}, {Me?.MaxHp:0.##})");
             await RealTime(() => Character.GearHold.Values.Sum() >= 2, 3); await Wait(0.5);
             Check(Character.GearHold.Values.Sum() == 2 && HoldIds() == RolledFor(Character.Id),
                   $"third player: its own 2 parts from the kill, the very ones the host rolled for it ({HoldIds()} / {RolledFor(Character.Id)})");
@@ -19050,8 +19191,8 @@ public partial class _Test : Node
             H.Yard.SetStock("ore", 5000);       // "own" hub total, should come back after leaving
             H.Yard.SetStock("salvage", 500);    // this pilot's own, for the gear level it buys mid-session (156)
             // a NON-default loadout: FOUR Armour Chips I, written past this pilot's own window, which
-            // refuses a fourth Utility chip. The host holds the claim to three of a kind: 200 x 1.24 =
-            // 248 hull -- not the stock 200 (gear ignored) and not 264 (the cap ignored).
+            // refuses a fourth Utility chip. The host holds the claim to three of a kind: 425 x 1.24 =
+            // 527 hull -- not the stock 425 (gear ignored) and not 561 (the cap ignored).
             // The CLASS FIRST: gear is per class, and this used to edit whichever class the
             // character happened to already be -- inherited from whoever wrote the shared file
             // last. With a fresh character per role it is a Battleship here, so the chips would go
@@ -19202,10 +19343,10 @@ public partial class _Test : Node
             var host = Nodes<PlayerShip>().FirstOrDefault(s => s.OwnerId == 1);
             await RealTime(() => Nodes<PlayerShip>().Count() == 3 && Nodes<PlayerShip>().Any(s => s.Pilot == "Third"), 8);
             Check(Nodes<PlayerShip>().Count() == 3 && Nodes<PlayerShip>().Any(s => s.Pilot == "Third"), "guest sees the other guest too (3 ships)");
-            await RealTime(() => Nodes<PlayerShip>().FirstOrDefault(s => s.Pilot == "Third") is { } t3 && Math.Abs(t3.MaxHp - 324) < 1e-6, 5);
+            await RealTime(() => Nodes<PlayerShip>().FirstOrDefault(s => s.Pilot == "Third") is { } t3 && Math.Abs(t3.MaxHp - 540) < 1e-6, 5);
             var t3w = Nodes<PlayerShip>().FirstOrDefault(s => s.Pilot == "Third");
-            Check(t3w != null && Math.Abs(t3w.MaxHp - 324) < 1e-6,
-                  $"guest: the other guest's five chips at peak 3 fly as one here too (324 hull; {t3w?.MaxHp:0.##})");
+            Check(t3w != null && Math.Abs(t3w.MaxHp - 540) < 1e-6,
+                  $"guest: the other guest's five chips at peak 3 fly as one here too (540 hull; {t3w?.MaxHp:0.##})");
             Check(H.Yard.Level("salvage_rate") == 1, "the upgrade the host granted reached the guest");
             for (int i = 0; i < 480 && Character.Exp != 650; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Character.Exp == 650, $"the host's kill reached this guest, which took its own 650 (exp {Character.Exp})");
@@ -19250,8 +19391,8 @@ public partial class _Test : Node
             // over the wire.
             int heardFighters = Sfx.Played.GetValueOrDefault("fighter") - heardFighters0;
             Check(heardFighters > 0, $"guest hears its fighters' beams as the fighter's own row, sent by index ({heardFighters} heard since it joined)");
-            Check(mine != null && Math.Abs(mine.MaxHp - 248) < 1e-6 && Math.Abs(mine.Hp - 248) < 1e-6,
-                  $"hull replicated from the host, which applied this pilot's own gear held to three of a kind (three of its four Armour Chips I: 200 x 1.24 = 248; {mine?.Hp:0})");
+            Check(mine != null && Math.Abs(mine.MaxHp - 527) < 1e-6 && Math.Abs(mine.Hp - 527) < 1e-6,
+                  $"hull replicated from the host, which applied this pilot's own gear held to three of a kind (three of its four Armour Chips I: 425 x 1.24 = 527; {mine?.Hp:0})");
             ItemsGuestChecks(mine, "the guest's own copy");
             int streamed0 = _streamGot; ulong streamAt = Time.GetTicksMsec(); _streamGap = 0;
             await Wait(12.0);                      // strike done, bombers home and docked
