@@ -511,6 +511,10 @@ Echo's blast check reads the marks after its wait and prints the missiles in fli
 `-ReplyWindow`.
 
 **Known broken (R0):**
+- **The in-process pair missed its 5 s once**, in the third run of a bar (six engines at once); it
+  connects in 11-14 ms everywhere else, the failing seed included, and in three rung-5 runs. Not
+  understood. The check now says which step a stalled pair stopped at (`RtcPair.Stage`), so the
+  next one explains itself.
 - **A real guest freed mid-handshake prints two plugin ERROR lines** (DESIGN.md traps): the harness
   sidesteps it; R2's guest role will meet it when an invite is hung up.
 - **The plugin-missing text is this batch's own** (plan v1 §6.1's literal was not in the repo); the
