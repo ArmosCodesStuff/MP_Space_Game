@@ -75,3 +75,15 @@ Unreleased + Handoff.
 Steps 1-2 as specified in the task (solo chain at slot 0 unchanged; then 3 concurrent chains at slots
 1/2/3 with a lock-holding helper process gating start; record wall times; fall back to -Slots 2 if a
 red is CPU-timing, not a collision). Default -Slots to commit once proven.
+
+## PRE job S3 -- the record
+tier: opus (owner: "do the tasks with opus 5.5"), effort medium. intent: CLAUDE.md s8 rungs sentence + s12
+rungs line; DESIGN.md one trap; README.md (does not list rungs.ps1: untouched); CHANGES.md Unreleased + Handoff.
+HEAD: df869599b3f1a772a01b2f1a05929aa7c6c1a282
+hashes: CLAUDE.md 93f6b61e4938c3fffbd05ecad5cc82e853395b5d; docs/DESIGN.md 9637c92641e946f8d9f756cc9e7b07bfcc7d00e1;
+docs/CHANGES.md 44ca0246e80b7e3f4c7dd03ab52201f53168a8ac
+
+## POST job S3
+verdict: green. files: CLAUDE.md (s8 sentence, s12 rungs line), docs/DESIGN.md (trap: port literal bypassing
+P(), naming wan.py's box), docs/CHANGES.md (Handoff + Unreleased). docs/README.md does not list rungs.ps1: untouched.
+typecheck 0 errors; verify -Quick ALL CHECKS PASSED. next: the proof.
