@@ -35,8 +35,9 @@ function Check {
         $f = Get-Item $tr
         $age = ($now - $f.CreationTime).TotalMinutes
         $idle = ($now - $f.LastWriteTime).TotalMinutes
-        # A transcript silent for 3 hours belongs to a workflow that was stopped, not to a running agent.
-        if ($age -ge $Minutes -and $idle -lt 180) {
+        # A transcript silent for 15 minutes belongs to a stopped workflow or a dead agent (a live runner's longest
+        # single call is a 9-minute Wait-Process), and spends nothing: not listed.
+        if ($age -ge $Minutes -and $idle -lt 15) {
           "{0} {1} [{2}] running {3:N0} min, idle {4:N0} min, {5:N0} KB: {6}" -f (Split-Path $dir -Leaf), $id, $model, $age, $idle, ($f.Length / 1KB), $started[$id]
         }
       }
