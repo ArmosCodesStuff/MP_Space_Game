@@ -1260,12 +1260,13 @@ public partial class Hub : Node2D
     // (A wave's composition, an escort's threat and the party's standing are Waves.cs; the
     // builder that reads them is Raids.Send. Nothing about a wave is written in this file.)
 
-    // ── a freighter's turret: dropped, collected, or shot off its base ──────
+    // ── a freighter's turret: thrown, recalled, or shot off its base ──────
     // A ROW OF Spawns.All (its space, its burst, how it is built and what a joiner is told), so
-    // these three are faces onto Spawn/Down and nothing else. Picked up by its owner or shot off
+    // these three are faces onto Spawn/Down and nothing else. Recalled by its owner or shot off
     // its base: both go the same way, and only the burst differs.
-    public DeployedTurret Drop(PlayerShip owner, Vector2 at, double hull) =>
-        owner == null ? null : Spawn(Spawns.Turret, at, owner.OwnerId, hull, hull) as DeployedTurret;
+    // `max` is the full hull: a recalled sentry is thrown again with the hull it had (PlayerShip.DeployTurret).
+    public DeployedTurret Drop(PlayerShip owner, Vector2 at, double hull, double? max = null) =>
+        owner == null ? null : Spawn(Spawns.Turret, at, owner.OwnerId, hull, max ?? hull) as DeployedTurret;
     public void DeployedDown(DeployedTurret t) => Down(Spawns.Turret, t, burst: true, (float)t.Hp);
     public void DeployedTaken(DeployedTurret t) => Down(Spawns.Turret, t, burst: false, (float)t.Hp);
 

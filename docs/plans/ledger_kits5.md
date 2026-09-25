@@ -124,3 +124,27 @@ Done: J1 (F12), J2-J3 (F11), J4 (F14 Prefer). Next is kits5-J5; no PRE written f
   picked one up") and ~14115-14152 (guest T / C). Guest presses: the guest's AimPoint reaches the host at 20 Hz.
 - Traps: SmokeTest.cs.txt is LF (edit in binary / newline=''); verify -Quick needs a 300 s+ timeout.
 - J6-J9 as the job list says. Raider.cs hunks still owed: F14 Call (J6), F19 Towed (J8), the latch gates (J9).
+
+## Agent 2 (resumes after Handover 1)
+
+### kits5-J5 · PRE · F14b: the sentry throw and recall -- tier opus
+- Intent: Deploy (R) throws to the cursor (AimPoint, D31) clamped to deploy_reach 600, landing after deploy_flight
+  0.8 s (host pending list, counted in TurretsOut, an Fx.AimZone mark); R within recall_pick 60 of an own turret
+  recalls it (never refused; hull stowed and reused by the next throw). Delete Ab.Collect, CollectTurret,
+  NearestOwnTurret, collect_range. Hub.Drop gains the max hull. Checks LaneASentryThrowChecks + the rewrites.
+- D33: the recall stows at once (the 0.8 s flight home is not drawn; 6b may add it). Stowed hulls are a stack.
+- Files: scripts/PlayerShip.cs, scripts/Abilities.cs, scripts/Ships.cs, scripts/Hub.cs, SmokeTest.cs.txt, this ledger.
+- HEAD d95adc3cd5707097f16cb74209f3f06a06f82eb3 · PlayerShip.cs 0ab60fbad195ccedd5b1ea7f6353d1f5ce0560c0 · Abilities.cs 4f130c86b8b5160df23cfb8eb9358de085b58e9d · Ships.cs 667188f159e3bf5a7ecf560191480eb366e8cf2f · Hub.cs bb3d4f97e167719b852743c3c0fb7971669b7909 · SmokeTest.cs.txt 2e777f1794453c44155090b591384b8655a51318
+### kits5-J5 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Deploy row (R, "SENTRY"): recall first (RecallAt within recall_pick, never refused), else throw to
+  ThrowPoint (clamped to deploy_reach), a host pending list ticked with the statuses, counted in TurretsOut, landing
+  via Hub.Drop(owner, at, hull, max) after deploy_flight; Fx.AimZone marks the landing on every peer. Ab.Collect,
+  CollectTurret, NearestOwnTurret and the three collect_range rows deleted; deploy_reach / deploy_flight / recall_pick
+  rows added to the three freighters.
+- Harness rewrites (6.3): SentryAt helper; the credit check, three-out, recall + RELOADING (was C / NOT OVER ONE),
+  the wreck message, the tender, the missile-first pick, the ability sweep and fit rows, the never-walled rows and the
+  walls kit, rung 5 host/guest (guest throws at its held cursor and the landing is asserted on the host's spot; R
+  recalls). The guest's `For(FreightHauler).Length == 13` was stale before this job (5 + drive + 6 = 12); now 11.
+- Files: PlayerShip.cs, Abilities.cs, Ships.cs, Hub.cs; SmokeTest.cs.txt (LaneASentryThrowChecks after LaneASentryPreferChecks).
+- Next: kits5-J6.

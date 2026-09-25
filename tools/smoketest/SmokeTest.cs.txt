@@ -1988,6 +1988,9 @@ public partial class _Test : Node
     // scenario can fly one of the nine and have the other side see which hull it is. Offline,
     // SendIdentity returns at once, so the solo callers are unchanged.
     async Task SetClass(ShipClass c) { Character.Class = c; H.PilotChanged(); await Wait(0.1); }
+    // R at a cursor: the sentry row reads the pilot's AimPoint as it is pressed (the host's copy of
+    // its 20 Hz intent), so the press is set up the way the wire would set it.
+    static void SentryAt(PlayerShip s, Vector2 cursor) { s.AimPoint = cursor; s.UseAbility("deploy", 0); }
     System.Collections.Generic.List<(Vector2 p, float age)> Smoke(Shot t) =>
         (System.Collections.Generic.List<(Vector2 p, float age)>)typeof(Shot).GetField("_smoke", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(t);
     // the three projectile classes are one flyer with a row each now (Shots.All)
@@ -2801,7 +2804,7 @@ public partial class _Test : Node
             {
                 var fr = Me; var at = VaryNear(yonder, 300f);
                 fr.Position = at; fr.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                fr.Sl("deploy").Cool = 0; fr.UseAbility("deploy", 0); await Wait(0.1);
+                fr.Sl("deploy").Cool = 0; SentryAt(fr, at); await Wait(0.9);   // thrown at its own spot: 0.8 s in flight
                 var gun = H.Deployed.FirstOrDefault(t => t.OwnerId == fr.OwnerId);
                 var centre = gun?.Position ?? at;
                 var tgt = H.SpawnRaider(centre + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 300f), Enemies.Gunship);
@@ -2811,7 +2814,7 @@ public partial class _Test : Node
                 for (int i = 0; i < 150; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 double lost = hp0 - tgt.Hp, credited = fr.DealtBy.GetValueOrDefault("turret") - dealt0;
                 Check(lost > 0 && Math.Abs(lost - credited) < 1e-6 && gun != null,
-                      $"a freighter's dropped turret, {centre.DistanceTo(tgt.Position):0} u off: DealtBy[\"turret\"] on its OWNER (not the turret) grew {credited:0.0}, the target lost {lost:0.0}");
+                      $"a freighter's thrown sentry, {centre.DistanceTo(tgt.Position):0} u off: DealtBy[\"turret\"] on its OWNER (not the turret) grew {credited:0.0}, the target lost {lost:0.0}");
                 tgt.TakeDamage(1e12);
                 gun?.TakeDamage(1e9);                                    // clear it before the next run's FirstOrDefault
             }
@@ -4354,6 +4357,88 @@ public partial class _Test : Node
         pm.Position = yonder; pm.Velocity = Vector2.Zero;
     }
 
+    // ── F14 · THE SENTRY THROW AND RECALL (lane A slice 5, kits5-J5) ──────────────────────────
+    // World, host (the deploy row through PlayerShip.DeployTurret), kits_v3 3.3's lines, 3 runs from
+    // varied spots. Cursors 150-250 u, 560-595 u and 700-900 u off the hull at varied bearings: each
+    // sentry lands within 10 u of its point (the 600 u clamp on the same bearing for the far one), 0.8
+    // +- 0.05 s after the press, and is no body before (it counts as out; nothing stands). The landing
+    // is marked (Fx.AimZone). A 4th throw with 3 out is refused (ALL OUT). A cursor 10-50 u from one
+    // recalls it inside the 6 s clock (never refused); a throw on open space inside the clock is refused
+    // (RELOADING). A cursor 65-90 u from every sentry throws a new one, and it lands with the hull the
+    // recalled one had (kept, not refilled). Nothing sits exactly on 60 u or 600 u.
+    async Task LaneASentryThrowChecks(Vector2 yonder)
+    {
+        var cls0 = Character.Class;
+        await SetClass(ShipClass.FreightHauler);
+        var fr = Me; bool demo = fr.Demo; fr.Demo = true;
+        for (int run = 0; run < 3; run++)
+        {
+            foreach (var dp in H.Deployed.ToList()) H.DeployedTaken(dp);
+            var home = VaryNear(yonder, 300f);
+            fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = VaryAngle();
+            await Wait(0.1);
+            int Own() => H.Deployed.Count(t => t.OwnerId == fr.OwnerId);
+            var dists = new[] { Vary(150f, 250f), Vary(560f, 595f), Vary(700f, 900f) };
+            var landed = new List<DeployedTurret>();
+            foreach (float dist in dists)
+            {
+                var cursor = home + Vector2.Right.Rotated(VaryAngle()) * dist;
+                var want = home + (cursor - home).LimitLength(600f);
+                int stood = Own(), outBefore = fr.TurretsOut, marks0 = Nodes<FxNode>().Count(n => n.Id == Fx.AimZone);
+                fr.Sl("deploy").Cool = 0;
+                SentryAt(fr, cursor);
+                double t0 = fr.Clock;
+                bool inFlight = fr.TurretsOut == outBefore + 1 && Own() == stood;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                bool marked = Nodes<FxNode>().Count(n => n.Id == Fx.AimZone) > marks0;
+                for (int i = 0; i < 120 && Own() == stood; i++)
+                { fr.Position = home; fr.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                double flew = fr.Clock - t0;
+                var got = H.Deployed.FirstOrDefault(t => t.OwnerId == fr.OwnerId && !landed.Contains(t));
+                if (got != null) landed.Add(got);
+                Check(inFlight && marked && got != null && got.Position.DistanceTo(want) < 10f && Math.Abs(flew - 0.8) < 0.05
+                      && want.DistanceTo(home) < 600.5f,
+                      $"R at a cursor {dist:0} u off lands a sentry {got?.Position.DistanceTo(want):0.0} u from {(dist > 600f ? "the 600 u clamp" : "the cursor")} after {flew:0.00} s (0.8), out but no body in flight ({inFlight}), its landing marked ({marked})");
+            }
+            fr.Sl("deploy").Cool = 0;
+            SentryAt(fr, home);                                  // the hull's own spot: 150 u+ from every sentry
+            Check(fr.TurretsOut == 3 && fr.FailNote("deploy") == "ALL OUT", $"a 4th throw with 3 out is refused, ALL OUT ({fr.TurretsOut})");
+            if (landed.Count < 3) continue;
+
+            var back = landed[0];
+            double hurt = back.MaxHp * Vary(0.3f, 0.7f);
+            back.Hp = hurt;
+            fr.Sl("deploy").Cool = 6.0;
+            SentryAt(fr, back.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(10f, 50f));
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool recalled = !H.Deployed.Contains(back) && fr.TurretsOut == 2;
+            SentryAt(fr, home);
+            Check(recalled && fr.TurretsOut == 2 && fr.FailNote("deploy") == "RELOADING",
+                  $"R within 60 u of one recalls it inside the 6 s clock ({recalled}); R on open space inside the clock is refused, RELOADING ({fr.FailNote("deploy")})");
+
+            // 65-90 u off one of the two left, on the side furthest from both
+            var near = landed[1];
+            var other = landed[2];
+            Vector2 best = near.Position; float bestGap = -1f;
+            for (int k = 0; k < 8; k++)
+            {
+                var c = near.Position + Vector2.Right.Rotated(k * Mathf.Tau / 8f) * Vary(65f, 90f);
+                float gap = Math.Min(c.DistanceTo(near.Position), c.DistanceTo(other.Position));
+                if (c.DistanceTo(home) < 590f && gap > bestGap) { bestGap = gap; best = c; }
+            }
+            fr.Sl("deploy").Cool = 0;
+            SentryAt(fr, best);
+            bool threw = fr.TurretsOut == 3 && H.Deployed.Contains(near);
+            await Wait(0.9);
+            var again = H.Deployed.FirstOrDefault(t => t.OwnerId == fr.OwnerId && !landed.Contains(t));
+            Check(bestGap > 60f && threw && again != null && Math.Abs(again.Hp - hurt) < 1e-6 && Math.Abs(again.MaxHp - 120) < 1e-6,
+                  $"R {bestGap:0} u from the nearest sentry throws a new one, recalling none ({threw}); it lands with the recalled one's hull, {again?.Hp:0} of {again?.MaxHp:0} (kept {hurt:0})");
+        }
+        foreach (var dp in H.Deployed.ToList()) H.DeployedTaken(dp);
+        fr.Demo = demo;
+        await SetClass(cls0);
+    }
+
     // ── F12 · THE MELEE ARC AND THE GUARD CLAMP (lane A slice 5, kits5-J1) ─────────────────────
     // Pure (Melee.Pick, Melee.Guard): the blade's literals (160 u, ±55°, kits_v2 Warrior card) and the
     // whirlwind's (210 u, all round) from 3 varied spots and facings. A body well inside the wedge and one
@@ -5831,16 +5916,16 @@ public partial class _Test : Node
         }
 
         // THE ABILITY WALLS BY POSITION (D4/D5): a class's abilities 1, 2 and 3 are its rows in list order,
-        // skipping a weapon's own actions and the open hotkeys. The weapon rows are exactly these seven (point defence is passive: no row).
+        // skipping a weapon's own actions and the open hotkeys. The weapon rows are exactly these six (point defence is passive: no row).
         var weaponRows = typeof(Ab).GetFields(BindingFlags.Public | BindingFlags.Static)
                                    .Select(f => f.GetValue(null)).OfType<AbilityDef>().Where(a => a.Weapon).Select(a => a.Id).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        Check(weaponRows.SequenceEqual(new[] { "attack", "collect", "deploy", "firemode", "guns", "recall", "reload" }),
-              $"never walled: the guns, fire mode, the missile's reload, the wing's attack and recall, the sentries' deploy and collect ({string.Join(",", weaponRows)})");
+        Check(weaponRows.SequenceEqual(new[] { "attack", "deploy", "firemode", "guns", "recall", "reload" }),
+              $"never walled: the guns, fire mode, the missile's reload, the wing's attack and recall, the sentry's throw and recall ({string.Join(",", weaponRows)})");
         // ...and the rule, on real rows in three orders: weapon rows first, walled rows first, the two interleaved
         foreach (var (kit, want) in new[] {
             (new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Missile, Ab.Reload, Ab.Railgun }, new[] { 1, 1, 1, 3, 1, 6 }),
             (new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Hunters, Ab.Bubble, Ab.Echo }, new[] { 1, 1, 1, 3, 6, int.MaxValue }),
-            (new[] { Ab.Echo, Ab.Guns, Ab.Stealth, Ab.Deploy, Ab.Collect, Ab.Rush, Ab.FireMode }, new[] { 1, 1, 3, 1, 1, 6, 1 }) })
+            (new[] { Ab.Echo, Ab.Guns, Ab.Stealth, Ab.Deploy, Ab.Rush, Ab.FireMode }, new[] { 1, 1, 3, 1, 6, 1 }) })
         {
             var got = kit.Select(a => Unlocks.AbilityAt(kit, a)).ToArray();
             Check(got.SequenceEqual(want) && Unlocks.AbilityAt(kit, Ab.Reboard) == 1,
@@ -9635,12 +9720,13 @@ public partial class _Test : Node
             for (int i = 0; i < 4; i++)
             {
                 fr.Sl("deploy").Cool = 0;
-                fr.UseAbility("deploy", 0);
+                SentryAt(fr, fr.Position);
                 fr.Position += Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 240f);
                 await Wait(0.1);
             }
+            await Wait(0.9);                                                     // the last throw lands
             Check(fr.TurretsOut == 3 && H.Deployed.Count(t => t.OwnerId == fr.OwnerId) == 3,
-                  $"T drops a turret where you are, and a fourth is refused: three out ({fr.TurretsOut})");
+                  $"R throws a sentry (here onto the hull's own spot), and a fourth is refused: three out ({fr.TurretsOut})");
             {   // ONE TICK A FRAME, not two. The deploy cooldown used to be run down by a line of
                 // its own outside the loop that runs the slots down; the loop reaches every row
                 // now, so that line is gone. Two ticks would spend the 6 s between drops in 3.
@@ -9662,12 +9748,12 @@ public partial class _Test : Node
                   && Math.Abs(one.Spec(true).Range - (float)fr.Stats["deploy_range"]) < 1e-3
                   && Math.Abs(new ShipStats(ShipClass.FreightHauler)["deploy_damage"] - 6) < 1e-9,
                   $"a dropped turret fires its owner's sheet: {one.Spec(true).Damage:0.0} a shot every {one.Spec(true).Interval:0.00} s inside {one.Spec(true).Range:0} u, on {one.Hp:0} hull");
-            fr.Position = one.Position + new Vector2(90, 0); await Wait(0.15);
-            fr.UseAbility("collect", 0); await Wait(0.15);
-            Check(fr.TurretsOut == 2, $"C over one picks it up again ({fr.TurretsOut} left out)");
-            fr.Position = yonder + new Vector2(0, -900); await Wait(0.15);       // clear of all three
-            fr.UseAbility("collect", 0); await Wait(0.15);
-            Check(fr.TurretsOut == 2 && fr.FailNote("collect") == "NOT OVER ONE", "and from 400 u away it refuses, saying why");
+            fr.Sl("deploy").Cool = 6.0;                                          // reloading: a recall is still never refused
+            SentryAt(fr, one.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(10f, 50f)); await Wait(0.15);
+            Check(fr.TurretsOut == 2, $"R with the cursor on one recalls it, reloading or not ({fr.TurretsOut} left out)");
+            SentryAt(fr, yonder + new Vector2(0, -900)); await Wait(0.15);       // clear of all three
+            Check(fr.TurretsOut == 2 && fr.FailNote("deploy") == "RELOADING", "and on open space inside the 6 s clock it refuses, saying why");
+            fr.Sl("deploy").Cool = 0;
             // a raider walks into one: the turret shoots it, and the raider shoots back
             var tgt = H.Deployed.First();
             var standAt = VaryNear(tgt.Position, 420f);                          // inside its 500 u, any direction
@@ -9794,7 +9880,7 @@ public partial class _Test : Node
             doAbility.Invoke(fr, new object[] { "reboard", 0 });
             await Wait(0.1);
             Check(!wreckTrigger && outWhileDead == 0 && fr.Alive && Math.Abs(fr.Hp - fr.MaxHp * 0.33) < 0.5,
-                  $"a wreck fires nothing and drops nothing: the wire's trigger reads {wreckTrigger} on it and a T from its own peer makes {outWhileDead} turrets -- and reboard, the one ability declared for a wreck, still climbs aboard at a third of the hull ({fr.Hp:0} of {fr.MaxHp:0})");
+                  $"a wreck fires nothing and drops nothing: the wire's trigger reads {wreckTrigger} on it and an R from its own peer makes {outWhileDead} sentries -- and reboard, the one ability declared for a wreck, still climbs aboard at a third of the hull ({fr.Hp:0} of {fr.MaxHp:0})");
             fr.Restore(fr.MaxHp, true, 0); fr.Trigger = false;
             await Wait(0.1);
 
@@ -9835,7 +9921,7 @@ public partial class _Test : Node
             // ── TENDER: everything it owns fires twice as fast ──
             await SetClass(ShipClass.FreightTender);
             var td = Me; td.Position = VaryNear(yonder, 200f); td.Velocity = Vector2.Zero; td.Rotation = VaryAngle(); await Wait(0.2);
-            td.Sl("deploy").Cool = 0; td.UseAbility("deploy", 0); await Wait(0.15);
+            td.Sl("deploy").Cool = 0; SentryAt(td, td.Position); await Wait(0.9);
             var tt = H.Deployed.First();
             double gun0 = td.Spec(false).Interval, drop0 = tt.Spec(true).Interval;
             // THE SHELLS THEMSELVES, counted as they leave the barrel: the mean gap from the first to
@@ -10184,6 +10270,7 @@ public partial class _Test : Node
             await LaneAPrismReflectChecks(yonder);
             await LaneAPrismRayChecks(yonder);
             await LaneASentryPreferChecks(yonder);
+            await LaneASentryThrowChecks(yonder);
             await LaneBHelmChecks(yonder);
             await LaneBStrafeChecks(yonder);
             await LaneBBoostChecks(yonder);
@@ -10466,7 +10553,7 @@ public partial class _Test : Node
                 {
                     var xsShip = Me; var xsAt = VaryNear(yonder, 300f);
                     xsShip.Position = xsAt; xsShip.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                    xsShip.Sl("deploy").Cool = 0; xsShip.UseAbility("deploy", 0); await Wait(0.1);
+                    xsShip.Sl("deploy").Cool = 0; SentryAt(xsShip, xsAt); await Wait(0.9);
                     var xsGun = H.Deployed.FirstOrDefault(t => t.OwnerId == xsShip.OwnerId);
                     var xsOff = xsAt + Vector2.Right.Rotated(VaryAngle()) * 1500f;   // the freighter well clear of it
                     void XsHold() { xsShip.Position = xsOff; xsShip.Velocity = Vector2.Zero; }
@@ -10584,7 +10671,6 @@ public partial class _Test : Node
                     ["recall"]    = sp => sp.WingTarget == null,
                     ["bombers"]   = sp => ReferenceEquals(sp.StrikeTarget, sweepMark),
                     ["deploy"]    = sp => sp.TurretsOut == sweepTurrets + 1 && sp.Sl("deploy").Cool > 0,
-                    ["collect"]   = sp => sp.TurretsOut == sweepTurrets - 1,
                     ["bubble"]    = sp => sp.BubbleUp && Math.Abs(sp.BubbleLeft - sp.Stats["bubble_pool"]) < 0.5,
                     ["overdrive"] = sp => Math.Abs(sp.FireRate - (float)sp.Stats["overdrive_mult"]) < 1e-3f,
                     ["shockwave"] = sp => sp.Sl("shockwave").Cool > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Wave),
@@ -10610,7 +10696,7 @@ public partial class _Test : Node
                     (Fit.Broadside, new[] { "broadside" }),
                     (Fit.Missiles,  new[] { "missile", "reload" }),
                     (Fit.Wing,      new[] { "attack", "recall", "bombers" }),
-                    (Fit.Deploy,    new[] { "deploy", "collect" }),
+                    (Fit.Deploy,    new[] { "deploy" }),
                 };
 
                 foreach (var cls in Classes.All.Where(cd2 => cd2.Ready).ToList())
@@ -10671,7 +10757,7 @@ public partial class _Test : Node
 
                         // THE SECOND PRESS. A row that engaged its slot must refuse it: neither
                         // the time it has left nor its cooldown may go UP. (A row that engages no
-                        // slot -- the carrier's attack and recall, a freighter's collect -- has
+                        // slot -- the carrier's attack and recall -- has
                         // nothing to refuse, and its witness is the whole of it; the bombers'
                         // refusal of a second strike is measured with strike_range below.)
                         var slotWas = sweepShip.Sl(abil.Id);
@@ -13812,7 +13898,7 @@ public partial class _Test : Node
                   $"arena host: the guest refitted to a FREIGHTER and parked -- its stock 400 hull ({fg?.Class}, {fg?.MaxHp:0}, {fg?.Position.DistanceTo(mpSpot):0} u off)");
             hw.Position = VaryNear(fg.Position, 230f); hw.Velocity = Vector2.Zero; hw.Rotation = 0f;   // inside its 260 u, any bearing
             await Wait(0.3);
-            // ITS TURRET, MADE BY THE HOST: the guest presses T; only the host may put one in the
+            // ITS SENTRY, MADE BY THE HOST: the guest presses R; only the host may put one in the
             // world, and only the host may take it away again.
             await RealTime(() => H.Deployed.Count(t => t.OwnerId == fg.OwnerId) == 1, Wan ? 15 : 8);
             var t1 = H.Deployed.FirstOrDefault(t => t.OwnerId == fg.OwnerId);
@@ -13820,7 +13906,7 @@ public partial class _Test : Node
                   && Math.Abs(t1.Hp - 120) < 1e-6
                   && Math.Abs(t1.Spec(true).Damage - fg.Stats["deploy_damage"]) < 1e-9
                   && Math.Abs(fg.Stats["deploy_damage"] - 6) < 1e-9,     // the stock 6: the guest's freighter carries no chips
-                  $"arena host: a guest's T reached the host -- one 120-hull turret firing the GUEST's sheet, {t1?.Spec(true).Damage:0.0} a shot, owned by the guest ({H.Deployed.Count} out)");
+                  $"arena host: a guest's R reached the host -- one 120-hull turret firing the GUEST's sheet, {t1?.Spec(true).Damage:0.0} a shot, owned by the guest ({H.Deployed.Count} out)");
             H.Drop(fg, VaryNear(fg.Position, 420f), fg.Stats["deploy_hull"]);
             H.Drop(fg, VaryNear(fg.Position, 420f), fg.Stats["deploy_hull"]);
             await Wait(0.3);
@@ -13864,7 +13950,7 @@ public partial class _Test : Node
                   $"arena host: a turret shot off its base is gone here ({fg.TurretsOut} left out)");
             await RealTime(() => fg.TurretsOut == 1, Wan ? 20 : 12);
             Check(fg.TurretsOut == 1 && H.Deployed.Count == 1,
-                  $"arena host: the guest's C picked one up again -- one of its three left standing ({fg.TurretsOut})");
+                  $"arena host: the guest's R recalled one -- one of its three left standing ({fg.TurretsOut})");
             // THE RUSH MUST LAND BEFORE THE REFIT. A refit rebuilds the ship's slots, so a rush
             // still running is discarded with them and its EMP never fires -- which is right (it is
             // a different ship now), but it would leave the guest waiting for a ring that never came.
@@ -14090,8 +14176,8 @@ public partial class _Test : Node
             // later -- so this waits for the host to have refitted its copy too.
             await RealTime(() => Math.Abs(fgm.MaxHp - 400) < 1e-6, Wan ? 20 : 10);
             Check(fgm.Class == ShipClass.FreightHauler && Math.Abs(fgm.MaxHp - 400) < 1e-6
-                  && Abilities.For(ShipClass.FreightHauler).Length == 13,
-                  $"arena guest: flying a FREIGHTER in a session -- its stock 400 hull, no chips, and the host's word for it, six abilities and six open slots ({fgm.MaxHp:0})");
+                  && Abilities.For(ShipClass.FreightHauler).Length == 11,
+                  $"arena guest: flying a FREIGHTER in a session -- its stock 400 hull, no chips, and the host's word for it, four abilities, its drive and six open slots ({fgm.MaxHp:0})");
             // Watched from before the host does any of it: an effect lives well under a second and
             // a status bit is held for a packet, so neither survives a single sample.
             bool sawEmp = false, sawBurst = false; int mostBursts = 0;
@@ -14113,11 +14199,16 @@ public partial class _Test : Node
             // pressing T and looking a frame later: on a loopback the host's answer can beat that
             // frame, and a check that depends on losing a race is a check that hides a bug.
             bool ownDrop = H.Drop(fgm, fgm.Position, 120) != null || fgm.TurretsOut > 0;
-            fgm.UseAbility("deploy", 0);                       // T
+            // THE THROW'S POINT IS THE GUEST'S CURSOR, carried to the host in its 20 Hz intent (AimPoint):
+            // held still (Demo: no mouse) long enough for the host to have it before R goes down.
+            bool fgmDemo = fgm.Demo; fgm.Demo = true;
+            var throwAt = fgm.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 500f);
+            fgm.AimPoint = throwAt; await Wait(0.3);
+            SentryAt(fgm, throwAt);                            // R
             await RealTime(() => H.Deployed.Count == 1, Wan ? 15 : 8);
             Check(!ownDrop && H.Deployed.Count == 1 && H.Deployed[0].OwnerId == Net.LocalId && fgm.TurretsOut == 1
-                  && Math.Abs(H.Deployed[0].Hp - 120) < 1e-6,
-                  $"arena guest: its T is the host's -- nothing made here ({ownDrop}), then a 120-hull turret of its own arrives ({H.Deployed.Count} out)");
+                  && Math.Abs(H.Deployed[0].Hp - 120) < 1e-6 && H.Deployed[0].Position.DistanceTo(throwAt) < 10f,
+                  $"arena guest: its R is the host's -- nothing made here ({ownDrop}), then a 120-hull sentry of its own lands on the host's spot, {H.Deployed.FirstOrDefault()?.Position.DistanceTo(throwAt):0} u off its cursor ({H.Deployed.Count} out)");
             await RealTime(() => H.Deployed.Count == 3, Wan ? 15 : 8);
             Check(H.Deployed.Count == 3 && H.Deployed.All(t => t.OwnerId == Net.LocalId),
                   $"arena guest: every turret the host put out for it stands here ({H.Deployed.Count})");
@@ -14147,12 +14238,13 @@ public partial class _Test : Node
             await RealTime(() => H.Deployed.Count == 2, Wan ? 20 : 12);
             Check(H.Deployed.Count == 2, $"arena guest: the turret the host shot off its base is gone here too ({H.Deployed.Count} left)");
             var takeBack = H.Deployed.First();
-            fgm.Position = takeBack.Position; fgm.Velocity = Vector2.Zero;
-            await Wait(0.6);                                   // the host must see it over the turret before C
-            fgm.UseAbility("collect", 0);                      // C
+            fgm.AimPoint = takeBack.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(10f, 45f);
+            await Wait(0.6);                                   // the host must have the cursor on the sentry before R
+            SentryAt(fgm, fgm.AimPoint);                       // R
             await RealTime(() => H.Deployed.Count == 1, Wan ? 15 : 8);
+            fgm.Demo = fgmDemo;
             Check(H.Deployed.Count == 1 && fgm.TurretsOut == 1,
-                  $"arena guest: C over one picked it up, and the host's word of it is here ({H.Deployed.Count} left)");
+                  $"arena guest: R with the cursor on one recalled it, and the host's word of it is here ({H.Deployed.Count} left)");
             await RealTime(() => hardWatch.Seen && sawEmp && sawBurst, Wan ? 20 : 12);
             Check(hardWatch.Seen, "arena guest: the host's warrior reads HARDENED here -- a status bit is the host's word, counted down on no other peer");
             Check(sawEmp && sawBurst && mostBursts == 1,

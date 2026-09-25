@@ -573,39 +573,67 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // ── THE FREIGHTERS ──────────────────────────────────────────────────
     private Hub MyHub => GetParent() as Hub;
 
-    // How many of this pilot's turrets are standing, and the one it is sitting over (C).
+    // THE SENTRY THROW (F14). R with the cursor on open space throws one from the hull to the
+    // cursor, clamped to deploy_reach on the same bearing; it lands deploy_flight later, and in
+    // flight it is no body (nothing hits it, it fires at nothing). R with the cursor within
+    // recall_pick of one of yours recalls it: never refused, and its hull is stowed for the next
+    // throw. The host keeps the throws in flight; every peer sees the landing mark (Fx.AimZone).
+    private readonly List<(Vector2 At, double Left, double Hp, double Max)> _throws = new();
+    private readonly Stack<(double Hp, double Max)> _stowed = new();
+
+    // How many of this pilot's turrets are standing or in flight.
     public int TurretsOut
     {
         get
         {
             var h = MyHub; if (h == null) return 0;
-            int n = 0; foreach (var t in h.Deployed) if (t.OwnerId == OwnerId) n++;
+            int n = _throws.Count; foreach (var t in h.Deployed) if (t.OwnerId == OwnerId) n++;
             return n;
         }
     }
-    public DeployedTurret NearestOwnTurret()
+    // The own turret an R at `cursor` recalls: the nearest within recall_pick, or none.
+    public DeployedTurret RecallAt(Vector2 cursor)
     {
         var h = MyHub; if (h == null) return null;
-        DeployedTurret best = null; float bd = (float)Stats["collect_range"];
+        DeployedTurret best = null; float bd = (float)Stats["recall_pick"];
         foreach (var t in h.Deployed)
         {
             if (t.OwnerId != OwnerId) continue;
-            float d = Position.DistanceTo(t.Position);
+            float d = cursor.DistanceTo(t.Position);
             if (d <= bd) { bd = d; best = t; }
         }
         return best;
     }
-    public void DeployTurret()
+    // Where a throw at `cursor` lands.
+    public Vector2 ThrowPoint(Vector2 cursor) => Position + (cursor - Position).LimitLength((float)Stats["deploy_reach"]);
+    public void DeployTurret(Vector2 cursor)
     {
         if (!Stats.Def.Has(Fit.Deploy)) return;
+        if (RecallAt(cursor) is { } mine)
+        {
+            _stowed.Push((mine.Hp, mine.MaxHp));
+            MyHub?.DeployedTaken(mine);
+            return;
+        }
         if (Sl("deploy").Cool > 0 || TurretsOut >= (int)Stats["deploy_max"]) return;
-        MyHub?.Drop(this, Position, Stats["deploy_hull"]);
+        var at = ThrowPoint(cursor);
+        double flight = Stats["deploy_flight"];
+        var (hp, max) = _stowed.Count > 0 ? _stowed.Pop() : (Stats["deploy_hull"], Stats["deploy_hull"]);
+        _throws.Add((at, flight, hp, max));
+        Fx.Warn(new FxRaise { Id = Fx.AimZone, At = at, To = at, Size = DeployedTurret.Radius, Time = flight });
         Sl("deploy").Cool = Cooling(Stats["deploy_cooldown"]);
     }
-    public void CollectTurret()
+    // host, each frame: a throw whose flight is over lands as a turret
+    private void TickThrows(double delta)
     {
-        if (!Stats.Def.Has(Fit.Deploy)) return;
-        if (NearestOwnTurret() is { } t) MyHub?.DeployedTaken(t);
+        for (int i = _throws.Count - 1; i >= 0; i--)
+        {
+            var th = _throws[i];
+            th.Left -= delta;
+            if (th.Left > 0) { _throws[i] = th; continue; }
+            _throws.RemoveAt(i);
+            MyHub?.Drop(this, th.At, th.Hp, th.Max);
+        }
     }
 
     // The bubble is a POOL IN THE WORLD, not a flag on one hull: it covers whoever is inside it
@@ -1029,7 +1057,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Alive && Hp < MaxHp) Hp = Math.Min(MaxHp, Hp + MaxHp * (InCombat ? RegenInCombat : RegenOutOfCombat) * delta);
         // The HOST decides pinned. A guest used to count its own (never-set) timer down here and
         // overwrite the host's flag every frame, so a raider's web never held a guest at all.
-        if (Net.Sim) { _status.Tick(delta); _paintLeft = System.Math.Max(0, _paintLeft - delta); }
+        if (Net.Sim) { _status.Tick(delta); _paintLeft = System.Math.Max(0, _paintLeft - delta); TickThrows(delta); }
         // the drive's clocks run on every peer: the landing flash used to fade only on the owner's,
         // and a remote ship's warp left it lit for good
         Drives.Tick(_drive, delta);
