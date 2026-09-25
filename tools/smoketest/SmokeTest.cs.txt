@@ -14,6 +14,13 @@ public partial class _Test : Node
     int fails = 0;
     void Check(bool ok, string what) { GD.Print((ok ? "PASS " : "FAIL ") + what); if (!ok) fails++; }
     async Task Wait(double s) => await ToSignal(GetTree().CreateTimer(s), "timeout");
+    // A HULL TEXTURE TRIMMED TO ITS DRAWING (tools/make_ships.ps1): it fills 98.5% of its height
+    // and reaches a side within 2 px, so a row's Length is the drawn hull, nose to tail.
+    static bool Trimmed(string texture)
+    {
+        var im = Assets.Load<Texture2D>(texture).GetImage(); var u = im.GetUsedRect();
+        return u.Size.Y >= 0.985f * im.GetHeight() && Math.Min(u.Position.X, im.GetWidth() - u.End.X) <= 2;
+    }
     // A HERMETIC NETWORK. Every host in this harness used to search the real network for a router
     // and ask a real web service for the public address, so two checks passed in the sandbox the
     // harness was born in and failed on every real machine -- and now that the game maps ports
@@ -1799,6 +1806,15 @@ public partial class _Test : Node
               && menu.Foes.Count(f => f.Kind == MenuFoeKind.Light) == 3
               && menu.Foes.All(f => Combat.Hostiles.Contains(f)),
               "heavies, a webifier and light fighters, all of them real targets the ship can shoot");
+        // ...and every one of them in its enemy row's red, the Web on its own crescent too: it drew in
+        // the art's own colours before the pack's grey art, and untinted grey reads as a neutral hull.
+        {
+            Sprite2D Drawn(MenuFoe f) => f.GetChildren().OfType<Sprite2D>().First();
+            var web = menu.Foes.First(f => f.Kind == MenuFoeKind.Web);
+            Check(menu.Foes.All(f => Drawn(f).Modulate == Enemies.Of(f.Kind == MenuFoeKind.Heavy ? Enemies.Gunship : Enemies.Webifier).Tint)
+                  && Drawn(web).Modulate != Colors.White && Drawn(web).Texture.ResourcePath.EndsWith("enemy_light_tier_2.png"),
+                  $"the title screen's foes wear their raider rows' tints, the Web on its own art (Web {Drawn(web).Modulate})");
+        }
 
         // THE HULL COMES ROUND AT THE SHEET'S RATE. turn_rate is RADIANS a second -- the sheet says
         // so ("Rudder limit", rad/s) and PlayerShip.Steer caps its yaw with the figure itself --
@@ -2322,6 +2338,19 @@ public partial class _Test : Node
         finally { w.Crew[ci] = c; }
         Check(FingerprintNow() == Net.Protocol,
               $"a wave crew row put back is the build's fingerprint again ({FingerprintNow():x8}, the build's {Net.Protocol:x8})");
+        // A BARE BELL TABLE IS HASHED: Nozzle was a positional record struct -- no public fields, so
+        // not a row to StructRow -- and Lanes.CourierBells / Gatherer.DroneBells, Nozzle[] fields of
+        // their own, never entered the fingerprint. One courier bell moved moves it; put back it is
+        // the build's again, and the part shows the bell written out field by field.
+        var bells = (Nozzle[])typeof(Lanes).GetField("CourierBells", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+        int bi = Rng.RandiRange(0, bells.Length - 1);
+        var bellWas = bells[bi];
+        bells[bi] = new Nozzle(bellWas.X + Vary(0.5f, 5f), bellWas.Y, bellWas.Bell);
+        int bellShifted = FingerprintNow();
+        bells[bi] = bellWas;
+        string bellPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("Lanes.CourierBells=", StringComparison.Ordinal)) ?? "none";
+        Check(bellShifted != Net.Protocol && FingerprintNow() == Net.Protocol && bellPart.Contains("Nozzle{Bell=2.11", StringComparison.Ordinal),
+              $"a bare bell table is part of the build's fingerprint: one courier bell moved moves it, put back it is the build's again (bell {bi}: {bellShifted:x8}, the build's {Net.Protocol:x8}; {bellPart[..Math.Min(90, bellPart.Length)]})");
         // Net.Fingerprint() folds in every static field of every null-namespace type that is
         // IsLiteral or IsInitOnly with a Plain field type -- and string is Plain. A
         // `public static readonly string Build` would therefore enter the hash two peers are
@@ -2489,7 +2518,7 @@ public partial class _Test : Node
         var sDock = Y.Arms[Math.Max(0, shared)].Dock;
         var holder = Y.Gatherers.First(g => g.Kind == GatherKind.Miner);
         Y.SetArm(holder, Math.Max(0, shared)); holder.State = Gatherer.St.Unloading; holder.Cargo = 1e6;
-        holder.Position = sDock.Berth(Gatherer.Length); holder.Rotation = sDock.Heading;
+        holder.Position = sDock.Berth(holder.Def.Length); holder.Rotation = sDock.Heading;
         var keepPhase = drones.Select(c => c.Phase).ToArray();
         var keepClock = drones.Select(c => c.Clock).ToArray();
         float before = Vary(0.3f, 1.5f);                 // how far out each starts: WHERE on its approach
@@ -2512,11 +2541,14 @@ public partial class _Test : Node
                     skew: Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(c.Rotation, dk.Heading))));
         }).ToList();
         var farthest = landed.OrderByDescending(l => l.fromPad).First();
+        // NOT SHORT OF IT, from the courier's own 30 u (the pack's, sprites.md Q6): a nose inside the
+        // 10 u band puts the centre at most the pad's reach + 10 + 15 out. A flat 50 u was that bound
+        // for the old 22 u courier and sat exactly ON the edge for the new one (50.0 u, nose 4 u off).
         Check(flyingIn == drones.Count
-              && landed.All(l => l.c.Docked && !l.c.Held && l.fromPad < 50f && l.toFace > 0f && l.toFace < 10f && l.skew < 5f)
+              && landed.All(l => l.c.Docked && !l.c.Held && l.fromPad < l.dk.Row.Reach + 10f + 30f * 0.5f && l.toFace > 0f && l.toFace < 10f && l.skew < 5f)
               && drones.All(c => Y.Arms.Any(a => a.Dock.Row == c.Home.Row)
                                  && Landmarks.Outposts[c.Def.Outpost].Docks.Contains(c.Away.Row) && c.Away.At == Hub.Outposts[c.Def.Outpost].at),
-              $"every courier docks where the fleet does -- a base service arm at one end, its outpost's clamp at the other -- and not short of it: centre within 50 u of the pad's, nose within 10 u of the open face and pointing in, flown in from {before:0.00} s out on all four bearings ({flyingIn} of {drones.Count} flying at the start, {landed.Count(l => l.c.Docked)} docked; farthest {Lanes.Name(farthest.c.Lane)} {farthest.dk.Row.Id}: {farthest.fromPad:0.0} u off the pad's centre, nose {farthest.toFace:0.0} u off the face, {farthest.skew:0.0} deg off nose-in)");
+              $"every courier docks where the fleet does -- a base service arm at one end, its outpost's clamp at the other -- and not short of it: centre within the pad's reach + 25 u (the 10 u band + half the 30 u courier), nose within 10 u of the open face and pointing in, flown in from {before:0.00} s out on all four bearings ({flyingIn} of {drones.Count} flying at the start, {landed.Count(l => l.c.Docked)} docked; farthest {Lanes.Name(farthest.c.Lane)} {farthest.dk.Row.Id}: {farthest.fromPad:0.0} u off the pad's centre, nose {farthest.toFace:0.0} u off the face, {farthest.skew:0.0} deg off nose-in)");
         // ...and the one that came in to a held arm sits BESIDE the miner holding it: its centre past
         // the miner's own half-width along the face, its own outer edge still on the face. The miner
         // keeps its arm. Both read after the wait, where they are now.
@@ -2524,7 +2556,7 @@ public partial class _Test : Node
         var sharerArt = Nodes<Sprite2D>(sharer).First();
         float sharerHalf = sharerArt.Texture.GetWidth() * sharerArt.Scale.X * 0.5f;
         Check(shared >= 0 && Y.Arms[shared].Occupant == holder && Y.QueueLength == 0
-              && sharer.Docked && holder.Position.DistanceTo(sDock.Berth(Gatherer.Length)) < 1f
+              && sharer.Docked && holder.Position.DistanceTo(sDock.Berth(holder.Def.Length)) < 1f
               && along > holder.Extent.halfWidth && along + sharerHalf <= sDock.Row.Face * 0.5f + 0.5f,
               $"two craft may share one pad: lane {Lanes.Name(sl)}'s courier docks at {sDock.Row.Id} while a miner holds it, beside it ({along:0.0} u outboard of the centre line, past the miner's {holder.Extent.halfWidth:0} u half-width; its outer edge {along + sharerHalf:0.0} u out on a {sDock.Row.Face * 0.5f:0.0} u half-face; still the miner's: {Y.Arms[Math.Max(0, shared)].Occupant == holder})");
         holder.ResetToWork(); Y.Release(holder);
@@ -3385,18 +3417,37 @@ public partial class _Test : Node
         Check(Abilities.ControlsHint((ShipClass)99) == "placeholder", "an undefined class shows 'placeholder'");
         ship = Me;
 
-        // the owner's line-art hull, its painted turrets painted over: the moving turrets stand where
-        // they stood, on the spine, and point defence on the stern
+        // the owner's pack hull (battleship_bb05, tools/make_ships.ps1): the painted twins' barrels
+        // painted out (Q4), the moving turrets on 4 of the 6 -- the two forward flanking rows -- and
+        // point defence on the aft domes; the hull's own beam is unchanged (Q1)
         var hullSpr = ship.GetChildren().OfType<Sprite2D>().First();
         Check(hullSpr.Texture.ResourcePath.EndsWith("battleship_hull.png") && Math.Abs(hullSpr.Texture.GetHeight() * hullSpr.Scale.Y - 378f) < 0.5f
               && Math.Abs(ship.MyArt.HalfWidth - 43.875f) < 1e-4,
-              "battleship is the owner's line-art hull made twice as wide, then 35% and 25% larger: 378 u (224 x 1.35 x 1.25), a 43.875 u half-beam");
+              "battleship is the pack's hull at 378 u, its 43.875 u half-beam unchanged");
         var tsprites = Nodes<Turret>(ship).Select(x => x.GetChildren().OfType<Sprite2D>().FirstOrDefault()).ToList();
         Check(tsprites.Count == 6 && tsprites.All(x => x != null)
               && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_main.png")) == 4
               && tsprites.Count(x => x.Texture.ResourcePath.EndsWith("turret_pd.png")) == 2
-              && Nodes<Turret>(ship).All(x => x.PointDefense ? x.Offset.Y > 150f : Mathf.Abs(x.Offset.X) < 1e-6f),
-              "four main turrets on the spine and two point-defence turrets on the stern, in the owner's turret art");
+              && Nodes<Turret>(ship).Where(x => !x.PointDefense).All(x => Math.Abs(Mathf.Abs(x.Offset.X) - 23.99f) < 0.5f
+                     && (Math.Abs(x.Offset.Y + 74.28f) < 0.5f || Math.Abs(x.Offset.Y + 36.27f) < 0.5f))
+              && Nodes<Turret>(ship).Where(x => x.PointDefense).All(x => Math.Abs(Mathf.Abs(x.Offset.X) - 58.99f) < 0.5f && Math.Abs(x.Offset.Y - 71.73f) < 0.5f),
+              "four main turrets on the flanking twins, off the keel, and two point-defence turrets on the aft domes, in the owner's turret art");
+        // ALL TWELVE CLASSES WEAR THE PACK (J5, tools/make_ships.ps1): each hull trimmed to its
+        // drawing, the hit half-beams exactly as they were before the re-art
+        // (Q1); the destroyer's two mains on its keel gun cluster near the bow (was -57 / +25)
+        {
+            var wantHw = new Dictionary<ShipClass, float> {
+                [ShipClass.Battleship] = 43.875f, [ShipClass.Carrier] = 40.02f, [ShipClass.Destroyer] = 27.8f,
+                [ShipClass.FreightHauler] = 59.74f, [ShipClass.FreightTender] = 57.48f, [ShipClass.FreightBastion] = 49.34f,
+                [ShipClass.HeavySniper] = 30.03f, [ShipClass.HeavyWarrior] = 31.54f, [ShipClass.HeavyWarden] = 28.68f,
+                [ShipClass.LightDart] = 16.78f, [ShipClass.LightEcho] = 14.68f, [ShipClass.LightWraith] = 14.97f };
+            var bad = Classes.All.Where(c => !wantHw.TryGetValue(c.Id, out var hw) || Math.Abs(c.Art.HalfWidth - hw) > 1e-4f || !Trimmed(c.Art.Texture))
+                                 .Select(c => c.Name).ToList();
+            var dd = Classes.All.First(c => c.Id == ShipClass.Destroyer).Art;
+            Check(Classes.All.Length == 12 && bad.Count == 0
+                  && dd.Mains.Length == 2 && dd.Mains.All(m => Mathf.Abs(m.X) < 0.5f) && Math.Abs(dd.Mains[0].Y + 14.20f) < 0.5f && Math.Abs(dd.Mains[1].Y - 17.81f) < 0.5f,
+                  $"all 12 classes wear trimmed pack art, hit half-beams unchanged, the destroyer's mains on its keel ({(bad.Count == 0 ? "none off" : string.Join(", ", bad))})");
+        }
         // DAMAGE NUMBERS: small figures where damage lands -- gold for damage dealt, red for damage
         // taken -- floating up and gone after a second or so; hits in quick succession add into one
         {
@@ -3543,10 +3594,35 @@ public partial class _Test : Node
         Check(miner.Beaming && salv.Beaming, "both reach their work and start beaming");
         await Wait(0.2);
         var bolts = (System.Collections.IList)typeof(Gatherer).GetField("_bolts", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(salv);
-        var nose = salv.ToGlobal(new Vector2(0, -Gatherer.Length * 0.45f)); var aim = (salv.BeamTo - nose).Angle();
+        var nose = salv.ToGlobal(salv.Def.Emitter); var aim = (salv.BeamTo - nose).Angle();
         float cone = 0; foreach (Vector2[] bl in bolts) cone = Mathf.Max(cone, Mathf.Abs(Mathf.AngleDifference(aim, (bl[^1] - nose).Angle())));
         Check(bolts.Count >= 2 && cone < 0.33f, $"salvager's beam is a narrow scan: {bolts.Count} arcs within {cone:0.00} rad of centre");
         Check(miner.BeamTo.DistanceTo(Y.WorkSpot(miner).target) < 0.01f, "miner's single beam holds on its asteroid");
+        // THE PACK'S ART ON THE BASE'S FLEET (tools/make_ships.ps1, the owner's picks of 2026-09-25):
+        // the hauler cargo_4, the miner AND the salvager drone_salvager (one file, told apart by their
+        // tints), the lanes' couriers drone_economy (a file of their own, drawn 30 u), the wing's
+        // fighter fighter_delta and bomber fighter_g. Each texture is trimmed to its drawing, and each
+        // flies on the bells its art has, counted off the art -- the hauler 2, a gatherer and a
+        // courier 3 (their three thruster blocks), the fighter 2, the bomber 2 -- every one aft of the
+        // hull's centre. The grey gatherers wear the average colour of the art they first replaced; a
+        // gatherer's beam leaves from its emitter on the keel ahead of its centre (the claws' mouth),
+        // and raiders hold off its drawn span.
+        {
+            var fleet = new (HullArt row, int bells)[] { (Hauler.Art, 2), (miner.Def, 3), (salv.Def, 3), (Lanes.All[0], 3),
+                                                        (Wings.Of(WingKind.Fighter), 2), (Wings.Of(WingKind.Bomber), 2) };
+            var loose = fleet.Where(f => !Trimmed(f.row.Texture)).Select(f => f.row.Texture).ToList();
+            var cour = Nodes<Courier>().First(); var cArt = Nodes<Sprite2D>(cour).First();
+            Sprite2D HullOf(Gatherer g) => Nodes<Sprite2D>(g).First();
+            float DrawnHalf(Gatherer g) => HullOf(g).Texture.GetWidth() * HullOf(g).Scale.X * 0.5f;
+            Check(loose.Count == 0 && fleet.All(f => f.row.Nozzles.Length == f.bells && f.row.Nozzles.All(n => n.Y > 0f && n.Y <= f.row.Length * 0.5f + 1f))
+                  && Lanes.All.All(l => l.Texture == "res://courier.png" && l.Length == 30f && l.Nozzles.Length == 3)
+                  && Math.Abs(cArt.Texture.GetHeight() * cArt.Scale.Y - 30f) < 0.05f && cArt.Modulate == Lanes.Livery
+                  && HullOf(miner).Texture == HullOf(salv).Texture
+                  && HullOf(miner).Modulate == new Color(0.63f, 0.46f, 0.31f) && HullOf(salv).Modulate == new Color(0.61f, 0.35f, 0.11f)
+                  && new[] { miner, salv }.All(g => g.Def.Emitter.X == 0f && g.Def.Emitter.Y < 0f && g.Def.Emitter.Y > -g.Def.Length * 0.5f
+                                                    && g.Extent.halfLength == g.Def.Length * 0.5f && Math.Abs(g.Extent.halfWidth - DrawnHalf(g)) < 0.3f),
+                  $"the fleet wears the pack: trimmed, a flame per bell (hauler/miner/salvager/courier/fighter/bomber {string.Join("/", fleet.Select(f => f.row.Nozzles.Length))}), couriers 30 u in the livery, the miner and the salvager one drone in two tints, beaming from the claws, held off at their drawn span (miner {miner.Extent.halfWidth:0.0} of {DrawnHalf(miner):0.0} u, salvager {salv.Extent.halfWidth:0.0} of {DrawnHalf(salv):0.0}; loose: {string.Join(", ", loose)})");
+        }
         double mined0 = Y.Delivered("ore"), salv0 = Y.Delivered("salvage");
         for (int i = 0; i < 12000 && (Y.Delivered("ore") - mined0 < 99.9 || Y.Delivered("salvage") - salv0 < 99.9); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         Check(Y.Delivered("ore") - mined0 >= 99.9 && Y.Delivered("salvage") - salv0 >= 99.9, "a full hold (100) of each is unloaded through an arm");
@@ -3701,7 +3777,7 @@ public partial class _Test : Node
               && Mathf.Abs(Mathf.AngleDifference(midRot, Hauler.West)) > 0.3f && Mathf.Abs(Mathf.AngleDifference(midRot, Hauler.East)) > 0.3f,
               $"it turns WHILE it descends (half way: scale {midScale:0.00}, heading between west and east)");
         // half way round it points north: its nose, at that size, must clear the station (lowest point y ~ 110)
-        Check(Hub.HaulerPad.Y - Hauler.Length * midScale / 2 > 110, "turning on the way down, it clears the station");
+        Check(Hub.HaulerPad.Y - Hauler.Art.Length * midScale / 2 > 110, "turning on the way down, it clears the station");
         await Wait(Economy.HaulerLand / 2 + 0.2);
         Check(hauler.State == Hauler.St.Loading && Math.Abs(hauler.VisualScale - Economy.HaulerLandedScale) < 1e-4
               && Mathf.Abs(Mathf.AngleDifference(hauler.Rotation, Hauler.East)) < 0.01f, "lands facing the portal, and loads");
@@ -4580,7 +4656,7 @@ public partial class _Test : Node
               "fighter control range 1500 (1.5x the battleship's 1000 u guns); bomber strike range 3000 (2x)");
         var spr = Nodes<Sprite2D>(ship).First();
         Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 283.5f) < 0.5f,
-              "carrier flies the owner's line-art sprite at 283.5 u, 25% smaller than the battleship");
+              "carrier flies the pack's carrier_a sprite at 283.5 u, 25% smaller than the battleship");
         await Park(VaryNear(fighterPair + new Vector2(-120, 150), 20f), 0);
         var pdLight = H.SpawnRaider(ship.Position + new Vector2(-80, 160));   // a third light target (the practice fighters are two), placed off the parked hull
         Key(global::Godot.Key.Q); await Wait(2.0);
@@ -4604,7 +4680,7 @@ public partial class _Test : Node
         Check(Nodes<Wing>().Where(w => w.Carrier == ship && w.Kind == WingKind.Fighter).All(w => w.Inside && !w.Visible),
               "idle fighters wait docked inside the carrier, out of sight");
         // parked SMALL, as far below as the deck is: 65% of 28.125 u (the hauler's landed size), facing
-        // the bow, the whole of it (18 u across) on the white between the runway's edge (15.2 u out) and
+        // the bow, the whole of it (12 u across) on the white between the runway's edge (15.2 u out) and
         // the hull's (37.9 u)
         foreach (var bw in Nodes<Wing>().Where(w => w.Carrier == ship && w.Def.Parks && w.Docked))
         {
@@ -4785,13 +4861,29 @@ public partial class _Test : Node
         float launchDist = crawl?.Position.DistanceTo(d1.Position) ?? -1;
         Check(launchDist > 1850 && launchDist <= 1901, $"the bombers close to 1900 u before they launch ({launchDist:0} u)");
         var fspr = Nodes<Sprite2D>(Nodes<Wing>().First(w => w.Carrier == ship && !w.Def.Parks)).First(); var bspr = Nodes<Sprite2D>(crawl).First();
-        Check(Math.Abs(fspr.Texture.GetHeight() * fspr.Scale.Y - 17f) < 0.1f && Math.Abs(bspr.Texture.GetHeight() * bspr.Scale.Y - 28.125f) < 0.1f, "fighters 17 u, bombers 28.1 u (snout-nosed, 25% smaller)");
+        Check(Math.Abs(fspr.Texture.GetHeight() * fspr.Scale.Y - 17f) < 0.1f && Math.Abs(bspr.Texture.GetHeight() * bspr.Scale.Y - 28.125f) < 0.1f, "fighters 17 u, bombers 28.1 u (25% smaller)");
         Shot first = null;
         for (int i = 0; i < 1200 && first == null; i++) { first = InFlight().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(first != null, "bombers launch torpedoes");
+        // A TORPEDO LEAVES FROM A WINGTIP RAIL, not the nose: each round, on the frame it first shows,
+        // sits off its launcher's keel (the bomber nearest it) by the rails' reach on fighter_g's art
+        // -- 8.5 u out on the 28.125 u airframe (138.5 of its 456 px) -- within 1.3 u, the half-span
+        // the old pods allowed a round that has flown its first frame. The first round and every one
+        // launched in the half second below.
+        float OffKeel(Shot rd)
+        {
+            var by = Nodes<Wing>().Where(w => w.Carrier == ship && w.Def.Parks).OrderBy(w => w.GlobalPosition.DistanceTo(rd.GlobalPosition)).First();
+            return Mathf.Abs((rd.GlobalPosition - by.GlobalPosition).Dot(Vector2.Right.Rotated(by.Rotation)));
+        }
+        var rounds = new System.Collections.Generic.HashSet<Shot> { first }; var offKeel = new System.Collections.Generic.List<float> { OffKeel(first) };
         // measure over an exact frame count: timers round up to the next frame
         var dir0 = first.Dir; var q0 = first.GlobalPosition;
-        for (int i = 0; i < 30; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int i = 0; i < 30; i++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            foreach (var rd in InFlight().Where(x => x.Kind == Shots.Torpedo && rounds.Add(x)).ToList()) offKeel.Add(OffKeel(rd));
+        }
+        Check(offKeel.All(o => o > 7.2f && o < 9.8f), $"a torpedo leaves from a wingtip rail's front, not the nose ({string.Join(", ", offKeel.Select(o => o.ToString("0.0")))} u off its launcher's keel, {offKeel.Count} rounds)");
         float spd = (first.GlobalPosition - q0).Length() / (30f / 60f);
         Check(first.Dir == dir0 && Math.Abs(spd - 300) < 2, $"torpedo runs straight at a steady 300 u/s (no tracking; {spd:0})");
         Check(Smoke(first).Count > 3, "torpedo leaves a smoke trail");
@@ -5885,6 +5977,22 @@ public partial class _Test : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(hv.Heavy && Math.Abs(hv.Length - 4 * Raider.LightLength) < 1e-3 && Math.Abs(Raider.HeavyDps - 2 * Raider.RaiderDps) < 1e-9 && Raider.RaiderDps == 1,
                   "a heavy raider: four times a light's length, twice the raider damage (2 DPS)");
+            // THE PACK'S ART ON EVERY RAIDER ROW (tools/make_ships.ps1). Each texture is trimmed to its
+            // drawing -- it fills 98.5% of its height and reaches a side within 2 px -- so a row's
+            // Length is the drawn hull, nose to tail, and the hit sizes read off it are unchanged. And a
+            // flame for every bell the art has, counted off the art: two on each (the light's centre
+            // spine is not a bell) but the pod, a round drone (drone_sensor) with one stern vent --
+            // every one at the stern.
+            {
+                var arts = Enemies.All.Select(e => e.Texture).Append("res://enemy_light_tier_2.png");
+                var loose = arts.Where(t => !Trimmed(t)).ToList();
+                int[] bells = { 2, 2, 2, 1, 2, 2 };   // webifier, gunship, talon, pod, cross, lancerkin
+                var hvArt = hv.GetChildren().OfType<Sprite2D>().First();
+                Check(loose.Count == 0 && Enemies.All.Select(e => e.Nozzles.Length).SequenceEqual(bells)
+                      && Enemies.All.All(e => e.Nozzles.All(n => n.Y > e.Length * 0.4f && n.Y <= e.Length * 0.5f + 1f))
+                      && hvArt.Texture.ResourcePath.EndsWith("enemy_heavy_hull.png") && Math.Abs(hvArt.Texture.GetHeight() * hvArt.Scale.Y - 136f) < 0.5f,
+                      $"every raider's art is trimmed to its drawing and flames from its own bells at the stern (two, the pod's one vent); the gunship is drawn 136 u (loose: {string.Join(", ", loose)}; bells {string.Join("/", Enemies.All.Select(e => e.Nozzles.Length))})");
+            }
             double HvLaser() => hm.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
             double HvMissile() => hm.DamageBySource.Where(kv => kv.Key == $"heavy:{hv.NetId}:missile").Sum(kv => kv.Value);
             var edge = Raider.EdgeSpot(hm.Position);
@@ -6390,7 +6498,7 @@ public partial class _Test : Node
                 var snHeavy = H.SpawnRaider(SnAround(Vary(0.3f, 0.4f), Vary(1.6f, 2.4f)), Enemies.Gunship);
                 var snType = Missions.Bosses[0];
                 var snPost = new Boss { Hub = H, Position = SnAround(Vary(0.5f, 0.65f), Vary(-2.4f, -1.6f)),
-                                        Type = new Missions.BossType { Id = "post", Name = "POST", Hull = 100000, Sprite = snType.Sprite,
+                                        Type = new Missions.BossType { Id = "post", Name = "POST", Hull = 100000, Texture = snType.Texture,
                                                                        Length = snType.Length, HalfWidth = snType.HalfWidth,
                                                                        CloseSpeed = 0f, TurnRate = 0f, Moves = System.Array.Empty<BossMove>() } };
                 AddChild(snPost);                                        // its _Ready puts it among the hostiles
@@ -7785,6 +7893,15 @@ public partial class _Test : Node
                 }
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
+            // THE BOSS SPAWNS NOSE-ON: its NOSE on ArenaCentre, facing the party, so its centre stands
+            // half a length north of it -- read the first frame the boss exists, before its 30 u/s
+            // approach (0.5 u a frame) can have carried it more than a frame or two
+            int spawnWait = 0;
+            for (; spawnWait < 120 && H?.Boss == null; spawnWait++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float spawnOff = H?.Boss == null ? -1f : H.Boss.Position.DistanceTo(Hub.ArenaCentre + Vector2.Up * (H.Boss.Length * 0.5f));
+            float spawnNose = H?.Boss == null ? -1f : H.Boss.Position.DistanceTo(Hub.ArenaCentre);
+            Check(spawnOff >= 0f && spawnOff < 3f && Mathf.Abs(Mathf.AngleDifference(H.Boss.Rotation, Mathf.Pi)) < 0.05f,
+                  $"the boss spawns with its nose on the arena's centre: its centre {spawnNose:0} u north of it (half its {H?.Boss?.Length:0} u), {spawnOff:0.0} u off that spot, facing south");
             var tripRec = typeof(Yard).GetField("_trip", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
             // The trip's stock is one figure per resource row now, not two named fields.
             var tripBag = tripRec?.GetType().GetProperty("Stock").GetValue(tripRec) as System.Collections.Generic.Dictionary<string, double>;
@@ -7832,17 +7949,32 @@ public partial class _Test : Node
                       && dra.Moves.Select(m => m.Id).SequenceEqual(new[] { "gun", "shotgun", "throw" }),
                       $"a boss's moves are a table of rows, in the order a frame resolves them ({string.Join(",", lan.Moves.Select(m => m.Id))} / {string.Join(",", dra.Moves.Select(m => m.Id))})");
                 // its art, its shape and what it closes on are the row's too, as EnemyDef carries
-                // a raider's -- they were abstract members of a boss class each
-                Check(lan.Hull == 760 && lan.Length == 360f && lan.HalfWidth == 70f && lan.Sprite == "res://boss_raider.png"
-                      && dra.Hull == 700 && dra.Length == 420f && dra.HalfWidth == 90f && dra.Sprite == "res://boss_drake.png"
-                      && lan.HoldOff == 650f && lan.CloseSpeed == 30f && Math.Abs(lan.TurnRate - 0.3f) < 1e-6
-                      && dra.HoldOff == 650f && dra.CloseSpeed == 30f && Math.Abs(dra.TurnRate - 0.3f) < 1e-6,
-                      "a boss's hull, art and approach are its row's: 760 / 360 / 70 and 700 / 420 / 90, both closing to 650 u at 30 u/s and turning at 0.3 rad/s");
+                // a raider's -- they were abstract members of a boss class each. TWICE THE SIZE
+                // (the owner, 2026-09-25): 720 / 140 and 840 / 180, the art's 360 / 70 and 420 / 90
+                // doubled, hit size and all. Each closes to the gap it held at its first size --
+                // 650 u from the centre of a 360 / 420 u hull, 470 / 440 u off the nose -- measured
+                // from the hull now, so the bigger hull stands no nearer the party.
+                Check(lan.Hull == 760 && lan.Length == 720f && lan.HalfWidth == 140f && lan.Texture == "res://boss_raider.png"
+                      && dra.Hull == 700 && dra.Length == 840f && dra.HalfWidth == 180f && dra.Texture == "res://boss_drake.png"
+                      && lan.HoldOff == 470f && lan.CloseSpeed == 30f && Math.Abs(lan.TurnRate - 0.3f) < 1e-6
+                      && dra.HoldOff == 440f && dra.CloseSpeed == 30f && Math.Abs(dra.TurnRate - 0.3f) < 1e-6,
+                      "a boss's hull, art and approach are its row's: 760 / 720 / 140 and 700 / 840 / 180 (twice the art's size, hit size and all), closing to 470 / 440 u off the nose at 30 u/s and turning at 0.3 rad/s");
+                // THE PACK'S ART ON THE BOSSES: grey art, so each wears a tint -- the owner's red, the
+                // swatch's mean RGB 172, 7, 2 = (0.67, 0.03, 0.01), red highlights over black shadows --
+                // each texture is trimmed to its drawing, and its bells are listed off the art: the
+                // Rusty's two, the Drake's five (four and a shorter one on the keel) -- at the stern of
+                // the hull at twice the size: the Rusty's first bell 357.6 u aft (the tool's 178.81 at
+                // 360 u, doubled), every one aft of 0.4 of its length and none past its tail.
+                Check(lan.Tint == new Color(0.67f, 0.03f, 0.01f) && dra.Tint == new Color(0.67f, 0.03f, 0.01f)
+                      && Trimmed(lan.Texture) && Trimmed(dra.Texture) && lan.Nozzles.Length == 2 && dra.Nozzles.Length == 5
+                      && Math.Abs(lan.Nozzles[0].Y - 357.62f) < 0.01f
+                      && new[] { lan, dra }.All(b => b.Nozzles.All(n => n.Y > b.Length * 0.4f && n.Y <= b.Length * 0.5f + 1f)),
+                      $"a boss wears the owner's red on the pack's grey art, trimmed, its bells listed at the stern of the doubled hull (Rusty {lan.Nozzles.Length}, Drake {dra.Nozzles.Length}; the Rusty's first {lan.Nozzles[0].Y:0.00} u aft)");
                 var gn = L("guns");
                 Check(gn.Way == MoveWay.Bolt && gn.Every == 1.2 && gn.First == 2.0 && gn.Damage == 3.6 && gn.Find == 900f
                       && gn.Waits == MoveWait.Nothing && !gn.Busy && !gn.Super && gn.Source == "boss:guns"
                       && Math.Abs(gn.Damage / gn.Every - 3) < 1e-9 && gn.Beam == Beam.Bolt,
-                      $"the guns: {gn.Damage} every {gn.Every} s (3 DPS) at the nearest ship within 900 u, they wait on nothing, and they are seen and heard as a boss's bolt ({Beam.Of(gn.Beam).Id})");
+                      $"the guns: {gn.Damage} every {gn.Every} s (3 DPS) at the nearest ship within 900 u of its hull, they wait on nothing, and they are seen and heard as a boss's bolt ({Beam.Of(gn.Beam).Id})");
                 var tr = L("trident");
                 Check(tr.Way == MoveWay.Shoot && tr.Shot == Shots.Seeker && tr.Every == 15 && tr.First == 13.5
                       && tr.Count == 3 && tr.Spread == 25f && tr.Damage == 15 && tr.Speed == 135f && tr.Range == 1920f
@@ -7855,14 +7987,15 @@ public partial class _Test : Node
                       && bm.Busy && bm.Super && bm.Waits == MoveWait.Itself && bm.Source == "boss:beam"
                       && bm.Cue == "boss_beam_charge" && bm.Strike == "boss_beam"
                       && bm.Escorts == 2 && bm.EscortKind == Enemies.Webifier && bm.EscortAngle == 45f
-                      && bm.EscortOut == 130f && bm.EscortHull == 3 && bm.WebGrace == 1.0 && bm.WebSlack == 1.0
+                      && bm.EscortOut == 13f / 7f && Math.Abs(bm.EscortOut * lan.HalfWidth - 260f) < 0.01f
+                      && bm.EscortHull == 3 && bm.WebGrace == 1.0 && bm.WebSlack == 1.0
                       && bm.ArmMax == 5.0 && bm.ArmMax < bm.Windup,
-                      $"the beam: wind-up {bm.Windup} s, live {bm.Live} s judged every {bm.Tick} s for {bm.Damage}, 70 u wide down 10000 u; two escorts 45 degrees off at 3 hull, never stalling it past 5 s");
+                      $"the beam: wind-up {bm.Windup} s, live {bm.Live} s judged every {bm.Tick} s for {bm.Damage}, 70 u wide down 10000 u; two escorts 45 degrees off, 260 u out (130 on the 1x hull), at 3 hull, never stalling it past 5 s");
                 var rm = L("ram");
                 Check(rm.Way == MoveWay.Dash && rm.Every == 30 && rm.First == 21.0 && rm.Windup == 1.5
-                      && rm.Damage == 40 && rm.Reach == 900f && rm.Speed == 1200f && rm.Width == 140f
+                      && rm.Damage == 40 && rm.Reach == 900f && rm.Speed == 1200f && rm.Width == 0f
                       && rm.Busy && rm.Super && rm.Shifts && rm.Waits == MoveWait.Everything && rm.Source == "boss:charge",
-                      $"the ram: wind-up {rm.Windup} s, {rm.Reach} u at {rm.Speed} u/s, {rm.Damage} on contact -- and a cadence of its OWN ({rm.Every} s, where it read the beam's constant by accident)");
+                      $"the ram: wind-up {rm.Windup} s, {rm.Reach} u at {rm.Speed} u/s, {rm.Damage} on contact, its lane the hull's own beam (no Width on the row) -- and a cadence of its OWN ({rm.Every} s, where it read the beam's constant by accident)");
                 var wv = L("wave");
                 Check(wv.Way == MoveWay.Ring && wv.Every == 17.0 && wv.First == 10.0 && wv.Windup == 1.8
                       && wv.Damage == 45 && wv.Reach == 340f && wv.Busy && !wv.Super && !wv.Shifts
@@ -7872,38 +8005,42 @@ public partial class _Test : Node
                 Check(dg.Way == MoveWay.Shoot && dg.Shot == Shots.Slug && dg.Every == 2.5 && dg.First == 2.0
                       && dg.Find == 1100f && dg.Damage == 6 && dg.Speed == 220f && dg.Range == 1300f
                       && dg.Radius == 7f && dg.Waits == MoveWait.Nothing && !dg.Busy && dg.Source == "boss:gun",
-                      $"the Drake's main gun: {dg.Damage} a shell (2.4 DPS) every {dg.Every} s at 220 u/s within 1100 u, through its own specials");
+                      $"the Drake's main gun: {dg.Damage} a shell (2.4 DPS) every {dg.Every} s at 220 u/s within 1100 u of its hull, through its own specials");
                 Check(sg.Way == MoveWay.Shoot && sg.Shot == Shots.Scrap && sg.Every == 15 && sg.First == 17.0
-                      && sg.Warp == 1.0 && sg.Standoff == 600f && sg.WarpRing == 117f && sg.WarpSound == "drake_warp"
+                      && sg.Warp == 1.0 && sg.Standoff == 390f && sg.WarpRing == 1.3f && Math.Abs(sg.WarpRing * dra.HalfWidth - 234f) < 0.01f
+                      && sg.WarpSound == "drake_warp"
                       && sg.Windup == 1.875 && sg.Count == 7 && sg.Spread == 10f && sg.Width == 28f
                       && sg.Damage == 18.75 && sg.Speed == 480f && sg.Range == 1400f && sg.Radius == 9f
                       && sg.Busy && sg.Super && sg.Shifts && sg.Waits == MoveWait.Everything && sg.Source == "boss:scrap",
-                      $"the scrap shotgun: a {sg.Warp} s ring, a warp to {sg.Standoff} u off, {sg.Windup} s of fan, then {sg.Count} pieces of {sg.Damage} at {sg.Spread} degrees apart");
+                      $"the scrap shotgun: a {sg.Warp} s ring, a warp to its nose {sg.Standoff} u off (the old 600 u from the 420 u hull's centre), a ring 234 u on the doubled hull, {sg.Windup} s of fan, then {sg.Count} pieces of {sg.Damage} at {sg.Spread} degrees apart");
                 // THE BODY IS 180 u and the row carries NO Width, because a thrown body's lane is
                 // the body's own width and Boss.Warn works it out. Width == 0 is asserted here so
                 // a Width put back on this row fails rather than quietly taking over; that the
                 // lane really is twice the body is proved where the throw runs, on this peer and
                 // on a guest, because only a live raise can show it.
-                // The 310 u it is held at is the clearance the row's comment sets out: the hull's
-                // own half-width, the body, and a 40 u gap -- 90 + 180 + 40.
+                // Where it is held is the clearance the row's comment sets out: the hull's own
+                // half-width, the body, and the row's 40 u gap -- 180 + 180 + 40 = 400 u off the keel
+                // of the doubled hull (310 on the 1x one). It backs its nose off to 1300 u, 200 u past
+                // its main gun's 1100 u Find: both are measured from the hull, so the throw leaves
+                // nothing in the gun's reach at any hull size.
                 Check(th.Way == MoveWay.Throw && th.Every == 30 && th.First == 6.0 && th.Windup == 7.5
                       && th.Flight == 1.2 && th.Damage == 250 && th.Reach == 1800f && th.Width == 0f
-                      && th.Warp == 1.0 && th.Standoff == 1300f && th.WarpSound == "drake_warp"
-                      && th.Radius == 180f && th.Offset == 310f
-                      && th.Offset == Missions.Bosses[1].HalfWidth + th.Radius + 40f && th.Busy && th.Super
+                      && th.Warp == 1.0 && th.Standoff == 1300f && th.Standoff - dg.Find == 200f && th.WarpSound == "drake_warp"
+                      && th.Radius == 180f && th.Offset == 40f
+                      && dra.HalfWidth + th.Radius + th.Offset == 400f && th.Busy && th.Super
                       && th.Waits == MoveWait.Everything && th.Cue == "drake_tractor" && th.Strike == "drake_throw",
-                      $"the asteroid throw: a {th.Radius} u body {th.Offset} u off the flank, a {th.Windup} s lane {th.Reach} u long and as wide as the body ({th.Radius * 2f} u), {th.Flight} s of flight, {th.Damage} to a ship in it");
+                      $"the asteroid throw: a {th.Radius} u body held {dra.HalfWidth + th.Radius + th.Offset} u off the keel ({th.Offset} u clear of the flank), a {th.Windup} s lane {th.Reach} u long and as wide as the body ({th.Radius * 2f} u), {th.Flight} s of flight, {th.Damage} to a ship in it");
                 // ...AND A BOSS'S MOVES COME FROM ITS ROW, NOT FROM ITS CLASS. There is one Boss
                 // class now: given the Lancer's hull with the DRAKE'S Moves, the boss built from
                 // that row schedules the Drake's moves and knows nothing of the Lancer's.
-                var mixed = new Missions.BossType { Id = "mixed", Name = "MIXED", Hull = 100, Sprite = lan.Sprite,
+                var mixed = new Missions.BossType { Id = "mixed", Name = "MIXED", Hull = 100, Texture = lan.Texture,
                                                     Length = lan.Length, HalfWidth = lan.HalfWidth, Moves = dra.Moves };
                 var proof = new Boss { Hub = H, Type = mixed, Position = boss.Position + new Vector2(0, -6000) };
                 AddChild(proof);                                  // _Ready builds its slots from the row
                 Check(boss.GetType() == typeof(Boss) && proof.GetType() == typeof(Boss)
                       && proof.S("beam") == null && proof.S("ram") == null && proof.S("throw") != null
                       && proof.S("throw").Due == 6.0 && proof.S("shotgun").Due == 17.0
-                      && proof.Length == 360f && Math.Abs(proof.MaxHp - 100) < 1e-6,
+                      && proof.Length == 720f && Math.Abs(proof.MaxHp - 100) < 1e-6,
                       $"a boss's moves come from its ROW, not its class: one Boss class, and the Lancer's hull handed the Drake's rows runs the Drake's moves ({string.Join(",", proof.Type.Moves.Select(m => m.Id))})");
                 proof.QueueFree();
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -7965,7 +8102,7 @@ public partial class _Test : Node
                     // off the telegraph would measure that wait, not the rhythm.
                     if (tBeam < 0 && H.Raiders.Any(r => r.IsEscort)) tBeam = arenaT;
                     foreach (var tl in Nodes<FxNode>().Where(x => x.Id == Fx.WarnLane))
-                        if (tCharge < 0 && Math.Abs(tl.Radius - 140f) < 0.1f) tCharge = arenaT;   // the ram's lane, 140 u
+                        if (tCharge < 0 && Math.Abs(tl.Radius - 280f) < 0.1f) tCharge = arenaT;   // the ram's lane: the doubled hull's 280 u beam
                     if (tVolley < 0 && boss.S("trident").Fired > 0)
                     {
                         tVolley = arenaT;
@@ -7984,9 +8121,14 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 20 && escorts.Count < 2; i++) { escorts = H.Raiders.Where(r => r.IsEscort).ToList(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             var bnose = Vector2.Up.Rotated(boss.Rotation);
             var escAng = escorts.Select(r => Mathf.RadToDeg(bnose.AngleTo(r.Position - boss.Position))).OrderBy(x => x).ToList();
+            // ...AS FAR CLEAR OF THE DOUBLED HULL as they stood of the old one: 260 u out, twice the
+            // 130 (13/7 of the 140 u half-width). Read while they shiver on the launch point, which
+            // shakes them a few units: 12 u either way, and 130 is far outside it.
+            var escOut = escorts.Select(r => r.Position.DistanceTo(boss.Position)).ToList();
             Check(escorts.Count == 2 && Math.Abs(escAng[0] + 45) < 12 && Math.Abs(escAng[1] - 45) < 12
+                  && escOut.All(d => Math.Abs(d - 260f) < 12f)
                   && escorts.All(r => r.Target == me2 && r.Hp > 0 && r.Hp <= 3 * Missions.S(Missions.Level) + 1e-6),
-                  $"two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), fragile");
+                  $"two escorts launch at the pilot, 45 degrees to port and starboard ({string.Join(", ", escAng.Select(x => x.ToString("0")))}), 260 u out from the doubled hull's centre ({string.Join(", ", escOut.Select(x => x.ToString("0")))}), fragile");
             Check(escorts.All(r => r.Shivering), "the escorts shiver at the launch point before the run in");
             // ── A BOSS'S ESCORTS ARE NOT THE LANCER'S: one more every ten levels, to five ──
             // The count was the row's alone, so every boss that ever calls craft in would have had
@@ -8001,11 +8143,13 @@ public partial class _Test : Node
                   && Boss.EscortsAt(callsNone, 99) == 0,
                   $"a move's escorts grow with the level and stop at five: {Boss.EscortsAt(callsThem, 1)} at level 1, {Boss.EscortsAt(callsThem, 11)} at 11, {Boss.EscortsAt(callsThem, 21)} at 21, {Boss.EscortsAt(callsThem, 31)} at 31, {Boss.EscortsAt(callsThem, 99)} at 99 -- and a move that calls none still calls none");
             // ESCORTS OUT, THE BOSS ALREADY HOLDS ITS POSITION -- and turns only to face the pilot. Pushed
-            // out past its 650 u standoff (where it would otherwise close at 30 u/s) and twisted 0.6 rad
-            // off the pilot first, so both "it held" and "it turned" are real claims.
+            // out past its hold-off (470 u off its nose, 830 from the centre of the 720 u hull, where it
+            // would otherwise close at 30 u/s) -- 700 u plus the half-length, so even from beside the
+            // pilot it lands past it -- and twisted 0.6 rad off the pilot first, so both "it held" and
+            // "it turned" are real claims.
             {
                 var armHome = boss.Position;
-                boss.Position += (boss.Position - me2.Position).Normalized() * 700f;
+                boss.Position += (boss.Position - me2.Position).Normalized() * (700f + boss.Length * 0.5f);
                 var armAt = boss.Position;
                 boss.Rotation += 0.6f;
                 float Off() => Mathf.Abs(Mathf.AngleDifference(boss.Rotation, (me2.Position - boss.Position).Angle() + Mathf.Pi / 2f));
@@ -8058,16 +8202,17 @@ public partial class _Test : Node
             // pinned to the spot the boss stood on: the line drawn IS the line fired
             Check(beam.GetParent() == boss && beam.Anchor == boss.NetId,
                   "the beam's warning rides the hull rather than the world: the raise carries the hull's own id");
-            // Push it out past its 650 u standoff BEFORE measuring. Inside that range it would
-            // not close anyway, so watching for drift there proves nothing -- a mutant that
-            // ignored the lock completely still passed this. Out here it wants to close at
-            // 30 u/s, which is 22 u over the window below, so holding still is a real claim.
+            // Push it out past its hold-off BEFORE measuring -- 470 u off its nose, 830 u from the
+            // centre of the 720 u hull. Inside that range it would not close anyway, so watching for
+            // drift there proves nothing -- a mutant that ignored the lock completely still passed
+            // this. Out here it wants to close at 30 u/s, which is 22 u over the window below, so
+            // holding still is a real claim.
             var bossWasAt = boss.Position;
-            boss.Position += (boss.Position - me2.Position).Normalized() * 700f;
+            boss.Position += (boss.Position - me2.Position).Normalized() * (700f + boss.Length * 0.5f);
             var lockAt = boss.Position;
             double standoff = boss.Position.DistanceTo(me2.Position);
             await Wait(0.75);
-            Check(BeamCharging() && boss.Locked && standoff > 650 && boss.Position.DistanceTo(lockAt) < 0.01f,
+            Check(BeamCharging() && boss.Locked && standoff > 470 + 360 && boss.Position.DistanceTo(lockAt) < 0.01f,
                   $"the boss is locked in place while the beam charges, {standoff:0} u out where it would otherwise close (drifted {boss.Position.DistanceTo(lockAt):0.000} u)");
             boss.Position = bossWasAt;   // put it back: left out there its tridents take so long to
                                          // arrive that the point-defence check below times out
@@ -8110,8 +8255,8 @@ public partial class _Test : Node
                   "then small craft (by their tag, not their size), then everything else -- and a boss is never a PD target");
             FxNode ring = null;
             for (int i = 0; i < 60 * 18 && ring == null; i++) { ring = Nodes<FxNode>().FirstOrDefault(t => t.Id == Fx.WarnZone); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            Check(ring != null && ring.Radius == 340f && boss.S("wave").M.Reach == 340f && ring.Anchor == Fx.World,
-                  "the shockwave is telegraphed: a red zone 340 u across, on the ground, before it lands");
+            Check(ring != null && ring.Radius == 680f && boss.S("wave").M.Reach == 340f && ring.Anchor == Fx.World,
+                  "the shockwave is telegraphed: a red zone 680 u across (the row's 340, twice for the doubled hull), on the ground, before it lands");
             // without point defence, a pair of escorts reaches the pilot and pins it inside the charge
             for (int i = 0; i < 60 * 8 && Me.PdActive; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             boss.LaunchEscorts("beam", me2);
@@ -8130,7 +8275,7 @@ public partial class _Test : Node
             // live 3 s, checked every 0.25 s for 50 -- one source lands at most once per 0.52 s, and
             // ticks fall on frames, so two ticks are sometimes 0.533 s apart: 5 to 7 hits of 50
             Check(beamDmg >= 200 && beamDmg <= 350 && Math.Abs(beamDmg % 50) < 1e-6, $"the beam, live 3 s at 50 a tick, through the 0.52 s guard: {beamDmg / 50:0} hits ({beamDmg:0})");
-            Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40 ({chargeDmg:0})");
+            Check(Math.Abs(chargeDmg - 40) < 1e-6, $"the charge rams for 40, once, the pilot left where it stood ({chargeDmg:0})");
             Check(sidestep && liveTurn < 0.01f, $"the live beam holds the line it drew, with the pilot gone from it (turned {Mathf.RadToDeg(liveTurn):0.00} deg)");
             Check(liveDrawn, "and the line is still drawn 2 s into its 3 s burn");
             Check(Music.I == null || Math.Abs(boss.S("trident").M.Speed - 135f) < 1e-3, "trident missiles fly at 135 u/s (10% slower)");
@@ -8142,7 +8287,7 @@ public partial class _Test : Node
                 // A MOVE IS ARMED BY ITS ROW'S CLOCK, so each fallback is started by putting that
                 // clock on the point of coming round -- no reflection, and a renamed field can no
                 // longer pass silently.
-                bool RamLine() => Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 140f) < 0.1f) || boss.S("ram").At != Boss.Phase.Idle;
+                bool RamLine() => Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 280f) < 0.1f) || boss.S("ram").At != Boss.Phase.Idle;   // the doubled hull's 280 u beam
                 for (int i = 0; i < 60 * 12 && (boss.Locked || RamLine()); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
                 BeamSlot().Due = 0.01;
@@ -8208,7 +8353,7 @@ public partial class _Test : Node
                 { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                 double dkWaveHit = me2.DamageBySource.GetValueOrDefault("boss:wave") - dkWave0;
                 Check(Targeting.Hidden(me2) && boss.S("wave").Fired == dkWaves0 + 1 && Math.Abs(dkWaveHit - 45) < 1e-6,
-                      $"a pilot it cannot see, {me2.Position.DistanceTo(boss.S("wave").To):0} u inside its 340 u shockwave, still takes the whole 45 ({dkWaveHit:0})");
+                      $"a pilot it cannot see, {me2.Position.DistanceTo(boss.S("wave").To):0} u inside its 680 u shockwave, still takes the whole 45 ({dkWaveHit:0})");
 
                 // ...AND ITS MOVES STILL COME, AIMED WHERE IT LAST SAW ANYONE: not held back for want
                 // of a pilot in sight, and not aimed at the one it cannot see
@@ -8234,6 +8379,123 @@ public partial class _Test : Node
 
                 foreach (var dkMove in boss.Type.Moves) boss.S(dkMove.Id).Due = dkHeld[dkMove.Id];
                 me2.Statuses.Clear(Status.Untargetable);
+                me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
+            }
+            // -- WHAT IS PLACED ROUND A BOSS IS MEASURED FROM ITS HULL, AND A RAM LANDS ONCE --------
+            // The owner's ruling: what is placed around a boss scales with it. So the gap it closes
+            // to, how far its guns look and its shockwave's ring are all taken off the doubled hull,
+            // and a hull that takes 0.6 s to pass a point still rams a pilot once. Every clock is
+            // parked, so the only move that runs is the one each check brings round; the boss's own
+            // place is put back after each (a check that moves it owns putting it back). A pilot's
+            // hit radius under 60 u keeps every spot below clear of the edges it is placed between.
+            {
+                var hbHeld = boss.Type.Moves.ToDictionary(hbMv => hbMv.Id, hbMv => boss.S(hbMv.Id).Due);
+                foreach (var hbMv in boss.Type.Moves) { boss.S(hbMv.Id).Due = 999; boss.S(hbMv.Id).At = Boss.Phase.Idle; }
+                Fx.ClearWarnings();
+                var hbHome = boss.Position; float hbHomeRot = boss.Rotation, hbHalf = boss.Length * 0.5f;
+                bool hbSmall = me2.HitRadius < 60f;
+
+                // ITS GUNS LOOK Find PAST THE HULL: 900 u off the Rusty's nose, 1260 u from its centre
+                // on the 720 u hull. From three bearings, a pilot just inside draws them and one just
+                // outside does not (the clock armed either way, so "not" is a choice, not a silence).
+                var hbGuns = boss.S("guns");
+                float hbReach = hbGuns.M.Find + hbHalf;
+                var hbFindBad = new List<string>();
+                for (int k = 0; k < 3; k++)
+                    foreach (bool hbIn in new[] { true, false })
+                    {
+                        boss.Position = hbHome;
+                        float hbR = hbReach + (hbIn ? -1f : 1f) * Vary(20f, 60f);
+                        me2.Position = boss.Position + Vector2.Up.Rotated(VaryAngle()) * hbR; me2.Velocity = Vector2.Zero;
+                        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                        int hbFired = hbGuns.Fired;
+                        hbGuns.Due = 0.01;
+                        for (int i = 0; i < 30 && hbGuns.Fired == hbFired; i++) { me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                        hbGuns.Due = 999;
+                        bool hbDrew = hbGuns.Target == me2;
+                        if (hbGuns.Fired != hbFired + 1 || hbDrew != hbIn)
+                            hbFindBad.Add($"{boss.Position.DistanceTo(me2.Position):0} u off its centre: {(hbDrew ? "fired on" : "left alone")}, armed {hbGuns.Fired - hbFired}");
+                    }
+                Check(hbFindBad.Count == 0 && Math.Abs(hbReach - 1260f) < 0.01f,
+                      $"its guns look 900 u past its hull, not past its centre: at three bearings a pilot 20-60 u inside {hbReach:0} u draws them and one 20-60 u outside does not{(hbFindBad.Count > 0 ? " -- " + string.Join("; ", hbFindBad) : "")}");
+
+                // ITS SHOCKWAVE LANDS WHERE ITS RING IS DRAWN: 340 x 2 = 680 u round where it stood. A
+                // pilot 420-600 u out -- past the row's bare 340, inside the doubled ring -- takes the
+                // whole 45, placed round the centre the ring was drawn on once it is drawn.
+                var hbWave = boss.S("wave");
+                var hbRingBad = new List<string>();
+                for (int k = 0; k < 3; k++)
+                {
+                    boss.Position = hbHome;
+                    me2.Position = boss.Position + Vector2.Up.Rotated(VaryAngle()) * Vary(900f, 1100f); me2.Velocity = Vector2.Zero;
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    double hbW0 = me2.DamageBySource.GetValueOrDefault("boss:wave");
+                    int hbWf = hbWave.Fired;
+                    hbWave.Due = 0.01;
+                    for (int i = 0; i < 60 && hbWave.At == Boss.Phase.Idle; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    hbWave.Due = 999;
+                    float hbOut = Vary(420f, 600f);
+                    var hbAt = hbWave.To + Vector2.Up.Rotated(VaryAngle()) * hbOut;
+                    for (int i = 0; i < 60 * 4 && hbWave.At != Boss.Phase.Idle; i++) { me2.Position = hbAt; me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                    double hbWHit = me2.DamageBySource.GetValueOrDefault("boss:wave") - hbW0;
+                    if (hbWave.Fired != hbWf + 1 || hbWave.At != Boss.Phase.Idle || Math.Abs(hbWHit - 45) > 1e-6)
+                        hbRingBad.Add($"{hbOut:0} u out: {hbWHit:0}");
+                }
+                Check(hbSmall && hbRingBad.Count == 0 && Math.Abs(hbWave.M.Reach * boss.Type.Size - 680f) < 0.01f,
+                      $"its shockwave hits as far as its ring is drawn: at three bearings, a pilot 420-600 u from the centre (past the row's 340, inside the doubled 680) takes the whole 45{(hbRingBad.Count > 0 ? " -- " + string.Join("; ", hbRingBad) : "")}");
+
+                // A RAM LANDS ONCE A PASS: a pilot held still in its lane, 360 to 480 u down it from
+                // the centre, is reached by the nose within the first 0.1 s of the dash (it starts 0-120 u
+                // ahead of it), and the dash ends with the hull
+                // still over it (its tail stops 540 u down the lane), so it covers the pilot for the
+                // rest of the 0.75 s dash, longer than the 0.52 s a source is blocked for -- and the
+                // pilot takes the row's 40 once, not twice.
+                // The spot is taken off the lane once the lane is drawn, not before the wait.
+                var hbRam = boss.S("ram");
+                var hbRamBad = new List<string>();
+                for (int k = 0; k < 3; k++)
+                {
+                    boss.Position = hbHome;
+                    me2.Position = boss.Position + Vector2.Up.Rotated(VaryAngle()) * Vary(700f, 1000f); me2.Velocity = Vector2.Zero;
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    double hbR0 = me2.DamageBySource.GetValueOrDefault("boss:charge");
+                    hbRam.Due = 0.01;
+                    for (int i = 0; i < 60 && hbRam.At == Boss.Phase.Idle; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    hbRam.Due = 999;
+                    float hbAlong = Vary(360f, 480f);
+                    var hbSpot = boss.Position + (hbRam.To - boss.Position).Normalized() * hbAlong;
+                    for (int i = 0; i < 60 * 4 && hbRam.At != Boss.Phase.Idle; i++) { me2.Position = hbSpot; me2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                    double hbRHit = me2.DamageBySource.GetValueOrDefault("boss:charge") - hbR0;
+                    if (hbRam.At != Boss.Phase.Idle || Math.Abs(hbRHit - 40) > 1e-6)
+                        hbRamBad.Add($"{hbAlong:0} u down the lane: {hbRHit:0}");
+                }
+                Check(hbSmall && hbRamBad.Count == 0,
+                      $"a pilot held still in the ram's lane, at three spots 360-480 u down it, takes the row's 40 once a pass, though the doubled hull is over it for the rest of the 0.75 s dash{(hbRamBad.Count > 0 ? " -- " + string.Join("; ", hbRamBad) : "")}");
+
+                // IT CLOSES TO ITS HOLD-OFF OFF THE NOSE: 470 u, so its centre stops 470 + 360 = 830 u
+                // from the pilot. From three bearings, 1.3-1.8 times that out, it closes and stops there.
+                float hbStop = boss.Type.HoldOff + hbHalf;
+                var hbCloseBad = new List<string>();
+                for (int k = 0; k < 3; k++)
+                {
+                    boss.Position = hbHome;
+                    var hbP = boss.Position + Vector2.Up.Rotated(VaryAngle()) * (Vary(1.3f, 1.8f) * hbStop);
+                    int hbStill = 0; var hbWas = boss.Position;
+                    for (int i = 0; i < 60 * 30 && hbStill < 10; i++)
+                    {
+                        me2.Position = hbP; me2.Velocity = Vector2.Zero;
+                        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                        hbStill = boss.Position.DistanceTo(hbWas) < 1e-4f ? hbStill + 1 : 0; hbWas = boss.Position;
+                    }
+                    float hbGap = boss.Position.DistanceTo(hbP);
+                    if (hbStill < 10 || Math.Abs(hbGap - hbStop) > 2f) hbCloseBad.Add($"stopped {hbGap:0.0} u off (still {hbStill} frames)");
+                }
+                Check(hbCloseBad.Count == 0 && Math.Abs(hbStop - 830f) < 0.01f,
+                      $"it closes on the pilot and stops with its centre {hbStop:0} u off -- its nose the row's 470 u hold-off away -- from three bearings{(hbCloseBad.Count > 0 ? " -- " + string.Join("; ", hbCloseBad) : "")}");
+
+                foreach (var hbMv in boss.Type.Moves) boss.S(hbMv.Id).Due = hbHeld[hbMv.Id];
+                Fx.ClearWarnings();
+                boss.Position = hbHome; boss.Rotation = hbHomeRot;
                 me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
             }
             // the kill: shared EXP for it and the mission, the bounty's credits, then home
@@ -8361,8 +8623,48 @@ public partial class _Test : Node
                 var me3 = Me; me3.MaxHp = 5000; me3.TakeDamage(-(5000 - me3.Hp)); me3.Velocity = Vector2.Zero; me3.Rotation = 0f;
                 var dspr = dk?.GetChildren().OfType<Sprite2D>().FirstOrDefault();
                 Check(dk != null && dk.Type.Id == "drake_bastion" && dk.Type.Name == "DRAKE BASTION" && Math.Abs(dk.MaxHp - 700 * Missions.S(2)) < 1e-6
-                      && dspr != null && dspr.Texture.ResourcePath.EndsWith("boss_drake.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 420f) < 0.5f,
-                      $"level 2 is the Drake Bastion: 700 hull x the level's scale, 420 u long ({dk?.Type.Name}, {dk?.MaxHp:0})");
+                      && dspr != null && dspr.Texture.ResourcePath.EndsWith("boss_drake.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 840f) < 0.5f
+                      && dspr.Modulate == new Color(0.67f, 0.03f, 0.01f),
+                      $"level 2 is the Drake Bastion: 700 hull x the level's scale, 840 u long (twice its art), in the owner's red ({dk?.Type.Name}, {dk?.MaxHp:0}, {dspr?.Modulate})");
+                if (dk != null)
+                {
+                    // THE DRAKE'S WHOLE HULL FRAMES WITHOUT RAISING THE WHEEL'S CEILING -- the
+                    // owner's open question (b), 2026-09-25 (a first pass widened ZoomOutMax; the
+                    // owner overruled it in the ledger -- the wheel never goes past what it already
+                    // reached). Hub.BossFramed slides the CENTRE toward the boss's far end instead.
+                    // Proved from 3 approach angles (VaryAngle, never the one line the spawn uses),
+                    // the ship fixed at ArenaCentre and the boss placed HoldOff + half its length out
+                    // along each angle, nose on the ship, so every angle is a real hold-off.
+                    H.SetZoom(Hub.DefaultZoom / Hub.ZoomOutMax);
+                    var vp = H.GetViewport().GetVisibleRect().Size;
+                    Vector2 ScreenOf(Vector2 w) => H.GetViewport().GetCanvasTransform() * w;
+                    for (int a = 0; a < 3; a++)
+                    {
+                        float ang = VaryAngle();
+                        var dir = Vector2.Right.Rotated(ang);
+                        me3.Position = Hub.ArenaCentre; me3.Velocity = Vector2.Zero;
+                        dk.Rotation = ang + Mathf.Pi / 2f;
+                        dk.Position = Hub.ArenaCentre - dir * (dk.Length * 0.5f + dk.Type.HoldOff);
+                        await Wait(1.0);
+                        var sternOn = ScreenOf(dk.Position - dir * (dk.Length * 0.5f));
+                        var shipOn = ScreenOf(me3.Position);
+                        // REPOSITIONED, not zoomed: the centre has slid off the ship toward the boss
+                        // (the owner's ruling, ledger_sprites NOTE 1), read after the wait
+                        float slid = (H.CameraPosition - me3.Position).Dot(-dir);
+                        Check(sternOn.X >= 10f && sternOn.X <= vp.X - 10f && sternOn.Y >= 10f && sternOn.Y <= vp.Y - 10f
+                              && shipOn.X >= 10f && shipOn.X <= vp.X - 10f && shipOn.Y >= 10f && shipOn.Y <= vp.Y - 10f
+                              && Mathf.IsEqualApprox(H.ZoomLevel, Hub.DefaultZoom / Hub.ZoomOutMax) && slid > 20f,
+                              $"at {Mathf.RadToDeg(ang):0} degrees off the hold-off, the wheel's own ceiling ({H.ZoomLevel:0.000}) still frames the Drake's far end ({sternOn.X:0}, {sternOn.Y:0}) and the ship ({shipOn.X:0}, {shipOn.Y:0}) of {vp.X:0} x {vp.Y:0}, the centre moved {slid:0} u toward the boss");
+                    }
+                    H.SetZoom(Hub.DefaultZoom);
+                    // BACK TO THE SPAWN POSE before the checks below: the last angle left the boss
+                    // facing an arbitrary way, and its own tracking needs real time to turn back --
+                    // MAIN GUN below waits only 0.1 s for its shot, not the seconds a big turn takes,
+                    // so a stray rotation here reads there as a wrong DPS, not a camera bug.
+                    dk.Rotation = Mathf.Pi; dk.Position = Hub.ArenaCentre + new Vector2(0, -dk.Length * 0.5f);
+                    me3.Position = Hub.ArenaCentre + new Vector2(0, dk.Type.HoldOff); me3.Velocity = Vector2.Zero;
+                    await Wait(0.5);
+                }
                 if (dk != null)
                 {
                     // ITS CLOCKS: a throw every 30 s from 6 s, the shotgun every 15 s from 17 s -- 11 s after a
@@ -8395,7 +8697,7 @@ public partial class _Test : Node
                     double gunHit = Fired("boss:gun") - gun0;
                     Check(shellAt.Count == 2 && Math.Abs(shellAt[1] - shellAt[0] - 2.5) < 0.05 && Math.Abs(sspd - 220) < 4 && Math.Abs(gunHit - 6 * Missions.S(2)) < 1e-6,
                           $"its main gun: a slow shell (220 u/s) every 2.5 s, 6 a hit -- 2.4 DPS before the level's scale (here {6 * Missions.S(2):0.00}) ({sspd:0} u/s, {(shellAt.Count == 2 ? shellAt[1] - shellAt[0] : -1):0.00} s apart, {gunHit:0.00})");
-                    // THE SCRAP SHOTGUN (started by hand): a warpRing where it will land -- 600 u from the pilot --
+                    // THE SCRAP SHOTGUN (started by hand): a warpRing where it will land -- its nose 390 u from the pilot --
                     // then, held still, a fan of seven red lines for 1.875 s (1.25 x the Lancer's 1.5 s), then
                     // seven pieces of scrap down them: the same fixed fan, 10 degrees apart
                     for (int i = 0; i < 60 * 12 && dk.Locked; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -8415,15 +8717,18 @@ public partial class _Test : Node
                     float aimTo = (me3.Position - landed).Angle();
                     var offs = scrap.Select(s => Mathf.RadToDeg(Mathf.AngleDifference(aimTo, s.Dir.Angle()))).OrderBy(a => a).ToList();
                     bool fanned = offs.Count == 7 && offs.Zip(new[] { -30f, -20f, -10f, 0f, 10f, 20f, 30f }, (a, b) => Math.Abs(a - b) < 0.5f).All(x => x);
-                    // 606, not 600: this is the LEVEL-2 Drake, and a boss gains 1% a level on its
-                    // reach (Missions.Quicken), so its 600 u standoff is 600 x 1.01.
+                    // 394, not 390: this is the LEVEL-2 Drake, and a boss gains 1% a level on its
+                    // reach (Missions.Quicken), so its 390 u standoff is 390 x 1.01 -- off its NOSE, so
+                    // the centre lands that plus half the 840 u hull from the pilot. The ring is 1.3
+                    // half-widths: 234 u on the doubled hull (the ring does not grow with the level).
                     // The FIGURES ARE THE BOSS'S OWN, scaled for its level -- 1% a level on wind-ups
                     // and reach, proved against literals where that scale is defined. What is
                     // checked here is the SHAPE: a ring, a standoff, seven lines, seven pieces.
                     var shot = dk.S("shotgun").M;
-                    Check(warpRing != null && Math.Abs(warpRing.Time - shot.Warp) < 1e-3 && Math.Abs(warpOff - shot.Standoff) < 6 && fan.Count == 7 && heldStill && fanned
+                    Check(warpRing != null && Math.Abs(warpRing.Time - shot.Warp) < 1e-3 && Math.Abs(warpRing.Radius - 234f) < 0.5f
+                          && Math.Abs(warpOff - (shot.Standoff + dk.Length * 0.5f)) < 6 && fan.Count == 7 && heldStill && fanned
                           && dk.S("shotgun").Fired == 1,
-                          $"the scrap shotgun: a warp to its own standoff off the pilot ({warpOff:0} u of {shot.Standoff:0}, ring {warpRing?.Time:0.000} of {shot.Warp:0.000}), a fan of {fan.Count} lines for {shot.Windup:0.000} s held still ({heldStill}), then 7 pieces at -30..+30 in 10s ({string.Join(" ", offs.Select(a => a.ToString("0")))}), counted once ({dk.S("shotgun").Fired})");
+                          $"the scrap shotgun: a warp to its own standoff off the pilot, from its nose ({warpOff:0} u of {shot.Standoff + dk.Length * 0.5f:0} to the centre, ring {warpRing?.Radius:0} u for {warpRing?.Time:0.000} of {shot.Warp:0.000} s), a fan of {fan.Count} lines for {shot.Windup:0.000} s held still ({heldStill}), then 7 pieces at -30..+30 in 10s ({string.Join(" ", offs.Select(a => a.ToString("0")))}), counted once ({dk.S("shotgun").Fired})");
                     // EACH PIECE ITS OWN HIT, by construction rather than by hand. The fan used to
                     // number its seven source keys itself (boss:scrap:0..6) so the pieces would not
                     // swallow one another inside a hull's 0.52 s per-source gap; every fired shot
@@ -8465,19 +8770,19 @@ public partial class _Test : Node
                     bool heldRock = rock != null && GodotObject.IsInstanceValid(rock) && rock.Position.DistanceTo(rockAt) < 0.01f && !rock.Thrown
                                     && dk.Position.DistanceTo(drakeAt) < 0.01f && dk.Locked;
                     // 7.43 s and 1.58: the flight and the wind-up are the level-2 Drake's, one
-                    // percent quicker than the row's 7.5 and 1.6 (Missions.Quicken). The 310 u the
-                    // rock is held at is a clearance, so it goes the other way: 310 x 1.01 = 313 --
-                    // and the body it clears grew by the same one percent, which is why the offset
-                    // is scaled with it (Boss.Scaled) and the rock is never drawn inside the hull.
+                    // percent quicker than the row's 7.5 and 1.6 (Missions.Quicken). The rock is held
+                    // a clearance off the keel -- the doubled hull's 180 u half-width, the body and a
+                    // 40 u gap -- and the body grew by that one percent (181.8 u, past the row's 180),
+                    // so the hold follows it and the rock is never drawn inside the hull.
                     bool clearsHull = rockAt.DistanceTo(drakeAt) - heave.Radius > dk.HalfWidth;
                     Check(rock != null && lane != null && Math.Abs(lane.Time - heave.Windup) < 1e-3 && Math.Abs(lane.Hold - heave.Flight) < 1e-3
-                          && Math.Abs(rockAt.DistanceTo(drakeAt) - heave.Offset) < 1.5 && heave.Offset > 310f && clearsHull
+                          && Math.Abs(rockAt.DistanceTo(drakeAt) - (180f + heave.Radius + 40f)) < 1.5 && heave.Radius > 180f && clearsHull
                           // IT BACKED OFF FIRST: 700 u away when the throw was called, its own
-                          // standoff away when the wind-up began, and further than it started.
-                          && Math.Abs(afterWarp - heave.Standoff) < 8 && afterWarp > beforeWarp
+                          // standoff off its nose when the wind-up began, and further than it started.
+                          && Math.Abs(afterWarp - (heave.Standoff + dk.Length * 0.5f)) < 8 && afterWarp > beforeWarp
                           && Math.Abs(rock.Radius - heave.Radius) < 1e-3 && Math.Abs(lane.Radius - heave.Radius * 2f) < 0.5f
                           && heldRock && dk.S("throw").Fired == 1,
-                          $"the throw: it backs off from {beforeWarp:0} u to {afterWarp:0} u, then a {heave.Radius:0} u rock beside it in its tractor ({heave.Offset:0} u off, clear of a {dk.HalfWidth:0} u flank), a lane of its own width ({lane?.Radius:0} u) for {heave.Windup:0.00} s then {heave.Flight:0.00} s of flight, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Time:0.00} s), counted once ({dk.S("throw").Fired})");
+                          $"the throw: it backs off from {beforeWarp:0} u to {afterWarp:0} u, then a {heave.Radius:0} u rock beside it in its tractor ({rockAt.DistanceTo(drakeAt):0} u off the keel, clear of a {dk.HalfWidth:0} u flank), a lane of its own width ({lane?.Radius:0} u) for {heave.Windup:0.00} s then {heave.Flight:0.00} s of flight, the boss and the rock held still ({rockAt.DistanceTo(drakeAt):0} u, lane {lane?.Time:0.00} s), counted once ({dk.S("throw").Fired})");
                     for (int i = 0; i < 60 * 6 && rock != null && GodotObject.IsInstanceValid(rock) && !rock.Thrown; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     var lane0 = rock?.From ?? Vector2.Zero; float laneLen = rock == null ? 1 : rock.From.DistanceTo(rock.To);
                     // HALF OF THIS FLIGHT, not a fixed 0.8 s. The wait was written when the flight
@@ -8490,6 +8795,54 @@ public partial class _Test : Node
                     double rockDmg = me3.DamageBySource.GetValueOrDefault("boss:rock");
                     Check(Math.Abs(half - 0.125) < 0.04 && broke && Math.Abs(laneLen - heave.Reach) < 1 && Math.Abs(rockDmg - 250 * Missions.S(2)) < 1e-6,
                           $"thrown: half the flight covers an eighth of its {heave.Reach:0} u lane ({half:0.000}) -- the ease, whatever the level does to the length -- it strikes the pilot for its 250 at the level's scale ({rockDmg:0}), and breaks apart at the end ({broke})");
+                    // THE THROW LEAVES NOTHING IN THE GUN'S REACH (the owner: the Drake stays silent
+                    // through its throw). Its nose lands the row's 1300 u off the target, 200 u past the
+                    // gun's 1100 u Find: both measured from the hull, both grown by the level. From
+                    // three bearings, the pilot held still: once the warp has landed, the pilot is
+                    // more than 150 u outside Find + L/2 of the centre, and the gun -- armed by hand
+                    // the moment it lands, so the 2 s is never a silence of its own clock -- draws on
+                    // nobody and puts no shell in the air for 2 s while the hull is held. Each throw
+                    // is called off after (its rock freed, its warning cleared) and the boss put back
+                    // where the next starts.
+                    {
+                        var twGun = dk.S("gun"); var twThrow = dk.S("throw");
+                        var twHome = Hub.ArenaCentre;
+                        float twReach = twGun.M.Find + dk.Length * 0.5f;
+                        var twBad = new List<string>();
+                        for (int k = 0; k < 3; k++)
+                        {
+                            for (int i = 0; i < 60 * 12 && dk.Locked; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            dk.Position = twHome;
+                            var twAt = twHome + Vector2.Up.Rotated(VaryAngle()) * Vary(600f, 900f);
+                            me3.Position = twAt; me3.Velocity = Vector2.Zero;
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            int twThrown = twThrow.Fired;
+                            twThrow.Due = 0.01;
+                            for (int i = 0; i < 60 * 5 && twThrow.At != Boss.Phase.Winding; i++) { me3.Position = twAt; me3.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                            bool twLanded = twThrow.At == Boss.Phase.Winding && twThrow.Fired == twThrown + 1;
+                            // read after the wait: where the hull landed, from where the pilot is
+                            float twOff = dk.Position.DistanceTo(me3.Position);
+                            var twSeen = new System.Collections.Generic.HashSet<Shot>(Slugs());
+                            int twArmed = twGun.Fired, twShells = 0;
+                            twGun.Due = 0.01;
+                            for (double twClock = 0; twClock < 2.0; twClock += GetProcessDeltaTime())
+                            {
+                                me3.Position = twAt; me3.Velocity = Vector2.Zero;
+                                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                                twShells += Slugs().Count(x => x.Kind == Shots.Slug && twSeen.Add(x));
+                            }
+                            bool twHeld = twThrow.At == Boss.Phase.Winding && dk.Locked;
+                            if (!twLanded || !twHeld || twOff - twReach < 150f || twGun.Fired <= twArmed || twGun.Target != null || twShells > 0)
+                                twBad.Add($"{twOff:0} u off its centre against a reach of {twReach:0} (landed {twLanded}, held {twHeld}), gun armed {twGun.Fired - twArmed}, drew {(twGun.Target != null ? "the pilot" : "nobody")}, {twShells} shells");
+                            twThrow.At = Boss.Phase.Idle;
+                            if (dk.Rock is { } twRock) twRock.QueueFree();
+                            Fx.ClearWarnings();
+                            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            dk.Position = twHome;
+                        }
+                        Check(twBad.Count == 0 && twThrow.M.Standoff - twGun.M.Find >= 200f,
+                              $"the throw leaves nothing in the gun's reach: at three bearings its nose lands {twThrow.M.Standoff:0} u off a pilot held still, more than 150 u outside the gun's {twReach:0} u from the centre, and the gun fires no shell at it for 2 s{(twBad.Count > 0 ? " -- " + string.Join("; ", twBad) : "")}");
+                    }
                 }
             }
             // EVERY BOSS SPECIAL HAS ITS OWN SOUND, heard as it happens: the Lancer's beam (its charge, and
@@ -8621,6 +8974,15 @@ public partial class _Test : Node
                 var pylons = em.Where(e => e.Def.Id == Emplacements.Pylon).ToList();
                 Check(em.Count == 5 && pbase != null && pylons.Count == 4 && H.Boss == null,
                       $"a siege builds a pirate base and FOUR pylons, and no boss at all ({em.Count} hulls, {pylons.Count} pylons, boss {(H.Boss == null ? "none" : "built")})");
+                // THE SIEGE WEARS THE PACK TOO (tools/make_ships.ps1): the base is crescent_b, the
+                // owner's pick, trimmed to its drawing at its new 483 u (was 560); the pylon shares
+                // the Pod's own file -- ONE game texture on both rows, drone_sensor.png (D18) -- at
+                // ITS new 300 u (was 220). Hit radii unchanged (330 / 150), so both stay circles
+                // through the length change (Combat.KeelCovers: L <= 2 HW).
+                Check(Trimmed(pbase.Def.Texture) && Math.Abs(pbase.Def.Length - 483f) < 0.5f && pbase.Def.HalfWidth == 330f
+                      && Trimmed(pylons[0].Def.Texture) && Math.Abs(pylons[0].Def.Length - 300f) < 0.5f && pylons[0].Def.HalfWidth == 150f
+                      && pylons[0].Def.Texture == Enemies.Of(Enemies.Pod).Texture,
+                      $"the base wears crescent_b at {pbase.Def.Length:0} u (was 560) and the pylon the Pod's own art at {pylons[0].Def.Length:0} u (was 220), both trimmed, hit radii unchanged ({pbase.Def.Texture} / {pylons[0].Def.Texture})");
                 // 1200 u out on each diagonal -- the four ends of an invisible X, one per corner
                 var pylonCorners = pylons.Select(p => (Math.Sign(p.Position.X - pbase.Position.X), Math.Sign(p.Position.Y - pbase.Position.Y))).ToHashSet();
                 Check(pylons.All(p => Math.Abs(p.Position.DistanceTo(pbase.Position) - 1200) < 1f
@@ -9576,10 +9938,11 @@ public partial class _Test : Node
             {
                 Me.Position = hd.Position + new Vector2(0, 600); Me.Velocity = Vector2.Zero;
                 await RealTime(() => H.Ships.Any(s => !s.Mine && Hub.PeerSector(s.OwnerId) == Hub.SectorKind.Arena), 6);
-                // ONE SHELL FIRST, while the guest is there to be sent it. The throw now warps the
-                // Drake back to 1300 u from its target -- past its gun's 1100 u -- so a throw called
-                // the moment the guest arrived left it nothing in reach to shoot for the whole throw,
-                // the guest waited out its watch for a shell, and every step after it ran late.
+                // ONE SHELL FIRST, while the guest is there to be sent it. The throw warps the
+                // Drake's nose back 1300 u off its target -- 200 u past its gun's Find (1100 u past
+                // the hull, both measured from it) -- so a throw called the moment the guest arrived
+                // leaves it nothing in reach to shoot for the whole throw, and a guest that had to
+                // wait out its watch for a shell would make every step after it run late.
                 int gunFired = hd.S("gun").Fired;
                 await RealTime(() => hd.S("gun").Fired > gunFired, 4);
                 hd.S("throw").Due = 0.01;
@@ -9828,11 +10191,13 @@ public partial class _Test : Node
                 if (H == null || !Hub.InArena || !GodotObject.IsInstanceValid(H.Boss)) return false;
                 sawDrake |= H.Boss is { Type.Id: "drake_bastion" };
                 sawShell |= Slugs().Any(s => s.Cosmetic && s.Kind == Shots.Slug);
-                // WHERE THE HOST HELD IT, not a figure written down here: the body is held
-                // Offset off the flank, and Offset is scaled by the level with the body it clears
-                // (Boss.Scaled), so a literal here would have to be re-chosen every time either
-                // the rock or the level's scale moved. Read the row and assert the spot exactly.
-                double heldAt = H.Boss.S("throw")?.M.Offset ?? 0;
+                // WHERE THE HOST HELD IT, not a figure written down here: the body is held its
+                // hull's half-width, its own radius and the row's gap off the keel, and the radius
+                // is scaled by the level (Boss.Scaled), so a literal here would have to be re-chosen
+                // every time the hull, the rock or the level's scale moved. Read the rows and
+                // assert the spot exactly.
+                var heldBy = H.Boss.S("throw")?.M;
+                double heldAt = heldBy == null ? 0 : H.Boss.HalfWidth + heldBy.Radius + heldBy.Offset;
                 sawRock |= heldAt > 0 && Nodes<ThrownRock>().Any(r => r.Cosmetic && r.Hold <= 7.5
                                                                       && Math.Abs(r.From.DistanceTo(H.Boss.Position) - heldAt) < 2f);
                 return sawDrake && sawShell && sawRock;
