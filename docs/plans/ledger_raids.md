@@ -113,3 +113,12 @@ QueueFree loop deleted (a stretch just raises Warn again). Checks: RaidsHostAdds
 guest mid-wind-up: stretched > left at the first web + 0.5, host holds ONE Radius-70 lane ending at the stretched
 time) + RaidsGuestAddsWire (after the replacement one lane standing, ending > first end + 0.5, no strike heard
 before it). CHANGES Known broken line dropped. engine-unproven: rungs owed in the final test phase (six x2).
+## GFb PRE -- tier opus -- readability (spec §1e/§4b, N19): SquadSight.cs (new: squads as every peer sees them,
+the "1+3" label, the victim's GANK line), Radar (heavy diamond by Tag.Heavy, bracket on a squad in formation, one
+rim chevron + label for an off-scope squad), HullHud GANK line, Raider row name under the hull 3 s (squad enters
+view / commit) + web glyph by Cc + LabelDrop, Hints pilot/boss, TIO adds-EXP line; checks RaidsSightChecks (solo)
++ guest bits in RaidsGuestAddsWire; frame 49c_squad_names_radar (+49b now shows the GANK line); CHANGES/DESIGN.
+HEAD 9ea4921. Files: Radar 0d2c845a, Raider 4c9845b0, HubNodes 60c27d97, Hints 87bce0b3, TioWindow f104c80d,
+SmokeTest b85abba6, Shots f2abfe85, CHANGES de9bdb1c, DESIGN df04e865; SquadSight.cs new.
+Defaults: "1+3" = heavies + the rest by Tag.Heavy ("2" when no heavy); the victim = the ship nearest a lock
+line's end within its hit radius + 150 u; names start per squad (the first member to enter view shows all).
