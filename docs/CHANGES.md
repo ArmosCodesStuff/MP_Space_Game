@@ -36,35 +36,47 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (local session, worktree `WarShips_wt_net`, branch `wt/net`): WebRTC slice R1 is proved
+on the engine.** Commits 6eef84e, dba1847, 06db494 (J7-J9), 8760795 (J9b, rung 3 green on seeds
+11400714819323466726 and 11400714819323463562), 3e4df1b (J10, the rows end to end), e4cac19 (J9c, the
+build's fingerprint), c4a7e01 (R1P: two rung-3-only checks fixed -- `Character`'s own `const` bounds
+are not "the pilot", `Bought`'s reflection name changed with the property). Rung 3 green twice more on
+this commit (seeds 11400714819323513555 and 11400714819323526641) and the six-role run green once
+(seed 11400714819323519265, every role `fails=0`): host and every guest agree on J9c's `Net.Protocol`.
+**The pair-proxy unknown is closed, in the box's favour**: libjuice does use a loopback pair proxy as a
+remote candidate (9 datagrams to the host, 9 to the guest); the `Net.DropBeatsFor` fallback (plan
+§10.2) was never needed. **The merge gate then failed the lane on `Net.cs:239-242`: `StructRow`
+demanded `IsReadOnlyAttribute`, so a MUTABLE struct row (`StatusSet.Guards`, `EmplacementDef.Gun`) and
+a `System.ValueTuple`N` row (`Hub.PracticeTargets`, `Hub.Outposts`) never entered the fingerprint.**
+Fixed (ledger R1Q): `StructRow` takes any value type of the game's own assembly, or any
+`System.ValueTuple`N`, whose public fields are all Plain, readonly or not; three new `BuildChecks` (a
+status guard's share, the base gun's damage, one practice target) each move the fingerprint and are
+restored. Re-proved: `-Quick`, rung 3 green twice more (seeds 11400714819323524536 and
+11400714819323511382), the six-role run green once more (seed 11400714819323521240, every role
+`fails=0`) -- host and every guest still agree on `Net.Protocol`.
+**The merge gate found a second defect (job R1R): `StructRow` still demanded every field Plain, so
+`WaveCrew` (a `Func` `Count` field) printed as its bare type name and the private static readonly
+`Waves.Patrol`/`HuntPin` rows never entered the fingerprint.** Fixed: `StructRow` accepts a field that
+is Plain OR a delegate; `Show` prints a delegate's type name, null as `null`. Re-proved at 1a139c0
+(after merging `version-l`'s walls lane in first, no fingerprint fix needed for `Unlocks.All`: it is a
+record class, already hashed through `Plain`'s own `<Clone>$` path): `-Quick` green, rung 3 green twice
+(seeds 11400714819323517228, 11400714819323555799), the six-role run green once (seed
+11400714819323519350, every role `fails=0`), the two new checks ("a row with a delegate field is part
+of the build's fingerprint", "a wave crew row put back is the build's fingerprint again") PASS on
+every run, no FAIL or ERROR line. Next: the bar (`verify.ps1 -Update`), a merge to `version-l`, and
+**R2** (network_webrtc.md §13: the switch; its `Net` is the desks, `Net._Process` polls
+`Rendezvous.Paths`, `Join` adds an invite's candidates only after the walk, D15). Not pushed.
+
+**2026-09-25 (main session): the walls lane (lane C) merged into `version-l`** (`29b154e`), rung
+3/5/4 green in the lane; `Unlocks.All` joins CLAUDE.md §7's extend-before-inventing list.
+`version-l` now also carries this session's docs/tool commits (`tools/lanes.ps1`,
+`docs/plans/ledger_main.md`, compaction-safety rules). kits (lane A) and art (sprites) lanes continue
+separately; see their own ledgers for status.
+
 **2026-09-24 (local session): R0 is VERIFIED (aa1e4f9) and pushed to version-l and main.** Rung 2,
 rung 3 on seeds 90331 and 4127, `-OneDll`, `-ReplyWindow` (every delay to 60 s connected:
 `Link.ReplyWindowS` = 30, DESIGN.md), then a green bar. Owner rulings since: the Echo's Rewind goes
 back 8 s with hull, from a 0.5 s snapshot ring; no boss-hull trim for adds (docs/plans/README.md).
-**Four lanes run in parallel** (owner, for speed), each a writer in its own worktree OUTSIDE this
-folder, compile rungs only; the main session runs every engine rung, one at a time, then merges:
-| worktree (branch) | lane | ledger |
-|---|---|---|
-| `..\WarShips_wt_net` (wt/net) | WebRTC R1: codes, STUN rows, `Link.ReplyWindowS` = 30 | `docs/plans/ledger_webrtc.md` J7+ |
-| `..\WarShips_wt_kits` (wt/kits) | kits lane A: the v2/v3/raids_v2 specs into docs/plans, slices 1-2 | `docs/plans/ledger_kits.md` |
-| `..\WarShips_wt_art` (wt/art) | sprites: enemies, bosses, fleet, siege, then the 12 hulls | `docs/plans/ledger_sprites.md` |
-| `..\WarShips_wt_walls` (wt/walls) | kits lane C: `Unlocks.cs`, 6 chip slots, walls, `Peak` | `docs/plans/ledger_walls.md` |
-Each ledger lists the engine rungs it owes. A lane whose ledger has a PRE with no POST was interrupted.
-**In flight, 2026-09-25 ~01:10** (engine tests run from a detached checkout `..\WarShips_wt_test`, one
-at a time, by the main session's scratch `rungs.ps1`):
-- **walls (lane C): DONE.** All 4 jobs + 2b (58d7d1a) + the adversarial review's 7 fixes (3ebce14, on
-  top of `version-l` merged in first, docs-only, no conflicts). Rung 2, rung 3 x2 (seeds
-  11400714819323513364, 11400714819323511793), rung 5 six-role (seed 11400714819323517573) and screens
-  (111 frames, `LINT: 0`) all green. Ready for the main session to merge `wt/walls` into `version-l`.
-- **kits (lane A):** slice 1a + J0 + F16 + 1b (606201f) green except the rewritten Disabled check's
-  own setup (timed from the input); the writer on J4 (F17) lands "job 1c" first. Next: J5-J7.
-- **net (R1):** J7-J9 + J9b (8760795) under rung 3 now. D17 cause found: `Character.Bought` (a
-  `static readonly int[]`) is hashed live by `Net.Fingerprint` -- two pilots with different upgrades
-  could refuse each other. The writer fixes it as J9c after J10; it wants the text after "parts moved
-  since the run began" from the two seam lines of the 8760795 run. Then J11 (record).
-- **art (sprites):** J1-J3b + a73d26e green (rung 3 x2, 108 frames). The writer is on J3c (the owner's
-  picks, README), J3d (bosses 2x, hit size too), J4 siege, J5 hulls.
-- The owner's casting page: https://claude.ai/artifact/G1HZfHe3ipoKdgUWy964hb (db `picks/current`).
-- New agents follow CLAUDE.md 2b.4 (lowest trusted tier, `model` set explicitly).
 
 **2026-09-25 (cloud session): WebRTC slice R0's code landed** (tested since: above).
 Ledger: `docs/plans/ledger_webrtc.md` (jobs J1-J6, decisions D1-D7, v1 of the plan is not in the repo).
@@ -490,6 +502,92 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### WebRTC slice R1: the reply window, the codes, the STUN walk, the box, the rows end to end (2026-09-25, branch wt/net)
+
+**`Link.ReplyWindowS` is 30 s** (R0's measurement, DESIGN.md), and every solo run holds one pair to it:
+its host takes the reply 30 s after the guest made it and must connect within 2 s; the one-time
+measurement and `run.ps1 -ReplyWindow` are gone. **`scripts/Rendezvous.cs`** owns how two machines swap
+session descriptions (network_webrtc.md §4): the four records (invite, reply, knock, refuse) and their
+one codec, each ending in a 4-byte SHA-256 check; the plugin's 17-line SDP template, so a code carries
+the five values that vary and the candidates, and the far side rebuilds the rest byte for byte; the
+text a player pastes (`WSI`/`WSR` and Crockford base32, found anywhere in a copied message, case and
+I/L/O forgiven, only as many characters read as the record needs); the fit rule (400 characters; the
+/64 rule, then the rest, IPv6, LAN, overlay, server-reflexive last); the two rows (paste, address)
+and which text each claims; the clipboard seam. **The rows end to end:** the pending table (one entry
+per invite not yet connected, Waiting or Linking) and the two desks a session implements
+(`IHostDesk`, `IGuestDesk`: R2's Net); every row opens on a host's desk, starts a guest's join and is
+polled. The address row's **listener** (dual-stack TCP from 27015 .. 27024, then the OS's port;
+records framed in 2 bytes, 3 s to arrive; the checks in order -- build, 20 knocks a minute an address,
+one entry per guest, room; a knock in flight refused `closed`; an invite whose connection ends without
+its reply hung up) and **dialer** (the typed address, `DialAddress` for a name, knock, answer). The
+paste row's **clipboard pickup**: while anything is pending, the clipboard read at most every 500 ms,
+and a reply for a Waiting invite handed over once. `Rendezvous.Guest`, a guest's mark, drawn once per
+process. **`Link.cs`** gains the STUN rows (Google's, then Cloudflare's; mutable, so outside the
+fingerprint), `Config` (one row per connection), the walk (`Link.Gather`: a row unanswered in 2,000 ms
+is passed over, the connection made again with the same id, the answering row remembered, none
+answering leaves this PC's own addresses and a flag), `ChannelOf`, `Backlog` (which counts only what
+waits beyond the SCTP send buffer), `LinkMs`, `InviteLifeS`. **The box** (`tools/smoketest/wan.py`,
+rewritten): a STUN responder, silent ports, the pair proxy, a blackhole and stats, started by run.ps1
+for every run; it also carries `-Wan`'s ENet relays until R2. **The courier** (harness): codes carried
+as files beside the project, and rewritten to the box's address for the pair proxy. Nothing in the
+session uses any of it yet: R2 switches, and R2's `Net._Process` polls the rows.
+
+**The build's fingerprint, fixed on the way.** `Net.Protocol` was a readonly field initializer, so the
+fingerprint was taken mid-way through Net's own initialization: it hashed itself as 0 and the Net
+statics below it as unset, and differed from every fingerprint taken later in the process (3724c77b
+against 7991f5f3). It is a property set by Net's static constructor. `Character.Bought` (the pilot's
+purchases) was a readonly array and so hashed live: a property over a mutable field. And a struct row
+(a pirate-base `Post`, a `TargetFilter`) was never hashed: `Net.Plain` takes one whose public fields are
+all Plain. **Then the merge gate found the fix half done:** `StructRow` still demanded
+`IsReadOnlyAttribute`, so a MUTABLE struct row (`StatusSet.Guards`, `EmplacementDef.Gun` -- the pirate
+base's cruise missile) printed as its bare type name, and a `System.ValueTuple`N` row
+(`Hub.PracticeTargets`, `Hub.Outposts`) was skipped whole, a different assembly than the game's own.
+`StructRow` now takes any value type of the game's own assembly, or any `System.ValueTuple`N`, whose
+public fields are all Plain, readonly or not. The fingerprint's value changes with this; both ends of a
+run share it.
+
+**Checks:** new in the solo role -- `Link.ReplyWindowS` is 30, and a reply taken 30 s late still
+connects within 2 s; every record kind round-trips; the wire values; the spike's bundles pack to the
+plan's 121 B/197 characters and 98 B/160; a name clips to 16 bytes at a character boundary; the
+spike's and the live pair's bundles come back byte for byte but the `o=` id; an unknown SDP line, a
+foundation over 255, a non-base64 credential and a non-sha-256 fingerprint are refused by name; a code
+reads back inside a Discord message, in lower case and with I/L/O, and one changed character does not;
+codes are the paste row's and addresses the address row's; 20 candidates fit 400 characters keeping
+srflx, overlay and LAN; two IPv6 on one /64 keep one; `Rendezvous.Clipboard`, `Link.Servers` and the
+guest's mark stay out of the fingerprint, which is the build's when swapped; the STUN table's literals;
+the box is up; the walk over two silent rows seals at 4,000 ms with host candidates and the flag, on a
+host's and a guest's peer; the next gather skips STUN in under 100 ms; a silent row then the box's
+responder stops at row 2 with a server-reflexive candidate; 20 gathers sealed by `Link.Sealed` hold
+their srflx, and 20 with no STUN hold every host candidate a second later holds; `ChannelOf`; `Backlog`
+reads a burst once it outgrows the SCTP send buffer; the listener's ports and limits; by the address
+row, a knock brings an invite and the reply reaches the host's desk, over IPv4, IPv6 and a name; one
+pending entry per guest; `full`, `build`, `rate` and `closed` refusals, each read by the dialer; the paste
+row through the courier's files, the reply taken off the clipboard as a whole Discord message and never
+the host's own invite; the pickup's pace and once-only; a pair whose codes the courier rewrote connects
+through the box's pair proxy, datagrams both ways; a packet sent into a 1 s blackhole arrives after it
+lifts; nothing about the pilot is in the fingerprint; the fingerprint never hashes itself; a struct row
+is in it; a MUTABLE struct row is in it too (a status guard's share, the pirate base's gun damage); a
+`System.ValueTuple`N` row is in it too (one practice target); every field of Character is accounted for
+by the round-trip test (`<Bought>k__BackingField`, the property's own backing field, now that `Bought`
+is one); `Character`'s own `const` bounds are not the pilot and stay in the fingerprint (`Dir`,
+`MaxBonus`, `MaxStock`, `PaidKept`, `SaveDelay`); a row with a DELEGATE field (`WaveCrew.Count`, a
+`Func`) is in it too -- `Waves.Patrol`/`HuntPin` moved, moves it, and the printed row is written out
+field by field, not its bare type name.
+Replaced: the reply-window measurement. Rung 3 green on two seeds at 8760795 (J7-J9b); two rung-3
+checks of J9c's fixed at c4a7e01 (both invisible below rung 3); rung 3 green twice more at c4a7e01
+(seeds 11400714819323513555, 11400714819323526641) and the six-role run once (seed
+11400714819323519265, every role `fails=0`); the merge gate's `StructRow` fix (R1Q) re-proved: rung 3
+green twice more (seeds 11400714819323524536, 11400714819323511382) and the six-role run once more
+(seed 11400714819323521240, every role `fails=0`): host and every guest agree on `Net.Protocol`; a
+second merge-gate defect fixed (R1R, `StructRow`'s delegate-field gate) and re-proved once more: rung 3
+green twice (seeds 11400714819323517228, 11400714819323555799) and the six-role run once (seed
+11400714819323519350, every role `fails=0`).
+
+**Known broken (R1):**
+- **What libjuice writes after an IPv6 server-reflexive candidate is unread**; the codec writes
+  `raddr :: rport 0`. No network here has one, so no check can see it.
+- **The Linux runner (run.sh) does not start the box**, and has no plugin (R0); the rows' checks need
+  neither and run there, the IPv6 join form becoming a second IPv4 one where the OS has no IPv6.
 ### Level walls: adversarial review, 7 findings fixed; batch proven (2026-09-25, lane C, `wt/walls`)
 
 **`Unlock` is a record class, not a struct**, so `Unlocks.All` (wall levels, the two boss gates) reaches

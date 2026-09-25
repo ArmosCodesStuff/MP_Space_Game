@@ -24,7 +24,7 @@ using System.Reflection;
 // ─────────────────────────────────────────────────────────────────────────────
 public partial class Net : Node
 {
-    private const int DefaultPort = 27015;
+    public const int DefaultPort = 27015;
     private const int MaxPlayers = 8;
 
     public static Net I { get; private set; }
@@ -171,7 +171,12 @@ public partial class Net : Node
     // the peer counts as connected: nothing is spawned for it, sent to it or relayed about it
     // until both sides have seen the other's fingerprint -- and each side refuses on its own, so
     // the refused player learns why without any message having to survive a disconnect.
-    public static readonly int Protocol = Fingerprint();
+    // SET BY THE STATIC CONSTRUCTOR, after every static field initializer of Net has run, and a property:
+    // as a readonly field initializer the walk ran mid-way through Net's own initialization, hashed this
+    // very field as 0 and every Net static declared below it as unset, and so differed from any
+    // fingerprint taken later in the same process (R1's first runs: 3724c77b against 7991f5f3).
+    public static int Protocol { get; private set; }
+    static Net() => Protocol = Fingerprint();
     public static bool Accepts(int protocol) => protocol == Protocol;
     // The smoke test's way to be a different build, to prove the refusal on a real connection.
     public static int? PretendProtocol;
@@ -221,13 +226,31 @@ public partial class Net : Node
         return (int)h;
     }
     // Values whose text is the same on every machine: numbers, words, colours and vectors, and
-    // records, tables and arrays of them. Not engine objects, and not the game's live collections
-    // (a list or dictionary field is what a run fills in -- the key bindings, the character).
+    // records, tables, struct rows and arrays of them. Not engine objects, and not the game's live
+    // collections (a list or dictionary field is what a run fills in -- the key bindings, the character).
     private static bool Plain(Type t) =>
         t.IsPrimitive || t.IsEnum || t == typeof(string) || t == typeof(decimal) || t == typeof(Color) || t == typeof(Vector2)
         || (t.IsArray && Plain(t.GetElementType()))
         || (t.GetMethod("<Clone>$") != null && !typeof(GodotObject).IsAssignableFrom(t))
-        || Table(t);
+        || Table(t) || StructRow(t);
+    // A STRUCT ROW: a value type of the game's own assembly whose public fields are all Plain OR A
+    // DELEGATE (a site's post, a target filter, a status guard, a turret's spec, a wave's crew row
+    // whose Count is a Func), or a `System.ValueTuple`N` whose fields are all Plain (a table row of
+    // names, positions and flags -- Hub.Outposts, Hub.PracticeTargets). As fixed as a table row, and
+    // written out the same way; before this, an array of them was not hashed at all. READONLY OR NOT:
+    // a value in a static readonly field or a table row is as fixed as what holds it -- a mutable
+    // struct (StatusSet.Guards' StatusGuard, EmplacementDef.Gun's TurretSpec) is no less part of the
+    // build for having settable fields, and `IsReadOnlyAttribute` only ever told us the struct itself,
+    // never the array holding it, could not be reassigned in place. A DELEGATE FIELD (WaveCrew.Count)
+    // no longer keeps its row out, but it is written only as its delegate type name (`Show`, e.g.
+    // Func`2): WHICH code is assigned there, and what it computes, are NOT compared. The row's other
+    // fields (Kind, Way, Nth, At, Step) are, so Waves.Patrol, Waves.HuntPin and WaveDef.Crew are
+    // hashed field by field while a changed Count rule still goes unseen.
+    private static bool StructRow(Type t) =>
+        t.IsValueType && !t.IsPrimitive && !t.IsEnum
+        && (t.Assembly == typeof(Net).Assembly || (t.Namespace == "System" && t.Name.StartsWith("ValueTuple`", StringComparison.Ordinal)))
+        && t.GetFields(BindingFlags.Public | BindingFlags.Instance) is { Length: > 0 } fields
+        && fields.All(f => Plain(f.FieldType) || typeof(Delegate).IsAssignableFrom(f.FieldType));
     // A TABLE ROW: one of the game's own data classes (a gear part, an upgrade, a boss type). Held in
     // a readonly field it is as fixed as a constant -- but a class, so it has no text of its own:
     // its public fields are written out, dictionaries sorted by key.
@@ -238,12 +261,13 @@ public partial class Net : Node
     private static string Show(object v, int depth) => v switch
     {
         null => "null",
+        Delegate del => del.GetType().Name,
         IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
         GodotObject g => g.GetType().Name,
         Array a => "[" + string.Join(",", a.Cast<object>().Select(x => Show(x, depth))) + "]",
         System.Collections.IDictionary d => "{" + string.Join(",", d.Keys.Cast<object>()
             .Select(k => Show(k, depth) + ":" + Show(d[k], depth)).OrderBy(x => x, StringComparer.Ordinal)) + "}",
-        _ when depth < 4 && Table(v.GetType()) => v.GetType().Name + "{" + string.Join(",", v.GetType()
+        _ when depth < 4 && (Table(v.GetType()) || StructRow(v.GetType())) => v.GetType().Name + "{" + string.Join(",", v.GetType()
             .GetFields(BindingFlags.Public | BindingFlags.Instance).OrderBy(f => f.Name).Select(f => f.Name + "=" + Show(f.GetValue(v), depth + 1))) + "}",
         _ => v.ToString(),
     };

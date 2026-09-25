@@ -37,7 +37,10 @@ public static class Character
     // THE HIGHEST LEVEL THIS PILOT HAS EVER REACHED: what the level walls read (Unlocks). A refit
     // takes a level off and never this, so it can never lock again what a pilot had opened.
     public static int Peak = 1;
-    public static readonly int[] Bought = new int[Progression.All.Length];
+    // How many of each upgrade the pilot owns, by Progression.All's index. A property over a MUTABLE
+    // field, never a readonly array: Net.Fingerprint reads every readonly array of numbers as a fixed
+    // value of the build, so a pilot's purchases would enter the hash two peers are matched on.
+    public static int[] Bought { get; private set; } = new int[Progression.All.Length];
     // THE ORDER THE POINTS WERE SPENT IN, one upgrade index per purchase, oldest first. `Bought`
     // says how many of each a pilot owns and never said WHICH it bought last, so a refit could not
     // undo the most recent one. A file written before this has no list: the refit falls back to

@@ -199,9 +199,12 @@ public partial class _Test : Node
         public ulong ReplyAt, AppliedAt, HostSawAt, GuestSawAt, HostLostAt, GuestLostAt;
         public WebRtcPeerConnection.ConnectionState GuestAtApply;   // had the guest's side got through alone (P2)?
         public int Handlers, OffMain;                   // signal handlers run, and how many off the main thread
-        public RtcPair(int id, long applyAfterMs = 0, bool delivered = true)
+        // How the bundles cross: whole, as the plugin made them (null), or through a courier that makes
+        // each a code and reads it back, as the pair-proxy check does
+        readonly Func<Rendezvous.Kind, string, string[], (string sdp, string[] lines)> _carry;
+        public RtcPair(int id, long applyAfterMs = 0, bool delivered = true, Func<Rendezvous.Kind, string, string[], (string sdp, string[] lines)> carry = null)
         {
-            Id = id; ApplyAfterMs = applyAfterMs; Delivered = delivered;
+            Id = id; ApplyAfterMs = applyAfterMs; Delivered = delivered; _carry = carry;
             var ice = new Godot.Collections.Dictionary { ["iceServers"] = new Godot.Collections.Array() };
             Served = Host.CreateServer(Link.Channels());
             ConnectedAtOnce = Host.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected;
@@ -219,6 +222,11 @@ public partial class _Test : Node
             HostConn.CreateOffer();
         }
         public static ulong Now => Time.GetTicksMsec();
+        // the bundles exactly as the plugin made them, for the codec's byte-for-byte check
+        public string Offer => _offer;
+        public string Answer => _answer;
+        public string[] OfferLines => _offerCands.Select(c => c.name).ToArray();
+        public string[] AnswerLines => _answerCands.Select(c => c.name).ToArray();
         readonly ulong _born = Now;
         void Seen() { Handlers++; if (OS.GetThreadCallerId() != OS.GetMainThreadId()) OffMain++; }
         public bool Connected => HostSawAt > 0 && GuestSawAt > 0;
@@ -238,16 +246,28 @@ public partial class _Test : Node
             {
                 Pasted = true;
                 Guest.AddPeer(GuestConn, 1);
-                GuestConn.SetRemoteDescription("offer", _offer);
-                foreach (var c in _offerCands) GuestConn.AddIceCandidate(c.media, c.index, c.name);
+                Hand(GuestConn, "offer", Rendezvous.Kind.Invite, _offer, _offerCands);
             }
             if (Pasted && !ReplySealed && Link.Sealed(GuestConn)) { ReplySealed = true; ReplyAt = Now; }
             if (ReplySealed && !Applied && Now >= ReplyAt + (ulong)ApplyAfterMs)
             {
                 Applied = true; AppliedAt = Now; GuestAtApply = GuestConn.GetConnectionState();
-                HostConn.SetRemoteDescription("answer", _answer);
-                foreach (var c in _answerCands) HostConn.AddIceCandidate(c.media, c.index, c.name);
+                Hand(HostConn, "answer", Rendezvous.Kind.Reply, _answer, _answerCands);
             }
+        }
+        // One side's bundle to the other: whole, or through the courier as a code. A code does not carry a
+        // candidate's section: it is the template's one, a=mid:0, as R2's Net will give it.
+        void Hand(WebRtcPeerConnection to, string type, Rendezvous.Kind kind, string sdp, List<(string media, int index, string name)> cands)
+        {
+            if (_carry == null)
+            {
+                to.SetRemoteDescription(type, sdp);
+                foreach (var c in cands) to.AddIceCandidate(c.media, c.index, c.name);
+                return;
+            }
+            var (built, lines) = _carry(kind, sdp, cands.Select(c => c.name).ToArray());
+            to.SetRemoteDescription(type, built);
+            foreach (var l in lines) to.AddIceCandidate("0", 0, l);
         }
         // Every object this pair made, let go of here and now -- not by the collector's finalizer
         // thread (Assets.cs: a C# handle released there can turn into an engine ERROR).
@@ -277,41 +297,757 @@ public partial class _Test : Node
         return seen;
     }
 
-    // THE REPLY WINDOW, MEASURED ONCE (§3.4; `run.ps1 -ReplyWindow` hands the solo role
-    // `replywindow`). The friend's agent starts its give-up clock at paste; on this path -- an
-    // in-process pair over the LAN host candidate, where the host answers the guest's early checks
-    // (P2) -- the guest's DTLS client may start before the host has the reply, and bound the window
-    // sooner. Seven pairs start together at the top of the run; each host takes its reply 5, 10, 15,
-    // 25, 35, 45 or 60 s after the guest made it; each is judged 5 s after that. About 65 s, in the
-    // background. The edit that sets Link.ReplyWindowS from it replaces this with the permanent check.
-    static readonly int[] ReplyDelaysS = { 5, 10, 15, 25, 35, 45, 60 };
-    Task<List<(int delay, long ms, WebRtcPeerConnection.ConnectionState guest)>> _replyWindow;
-    async Task<List<(int delay, long ms, WebRtcPeerConnection.ConnectionState guest)>> MeasureReplyWindow()
+    // THE REPLY WINDOW HOLDS (§3.4, §10.4 R0). R0 measured it once (DESIGN.md: every delay up to 60 s
+    // connected, so 30 s); this holds the build to it on every solo run. The friend's agent starts its
+    // give-up clock at paste; on this path -- an in-process pair over the LAN host candidate, where the
+    // host answers the guest's early checks (P2) -- the guest's DTLS client may start before the host
+    // has the reply, and a shorter bound than ICE's would show here first. One pair starts at the top
+    // of the run, its host takes the reply Link.ReplyWindowS after the guest made it, and it is judged
+    // in WebRtcPairs: in the background, so it adds no wall time beyond the run's own length.
+    Task<(bool connected, long appliedAfter, long upAfter, string stage)> _replyWindow;
+    async Task<(bool connected, long appliedAfter, long upAfter, string stage)> ReplyWindowHolds()
     {
-        if (!Link.Available) return null;
-        var pairs = ReplyDelaysS.Select((d, i) => new RtcPair(2 + i, d * 1000L)).ToList();
-        bool Judged(RtcPair p) => p.Connected || (p.Applied && RtcPair.Now > p.AppliedAt + 5000);
-        await RtcUntil(() => pairs.All(Judged), (ReplyDelaysS.Max() + 20) * 1000, pairs.ToArray());
-        var seen = pairs.Select(p => ((int)(p.ApplyAfterMs / 1000),
-                                      p.Connected && p.Applied ? (long)Math.Max(p.HostSawAt, p.GuestSawAt) - (long)p.AppliedAt : -1L,
-                                      p.GuestAtApply)).ToList();
-        foreach (var p in pairs) p.Free();
+        if (!Link.Available) return (false, 0, -1, "no plugin");
+        var p = new RtcPair(Rng.RandiRange(2, int.MaxValue), Link.ReplyWindowS * 1000L);
+        await RtcUntil(() => p.Connected || (p.Applied && RtcPair.Now > p.AppliedAt + 4000), (Link.ReplyWindowS + 20) * 1000, p);
+        var seen = (p.Connected, p.Applied ? (long)p.AppliedAt - (long)p.ReplyAt : -1L,
+                    p.Connected && p.Applied ? (long)Math.Max(p.HostSawAt, p.GuestSawAt) - (long)p.AppliedAt : -1L, p.Stage());
+        p.Free();
         return seen;
+    }
+
+    // ── WEBRTC, R1: THE CODES (network_webrtc.md §4, §10.4 R1) ──────────────────────────────────────
+    // THE SPIKE'S REAL BUNDLES (runs\stun offer_2.json and answer_2.json), the internet address replaced
+    // by a documentation one (203.0.113.7): what the plugin makes, as literals the codec is held to.
+    const string SpikeOffer = "v=0\r\no=rtc 2614788236 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic:WMS *\r\na=ice-options:ice2,trickle\r\n"
+        + "a=fingerprint:sha-256 45:C6:28:38:84:9D:AD:28:5E:93:1A:E8:88:0C:A7:50:12:17:F4:92:DE:24:53:13:AC:1E:F8:85:80:13:20:99\r\n"
+        + "m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=mid:0\r\na=sendrecv\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n"
+        + "a=setup:actpass\r\na=ice-ufrag:giTP\r\na=ice-pwd:4g46IhzHEvYFD/0EIUDle1\r\n";
+    static readonly string[] SpikeOfferLines = { "candidate:1 1 UDP 2114977791 192.168.0.33 54617 typ host", "candidate:2 1 UDP 1678769919 203.0.113.7 54617 typ srflx raddr 0.0.0.0 rport 0" };
+    const string SpikeAnswer = "v=0\r\no=rtc 2634790502 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic:WMS *\r\na=ice-options:ice2,trickle\r\n"
+        + "a=fingerprint:sha-256 07:9A:D7:15:4A:4C:26:4A:5A:22:A8:45:65:01:87:E7:2A:50:2A:E2:39:EC:20:B0:A6:B6:84:3D:E0:D5:8F:B1\r\n"
+        + "m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=mid:0\r\na=sendrecv\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n"
+        + "a=setup:active\r\na=ice-ufrag:BOeX\r\na=ice-pwd:ZOIsPAdHc0dSoJIIX6y8wQ\r\n";
+    static readonly string[] SpikeAnswerLines = { "candidate:1 1 UDP 2114977791 192.168.0.33 54581 typ host", "candidate:3 1 UDP 1678769663 203.0.113.7 54581 typ srflx raddr 0.0.0.0 rport 0" };
+
+    // A WHOLE COPIED DISCORD MESSAGE around a code: a name holding "wsr" before it, the time, line breaks,
+    // the code hand-copied over two lines with a hyphen, and words after it.
+    static string Message(string code)
+    {
+        int cut = Rng.RandiRange(10, code.Length - 10);
+        return $"Swsrdna the Brave — Today at {Rng.RandiRange(1, 12)}:{Rng.RandiRange(10, 59)} PM\nhere it is, paste it in:\n{code[..cut]}-\n{code[cut..]}\nthanks! wsr = warships reply btw";
+    }
+    // A record as one line of text, every field, for comparing two.
+    static string Said(Rendezvous.Record r) =>
+        $"{r.Kind} setup {r.Setup} nostun {r.NoStun} proto {r.Proto:x8} id {r.Id} guest {r.Guest} why {r.Why} build '{r.Build}' name '{r.Name}' "
+        + $"ice {r.Ufrag}/{r.Pwd} fp {Convert.ToHexString(r.Fingerprint)} [{string.Join(" | ", r.Candidates.Select(Rendezvous.Sdp.Line))}]";
+    const string CredChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static string VaryCred(int n) => new(Enumerable.Range(0, n).Select(_ => CredChars[Rng.RandiRange(0, 63)]).ToArray());
+    static System.Net.IPAddress VaryIp(bool v6)
+    {
+        var b = new byte[v6 ? 16 : 4];
+        for (int i = 0; i < b.Length; i++) b[i] = (byte)Rng.RandiRange(0, 255);
+        if (v6) b[0] = (byte)(0x20 | (b[0] & 0x1F));           // global unicast, 2000::/3
+        return new System.Net.IPAddress(b);
+    }
+    static Rendezvous.Candidate VaryCandidate(Rendezvous.Via type, System.Net.IPAddress at) =>
+        new(type, Rng.RandiRange(0, 255), Rng.Randi(), Rng.RandiRange(1, 65535), at);
+    // A record of a kind with only the fields that kind carries (§4.1), every one of them drawn.
+    static Rendezvous.Record VaryRecord(Rendezvous.Kind kind)
+    {
+        var names = new[] { "Harbour8", "Ølaf", "Kasia Ż", "x", "Twelve Chars" };
+        var r = new Rendezvous.Record { Kind = kind };
+        string build = Rng.RandiRange(0, 1) == 0 ? "dev" : "2026.09.25-1a2b3c4";
+        switch (kind)
+        {
+            case Rendezvous.Kind.Knock: r.Proto = (int)Rng.Randi(); r.Guest = Rng.Randi(); r.Build = build; r.Name = names[Rng.RandiRange(0, names.Length - 1)]; return r;
+            case Rendezvous.Kind.Refuse: r.Why = (Rendezvous.Why)Rng.RandiRange(0, 3); r.Proto = (int)Rng.Randi(); r.Build = build; return r;
+        }
+        r.Setup = kind == Rendezvous.Kind.Invite ? 0 : 1; r.NoStun = Rng.RandiRange(0, 1) == 1;
+        r.Id = Rng.RandiRange(2, int.MaxValue); r.Name = names[Rng.RandiRange(0, names.Length - 1)];
+        if (kind == Rendezvous.Kind.Invite) { r.Proto = (int)Rng.Randi(); r.Build = build; }
+        r.Ufrag = VaryCred(4); r.Pwd = VaryCred(22);
+        for (int i = 0; i < 32; i++) r.Fingerprint[i] = (byte)Rng.RandiRange(0, 255);
+        int n = Rng.RandiRange(1, 5);
+        for (int i = 0; i < n; i++) r.Candidates.Add(VaryCandidate((Rendezvous.Via)Rng.RandiRange(0, 3), VaryIp(Rng.RandiRange(0, 2) == 0)));
+        return r;
+    }
+
+    // ONE BUNDLE THROUGH THE WHOLE CODEC, as a code travels: stripped, packed, written as text, found
+    // in a message, rebuilt. The rebuilt SDP must equal the plugin's own byte for byte but the o= id
+    // (fresh each time, and meaningless to the far end), and every candidate line byte for byte. "" when
+    // it does; otherwise what differs.
+    static string ThroughCodec(Rendezvous.Kind kind, string sdp, string[] lines)
+    {
+        var r = Rendezvous.Sdp.Strip(kind, sdp, lines);
+        r.Id = Rng.RandiRange(2, int.MaxValue); r.Name = "Harbour8";
+        if (kind == Rendezvous.Kind.Invite) { r.Proto = Net.Protocol; r.Build = Game.Build; }
+        var back = Rendezvous.Find($"here you go: {Rendezvous.Encode(r)} (thanks)", kind);
+        if (back == null) return "the code was not found in its own message";
+        var was = sdp.Split("\r\n"); var now = Rendezvous.Sdp.Build(back).Split("\r\n");
+        var oLine = new System.Text.RegularExpressions.Regex(@"^o=rtc [0-9]+ 0 IN IP4 127\.0\.0\.1$");
+        var diff = new List<string>();
+        for (int i = 0; i < Math.Max(was.Length, now.Length); i++)
+        {
+            string x = i < was.Length ? was[i] : "(none)", y = i < now.Length ? now[i] : "(none)";
+            if (x != y && !(i == 1 && oLine.IsMatch(x) && oLine.IsMatch(y))) diff.Add($"line {i + 1} \"{x}\" came back \"{y}\"");
+        }
+        var rebuilt = back.Candidates.Select(Rendezvous.Sdp.Line).ToList();
+        for (int i = 0; i < Math.Max(lines.Length, rebuilt.Count); i++)
+            if ((i < lines.Length ? lines[i] : "(none)") != (i < rebuilt.Count ? rebuilt[i] : "(none)"))
+                diff.Add($"candidate \"{(i < lines.Length ? lines[i] : "(none)")}\" came back \"{(i < rebuilt.Count ? rebuilt[i] : "(none)")}\"");
+        return string.Join("; ", diff);
+    }
+    // What a refusal says, or "" when there was none.
+    static string Refusal(Action act)
+    {
+        try { act(); return ""; }
+        catch (FormatException e) { return e.Message; }
+    }
+
+    void Codes()
+    {
+        var kinds = new[] { Rendezvous.Kind.Invite, Rendezvous.Kind.Reply, Rendezvous.Kind.Knock, Rendezvous.Kind.Refuse };
+        // EVERY KIND COMES BACK, field for field, three varied records of each
+        var trips = new List<string>();
+        for (int n = 0; n < 3; n++)
+            foreach (var k in kinds)
+            {
+                var r = VaryRecord(k);
+                string back;
+                try { back = Said(Rendezvous.Unpack(Rendezvous.Pack(r))); } catch (FormatException e) { back = e.Message; }
+                if (back != Said(r)) trips.Add($"{Said(r)} came back {back}");
+            }
+        Check(trips.Count == 0, $"invite, reply, knock and refuse each come back from Pack and Unpack field for field, three varied records of each ({(trips.Count == 0 ? "12 of 12" : string.Join("; ", trips))})");
+        // the wire values the format names (§4.1): the kind nibble, and a refusal's reason byte
+        Check((int)Rendezvous.Kind.Invite == 1 && (int)Rendezvous.Kind.Reply == 2 && (int)Rendezvous.Kind.Knock == 3 && (int)Rendezvous.Kind.Refuse == 4
+              && (int)Rendezvous.Why.Full == 0 && (int)Rendezvous.Why.Build == 1 && (int)Rendezvous.Why.Rate == 2 && (int)Rendezvous.Why.Closed == 3
+              && Rendezvous.Format == 1 && Rendezvous.Pack(VaryRecord(Rendezvous.Kind.Knock))[0] == 0x31,
+              "a record's first byte is its kind and the format (a knock: 0x31), and a refusal says full, build, rate or closed as 0-3 (§4.1)");
+
+        // THE SIZES the plan's model gives for this PC's shape (§4.4 A: one LAN address and one
+        // server-reflexive, a release build id of 18 characters, an 8-character name)
+        var inv = Rendezvous.Sdp.Strip(Rendezvous.Kind.Invite, SpikeOffer, SpikeOfferLines);
+        inv.Id = Rng.RandiRange(2, int.MaxValue); inv.Proto = Net.Protocol; inv.Build = "2026.09.25-1a2b3c4"; inv.Name = "Harbour8";
+        var rep = Rendezvous.Sdp.Strip(Rendezvous.Kind.Reply, SpikeAnswer, SpikeAnswerLines);
+        rep.Id = inv.Id; rep.Name = "Harbour8";
+        int invB = Rendezvous.Pack(inv).Length, repB = Rendezvous.Pack(rep).Length, invC = Rendezvous.Encode(inv).Length, repC = Rendezvous.Encode(rep).Length;
+        Check(invB == 121 && repB == 98 && invC == 197 && repC == 160,
+              $"the spike's bundles pack to the plan's sizes: invite 121 B and 197 characters, reply 98 B and 160 (§4.4 A; {invB} B {invC}, {repB} B {repC})");
+
+        // A NAME is clipped to 16 bytes at a character boundary: the ø of "Ølaf, the Ångøra" would end at 17
+        var named = VaryRecord(Rendezvous.Kind.Reply); named.Name = "Ølaf, the Ångøra";
+        string clipped = Rendezvous.Unpack(Rendezvous.Pack(named)).Name;
+        Check(clipped == "Ølaf, the Ång", $"a name is carried as at most 16 bytes, never half a character (\"{clipped}\")");
+
+        // BYTE FOR BYTE: the spike's real bundles, stripped to a code and rebuilt
+        string offerDiff = ThroughCodec(Rendezvous.Kind.Invite, SpikeOffer, SpikeOfferLines), answerDiff = ThroughCodec(Rendezvous.Kind.Reply, SpikeAnswer, SpikeAnswerLines);
+        Check(offerDiff == "" && answerDiff == "",
+              $"the spike's offer and answer, through the codec and back, equal the plugin's own byte for byte but the o= id ({(offerDiff + answerDiff == "" ? "17 lines and 2 candidates each" : offerDiff + " " + answerDiff)})");
+
+        // WHAT A CODE CANNOT CARRY is refused, and the refusal names it
+        string unknown = Refusal(() => Rendezvous.Sdp.Strip(Rendezvous.Kind.Invite, SpikeOffer.Replace("a=mid:0\r\n", "a=mid:0\r\na=extmap-allow-mixed\r\n"), SpikeOfferLines));
+        Check(unknown.Contains("\"a=extmap-allow-mixed\""), $"an SDP line the template does not know is refused, by name ({unknown})");
+        int big = Rng.RandiRange(256, 999);
+        string foundation = Refusal(() => Rendezvous.Sdp.Parse($"candidate:{big} 1 UDP 2114977791 192.168.0.33 54617 typ host"));
+        Check(foundation.Contains("over 255"), $"a candidate foundation over 255 ({big}) is refused ({foundation})");
+        string cred = Refusal(() => Rendezvous.Sdp.Strip(Rendezvous.Kind.Invite, SpikeOffer.Replace("a=ice-ufrag:giTP", "a=ice-ufrag:gi_P"), SpikeOfferLines));
+        Check(cred.Contains("'_'"), $"an ICE credential with a character outside base64 is refused, naming it ({cred})");
+        string sha1 = Refusal(() => Rendezvous.Sdp.Strip(Rendezvous.Kind.Invite,
+            SpikeOffer.Replace("a=fingerprint:sha-256 45:C6:28:38:84:9D:AD:28:5E:93:1A:E8:88:0C:A7:50:12:17:F4:92:DE:24:53:13:AC:1E:F8:85:80:13:20:99", "a=fingerprint:sha-1 45:C6:28:38:84:9D:AD:28:5E:93:1A:E8:88:0C:A7:50:12:17:F4:92"), SpikeOfferLines));
+        Check(sha1.Contains("sha-256"), $"a fingerprint that is not sha-256 is refused ({sha1})");
+
+        // THE TEXT (§4.3), three varied codes. A code whose text holds no 0 or no 1 is drawn again, so
+        // the I/L/O check always has something to prove.
+        var textFails = new List<string>();
+        for (int n = 0; n < 3; n++)
+        {
+            Rendezvous.Record r; string code;
+            do { r = VaryRecord(n == 1 ? Rendezvous.Kind.Invite : Rendezvous.Kind.Reply); code = Rendezvous.Encode(r); }
+            while (!code[3..].Contains('0') || !code[3..].Contains('1'));
+            string Back(string text) => Rendezvous.Find(text) is { } f ? Said(f) : "nothing";
+            if (Back(code) != Said(r)) textFails.Add($"round trip: {Back(code)}");
+            // a whole copied Discord message (Message)
+            string msg = Message(code);
+            if (Back(msg) != Said(r)) textFails.Add($"in a message: {Back(msg)}");
+            // one changed character, anywhere but the last (whose low bits can be padding)
+            int at = Rng.RandiRange(3, code.Length - 2);
+            int was = Rendezvous.Crockford.IndexOf(code[at]);
+            char other = Rendezvous.Crockford[(was + Rng.RandiRange(1, 31)) % 32];
+            string damaged = code[..at] + other + code[(at + 1)..];
+            if (Rendezvous.Find(damaged) != null) textFails.Add($"a changed character at {at} ({code[at]} to {other}) still read");
+            if (Back(code.ToLowerInvariant()) != Said(r)) textFails.Add("lower case did not read");
+            int ones = 0;
+            string retyped = new(code.Select((c, i) => i < 3 ? c : c == '1' ? (ones++ % 2 == 0 ? 'I' : 'L') : c == '0' ? 'O' : c).ToArray());
+            if (Back(retyped) != Said(r)) textFails.Add("I, L and O for 1, 1 and 0 did not read");
+            // the rows: a code is the paste row's, never the address row's, and a damaged one neither's
+            foreach (var t in new[] { code, msg })
+                if (Rendezvous.PathFor(t) != Rendezvous.Paste || Rendezvous.Address.Claims(t)) textFails.Add($"the {Rendezvous.PathFor(t)?.Id ?? "no"} row claimed a code");
+            if (Rendezvous.PathFor(damaged) != null) textFails.Add($"the {Rendezvous.PathFor(damaged).Id} row claimed a damaged code");
+        }
+        Check(textFails.Count == 0,
+              $"a code reads back whole, inside a Discord message, in lower case and with I, L, O for 1, 1, 0; one changed character does not; every code is the paste row's (three varied: {(textFails.Count == 0 ? "all" : string.Join("; ", textFails))})");
+        var typed = new[] { $"192.168.{Rng.RandiRange(0, 255)}.{Rng.RandiRange(1, 254)}", $"26.{Rng.RandiRange(0, 255)}.{Rng.RandiRange(0, 255)}.{Rng.RandiRange(1, 254)}:{Rng.RandiRange(1024, 65535)}", "[2001:db8::7]:27016", "gamebox.local" };
+        var misread = typed.Where(t => Rendezvous.PathFor(t) != Rendezvous.Address || Rendezvous.Paste.Claims(t)).ToList();
+        Check(misread.Count == 0, $"a typed address is the address row's, and never the paste row's ({(misread.Count == 0 ? string.Join(", ", typed) : "misread: " + string.Join(", ", misread))})");
+        Check(Rendezvous.Paste.Id == "paste" && !Rendezvous.Paste.Auto && Rendezvous.Paste.Stun && Rendezvous.Paste.Budget == 400
+              && Rendezvous.Address.Id == "address" && Rendezvous.Address.Auto && !Rendezvous.Address.Stun && Rendezvous.Address.Budget == 8192,
+              "the paste row walks the STUN rows, never signals again by itself, and holds a code to 400 characters; the address row gathers without STUN, retries by itself, and reads 8,192 B");
+
+        // THE FIT RULE (§4.3, §4.4 E): 10 IPv4 host addresses (the LAN, a Radmin one and 8 others), 9
+        // global IPv6 on 9 /64s and a server-reflexive: 20 candidates, in a varied order, into 400
+        // characters. The rest goes first, then IPv6; the invite's 248 B then hold the three that matter
+        // and 4 IPv6 (97 B + 12 an IPv4 + 24 an IPv6, the plan's layout).
+        var lan = VaryIp(false); var radmin = VaryIp(false); var srflx = VaryCandidate(Rendezvous.Via.Srflx, VaryIp(false));
+        var shapeE = new Rendezvous.Record { Kind = Rendezvous.Kind.Invite, Id = 7, Proto = 1, Build = "2026.09.25-1a2b3c4", Name = "Harbour8", Ufrag = VaryCred(4), Pwd = VaryCred(22) };
+        shapeE.Candidates.Add(srflx);
+        shapeE.Candidates.Add(VaryCandidate(Rendezvous.Via.Host, lan));
+        shapeE.Candidates.Add(VaryCandidate(Rendezvous.Via.Host, radmin));
+        for (int i = 0; i < 8; i++) shapeE.Candidates.Add(VaryCandidate(Rendezvous.Via.Host, VaryIp(false)));
+        for (int i = 0; i < 9; i++)
+        {
+            var v6 = VaryIp(true).GetAddressBytes(); v6[7] = (byte)i;       // 9 different /64s
+            shapeE.Candidates.Add(VaryCandidate(Rendezvous.Via.Host, new System.Net.IPAddress(v6)));
+        }
+        shapeE.Candidates = shapeE.Candidates.OrderBy(_ => Rng.Randi()).ToList();
+        int fitDropped = Rendezvous.Fit(shapeE, Rendezvous.Paste, new List<System.Net.IPAddress> { radmin }, lan);
+        int fitLength = Rendezvous.Encode(shapeE).Length, v6Kept = shapeE.Candidates.Count(c => c.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6);
+        Check(fitLength <= 400 && shapeE.Candidates.Contains(srflx) && shapeE.Candidates.Any(c => c.Address.Equals(lan)) && shapeE.Candidates.Any(c => c.Address.Equals(radmin))
+              && v6Kept == 4 && shapeE.Candidates.Count == 7 && fitDropped == 13,
+              $"20 candidates fit 400 characters with the server-reflexive, the overlay and the LAN address kept, and 4 IPv6 (§4.4 E: {fitLength} characters, {shapeE.Candidates.Count} kept, {v6Kept} IPv6, {fitDropped} dropped)");
+        // two IPv6 on one /64 keep one, fit or not; one on another /64 stays
+        var a64 = VaryIp(true).GetAddressBytes(); var b64 = (byte[])a64.Clone(); var c64 = (byte[])a64.Clone();
+        b64[15] ^= 0x5A; b64[12] ^= 0x33; c64[7] ^= 0x01;
+        var small = VaryRecord(Rendezvous.Kind.Reply);
+        var first6 = VaryCandidate(Rendezvous.Via.Host, new System.Net.IPAddress(a64));
+        small.Candidates = new List<Rendezvous.Candidate> { VaryCandidate(Rendezvous.Via.Host, lan), first6, VaryCandidate(Rendezvous.Via.Host, new System.Net.IPAddress(b64)),
+                                                            VaryCandidate(Rendezvous.Via.Host, new System.Net.IPAddress(c64)), srflx };
+        int smallDropped = Rendezvous.Fit(small, Rendezvous.Paste, new List<System.Net.IPAddress>(), lan);
+        Check(smallDropped == 1 && small.Candidates.Count == 4 && small.Candidates.Contains(first6) && Rendezvous.Encode(small).Length <= 400,
+              $"two IPv6 addresses on one /64 keep the first, though the code fits; one on another /64 stays ({smallDropped} dropped, {small.Candidates.Count} kept)");
+
+        // THE SEAMS ARE MUTABLE, so they stay out of the build's fingerprint: swapped, it is the build's
+        var clipField = typeof(Rendezvous).GetField(nameof(Rendezvous.Clipboard), BindingFlags.Public | BindingFlags.Static);
+        var clipWas = Rendezvous.Clipboard;
+        Rendezvous.Clipboard = () => "swapped";
+        int swapped = FingerprintNow();
+        Rendezvous.Clipboard = clipWas;
+        Check(clipField != null && !clipField.IsInitOnly && !clipField.IsLiteral && swapped == Net.Protocol,
+              $"Rendezvous.Clipboard is mutable and outside the build's fingerprint (swapped {swapped:x8}, the build's {Net.Protocol:x8}{Moved(swapped)})");
+    }
+
+    // THE FINGERPRINT NOW (Net.Fingerprint, as Net.Protocol was taken at startup), and its PARTS: every
+    // fixed value it reads, "Type.Field=value". The parts are taken at the top of the solo run, so a
+    // check that finds the fingerprint moved can say what moved: R1's first solo run found it moved by
+    // the pilot's purchases (Character.Bought, a readonly array until then).
+    static int FingerprintNow() => (int)typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, Type.EmptyTypes).Invoke(null, null);
+    static List<string> FingerprintParts()
+    {
+        var parts = new List<string>();
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+        try { typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, null, new[] { typeof(List<string>) }, null).Invoke(null, new object[] { parts }); }
+        finally { System.Globalization.CultureInfo.CurrentCulture = culture; }
+        return parts;
+    }
+    static List<string> _partsAtStart;
+    static int _hashAtStart;                // the fingerprint when the parts were taken: Net's, unless it moved before the run began
+    // "" while the fingerprint is still the startup's; otherwise what moved: each changed part, cut to
+    // 60 characters either side of where it first differs (a table's part is one long line).
+    static string Moved(int now)
+    {
+        if (now == Net.Protocol) return "";
+        if (_partsAtStart == null) return $"; the startup's was {Net.Protocol:x8}";
+        string early = _hashAtStart == Net.Protocol ? "" : $" -- and it had moved before the run began ({_hashAtStart:x8} at the harness's start), which no part below can name";
+        static string Key(string p) => p.Split('=')[0];
+        static string Cut(string s, int at) { int from = Math.Max(0, at - 60); return s[from..Math.Min(s.Length, at + 60)]; }
+        var was = _partsAtStart.GroupBy(Key).ToDictionary(g => g.Key, g => g.First());
+        var moved = new List<string>();
+        foreach (var p in FingerprintParts())
+        {
+            if (!was.TryGetValue(Key(p), out var old)) { moved.Add($"new \"{Cut(p, 0)}\""); continue; }
+            if (old == p) continue;
+            int at = 0;
+            while (at < old.Length && at < p.Length && old[at] == p[at]) at++;
+            moved.Add($"{Key(p)} at {at}: \"{Cut(old, at)}\" became \"{Cut(p, at)}\"");
+        }
+        return $"; the startup's was {Net.Protocol:x8}{early}; {moved.Count} parts moved since the run began: {string.Join(" | ", moved.Take(4))}";
+    }
+
+    // ── WEBRTC, R1: THE STUN ROWS AND THE WALK (§5, §10.4 R1) ───────────────────────────────────────
+    // THE BOX (tools/smoketest/wan.py): the network between players, which run.ps1 starts for every run.
+    const int BoxHttp = 19480;
+    static System.Text.Json.JsonElement Box(string method, string path)
+    {
+        using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+        using var ask = new System.Net.Http.HttpRequestMessage(new System.Net.Http.HttpMethod(method), $"http://127.0.0.1:{BoxHttp}{path}");
+        string body;
+        try { using var got = http.Send(ask); body = got.Content.ReadAsStringAsync().GetAwaiter().GetResult(); }
+        catch (Exception e) { body = System.Text.Json.JsonSerializer.Serialize(new { error = "the box did not answer: " + e.Message }); }
+        using var doc = System.Text.Json.JsonDocument.Parse(body);
+        return doc.RootElement.Clone();
+    }
+    static readonly Link.StunRow[] _servers = Link.Servers;          // the game's own rows, put back after
+    // the box's rows: two ports that never answer, and its STUN responder
+    static readonly Link.StunRow SilentA = new("stun:127.0.0.1:19482"), SilentB = new("stun:127.0.0.1:19483"), BoxStun = new("stun:127.0.41.1:3478");
+    // LIBJUICE GATHERS A LOOPBACK-MAPPED SERVER-REFLEXIVE CANDIDATE: the box's responder maps every
+    // request to 127.0.0.1. If a run shows libjuice drops it, this goes false and DESIGN.md says so; the
+    // answering-row walk and the sealing rule then hold the timing and the host candidates only (§10.4 R1).
+    static readonly bool LoopbackSrflx = true;
+
+    // Steps walks once a frame, each after its peer's poll, until all are sealed or `ms` pass.
+    async Task Walk(int ms, params Link.Gather[] gs)
+    {
+        ulong end = RtcPair.Now + (ulong)ms;
+        while (gs.Any(g => !g.Done) && RtcPair.Now < end)
+        {
+            foreach (var mp in gs.Select(g => g.Mp).Distinct()) mp.Poll();
+            foreach (var g in gs) g.Step();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+    }
+    static string Walked(Link.Gather g) =>
+        $"row {g.Row}, done {g.Done} in {(g.Done ? (long)(g.DoneAt - g.Began) : -1)} ms, no STUN {g.NoStun}, re-added {g.Added}, seals "
+        + string.Join(" ", g.Seals.Select(s => $"[{(s.complete ? "complete" : "clock")} at {(long)(s.at - g.Began)} ms, due {(long)(s.deadline - g.Began)}, step before {(long)(s.before - g.Began)}]"))
+        + $", {g.Lines.Length} candidates: {string.Join(" | ", g.Lines)}";
+
+    async Task Walks()
+    {
+        // THE TABLE, against the ruling's rows (§5.1) and the plan's timings (§3.3, §5.2)
+        var row0 = Link.Config(0)["iceServers"].AsGodotArray();
+        string url0 = row0.Count == 1 ? row0[0].AsGodotDictionary()["urls"].AsGodotArray()[0].AsString() : $"{row0.Count} rows";
+        Check(_servers.Select(s => s.Url).SequenceEqual(new[] { "stun:stun.l.google.com:19302", "stun:stun.cloudflare.com:3478" })
+              && url0 == "stun:stun.l.google.com:19302" && Link.Config(-1)["iceServers"].AsGodotArray().Count == 0 && Link.Config(2)["iceServers"].AsGodotArray().Count == 0
+              && Link.GatherMs == 2000 && Link.LinkMs == 12000 && Link.InviteLifeS == 900,
+              $"the STUN rows are Google's then Cloudflare's and nothing else, one to a connection (row 0 configures {url0}); a row is passed over after 2,000 ms, a reply has 12,000 ms, an invite 900 s");
+        // THE SEAMS ARE MUTABLE, so they stay out of the build's fingerprint: swapped, it is the build's
+        // (a readonly StunRow[] would be read: an array of records is Plain)
+        var serversField = typeof(Link).GetField(nameof(Link.Servers), BindingFlags.Public | BindingFlags.Static);
+        Link.Servers = new[] { SilentA, SilentB, BoxStun };
+        int swapped = FingerprintNow();
+        Link.Servers = _servers;
+        Check(serversField != null && !serversField.IsInitOnly && !serversField.IsLiteral && swapped == Net.Protocol,
+              $"Link.Servers is mutable and outside the build's fingerprint (with the box's three rows {swapped:x8}, the build's {Net.Protocol:x8}{Moved(swapped)})");
+
+        var box = Box("GET", "/box/stats");
+        bool boxUp = box.TryGetProperty("stun", out var stunStats) && stunStats.GetProperty("bound").GetBoolean()
+                     && box.GetProperty("silent_udp").EnumerateObject().Count() == 2 && box.GetProperty("silent_tcp").GetProperty("bound").GetBoolean();
+        Check(boxUp, $"the box is up: its STUN responder on 127.0.41.1:3478, the silent UDP ports 19482 and 19483, the silent TCP port 19481 ({box})");
+        if (!boxUp) return;
+
+        var hostMp = new WebRtcMultiplayerPeer();
+        hostMp.CreateServer(Link.Channels());
+        var guestMps = new List<WebRtcMultiplayerPeer>();
+        var walks = new List<Link.Gather>();
+        Link.Gather HostWalk(bool stun) { var g = new Link.Gather(hostMp, Rng.RandiRange(2, int.MaxValue), stun, c => c.CreateOffer()); walks.Add(g); return g; }
+        // A GUEST'S PEER 1, answering an invite: the spike's offer, with none of its candidates (a guest
+        // adds the host's only after its walk, Link.Gather)
+        Link.Gather GuestWalk()
+        {
+            var mp = new WebRtcMultiplayerPeer();
+            mp.CreateClient(Rng.RandiRange(2, int.MaxValue), Link.Channels());
+            guestMps.Add(mp);
+            var g = new Link.Gather(mp, 1, true, c => c.SetRemoteDescription("offer", SpikeOffer));
+            walks.Add(g);
+            return g;
+        }
+        try
+        {
+            // TWO ROWS THAT NEVER ANSWER: each is given up at GatherMs and the connection made again on the
+            // next with the same id; the bundle is sealed at 4,000 ms with this PC's own addresses and the
+            // flag set, each seal on the first frame after its deadline
+            Link.Servers = new[] { SilentA, SilentB }; Link.StunFirst = 0;
+            var silent = new[] { HostWalk(true), GuestWalk() };
+            await Walk(8000, silent);
+            string Late(Link.Gather g)
+            {
+                // on time: the step before each seal came before its deadline, so the seal is on the first
+                // frame after it (the rebuild between the two rows is not a frame, and is not counted)
+                var timed = g.Seals.Where(s => !s.complete).ToList();
+                long took = g.Done ? (long)(g.DoneAt - g.Began) : -1;
+                bool ok = g.Done && g.NoStun && g.Row == 1 && g.Added == Error.Ok && g.Lines.Length > 0 && g.Lines.All(l => l.EndsWith(" typ host", StringComparison.Ordinal))
+                          && g.Seals.Count == 2 && timed.Count == 2 && timed.All(s => s.before < s.deadline && s.deadline <= s.at) && took >= 4000;
+                return ok ? "" : Walked(g);
+            }
+            string hostLate = Late(silent[0]), guestLate = Late(silent[1]);
+            Check(hostLate == "" && guestLate == "" && Link.StunFirst == 2,
+                  $"with two rows that never answer, a host's and a guest's bundle are sealed at 4,000 ms with host candidates only and the flag set, each row given up on the first frame after its 2,000 ms, the id taken back at once (host: {(hostLate == "" ? Walked(silent[0]) : hostLate)}; guest: {(guestLate == "" ? $"{(long)(silent[1].DoneAt - silent[1].Began)} ms" : guestLate)}; StunFirst {Link.StunFirst})");
+            // THE MEMORY: the next gather in the process skips the rows that did not answer
+            var memory = HostWalk(true);
+            await Walk(3000, memory);
+            long memoryMs = memory.Done ? (long)(memory.DoneAt - memory.Began) : -1;
+            Check(memory.Done && memory.Row == -1 && memory.NoStun && memoryMs >= 0 && memoryMs < 100,
+                  $"after no row answered, the next gather asks none and is sealed in under 100 ms ({memoryMs} ms; {Walked(memory)})");
+
+            // ROW 2 ANSWERS: the walk passes row 1 at 2,000 ms, stops at row 2 with a server-reflexive
+            // candidate, and remembers it
+            Link.Servers = new[] { SilentA, BoxStun }; Link.StunFirst = 0;
+            var second = new[] { HostWalk(true), GuestWalk() };
+            await Walk(8000, second);
+            string Answered(Link.Gather g)
+            {
+                bool srflx = g.Lines.Any(l => l.Contains(" typ srflx", StringComparison.Ordinal));
+                bool ok = g.Done && g.Row == 1 && g.Added == Error.Ok && g.Seals.Count == 2 && !g.Seals[0].complete
+                          && (LoopbackSrflx ? srflx && !g.NoStun && g.Seals[1].complete : g.NoStun);
+                return ok ? "" : Walked(g);
+            }
+            string hostSecond = Answered(second[0]), guestSecond = Answered(second[1]);
+            Check(hostSecond == "" && guestSecond == "" && Link.StunFirst == (LoopbackSrflx ? 1 : 2),
+                  $"with row 1 silent and row 2 the box's STUN responder, a host's and a guest's walk stop at row 2 with a server-reflexive candidate, and StunFirst is 1 (host: {(hostSecond == "" ? Walked(second[0]) : hostSecond)}; guest: {(guestSecond == "" ? "row 2" : guestSecond)}; StunFirst {Link.StunFirst})");
+
+            // THE SEALING RULE (v1 §2.6 S2): 20 gathers against the box's responder, each sealed by
+            // Link.Sealed with its server-reflexive candidate in it...
+            Link.Servers = new[] { BoxStun }; Link.StunFirst = 0;
+            var answered = Enumerable.Range(0, 20).Select(_ => HostWalk(true)).ToArray();
+            await Walk(5000, answered);
+            var unsealed = answered.Where(g => !(g.Done && g.Seals.Count == 1 && g.Seals[0].complete
+                                                 && g.Lines.Any(l => l.Contains(" typ srflx", StringComparison.Ordinal)) == LoopbackSrflx)).ToList();
+            Check(unsealed.Count == 0, $"20 gathers against a STUN server that answers are each sealed by Link.Sealed, the server-reflexive candidate inside ({20 - unsealed.Count} of 20{(unsealed.Count == 0 ? "" : "; " + Walked(unsealed[0]))})");
+            // ...and 20 with no STUN, each holding every host candidate that arrives in the second after
+            var own = Enumerable.Range(0, 20).Select(_ => HostWalk(false)).ToArray();
+            await Walk(3000, own);
+            ulong settle = RtcPair.Now + 1000;
+            while (RtcPair.Now < settle) { hostMp.Poll(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            var missed = own.Where(g => !(g.Done && g.Seals.Count == 1 && g.Seals[0].complete && g.Arrived.All(l => g.Lines.Contains(l)))).ToList();
+            Check(missed.Count == 0,
+                  $"20 gathers with no STUN, each sealed one poll after Complete, hold every host candidate a second later holds ({20 - missed.Count} of 20{(missed.Count == 0 ? "" : $"; {Walked(missed[0])}, then {string.Join(" | ", missed[0].Arrived)}")})");
+        }
+        finally
+        {
+            foreach (var g in walks) g.Close();
+            hostMp.Close(); hostMp.Dispose();
+            foreach (var mp in guestMps) { mp.Close(); mp.Dispose(); }
+        }
+    }
+
+    // ── WEBRTC, R1: THE ROWS END TO END, THE COURIER, THE PAIR PROXY (§3.3, §10.2, §10.4 R1) ────────
+    // A SESSION FOR THE ROWS: both desks over a real Rendezvous.Pending, answering with drawn invites and
+    // replies, recording what each row asked of it. R2's Net is the real one.
+    sealed class Desk : Rendezvous.IHostDesk, Rendezvous.IGuestDesk
+    {
+        public Rendezvous.Pending Pending { get; } = new();
+        public bool Full { get; set; }
+        public int Proto = Net.Protocol;                        // what this desk's knocks carry
+        public uint Mark = Rendezvous.Guest;                    // ...and whose they are
+        public TaskCompletionSource<Rendezvous.Record> Hold;    // set: the next invite waits on it (a knock in flight)
+        public int Asked;                                       // invites the listener asked for
+        public readonly List<Rendezvous.Record> Invites = new(), Replies = new(), Answered = new(), Made = new();
+        public readonly List<int> Hung = new();
+        public readonly List<Rendezvous.Why> Refusals = new();
+        // an invite from this desk's host, its entry Waiting
+        public Rendezvous.Record Invitation(string row, uint guest)
+        {
+            var inv = VaryRecord(Rendezvous.Kind.Invite);
+            inv.Proto = Net.Protocol; inv.Build = Game.Build;
+            Pending.Add(new Rendezvous.Entry { Id = inv.Id, Row = row, Guest = guest, Stage = Rendezvous.Stage.Waiting });
+            Invites.Add(inv);
+            return inv;
+        }
+        public Task<Rendezvous.Record> Invite(Rendezvous.Record knock)
+        {
+            Asked++;
+            return Hold?.Task ?? Task.FromResult(Invitation(Rendezvous.Address.Id, knock.Guest));
+        }
+        public void Hang(int id) { Hung.Add(id); Pending.Remove(id); }
+        public void Replied(Rendezvous.Record reply)
+        {
+            Replies.Add(reply);
+            if (Pending.Find(reply.Id) is { } e) e.Stage = Rendezvous.Stage.Linking;
+        }
+        public void Refused(Rendezvous.Record knock, Rendezvous.Why why) => Refusals.Add(why);
+        public Rendezvous.Record Knock() => new() { Kind = Rendezvous.Kind.Knock, Proto = Proto, Guest = Mark, Build = Game.Build, Name = "Harbour8" };
+        public Task<Rendezvous.Record> Answer(Rendezvous.Record invite)
+        {
+            Answered.Add(invite);
+            var reply = VaryRecord(Rendezvous.Kind.Reply);
+            reply.Id = invite.Id;
+            Made.Add(reply);
+            return Task.FromResult(reply);
+        }
+    }
+    static bool IsRefusal(Rendezvous.Record r, Rendezvous.Why why) =>
+        r is { Kind: Rendezvous.Kind.Refuse } && r.Why == why && r.Proto == Net.Protocol && r.Build == Game.Build;
+
+    // THE COURIER (§10.2): the harness carrying codes as Discord would. Its FILES sit beside the project
+    // (res://, globalized: the scratch copy both roles of a run share), one per code, named for the host's
+    // listener port and the code's number.
+    static string CourierFile(string kind, int port, int n) => ProjectSettings.GlobalizePath($"res://{kind}-{port}-{n}.txt");
+    // ITS REWRITE, for the box: the code unpacked with the game's own codec, one IPv4 host candidate kept
+    // with the box's address and the given port in place of this PC's, packed again. `real` is the port it
+    // replaced: libjuice binds one socket on every address, so 127.0.0.1 and that port reach it.
+    const string BoxHost = "127.0.42.1";
+    static string Rewrite(string code, Rendezvous.Kind kind, int boxPort, out int real)
+    {
+        var r = Rendezvous.Find(code, kind) ?? throw new FormatException($"the courier found no {kind} code");
+        var keep = r.Candidates.FirstOrDefault(c => c.Type == Rendezvous.Via.Host && c.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                   ?? throw new FormatException($"the {kind} has no IPv4 host candidate for the courier to keep");
+        real = keep.Port;
+        r.Candidates = new List<Rendezvous.Candidate> { keep with { Address = System.Net.IPAddress.Parse(BoxHost), Port = boxPort } };
+        return Rendezvous.Encode(r);
+    }
+
+    // Frames with every row polled (R2's Net._Process), until `done` or `ms` pass.
+    async Task<bool> Polling(Func<bool> done, int ms)
+    {
+        ulong end = RtcPair.Now + (ulong)ms;
+        while (!done() && RtcPair.Now < end)
+        {
+            foreach (var p in Rendezvous.Paths) p.Poll();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        return done();
+    }
+
+    // THE ROWS END TO END with dummy codes (no plugin needed): the address row over a listener on a port
+    // the OS picks (never 27015: the main checkout's runs use it), the paste row through the courier's files
+    async Task Rows()
+    {
+        Check(Net.DefaultPort == 27015 && Rendezvous.ListenFrom == 27015
+              && Rendezvous.ListenPorts(Net.DefaultPort).SequenceEqual(new[] { 27015, 27016, 27017, 27018, 27019, 27020, 27021, 27022, 27023, 27024, 0 })
+              && Rendezvous.ListenPorts(0).SequenceEqual(new[] { 0 }) && Rendezvous.ReadMs == 3000 && Rendezvous.KnocksPerMinute == 20 && Rendezvous.PickupMs == 500,
+              $"the listener takes 27015, then 27016 ... 27024, then a port the OS picks; a record has 3 s to arrive, an address may knock 20 times a minute, the clipboard is read at most twice a second (§3.3 B, §3.4; {string.Join(",", Rendezvous.ListenPorts(Net.DefaultPort))})");
+        // THE GUEST'S MARK: drawn once per process, never 0, outside the build's fingerprint
+        var markField = typeof(Rendezvous).GetField("_guest", BindingFlags.NonPublic | BindingFlags.Static);
+        uint mark = Rendezvous.Guest;
+        markField?.SetValue(null, (uint?)(mark ^ 0x80000000u));
+        int swapped = FingerprintNow();
+        markField?.SetValue(null, (uint?)mark);
+        Check(mark != 0 && Rendezvous.Guest == mark && markField != null && !markField.IsInitOnly && !markField.IsLiteral && swapped == Net.Protocol
+              && typeof(Rendezvous).GetField(nameof(Rendezvous.Guest), BindingFlags.Public | BindingFlags.Static) == null,
+              $"the guest's mark is drawn once per process, never 0, a property over a mutable field outside the build's fingerprint ({mark:x8}; swapped {swapped:x8}, the build's {Net.Protocol:x8}{Moved(swapped)})");
+
+        var host = new Desk();
+        int from = Rendezvous.ListenFrom;
+        var clipWas = Rendezvous.Clipboard;
+        var files = new List<string>();
+        Rendezvous.ListenFrom = 0;
+        try
+        {
+            Rendezvous.Address.Open(host);
+            Rendezvous.Paste.Open(host);
+            int port = Rendezvous.ListenPort;
+            await PasteRows(host, port, files);
+            await AddressRows(host, port);
+        }
+        finally
+        {
+            Rendezvous.Address.Close(); Rendezvous.Paste.Close();
+            Rendezvous.ListenFrom = from; Rendezvous.Clipboard = clipWas;
+            foreach (var f in files) System.IO.File.Delete(f);
+        }
+    }
+
+    async Task AddressRows(Desk host, int port)
+    {
+        // KNOCK, INVITE, REPLY: three joins as a player types the host's address -- IPv4, IPv6, a name --
+        // in a varied order, all from one game process (one mark)
+        var forms = new List<string> { $"127.0.0.1:{port}", System.Net.Sockets.Socket.OSSupportsIPv6 ? $"[::1]:{port}" : $"127.0.0.1:{port}", $"localhost:{port}" }
+                    .OrderBy(_ => Rng.Randi()).ToList();
+        var guest = new Desk();
+        var joins = new List<string>();
+        // one session serves both rows: the paste rounds' entries are on this desk already
+        int inv0 = host.Invites.Count, pending0 = host.Pending.Count, hung0 = host.Hung.Count;
+        foreach (var at in forms)
+        {
+            int replies = host.Replies.Count, invites = host.Invites.Count;
+            var row = Rendezvous.PathFor(at);
+            Rendezvous.Record got;
+            try { got = await row.Start(at, guest); }
+            catch (Exception e) { joins.Add($"{at}: {e.GetType().Name}: {e.Message}"); continue; }
+            await RtcUntil(() => host.Replies.Count > replies, Rendezvous.ReadMs);
+            var inv = host.Invites.Count > invites ? host.Invites[^1] : null;
+            var entry = inv == null ? null : host.Pending.Find(inv.Id);
+            bool ok = row == Rendezvous.Address && inv != null && Said(got) == Said(inv) && guest.Answered.Count > 0 && Said(guest.Answered[^1]) == Said(inv)
+                      && host.Replies.Count == replies + 1 && guest.Made.Count > 0 && Said(host.Replies[^1]) == Said(guest.Made[^1]) && host.Replies[^1].Id == inv.Id
+                      && entry is { Stage: Rendezvous.Stage.Linking, Row: "address" } && entry.Guest == guest.Mark;
+            joins.Add(ok ? $"{at} ok" : $"{at}: got {Said(got)}; {host.Replies.Count - replies} replies, entry {entry?.Stage.ToString() ?? "none"}");
+        }
+        Check(joins.Count == 3 && joins.All(j => j.EndsWith(" ok", StringComparison.Ordinal)),
+              $"by the address row a knock brings an invite, and the reply reaches the host's desk with the invite's id, its entry Linking: over IPv4, IPv6 and a name ({string.Join("; ", joins)})");
+
+        // ONE PENDING ENTRY PER GUEST: each newer knock hung the older entry up through the desk; a knock
+        // from another game process keeps its own
+        var second = new Desk { Mark = guest.Mark ^ 0x80000000u };
+        var secondGot = await Rendezvous.Address.Start($"127.0.0.1:{port}", second);
+        await RtcUntil(() => host.Replies.Any(r => r.Id == secondGot.Id), Rendezvous.ReadMs);
+        var mine = host.Pending.OfGuest(guest.Mark);
+        var joined = host.Invites.Skip(inv0).ToList();
+        Check(joined.Count >= 3 && mine.Count == 1 && mine[0].Id == joined[2].Id && host.Hung.Skip(hung0).SequenceEqual(joined.Take(2).Select(i => i.Id))
+              && secondGot.Kind == Rendezvous.Kind.Invite && host.Pending.OfGuest(second.Mark).Count == 1 && host.Pending.Count == pending0 + 2,
+              $"a newer knock from the same guest leaves one pending entry, the older ones hung up through the desk; another guest's keeps its own ({host.Pending.Count - pending0} pending, {host.Hung.Count - hung0} hung, {mine.Count} for the first guest)");
+
+        // REFUSED, and read by the dialer: no room, another build; each refusal carries the host's build
+        host.Full = true;
+        var third = new Desk { Mark = guest.Mark ^ 0x40000000u };
+        var full = await Rendezvous.Address.Start($"127.0.0.1:{port}", third);
+        host.Full = false;
+        var stranger = new Desk { Mark = guest.Mark ^ 0x20000000u, Proto = Net.Protocol ^ 1 };
+        var build = await Rendezvous.Address.Start($"localhost:{port}", stranger);
+        Check(IsRefusal(full, Rendezvous.Why.Full) && IsRefusal(build, Rendezvous.Why.Build) && host.Refusals.SequenceEqual(new[] { Rendezvous.Why.Full, Rendezvous.Why.Build })
+              && third.Answered.Count == 0 && stranger.Answered.Count == 0 && host.Pending.Count == pending0 + 2,
+              $"a knock is refused `full` when the host has no room and `build` from another build, each read by the dialer with the host's build in it, nothing made for either ({Said(full)}; {Said(build)})");
+
+        // THE RATE, on a fresh listener: 20 knocks a minute from one address, the 21st refused
+        Rendezvous.Address.Close();
+        Rendezvous.Address.Open(host);
+        int fresh = Rendezvous.ListenPort;
+        var said = new List<string>();
+        for (int i = 0; i < 21; i++)
+        {
+            var r = await Rendezvous.Address.Start($"127.0.0.1:{fresh}", guest);
+            said.Add(r.Kind == Rendezvous.Kind.Invite ? "i" : r.Why.ToString());
+        }
+        Check(said.Take(20).All(s => s == "i") && said[20] == "Rate" && host.Refusals[^1] == Rendezvous.Why.Rate && host.Pending.OfGuest(guest.Mark).Count == 1,
+              $"an address that knocks 21 times in a minute is refused `rate` the 21st time, each of the 20 before invited ({string.Join(",", said)}; port {fresh})");
+
+        // CLOSED: a knock waiting on the host's desk when the listener closes is refused `closed`, and the
+        // invite the desk makes after that is hung up
+        Rendezvous.Address.Close();
+        Rendezvous.Address.Open(host);
+        host.Hold = new TaskCompletionSource<Rendezvous.Record>();
+        int asked = host.Asked;
+        var fourth = new Desk { Mark = guest.Mark ^ 0x10000000u };
+        var closing = Rendezvous.Address.Start($"127.0.0.1:{Rendezvous.ListenPort}", fourth);
+        bool waiting = await RtcUntil(() => host.Asked > asked, Rendezvous.ReadMs);
+        Rendezvous.Address.Close();
+        var closed = await closing;
+        var late = host.Invitation(Rendezvous.Address.Id, fourth.Mark);
+        host.Hold.SetResult(late);
+        host.Hold = null;
+        await RtcUntil(() => host.Hung.Contains(late.Id), 1000);
+        Check(waiting && IsRefusal(closed, Rendezvous.Why.Closed) && host.Hung.Contains(late.Id) && host.Pending.Find(late.Id) == null && fourth.Answered.Count == 0,
+              $"a knock waiting on the host's desk when the listener closes is refused `closed`, and the invite made after is hung up ({Said(closed)}; waiting {waiting}, late invite hung {host.Hung.Contains(late.Id)})");
+    }
+
+    async Task PasteRows(Desk host, int port, List<string> files)
+    {
+        int reads = 0;
+        string clip = "";
+        Rendezvous.Clipboard = () => { reads++; return clip; };
+        // THREE ROUNDS THROUGH THE COURIER'S FILES: the host posts its invite as a message (and it is on the
+        // host's own clipboard); the friend copies the whole message into JOIN; the friend's whole reply
+        // message comes back, and the host's game takes it off the clipboard once the host copies it
+        var friend = new Desk();
+        var rounds = new List<string>();
+        for (int n = 0; n < 3; n++)
+        {
+            var inv = host.Invitation(Rendezvous.Paste.Id, 0);
+            string invFile = CourierFile("invite", port, n), repFile = CourierFile("reply", port, n);
+            files.Add(invFile); files.Add(repFile);
+            clip = Rendezvous.Encode(inv);
+            System.IO.File.WriteAllText(invFile, Message(clip));
+            string text = System.IO.File.ReadAllText(invFile);
+            var row = Rendezvous.PathFor(text);
+            var got = row == null ? null : await row.Start(text, friend);
+            var reply = friend.Made.Count > n ? friend.Made[^1] : null;
+            if (reply == null) { rounds.Add($"round {n}: the {row?.Id ?? "no"} row made no reply"); continue; }
+            System.IO.File.WriteAllText(repFile, Message(Rendezvous.Encode(reply)));
+            int before = host.Replies.Count;
+            await Polling(() => host.Replies.Count > before, 600);
+            bool leftInvite = host.Replies.Count == before;
+            clip = System.IO.File.ReadAllText(repFile);
+            bool took = await Polling(() => host.Replies.Count > before, 2000);
+            var entry = host.Pending.Find(inv.Id);
+            bool ok = row == Rendezvous.Paste && got != null && Said(got) == Said(inv) && leftInvite && took && host.Replies.Count == before + 1
+                      && Said(host.Replies[^1]) == Said(reply) && entry is { Stage: Rendezvous.Stage.Linking, Row: "paste", Guest: 0 };
+            rounds.Add(ok ? "ok" : $"round {n}: row {row?.Id}, joined {got != null}, own invite left {leftInvite}, reply taken {took}, entry {entry?.Stage.ToString() ?? "none"}");
+        }
+        Check(rounds.Count == 3 && rounds.All(r => r == "ok"),
+              $"by the paste row, through the courier's files: the friend joins by the whole invite message, and the host's game takes the friend's whole reply message off the clipboard -- never its own invite -- its entry Linking (three rounds: {string.Join("; ", rounds)})");
+
+        // ONCE, AT MOST TWICE A SECOND, ONLY WHILE SOMETHING IS PENDING: the last reply is not taken again
+        // (the same text, then re-armed with its entry Linking), nor a reply to no invite; with nothing
+        // pending, or the row closed, the clipboard is not read at all
+        int replies = host.Replies.Count;
+        ulong t0 = RtcPair.Now;
+        int r0 = reads;
+        await Polling(() => false, 1200);
+        long span = (long)(RtcPair.Now - t0);
+        int paced = reads - r0;
+        Rendezvous.Paste.Open(host);
+        await Polling(() => false, 600);
+        clip = Message(Rendezvous.Encode(VaryRecord(Rendezvous.Kind.Reply)));
+        await Polling(() => false, 600);
+        bool never = host.Replies.Count == replies;
+        Rendezvous.Paste.Open(new Desk());
+        int r1 = reads;
+        await Polling(() => false, 600);
+        int idle = reads - r1;
+        Rendezvous.Paste.Close();
+        await Polling(() => false, 600);
+        int shut = reads - r1 - idle;
+        Check(never && paced >= 2 && paced <= 1 + span / 500 && idle == 0 && shut == 0,
+              $"the clipboard pickup hands a reply over once, and neither a reply to a Linking entry nor one to no invite; it reads at most every 500 ms, and not at all with nothing pending or the row closed ({host.Replies.Count - replies} more taken; {paced} reads in {span} ms; {idle} idle, {shut} closed)");
+    }
+
+    // THE PAIR PROXY (§10.2's unknown): an in-process pair whose bundles cross as codes the courier
+    // rewrote -- one IPv4 host candidate kept, its address the box pair's -- so each side knows the other
+    // only by a box address, and every datagram between them crosses the box
+    async Task Proxied()
+    {
+        var made = Box("POST", "/box/pair");
+        if (!made.TryGetProperty("n", out var nAt)) { Check(false, $"the box makes a pair for the pair-proxy check ({made})"); return; }
+        int n = nAt.GetInt32(), boxA = made.GetProperty("a").GetInt32(), boxB = made.GetProperty("b").GetInt32();
+        int id = Rng.RandiRange(2, int.MaxValue), hostPort = 0;
+        var carried = new List<string>();
+        (string, string[]) Carry(Rendezvous.Kind kind, string sdp, string[] lines)
+        {
+            bool invite = kind == Rendezvous.Kind.Invite;
+            var r = Rendezvous.Sdp.Strip(kind, sdp, lines);
+            r.Id = id; r.Name = "Harbour8";
+            if (invite) { r.Proto = Net.Protocol; r.Build = Game.Build; }
+            string code = Rewrite(Rendezvous.Encode(r), kind, invite ? boxA : boxB, out int real);
+            if (invite) hostPort = real;
+            else Box("POST", $"/box/pair/{n}?host=127.0.0.1:{hostPort}&guest=127.0.0.1:{real}&seed={Seed}");
+            var arrived = Rendezvous.Find(Message(code), kind);
+            var rebuilt = arrived.Candidates.Select(Rendezvous.Sdp.Line).ToArray();
+            carried.Add($"{kind}: {string.Join(" | ", rebuilt)}");
+            return (Rendezvous.Sdp.Build(arrived), rebuilt);
+        }
+        var p = new RtcPair(id, carry: Carry);
+        try
+        {
+            ulong t0 = RtcPair.Now;
+            bool up = await RtcUntil(() => p.Connected, 10000, p);
+            var st = Box("GET", "/box/stats").GetProperty("pairs").GetProperty($"{n}");
+            int toHost = st.GetProperty("to_host").GetInt32(), toGuest = st.GetProperty("to_guest").GetInt32();
+            Check(up && toHost > 0 && toGuest > 0 && carried.Count == 2 && carried.All(c => c.Contains($" {BoxHost} ", StringComparison.Ordinal) && !c.Contains('|')),
+                  $"an in-process pair whose codes the courier rewrote to the box's address connects through the box, datagrams both ways ({(up ? $"{RtcPair.Now - t0} ms" : p.Stage())}; box pair {n}: {toHost} to the host, {toGuest} to the guest, {st.GetProperty("unregistered")} before its endpoints were known; {string.Join("; ", carried)})");
+            if (!up) return;
+            // THE BLACKHOLE (R4's watchdog leans on it): a packet sent while the box drops every proxied
+            // datagram for 1 s arrives after it lifts, and the box counts what it dropped
+            int dropped = Box("GET", "/box/stats").GetProperty("blackholed").GetInt32();
+            ulong t1 = RtcPair.Now;
+            Box("POST", "/box/blackhole?s=1");
+            p.Host.TransferChannel = StreamChannel; p.Host.TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered; p.Host.SetTargetPeer(p.Id);
+            p.Host.PutPacket(BitConverter.GetBytes(p.Id));
+            bool through = await RtcUntil(() => p.Guest.GetAvailablePacketCount() > 0, 10000, p);
+            long after = (long)(RtcPair.Now - t1);
+            int blackholed = Box("GET", "/box/stats").GetProperty("blackholed").GetInt32() - dropped;
+            bool whole = through && p.Guest.GetPacket() is { Length: 4 } body && BitConverter.ToInt32(body) == p.Id;
+            Check(whole && after >= 1000 && blackholed > 0,
+                  $"a packet sent into a 1 s blackhole arrives after it lifts, and the box counts what it dropped ({(through ? $"{after} ms" : "never")}; {blackholed} dropped)");
+        }
+        finally { p.Free(); }
     }
 
     async Task WebRtcPairs()
     {
-        if (_replyWindow != null && await _replyWindow is { } measured)
+        // the number every friend's countdown shows, proved against the measured literal here; the
+        // pair below reads the row
+        Check(Link.ReplyWindowS == 30, $"Link.ReplyWindowS is the 30 s R0 measured (DESIGN.md: every delay to 60 s connected; {Link.ReplyWindowS})");
+        if (_replyWindow != null)
         {
-            // the window is the longest delay up to which EVERY pair connected
-            int window = 0;
-            foreach (var m in measured) { if (m.ms < 0) break; window = m.delay; }
-            int proposed = Math.Min(window - 10, 30);
-            GD.Print($"  reply window: {string.Join(" · ", measured.Select(m => $"{m.delay} s {(m.ms >= 0 ? $"connected {m.ms} ms after" : "NOT connected")} (guest {m.guest} at the reply)"))}; "
-                     + $"every delay up to {window} s connected, so Link.ReplyWindowS = {proposed}");
-            Check(proposed >= 15,
-                  $"the reply window leaves a friend at least 15 s: Link.ReplyWindowS would be {proposed} (every delay up to {window} s connected; under 15 stops the batch, network_webrtc.md §3.4)");
+            var w = await _replyWindow;
+            Check(w.connected && w.appliedAfter >= Link.ReplyWindowS * 1000L && w.upAfter >= 0 && w.upAfter <= 2000,
+                  $"a host that takes the reply {Link.ReplyWindowS} s after the friend made it still connects, within 2 s of taking it (taken after {w.appliedAfter} ms, connected {w.upAfter} ms later; {w.stage})");
         }
+        // the codec needs no plugin: it runs on every machine
+        try { Codes(); }
+        catch (Exception ex) { Check(false, $"the codec checks threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
+        // nor do the rows end to end: dummy codes over a real listener and the courier's files
+        try { await Rows(); }
+        catch (Exception ex) { Check(false, $"the row checks threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
         // THE PLUGIN LOADED, asked by the literal names the spike read (SPIKE Q1), so the row is
         // proved against them here and every other check reads the row.
         bool loaded = GDExtensionManager.GetLoadedExtensions().Contains("res://addons/webrtc_native/webrtc_native.gdextension");
@@ -334,6 +1070,13 @@ public partial class _Test : Node
         bool up = await RtcUntil(() => a.Connected, 5000, a);
         Check(up, $"an in-process pair connects, the host offering, bundles sealed and swapped whole ({RtcPair.Now - t0} ms, id {a.Id}{(up ? "" : "; " + a.Stage())})");
         if (!up) { a.Free(); return; }
+        // THE CODEC ON THIS PC'S OWN BUNDLES (§4.2, §10.4 R1): the live pair's offer and answer,
+        // stripped to a code and rebuilt, equal the plugin's own byte for byte but the o= id
+        string liveOffer, liveAnswer;
+        try { liveOffer = ThroughCodec(Rendezvous.Kind.Invite, a.Offer, a.OfferLines); } catch (FormatException ex) { liveOffer = "refused: " + ex.Message; }
+        try { liveAnswer = ThroughCodec(Rendezvous.Kind.Reply, a.Answer, a.AnswerLines); } catch (FormatException ex) { liveAnswer = "refused: " + ex.Message; }
+        Check(liveOffer == "" && liveAnswer == "",
+              $"the live pair's offer and answer, through the codec and back, equal the plugin's own byte for byte but the o= id ({(liveOffer + liveAnswer == "" ? $"{a.OfferLines.Length} and {a.AnswerLines.Length} candidates: {string.Join(" | ", a.OfferLines)}" : liveOffer + " " + liveAnswer)})");
         // every row's data channel open at both ends -- 15: channel 0's three and the 12 above -- and
         // every one of them reliable whatever the row asked for (Godot writes maxPacketLifetime, the
         // plugin reads maxPacketLifeTime: §2.1), which is why each row has its own
@@ -356,6 +1099,25 @@ public partial class _Test : Node
         }
         Check(got.SequenceEqual(new[] { "1@12:ok", $"{a.Id}@12:ok" }),
               $"a packet on the highest row (12) arrives on it, host to guest and guest to host ({string.Join("; ", got)})");
+        // WHICH ROW AN RPC RIDES, by name (§3.2's rows: Ships 2, Raiders 5, Boss 10; the harness's stream 12)
+        int[] rode = { Link.ChannelOf("NetShipState"), Link.ChannelOf("NetRaiders"), Link.ChannelOf("NetBoss"), Link.ChannelOf(nameof(NetStream)), Link.ChannelOf("NoSuchRpc") };
+        Check(rode.SequenceEqual(new[] { 2, 5, 10, 12, -1 }), $"Link.ChannelOf names the row an RPC rides: ships 2, raiders 5, boss 10, the harness's stream 12, none -1 ({string.Join(", ", rode)})");
+        // THE BACKLOG (§3.8): what waits on a row's data channel beyond the SCTP socket's own send buffer,
+        // which Link.Backlog cannot see (R1's first run put 1 MB, all of it inside that buffer, and read
+        // 0). So 200,000 B at a time, in one frame with no poll between, until the row backs up (8 MB at
+        // most: past that the plugin reports nothing); then it drains to nothing once the far side has
+        // taken it all
+        a.Host.TransferChannel = StreamChannel; a.Host.TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered; a.Host.SetTargetPeer(a.Id);
+        var burst = new byte[200000];
+        int put = 0, waiting = 0, taken = 0;
+        while (waiting == 0 && put < 40) { a.Host.PutPacket(burst); put++; waiting = Link.Backlog(a.Host, a.Id, StreamChannel); }
+        bool drained = await RtcUntil(() =>
+        {
+            for (; a.Guest.GetAvailablePacketCount() > 0; taken++) a.Guest.GetPacket();
+            return taken == put && Link.Backlog(a.Host, a.Id, StreamChannel) == 0;
+        }, 10000, a);
+        Check(waiting > 0 && drained && Link.Backlog(a.Host, a.Id, NetChannels.Ships) == 0 && Link.Backlog(a.Host, Rng.RandiRange(2, int.MaxValue), StreamChannel) == 0,
+              $"Link.Backlog reads a burst waiting on row 12 once it outgrows the SCTP send buffer ({waiting} B after {put} packets of 200,000 B), and nothing once the guest has taken all {put} ({(drained ? "drained" : $"{taken} taken, {Link.Backlog(a.Host, a.Id, StreamChannel)} B still waiting")}); an idle row and an unknown peer read 0");
         // a guest's Close() is seen by the host within 1 s
         a.Guest.Close(); t0 = RtcPair.Now;
         await RtcUntil(() => a.HostLostAt > 0, 3000, a);
@@ -389,6 +1151,12 @@ public partial class _Test : Node
         Check(all.Sum(p => p.Handlers) >= 12 && all.Sum(p => p.OffMain) == 0,
               $"every WebRTC signal handler runs on the main thread ({all.Sum(p => p.Handlers)} handlers, {all.Sum(p => p.OffMain)} off it)");
         foreach (var p in all) p.Free();
+
+        try { await Walks(); }
+        catch (Exception ex) { Check(false, $"the STUN walk checks threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
+        finally { Link.Servers = _servers; Link.StunFirst = 0; }
+        try { await Proxied(); }
+        catch (Exception ex) { Check(false, $"the pair-proxy checks threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
 
         // NOTHING LEAKS: three connect-and-close cycles, the first to warm up, the count after it
         // against the count after the other two. A leaked pair is 34 objects (two peers, two
@@ -440,7 +1208,7 @@ public partial class _Test : Node
         var argv = OS.GetCmdlineUserArgs();
         string role = argv.FirstOrDefault() ?? "solo";
         SeedFrom(argv);
-        if (role == "solo" && argv.Contains("replywindow")) _replyWindow = MeasureReplyWindow();
+        if (role == "solo") { _partsAtStart = FingerprintParts(); _hashAtStart = FingerprintNow(); _replyWindow = ReplyWindowHolds(); }
         Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // six windows, nobody listening
         NoRouterNoInternet();
         await Wait(0.3);
@@ -731,8 +1499,10 @@ public partial class _Test : Node
         // against the list this test exercises. Add a field and this goes red until it is either
         // set above or named here as deliberately not persisted. Found the hard way: the base
         // economy fields were added, not saved, and the round trip passed.
+        // Bought is a property now (J9c, the fingerprint): reflection sees the compiler's backing
+        // field, not the name a player reads, the same way LastSaveRenamed's already does below.
         var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels",
-                                "BaseStock", "BossCleared", "Bonuses", "Bought", "Class", "Exp",
+                                "BaseStock", "BossCleared", "Bonuses", "<Bought>k__BackingField", "Class", "Exp",
                                 "GearHold", "GearLevel", "GearLocked", "HintsOff", "HintsSeen", "Id", "Level", "Loadout", "Main",
                                 "Name", "PaidKills", "Peak", "Points", "Spent", "TourDone", "Unclaimed" };
         // Not state a character carries: a path, and the compiler's backing field for a property
@@ -1454,6 +2224,97 @@ public partial class _Test : Node
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
     {
+        // THE PILOT IS NOT THE BUILD: nothing a run changes about the pilot enters the fingerprint. The
+        // bought upgrades were a readonly int[] -- Plain to the fingerprint -- so every purchase moved it,
+        // and a peer whose Net was first touched after a pilot loaded would have hashed that pilot's
+        // purchases. Character itself DOES contribute a few parts -- a save path, a kept-kills cap, the
+        // bounds a stat off disk is clamped to -- every one `const`, the same for every peer on this
+        // build whichever pilot is loaded; named here rather than asserted away. What must never show
+        // up is anything a PLAYER decided -- Bought chief among them -- asserted by construction (no
+        // such part) and by effect (purchases made, the fingerprint is still the build's).
+        var buildConst = new[] { "Character.Dir=", "Character.MaxBonus=", "Character.MaxStock=",
+                                  "Character.PaidKept=", "Character.SaveDelay=" };
+        var pilotParts = FingerprintParts().Where(p => p.StartsWith("Character.", StringComparison.Ordinal)
+                                                      && !buildConst.Any(c => p.StartsWith(c, StringComparison.Ordinal))).ToList();
+        var boughtWas = Character.Bought.ToArray();
+        for (int i = 0; i < Character.Bought.Length; i++) Character.Bought[i] = Rng.RandiRange(0, Progression.MaxPerUpgrade);
+        int bought = FingerprintNow();
+        boughtWas.CopyTo(Character.Bought, 0);
+        Check(pilotParts.Count == 0 && bought == Net.Protocol && typeof(Character).GetField(nameof(Character.Bought), BindingFlags.Public | BindingFlags.Static) == null,
+              $"nothing about the pilot is part of the build's fingerprint: its bought upgrades are a property over a mutable field, and buying moves nothing ({bought:x8}, the build's {Net.Protocol:x8}; {(pilotParts.Count == 0 ? "no Character part" : string.Join(" | ", pilotParts))}{Moved(bought)})");
+        // THE FINGERPRINT NEVER HASHES ITSELF, and it is whole when it is taken: Net.Protocol is a property
+        // set by Net's static constructor, after every Net static is set. As a readonly field initializer
+        // it hashed itself as 0 and every Net static below it as unset, so it differed from every
+        // fingerprint taken later in the same process (R1's first runs: 3724c77b against 7991f5f3).
+        var selfParts = FingerprintParts().Where(p => p.StartsWith("Net.Protocol", StringComparison.Ordinal)).ToList();
+        int now = FingerprintNow();
+        Check(typeof(Net).GetField(nameof(Net.Protocol), BindingFlags.Public | BindingFlags.Static) == null && selfParts.Count == 0 && _hashAtStart == Net.Protocol && now == Net.Protocol,
+              $"the build's fingerprint never hashes itself and is whole when it is taken: at the harness's start and now it is the build's ({_hashAtStart:x8} at the start, {now:x8} now, the build's {Net.Protocol:x8}{(selfParts.Count == 0 ? "" : "; " + string.Join(" | ", selfParts))})");
+        // A STRUCT ROW IS HASHED: any game value type or System.ValueTuple`N whose public fields are
+        // Plain or delegates, readonly or not (a site's post) is written out field by field -- an array
+        // of them was not hashed at all -- so one field of one row, moved, moves the fingerprint, and
+        // put back it is the build's again
+        var posts = Emplacements.PirateBase;
+        int at = Rng.RandiRange(0, posts.Length - 1);
+        var post = posts[at];
+        posts[at] = new Post(post.Row, post.At + Vector2.Right.Rotated(VaryAngle()) * Vary(1f, 50f));
+        int shifted = FingerprintNow();
+        posts[at] = post;
+        string postPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("Emplacements.PirateBase=", StringComparison.Ordinal)) ?? "none";
+        Check(shifted != Net.Protocol && FingerprintNow() == Net.Protocol && postPart.Contains("Post{At=", StringComparison.Ordinal),
+              $"a struct row is part of the build's fingerprint: one pirate-base post moved moves it, put back it is the build's again (post {at}: {shifted:x8}, the build's {Net.Protocol:x8}; {postPart[..Math.Min(90, postPart.Length)]})");
+        // A MUTABLE STRUCT ROW IS HASHED TOO: StatusGuard and TurretSpec carry no IsReadOnlyAttribute
+        // (a mount's gun has settable fields) -- StructRow used to demand it, so a StatusGuard[] and
+        // an EmplacementDef's TurretSpec? printed as their bare type name no matter their numbers, and
+        // two builds that differed only there still shook hands.
+        int gi = Rng.RandiRange(0, StatusSet.Guards.Length - 1);
+        var guardWas = StatusSet.Guards[gi];
+        StatusSet.Guards[gi] = new StatusGuard { Status = guardWas.Status, Stat = guardWas.Stat, Share = guardWas.Share + Vary(0.05f, 0.4f) };
+        int guardShifted = FingerprintNow();
+        StatusSet.Guards[gi] = guardWas;
+        string guardPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("StatusSet.Guards=", StringComparison.Ordinal)) ?? "none";
+        Check(guardShifted != Net.Protocol && FingerprintNow() == Net.Protocol && guardPart.Contains("Share=", StringComparison.Ordinal),
+              $"a mutable struct row is part of the build's fingerprint: one status guard's share moved moves it, put back it is the build's again (guard {gi}: {guardShifted:x8}, the build's {Net.Protocol:x8}; {guardPart[..Math.Min(90, guardPart.Length)]})");
+        var baseDef = Emplacements.Of(Emplacements.RowOf(Emplacements.Base));
+        var gunWas = baseDef.Gun.GetValueOrDefault();
+        var gun = gunWas; gun.Damage = gunWas.Damage + Vary(1f, 50f);
+        baseDef.Gun = gun;
+        int gunShifted = FingerprintNow();
+        baseDef.Gun = gunWas;
+        string gunPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("Emplacements.All=", StringComparison.Ordinal)) ?? "none";
+        Check(gunShifted != Net.Protocol && FingerprintNow() == Net.Protocol && gunPart.Contains("Damage=", StringComparison.Ordinal) && !gunPart.Contains("Gun=TurretSpec}", StringComparison.Ordinal),
+              $"the pirate base's mutable gun is part of the build's fingerprint: its damage moved moves it, put back it is the build's again ({gunShifted:x8}, the build's {Net.Protocol:x8})");
+        // A VALUE-TUPLE ROW IS HASHED TOO: Hub.PracticeTargets and Hub.Outposts are
+        // System.ValueTuple`N tables, a different assembly than the game's own -- StructRow only ever
+        // looked at the game's assembly, so an array of them was skipped whole, not merely printed
+        // wrong. One practice target moved, moves the fingerprint; put back it is the build's again.
+        int pi = Rng.RandiRange(0, Hub.PracticeTargets.Length - 1);
+        var targetWas = Hub.PracticeTargets[pi];
+        Hub.PracticeTargets[pi] = (targetWas.number, targetWas.at + Vector2.Right.Rotated(VaryAngle()) * Vary(1f, 50f), targetWas.armed, targetWas.fighter);
+        int targetShifted = FingerprintNow();
+        Hub.PracticeTargets[pi] = targetWas;
+        string targetPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("Hub.PracticeTargets=", StringComparison.Ordinal)) ?? "none";
+        Check(targetShifted != Net.Protocol && FingerprintNow() == Net.Protocol && targetPart != "none",
+              $"a value-tuple row is part of the build's fingerprint: one practice target moved moves it, put back it is the build's again (target {pi}: {targetShifted:x8}, the build's {Net.Protocol:x8}; {targetPart[..Math.Min(90, targetPart.Length)]})");
+        // A ROW WITH A DELEGATE FIELD IS HASHED TOO: WaveCrew.Count is a Func<WaveBrief,int> --
+        // StructRow used to demand every field Plain, so a WaveCrew[] printed as its bare type name
+        // ("WaveCrew"), and the private static readonly rows built from it (Waves.Patrol, Waves.HuntPin)
+        // never entered the fingerprint at all. One crew's Step moved, moves it; put back it is the
+        // build's again, and the printed row shows the struct written out, not a bare type name.
+        var w = Waves.All.First(x => x.Id == "raid");
+        int ci = Rng.RandiRange(0, w.Crew.Length - 1);
+        var c = w.Crew[ci];
+        w.Crew[ci] = new WaveCrew(c.Kind, c.Way, c.Nth, c.Count, c.At, c.Step + Vector2.Right.Rotated(VaryAngle()) * Vary(1f, 50f));
+        int crewShifted = FingerprintNow();
+        string crewPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("Waves.All=", StringComparison.Ordinal)) ?? "none";
+        try
+        {
+            Check(crewShifted != Net.Protocol && crewPart.Contains("WaveCrew{", StringComparison.Ordinal),
+                  $"a row with a delegate field is part of the build's fingerprint: one wave crew's step moved moves it, and it is written out, not bare ({crewShifted:x8}, the build's {Net.Protocol:x8}; {crewPart[..Math.Min(90, crewPart.Length)]})");
+        }
+        finally { w.Crew[ci] = c; }
+        Check(FingerprintNow() == Net.Protocol,
+              $"a wave crew row put back is the build's fingerprint again ({FingerprintNow():x8}, the build's {Net.Protocol:x8})");
         // Net.Fingerprint() folds in every static field of every null-namespace type that is
         // IsLiteral or IsInitOnly with a Plain field type -- and string is Plain. A
         // `public static readonly string Build` would therefore enter the hash two peers are
