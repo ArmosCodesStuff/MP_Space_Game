@@ -62,3 +62,16 @@ Note for the coordinator: Enemies.cs:30 says `Cruise = 100f` is "under every cap
 (104 to 130)"; with F22 the BB is 88 and the CV 99, so raiders now cruise faster than two capitals.
 Not this lane's file; the comment (or the number) is lane A/G's to settle.
 Next: J2.
+
+### J2 PRE · tier opus · F24 strafe helm
+Intent: Helm rows strafe_speed / strafe_thrust (sheet default 0: the capitals never strafe, read from
+the stat), lights 130/520, heavies 95/380, freighters 60/120; Shift in Reserved; LocalFlight turns A/D
+into strafe while Shift is held on a hull whose strafe_speed > 0; Steer's across law (toward
+±strafe_speed x lift x hold at strafe_thrust x lift; keel grip otherwise; 0 under a web or Disabled).
+HEAD 1b80fee. Stats.cs 954412b · Ships.cs 46cb519 · Abilities.cs 4945b7f · PlayerShip.cs 2a91383 · SmokeTest.cs.txt 267132c.
+### J2 POST · green (typecheck 0, verify -Quick ALL CHECKS PASSED)
+Files: Stats.cs (strafe rows), Ships.cs (the nine's rows), Abilities.cs (Shift in Reserved), PlayerShip
+(LocalFlight Shift, Steer's across law, StrafeTop, SpeedAcross), SmokeTest (LaneBStrafeChecks; J1's
+method had landed between lane A's F20 comment and its method: the comment is back above its method).
+engine-unproven: rungs owed in the final test phase (solo x2). The boosted slide (195/142.5/90) is J3's.
+Next: J3.

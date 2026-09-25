@@ -134,6 +134,12 @@ public class ShipStats
         Add("Helm", "turn_rate",      "Rudder limit",        1.08, "rad/s", 2);
         Add("Helm", "water_drag",     "Drag",                0.35, "/s", 2);
         Add("Helm", "keel",           "Keel grip (drift loss)", 4.0, "/s", 1);
+        // THE SLIDE (F24): Shift + A/D push the hull sideways toward strafe_speed at strafe_thrust,
+        // the nose holding its heading. 0 on the sheet, so a hull that names no figure (the three
+        // capitals) never slides: that is read from the stat, never from the class. A speed lift
+        // lifts both (the boost's +50%), and a hold's share lands on the speed (PlayerShip.Steer).
+        Add("Helm", "strafe_speed",   "Strafe speed (Shift + A/D)", 0, "u/s", 1);
+        Add("Helm", "strafe_thrust",  "Strafe acceleration", 0, "u/s²", 0);
 
         if (Def.Has(Fit.Guns))
         {   // cursor-aimed turrets: the battleship's four, the destroyer's two

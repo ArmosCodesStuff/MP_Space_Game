@@ -2879,11 +2879,6 @@ public partial class _Test : Node
         }
     }
 
-    // F20's BEHAVIOUR, from 3 varied spots each (the numbers themselves are the ENEMY TABLE check,
-    // above -- this proves the game reads them). An unpinned target inside a gunship's 500 u
-    // missile reach draws nothing (the pin gate); THEN, separately, a pinned one: both barrels at
-    // once, 2.58 DPS, and a missile whose flight is 10 s and lands 35. The two are separate loops,
-    // never one run's pinned tail bleeding into the next run's "unpinned" head.
     // ── LANE B · F22 HELM ROWS (kits_v31 §3.5) ──────────────────────────────────────────────
     // The capitals are cut (BB 88, CV 99, DD 117) and the freighters raised to 120, each thrust
     // moved with its top so every hull reaches its top in the time it did. The literals are the
@@ -2936,6 +2931,94 @@ public partial class _Test : Node
         }
     }
 
+    // ── LANE B · F24 THE STRAFE HELM (kits_v31 §3.4, decision 1) ───────────────────────────────
+    // Shift + A/D slide the nine sideways at half their top (lights 130, heavies 95, freighters 60;
+    // full slide in 0.25 s, 0.25 s and 0.5 s), the nose holding its heading. The capitals carry
+    // strafe_speed 0 and pivot as they always did. A web or Disabled leaves no slide; a hold of x0
+    // (the railgun's charge today, the Anchor in 6c) roots it. The share rule on the pure figure:
+    // buffs add, holds multiply after the sum.
+    async Task<(float across, float turned, float ahead)> Slide(PlayerShip s, global::Godot.Key side, double secs)
+    {
+        float rot = s.Rotation;
+        KeyDown(global::Godot.Key.Shift); KeyDown(side);
+        await Wait(secs);
+        float across = s.SpeedAcross, turned = Mathf.Abs(Mathf.AngleDifference(rot, s.Rotation)), ahead = s.SpeedAhead;
+        KeyUp(side); KeyUp(global::Godot.Key.Shift);
+        return (across, turned, ahead);
+    }
+    async Task LaneBStrafeChecks(Vector2 yonder)
+    {
+        Check(Mathf.IsEqualApprox(PlayerShip.StrafeTop(130f, 1f, 1f), 130f) && Mathf.IsEqualApprox(PlayerShip.StrafeTop(130f, 1.5f, 1f), 195f)
+              && Mathf.IsEqualApprox(PlayerShip.StrafeTop(95f, 1.5f, 0.5f), 71.25f) && PlayerShip.StrafeTop(95f, 1.5f, 0f) == 0f,
+              "F24 share rule on the slide: 130 stock, 195 lifted x1.5, a x0.5 hold after the lifted sum 71.25 (not 95), a x0 hold 0");
+        bool N9(double a, double b) => Math.Abs(a - b) < 1e-9;
+        Check(new[] { ShipClass.Battleship, ShipClass.Carrier, ShipClass.Destroyer }.All(c => new ShipStats(c)["strafe_speed"] == 0)
+              && new[] { ShipClass.LightDart, ShipClass.LightEcho, ShipClass.LightWraith }.All(c => N9(new ShipStats(c)["strafe_speed"], 130) && N9(new ShipStats(c)["strafe_thrust"], 520))
+              && new[] { ShipClass.HeavySniper, ShipClass.HeavyWarrior, ShipClass.HeavyWarden }.All(c => N9(new ShipStats(c)["strafe_speed"], 95) && N9(new ShipStats(c)["strafe_thrust"], 380))
+              && new[] { ShipClass.FreightHauler, ShipClass.FreightTender, ShipClass.FreightBastion }.All(c => N9(new ShipStats(c)["strafe_speed"], 60) && N9(new ShipStats(c)["strafe_thrust"], 120)),
+              "F24 rows: the capitals 0 (they never slide); lights 130 at 520, heavies 95 at 380, freighters 60 at 120");
+        Check(Abilities.Reserved.Contains(global::Godot.Key.Shift) && Abilities.Bind(ShipClass.LightDart, "guns", global::Godot.Key.Shift) != null,
+              "Shift is a fixed control: it cannot be bound to anything");
+        // a light, a heavy and a freighter, from rest at seeded headings, each to a seeded side
+        foreach (var (cls, want) in new[] { (ShipClass.LightDart, 130f), (ShipClass.HeavyWarden, 95f), (ShipClass.FreightHauler, 60f) })
+        {
+            await SetClass(cls);
+            var s = Me; s.AutopilotTo = null;
+            s.Position = VaryNear(yonder, 300f); s.Rotation = VaryAngle(); s.Velocity = Vector2.Zero; await Wait(0.3); s.Velocity = Vector2.Zero;
+            bool starboard = Vary(0f, 1f) < 0.5f;
+            var (across, turned, ahead) = await Slide(s, starboard ? global::Godot.Key.D : global::Godot.Key.A, 1.0);
+            float signed = starboard ? across : -across;
+            Check(Math.Abs(signed - want) < 3f && Mathf.RadToDeg(turned) < 0.5f && Math.Abs(ahead) < 1f,
+                  $"F24: a {cls} at {Mathf.RadToDeg(s.Rotation):0} deg, Shift + {(starboard ? "D" : "A")} from rest: it slides {signed:0.0} u/s to {(starboard ? "starboard" : "port")} (want {want:0} ±3), the nose moves {Mathf.RadToDeg(turned):0.00} deg (under 0.5), {ahead:0.0} u/s ahead");
+            await Wait(1.0);
+            Check(Math.Abs(s.SpeedAcross) < 3f, $"F24: Shift released, the keel takes the slide back off ({s.SpeedAcross:0.0} u/s a second later)");
+            // WEBBED: no slide, as no rudder
+            s.Velocity = Vector2.Zero; s.ApplyStatus(Status.Pinned, 3.0); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var (acrossPinned, _, _) = await Slide(s, starboard ? global::Godot.Key.A : global::Godot.Key.D, 0.8);
+            s.Statuses.Clear(Status.Pinned);
+            Check(Math.Abs(acrossPinned) < 1f, $"F24: webbed, Shift + A/D slides a {cls} at {acrossPinned:0.00} u/s: none");
+            // DISABLED: no slide
+            s.Velocity = Vector2.Zero; s.ApplyStatus(Status.Disabled, 3.0); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var at = s.Position;
+            var (acrossOff, _, _) = await Slide(s, starboard ? global::Godot.Key.D : global::Godot.Key.A, 0.8);
+            s.Statuses.Clear(Status.Disabled);
+            Check(Math.Abs(acrossOff) < 1f && s.Position.DistanceTo(at) < 1f, $"F24: disabled, Shift + A/D slides a {cls} at {acrossOff:0.00} u/s ({s.Position.DistanceTo(at):0.00} u moved): none");
+            s.Velocity = Vector2.Zero; await Wait(0.2);
+        }
+        // ROOTED: the sniper's railgun charge is a hold of x0 -- Shift + A/D moves it nowhere
+        {
+            await SetClass(ShipClass.HeavySniper);
+            var sn = Me; sn.AutopilotTo = null;
+            sn.Position = VaryNear(yonder, 300f); sn.Rotation = VaryAngle(); sn.Velocity = Vector2.Zero; await Wait(0.3);
+            sn.Sl("railgun").Left = 0; sn.Sl("railgun").Cool = 0;
+            sn.UseAbility("railgun", 0);
+            for (int i = 0; i < 30 && sn.Sl("railgun").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var at = sn.Position; double secs = Math.Min(1.0, sn.Sl("railgun").Left - 0.1);
+            bool held = sn.Held == 0f;
+            var (acrossHeld, _, _) = await Slide(sn, Vary(0f, 1f) < 0.5f ? global::Godot.Key.D : global::Godot.Key.A, secs);
+            Check(held && Math.Abs(acrossHeld) < 0.01f && sn.Position.DistanceTo(at) < 0.5f,
+                  $"F24: held at x0 (the railgun's charge), Shift + A/D moves the sniper {sn.Position.DistanceTo(at):0.00} u in {secs:0.0} s at {acrossHeld:0.00} u/s: none");
+            sn.Sl("railgun").Left = 0.001;
+            for (int i = 0; i < 30 && sn.Sl("railgun").Left > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            sn.Sl("railgun").Cool = 0; sn.Velocity = Vector2.Zero;
+        }
+        // A CAPITAL: Shift + A/D is the rudder; dead in the water it pivots and never slides
+        {
+            await SetClass(ShipClass.Destroyer);
+            var dd = Me; dd.AutopilotTo = null;
+            dd.Position = VaryNear(yonder, 300f); dd.Rotation = VaryAngle(); dd.Velocity = Vector2.Zero; await Wait(0.3); dd.Velocity = Vector2.Zero;
+            var at = dd.Position;
+            var (acrossCap, turnedCap, _) = await Slide(dd, Vary(0f, 1f) < 0.5f ? global::Godot.Key.D : global::Godot.Key.A, 1.5);
+            Check(Math.Abs(acrossCap) < 0.5f && dd.Position.DistanceTo(at) < 1f && Mathf.RadToDeg(turnedCap) > 8f,
+                  $"F24: a destroyer (strafe_speed 0) with Shift + A/D pivots {Mathf.RadToDeg(turnedCap):0.0} deg and never slides ({acrossCap:0.00} u/s, {dd.Position.DistanceTo(at):0.00} u)");
+        }
+    }
+
+    // F20's BEHAVIOUR, from 3 varied spots each (the numbers themselves are the ENEMY TABLE check,
+    // above -- this proves the game reads them). An unpinned target inside a gunship's 500 u
+    // missile reach draws nothing (the pin gate); THEN, separately, a pinned one: both barrels at
+    // once, 2.58 DPS, and a missile whose flight is 10 s and lands 35. The two are separate loops,
+    // never one run's pinned tail bleeding into the next run's "unpinned" head.
     async Task LaneAHeavyRowsChecks(Vector2 yonder)
     {
         var pm = Me; var keep = pm.Position;
@@ -7684,6 +7767,7 @@ public partial class _Test : Node
             LaneASpeedAddChecks();
             await LaneAHeavyRowsChecks(yonder);
             await LaneBHelmChecks(yonder);
+            await LaneBStrafeChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);

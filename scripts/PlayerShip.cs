@@ -1167,20 +1167,24 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // Input.IsKeyPressed polls the raw keyboard, so it does not care that a text
         // box has focus. Hub decides when the controls belong to the UI instead.
         bool locked = Hub.ControlsLocked || Demo;
-        float throttle = 0f, rudder = 0f;
+        float throttle = 0f, rudder = 0f, strafe = 0f;
         if (!locked)
         {
             if (Input.IsKeyPressed(Key.W)) throttle += 1f;
             if (Input.IsKeyPressed(Key.S)) throttle -= 1f;
             if (Input.IsKeyPressed(Key.A)) rudder -= 1f;
             if (Input.IsKeyPressed(Key.D)) rudder += 1f;
+            // SHIFT TURNS A/D INTO A SLIDE (F24) on a hull whose sheet has one (strafe_speed > 0):
+            // the nose holds its heading, so the guns and the cursor keep their meaning. A hull with
+            // no slide (the capitals) reads Shift + A/D as the rudder it always was.
+            if (Input.IsKeyPressed(Key.Shift) && Stats["strafe_speed"] > 0) { strafe = rudder; rudder = 0f; }
         }
-        if (throttle != 0f || rudder != 0f) AutopilotTo = null;        // any helm key takes the controls back
+        if (throttle != 0f || rudder != 0f || strafe != 0f) AutopilotTo = null;   // any helm key takes the controls back
         else if (AutopilotTo is { } dest)
             (throttle, rudder) = Autopilot.Capital(Position, Rotation, Velocity, (float)Stats["max_speed"], dest, 60f);
-        if (Pinned) { throttle = 1f; rudder = 0f; AutopilotTo = null; }         // forced thrust, no rudder
+        if (Pinned) { throttle = 1f; rudder = 0f; strafe = 0f; AutopilotTo = null; }   // forced thrust, no rudder, no slide
         Thrusting = throttle != 0f;
-        Steer(throttle, rudder, dt);
+        Steer(throttle, rudder, strafe, dt);
 
         // the main guns aim at the cursor; the hull does not follow it
         if (!Demo) Trigger = false;              // a display ship's driver owns the trigger
@@ -1225,8 +1229,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // adds along the keel; water drag slows both; the keel kills sideways drift
     // quickly, so the ship goes where it points. The rudder turns at speed/radius
     // -- a turning circle -- capped by the rudder limit, and does nothing dead in
-    // the water.
-    private void Steer(float throttle, float rudder, float dt)
+    // the water. THE SLIDE (F24, `strafe` -1..1): while it is held the across speed moves toward
+    // strafe x StrafeTop at the sheet's strafe_thrust x the lift, and the keel lets it; otherwise
+    // the keel's grip damps it, as it always did.
+    private void Steer(float throttle, float rudder, float strafe, float dt)
     {
         var fwd = Vector2.Up.Rotated(Rotation);           // nose direction
         var side = new Vector2(-fwd.Y, fwd.X);
@@ -1236,6 +1242,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // (a running row's Hold, after the lifts): the thrust both ways, both caps and the rudder,
         // all by the one share.
         bool disabled = _status.Has(Status.Disabled);
+        if (disabled || Pinned) strafe = 0f;              // a web or Disabled: no slide, as no rudder
         if (disabled) { throttle = 0f; rudder = 0f; }
         float hold = Held;
         throttle *= hold; rudder *= hold;
@@ -1251,7 +1258,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         float top = TopSpeed((float)Stats["max_speed"], lift, SpeedAdds(), hold);
         along = Mathf.Clamp(along, -(float)Stats["reverse_speed"] * hold,
                             top * (Pinned ? StatusSet.PinSpeed : 1f));
-        across *= Mathf.Exp(-(float)Stats["keel"] * dt);
+        if (strafe != 0f)
+            across = Mathf.MoveToward(across, strafe * StrafeTop((float)Stats["strafe_speed"], lift, hold),
+                                      (float)Stats["strafe_thrust"] * lift * dt);
+        else across *= Mathf.Exp(-(float)Stats["keel"] * dt);
+        if (hold <= 0f) across = 0f;                      // rooted: nothing slides it either
 
         // turning circle: yaw rate = speed / radius, capped by the rudder; astern the
         // rudder reverses, as it does on a real ship. At or below 5% of top speed the
@@ -1278,6 +1289,13 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     public float SpeedAhead => Velocity.Dot(Vector2.Up.Rotated(Rotation));
+    // THE SLIDE'S OWN SPEED, by F1's share rule: the sheet's strafe_speed x the lift (the boost's +50%
+    // is a lift like any other), THEN every hold multiplied on the whole -- so the Prism's x0.5 is a
+    // share of the lifted slide and the Anchor's x0 stops it, as they do the top speed. Pure, so it is
+    // provable without a hull.
+    public static float StrafeTop(float sheet, float lift, float hold) => sheet * lift * hold;
+    // the slide as it is now: + to starboard (D), - to port (A)
+    public float SpeedAcross { get { var f = Vector2.Up.Rotated(Rotation); return Velocity.Dot(new Vector2(-f.Y, f.X)); } }
     private const float PivotBelow = 0.05f;                     // the pivot works at <= 5% of top speed
     private static readonly float PivotRate = Mathf.DegToRad(10f);   // slowly: 10 degrees a second
 

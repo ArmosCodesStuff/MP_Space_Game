@@ -235,7 +235,7 @@ public static class Classes
             Nums = new() {
                 ["hull"] = 400,
                 ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
-                ["turn_radius"] = 150, ["turn_rate"] = 0.85,
+                ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
@@ -273,7 +273,7 @@ public static class Classes
             Nums = new() {
                 ["hull"] = 400,
                 ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
-                ["turn_radius"] = 150, ["turn_rate"] = 0.85,
+                ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
@@ -309,7 +309,7 @@ public static class Classes
             Nums = new() {
                 ["hull"] = 400,
                 ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
-                ["turn_radius"] = 150, ["turn_rate"] = 0.85,
+                ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
                 ["pd_count"] = 2,
             },
@@ -348,7 +348,7 @@ public static class Classes
             Nums = new() {
                 ["hull"] = 140,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
-                ["turn_radius"] = 55, ["turn_rate"] = 2.2,
+                ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
                 ["main_count"] = 1, ["main_damage"] = 6, ["main_interval"] = 0.8, ["main_range"] = 900, ["shell_speed"] = 700,
             },
                 // 7.5 = 5% of the railgun's 150, what a level is worth on a battleship's shell
@@ -378,7 +378,7 @@ public static class Classes
             Nums = new() {
                 ["hull"] = 140,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
-                ["turn_radius"] = 55, ["turn_rate"] = 2.2,
+                ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
                 ["main_count"] = 2, ["main_damage"] = 9, ["main_interval"] = 0.7, ["main_range"] = 600, ["shell_speed"] = 520,
             },
                 // 3 = 5% of the EMP's 60
@@ -410,7 +410,7 @@ public static class Classes
             Nums = new() {
                 ["hull"] = 140,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
-                ["turn_radius"] = 55, ["turn_rate"] = 2.2,
+                ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
                 ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 0.6, ["main_range"] = 700, ["shell_speed"] = 600,
                 // ITS ONE MOUNT IS A GUN, NOT A NUISANCE. "Half efficiency, always on" was first read
             // as half a warship's damage PER SHOT: 0.25 every 0.5 s is 0.5 DPS, which is 50 seconds
@@ -453,7 +453,7 @@ public static class Classes
             Nums = new() {
                 ["hull"] = 90,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
-                ["turn_radius"] = 35, ["turn_rate"] = 3.0,
+                ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
             Damage = new() { ["main_damage"] = 1 },
@@ -482,7 +482,7 @@ public static class Classes
             Nums = new() {
                 ["hull"] = 90,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
-                ["turn_radius"] = 35, ["turn_rate"] = 3.0,
+                ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
                 // echo_share is NOT a weapon: the blast is a share of damage already dealt, so it
@@ -512,7 +512,7 @@ public static class Classes
             Nums = new() {
                 ["hull"] = 90,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
-                ["turn_radius"] = 35, ["turn_rate"] = 3.0,
+                ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
                 ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
             },
             Damage = new() { ["main_damage"] = 1 },

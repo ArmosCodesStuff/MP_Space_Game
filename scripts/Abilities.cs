@@ -393,7 +393,7 @@ public static class Abilities
     // Fixed hub controls. Binding one of these would break flying or the menus.
     public static readonly HashSet<Key> Reserved = new()
     {
-        Key.W, Key.A, Key.S, Key.D, Key.Tab, Key.Escape, Key.K, Key.B, Key.L, Key.I, Key.V, Key.Enter, Key.KpEnter,
+        Key.W, Key.A, Key.S, Key.D, Key.Shift, Key.Tab, Key.Escape, Key.K, Key.B, Key.L, Key.I, Key.V, Key.Enter, Key.KpEnter,
         Key.Y, Key.Up, Key.Down, Key.Left, Key.Right,        // the free camera
     };
 
