@@ -567,9 +567,9 @@ rows (`Ab.*`). Nothing else in the game is touched.
 | **Battleship** | 300 | 378 u | 88 u/s | 4, 17.9 a shell | broadside | 2 (slow, τ/3) | — | `battleship_hull.png` |
 | **Carrier** | 200 | 283.5 u | 99 u/s | — | bomber strike | 3 (fast, τ/1.2) | 3 fighters + 2 bombers | `carrier_player.png` |
 | **Destroyer** | 250 | 212.6 u | 117 u/s | 2, 7.5 a shell | missile burst | 2 (slow, τ/3) | — | `destroyer_hull.png` |
-| **Freighter** | 400 | 230 u | 120 u/s | 1, 12 a shell | bubble (400 soaked) | 2 | 3 deployable turrets | `freight_hauler_hull.png` |
-| **Tender** | 400 | 230 u | 120 u/s | 1, 12 a shell | overdrive (x2 fire) | 2 | 3 deployable turrets | `freight_tender_hull.png` |
-| **Bastion** | 400 | 230 u | 120 u/s | 1, 12 a shell | shockwave (1000 u) | 2 | 3 deployable turrets | `freight_bastion_hull.png` |
+| **Freighter** | 450 | 230 u | 120 u/s | 1 spotter, 31.25 a round (a hit paints) | time on target (40 a line) | 2 | 3 sentries (R) | `freight_hauler_hull.png` |
+| **Tender** | 380 | 230 u | 120 u/s | the mending lance, 4 / 0.8 a tick | overdrive field (x1.5, 500 u) | 2 | — | `freight_tender_hull.png` |
+| **Bastion** | 420 | 230 u | 120 u/s | the siege mortar, 58.75 in 110 u | bunker buster (180) | 2 | — | `freight_bastion_hull.png` |
 | **Sniper** | 140 | 120 u | 190 u/s | 1, 6 a shell | railgun (150 at 2500 u) | — | — | `heavy_sniper_hull.png` |
 | **Warrior** | 140 | 120 u | 190 u/s | 2, 9 a shell | rush + EMP | — | — | `heavy_warrior_hull.png` |
 | **Warden** | 140 | 120 u | 190 u/s | 1, 12 a shell | 6 hunter-seekers | 1, always on | — | `heavy_warden_hull.png` |
@@ -1202,6 +1202,43 @@ The mechanisms only; the class rows and keys that press them are slice 6 (ledger
 - **The latch gates are OutGuards columns** (`BlocksLatch`, `DropsLatch`): Dazzled takes no new latch, Jammed takes
   none and drops its own. Named so a row's default is "no effect". Raiders fire only while latched, so a
   blocked latch is also a silent laser.
+
+## Class kits, lane A slice 6b: the freighters' keys (2026-09-25)
+
+Decisions are ledger_kits6b.md's D33-D42 (numbered on from slice 3's; slice 5 also used D33-D37).
+- **The paint rides a slot** (6b-D33): `PaintOn`/`Painted` keep the paint in the pilot's `guns` slot (seconds left,
+  the target's NetId). Slots are in the host report, so a guest's sentry copies and its F refusal read the host's
+  paint with no new field or RPC.
+- **A primary is a field** (6b-D35): `ClassDef.Primary` {Guns, Lob, Beam}, read in ONE place (`FireOnce`). A new kind
+  of primary is a member and its one fire method; a class names its kind.
+- **Time on target is Lines rows, not a new weapon** (6b-D36): one `Lines.Tot` strike per gun in reach, same tick;
+  "landed" is `Hub.Deployed` (a throw in flight is no gun).
+- **What a round does to what holds a spot is its Shots row** (6b-D42): `ShotDef.Versus`/`VersusMult`/`Through`.
+  A shield's one door past it is `IShielded.TakeThrough`, reached through `Dealt.Deal(.., through)`; nothing else
+  ever passes a shield.
+- **A shockwave reaches `Targeting.Shaken`** (nothing in flight): the `Immovable` is HELD (Disabled), the rest thrown.
+  A practice dummy is `IStatused` so a hold means the same on it (its launcher quiet).
+- **A gravity well is a zone** (6b-D39, the gate fix): the row `well` of 6c's `Zones.All` -- laid at the cursor
+  (Near 0 / Far 900), Reach 280, Life 6, Prey `Targeting.Pullable` -- with a PULL (`ZoneDef.Light`/`Heavy`, stat ids
+  read at the lay): `Zones.Tick` drags each prey inside straight at the centre, never past it. Craft move in the
+  world state already sent; every peer draws the zone from its seed. A latched or towed craft is owned by its latch
+  or its tow. It was first built as its own host list and Fx row: a second zone system, which the merge gate caught
+  -- a thing a pilot lays, the host ticks and every peer draws IS a zone row.
+- **One heal door, every friendly hull** (6b-D37, D43): the Tender's lance and Repair field heal through slice 4's
+  `Mend.Give`, never a second path; what it mends is an `IMendable` (a pilot, a sentry, a fleet ship), and
+  `Mend.Friendlies` is every pilot in `Combat.Players` plus what a raid can reach, each once. A new friendly hull
+  fills in `IMendable` and every heal reaches it.
+- **A held beam is a slot, not a stream of effects** (6b-D44): the lance ticks on the host (`PlayerShip.LanceTick`,
+  first body by `Lines.Pick`), and what it touched and how far rides its own ability slot (N, Own) in the host
+  report; every peer draws it from there (a `Fields` row, look `Lance`). Ten effects a second on the wire would
+  have been the other way.
+- **A field is a row with an `Aura`** (6b-D38): a running row's lifts reach every other live pilot inside its radius,
+  added by the share rule (two Overdrive fields are x2.0, never x2.25). `AbilityDef.Tick` is a running row's host
+  frame, handed min(frame, Left) so a field's whole effect is its time exactly. **Trap:** a sentry is lifted through
+  its pilot's `Cadence`, so it is where the PILOT stands that counts.
+- **A cut is the clock's own step** (6b-D45): Resupply's 8 s goes through `PlayerShip.CoolBy`, the same step
+  `TickAbilities` cools by, so a charged row (the tether) gets its charge back from a cut as from the clock. It
+  reads `ClassDef.Abilities`, so the drive is never cut, and it skips any row of its own id.
 
 ## Traps that have already cost time
 

@@ -159,13 +159,24 @@ public class AbilityDef
     // A CHARGED ROW: it holds Charges (a stat id) presses; its slot's N counts those spent, and one comes back
     // every Recharge seconds (a stat id), one at a time (PlayerShip.Spend, and TickAbilities' Cool). The tether.
     public string Charges, Recharge;
-    // A ZONE IT LAYS (Zones.cs), at the stern or the cursor: a row of Zones.All (PlayerShip.Lay). The tether mine, the curtain.
+    // A ZONE IT LAYS (Zones.cs), at the stern or the cursor: a row of Zones.All (PlayerShip.Lay). The tether mine, the curtain, the well.
     public ZoneDef Lays;
     // A DECOY SALVO IT POPS round the hull (Decoys.cs): a row of Decoys.All (PlayerShip.Pop). The flares.
     public DecoyDef Pops;
     // THE COOLDOWN A PRESS SETS (a stat id), for a row whose press spends through PlayerShip.Spend (Pops, Lays):
     // the flares, the curtain.
     public string Cooldown;
+    // A FIELD (kits6b-J8): WHILE IT RUNS, its lifts (RateStat, SpeedStat, ...) reach every other live pilot within
+    // this stat's radius of the ship too, added to that pilot's own by the same share rule (PlayerShip.Lifts): the
+    // Tender's Overdrive. A row that Cuts reaches every pilot inside it, the presser included.
+    public string Aura;
+    // WHILE IT RUNS, ON THE HOST, EVERY FRAME: handed the ship and the frame's share of what is left (never more
+    // than Left), so a field's whole effect is its time exactly (TickAbilities). The Repair field.
+    public Action<PlayerShip, double> Tick;
+    // A PRESS THAT CUTS COOLING (D45): this stat's seconds off every cooldown still running on every pilot in its
+    // Aura -- the rows of its ClassDef.Abilities, never its drive, never a row of the pressing row's own id -- the
+    // way the clock would have run them (PlayerShip.CoolBy). Nothing cooling anywhere: refused, and free. The Resupply.
+    public string Cuts;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
@@ -229,6 +240,21 @@ public static class Ab
         Weapon = true, Id = "guns", Name = "Main guns", Short = "GUNS", Kind = AbilityKind.Hold, Default = Key.Space,
         Blurb = "Hold to fire. The barrels follow the cursor, slowly.",
         Show = (s, _) => new SlotState { Line = s.Staggered ? "STAGGERED" : "SALVO", Lit = s.Trigger },
+    };
+
+    // THE MENDING LANCE (the Tender's primary, kits6b-J7): held, a beam out of the main barrel onto the first
+    // body it touches, a tick every main_interval (PlayerShip.LanceTick, on the host): it burns a hostile and
+    // mends a friend. Its slot says what it is on, on every peer.
+    public static readonly AbilityDef Lance = new()
+    {
+        Weapon = true, Id = PlayerShip.LanceSlot, Name = "Mending lance", Short = "LANCE", Kind = AbilityKind.Hold, Default = Key.Space,
+        Blurb = "Hold for a beam out of the main barrel. The first thing it touches, it burns if it is hostile and mends if it is a friend -- a pilot, a sentry, the fleet.",
+        Show = (s, _) =>
+        {
+            ref var sl = ref s.Sl(PlayerShip.LanceSlot);
+            bool on = sl.Left > 0;
+            return new SlotState { Line = !on ? "LANCE" : sl.N == PlayerShip.LanceMend ? "MENDING" : sl.N == PlayerShip.LanceBurn ? "BURNING" : "LANCE", Lit = s.Trigger || on };
+        },
     };
 
     public static readonly AbilityDef FireMode = new()
@@ -350,32 +376,99 @@ public static class Ab
         },
     };
 
+    // TIME ON TARGET (6b, D36): every gun that can reach the paint -- the spotter and each landed
+    // sentry within tot_reach of it -- lands one line on it in the same host tick (Lines.Tot).
+    public static readonly AbilityDef Tot = new()
+    {
+        Id = "tot", Name = "Time on target", Short = "T.O.T.", Default = Key.F,
+        Blurb = "The spotter and every sentry in reach fire one rail line each at the painted target, all landing at once.",
+        Press = (s, _) => s.TimeOnTarget(),
+        Refuse = (s, _) => s.Sl("tot").Cool > 0 ? "COOLING" : s.Painted == null ? "NO PAINT" : null,
+        Show = (s, _) => s.Sl("tot").Cool > 0 || s.Painted != null ? Timed(s, "tot", "tot_cooldown", "READY")
+                                                                   : new SlotState { Line = "NO PAINT" },
+    };
+
     public static readonly AbilityDef Bubble = new()
     {
-        Id = "bubble", Name = "Bubble", Short = "BUBBLE", Default = Key.F,
-        Blurb = "A bubble over you and everyone near: it soaks damage until its pool is spent or the time is up.",
+        Id = "bubble", Name = "Bubble", Short = "BUBBLE", Default = Key.Q,
+        Blurb = "A bubble over you and every friendly hull near -- allies, sentries, the fleet: it soaks damage until its pool is spent or the time is up.",
         Press = (s, _) => s.RaiseBubble(),
         Refuse = (s, _) => s.Sl("bubble").Cool > 0 ? "CHARGING" : null,
         Show = (s, _) => Timed(s, "bubble", "bubble_cooldown", $"UP {s.Sl("bubble").N}"),
     };
 
+    // REDEPLOY (kits6b-J3): every sentry out folds and lands round the hull a second later.
+    public static readonly AbilityDef Redeploy = new()
+    {
+        Id = "redeploy", Name = "Redeploy", Short = "REDEPLOY", Default = Key.E,
+        Blurb = "Every sentry you have out folds up and lands in a ring round you a second later, each with the hull it had.",
+        Press = (s, _) => s.Redeploy(),
+        Refuse = (s, _) => s.Sl("redeploy").Cool > 0 ? "COOLING" : s.OwnLanded().Count == 0 ? "NONE OUT" : null,
+        Show = (s, _) => Timed(s, "redeploy", "redeploy_cooldown", "READY"),
+    };
+
+    // THE OVERDRIVE FIELD (the Tender's ability 1, kits6b-J8): for its time every gun of yours, and of every pilot within
+    // field_radius -- their sentries and craft through them -- fires overdrive_mult as fast (an Aura row).
     public static readonly AbilityDef Overdrive = new()
     {
-        Id = "overdrive", Name = "Overdrive", Short = "OVERDRIVE", Default = Key.F,
-        Blurb = "Everything you own fires faster: your gun, your point defence, every turret out.",
+        Id = "overdrive", Name = "Overdrive field", Short = "OVERDRIVE", Default = Key.F,
+        Blurb = "For eight seconds you and every friendly pilot near you fire half again as fast -- guns, point defence, sentries and craft.",
         Press = (s, _) => s.StartOverdrive(),
-        RateStat = "overdrive_mult",
+        RateStat = "overdrive_mult", Aura = "field_radius",
         Refuse = (s, _) => s.Sl("overdrive").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => Timed(s, "overdrive", "overdrive_cooldown", $"x{s.Stats["overdrive_mult"]:0.#}"),
     };
 
+    // THE REPAIR FIELD (the Tender's ability 2, kits6b-J8): for repair_time every friendly hull within field_radius --
+    // you, a pilot, a sentry, the fleet -- is mended repair_share of its MAXIMUM a second (Mend, "repair").
+    public static readonly AbilityDef Repair = new()
+    {
+        Id = "repair", Name = "Repair field", Short = "REPAIR", Default = Key.Q, Aura = "field_radius",
+        Blurb = "For eight seconds every friendly hull near you -- yours too -- is repaired 2% of its full hull a second.",
+        Press = (s, _) => s.StartRepair(),
+        Tick = (s, dt) => s.RepairTick(dt),
+        Refuse = (s, _) => s.Sl("repair").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "repair", "repair_cooldown", "UP"),
+    };
+
+    // RESUPPLY (the Tender's ability 3, kits6b-J8, D45): 8 s off every ability still cooling on every pilot within
+    // field_radius, you included -- never a drive, never a Resupply.
+    public static readonly AbilityDef Resupply = new()
+    {
+        Id = "resupply", Name = "Resupply", Short = "RESUPPLY", Default = Key.E, Aura = "field_radius", Cuts = "resupply_cut",
+        Cooldown = "resupply_cooldown",
+        Blurb = "Takes eight seconds off every ability still cooling -- yours and every friendly pilot's near you. Not the drive.",
+        Press = (s, _) => s.Resupply("resupply"),
+        Refuse = (s, _) => s.Sl("resupply").Cool > 0 ? "COOLING" : s.CoolingInAura("resupply") == 0 ? "NOTHING COOLING" : null,
+        Show = (s, _) => Timed(s, "resupply", "resupply_cooldown", "READY"),
+    };
+
+    public static readonly AbilityDef Buster = new()
+    {
+        Id = "buster", Name = "Bunker buster", Short = "BUSTER", Default = Key.F,
+        Blurb = "One slow heavy round at the cursor that stops on the first thing it meets: double on a boss or a structure, and a quarter of that through a pylon's shield.",
+        Press = (s, _) => s.FireBuster(),
+        Refuse = (s, _) => s.Sl("buster").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "buster", "buster_cooldown", "READY"),
+    };
+
     public static readonly AbilityDef Shockwave = new()
     {
-        Id = "shockwave", Name = "Shockwave", Short = "WAVE", Default = Key.F,
-        Blurb = "Throws everything near you clear. What is too big to throw (a boss) is held still instead.",
+        Id = "shockwave", Name = "Shockwave", Short = "WAVE", Default = Key.Q,
+        Blurb = "Throws everything near you clear. What cannot be thrown -- a boss, a structure -- is held still instead.",
         Press = (s, _) => s.Shockwave(),
         Refuse = (s, _) => s.Sl("shockwave").Cool > 0 ? "CHARGING" : null,
         Show = (s, _) => Timed(s, "shockwave", "wave_cooldown", "READY"),
+    };
+
+    public static readonly AbilityDef Well = new()
+    {
+        Id = "well", Name = "Gravity well", Short = "WELL", Default = Key.E,
+        Blurb = "A well at the cursor that drags loose raiding craft into its centre -- the light ones twice as fast. Bosses, structures and anything latched stay put.",
+        Lays = Zones.All[Zones.Well], Cooldown = "well_cooldown",
+        Press = (s, _) => s.Lay("well"),
+        Refuse = (s, _) => s.Sl("well").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "well", "well_cooldown", "READY"),
     };
 
     // ── the heavy fighters ───────────────────────────────────────────────────

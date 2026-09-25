@@ -21,7 +21,7 @@ using System.Linq;
 public enum ShipClass
 {
     Battleship, Carrier, Destroyer,                     // line
-    FreightHauler, FreightTender, FreightBastion,       // freight -- they deploy their own turrets
+    FreightHauler, FreightTender, FreightBastion,       // freight -- the freighter throws sentries; the tender and the bastion carry fields and a siege kit
     HeavySniper, HeavyWarrior, HeavyWarden,             // heavy fighters
     LightDart, LightEcho, LightWraith,                  // lights
 }
@@ -77,6 +77,12 @@ public class StatRow
     public bool Inverse;                     // an interval: a rate bonus divides it
 }
 
+// HOW ITS PRIMARY FIRES (kits6b D35): Guns -- its main mounts fire their round (Shot) along the
+// barrels; Lob -- a predicted blast thrown onto the cursor (a Missiles.All row, the Bastion's mortar);
+// Beam -- a beam held out of the main barrel onto the first body (the Tender's lance, PlayerShip.LanceTick).
+// A new kind is a member here and its ONE fire method in PlayerShip.FireOnce; a class names its kind in one field.
+public enum Primary { Guns, Lob, Beam }
+
 public class ClassDef
 {
     public ShipClass Id;
@@ -87,6 +93,9 @@ public class ClassDef
     // number, not a list of class names in an `if` -- a thirteenth class states its own answer.
     public int Targets = 1;
     public Fit Fit;
+    public Primary Primary = Primary.Guns;
+    // ...a Lob's row of Missiles.All (the blast it throws), when Primary is Lob
+    public int LobSide = Missiles.Mortar;
     public ClassArt Art = new();
     // This class's own numbers, by stat id. Everything it does NOT name it takes from the sheet's
     // default (Stats.cs), so a row here is a difference, never a copy.
@@ -130,7 +139,8 @@ public class ClassDef
     // follows from its sheet by that same rule (Equipment.Fits).
     public ItemDef[] Kit = Array.Empty<ItemDef>();
     public AbilityDef[] Abilities = Array.Empty<AbilityDef>();
-    // WHAT ITS MAIN GUNS FIRE: a row of Shots.All (PlayerShip.Spec). A shell, unless the class says (the Warden's flak).
+    // WHAT ITS MAIN GUNS FIRE: a row of Shots.All (PlayerShip.Spec). A shell, unless the class says (the Warden's
+    // flak; the freighter's spotter round, whose hit paints: ShotDef.Paint).
     public int Shot = Shots.Shell;
     // WHAT V DOES: one row of Drives.All (the warp on the capitals, the boost on the nine). Not in
     // Abilities: Abilities.For appends it after them, so it has a slot and no level wall.
@@ -242,15 +252,15 @@ public static class Classes
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Missile, Ab.Reload } },
 
         // -- page 2: freight, which carries its own defences -------------------
-        new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "Toughest hull there is. One main gun, two point-defence turrets, three deployable turrets, and a bubble that soaks damage.",
-            Hint = "FREIGHTER  ·  mouse aims the main gun",
+        new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy, Shot = Shots.Spotter,
+            Blurb = "Toughest hull there is. A spotter cannon that paints what it hits, three sentries that shoot the paint first, every gun converging on the paint at once, and a bubble that soaks damage.",
+            Hint = "FREIGHTER  ·  mouse aims the spotter  ·  a hit paints",
             Drive = Drives.Boost,
             Nums = new() {
-                ["hull"] = 400,
+                ["hull"] = 450,
                 ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
                 ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
-                ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
+                ["main_count"] = 1, ["main_damage"] = 31.25, ["main_interval"] = 1.25, ["main_range"] = 800, ["shell_speed"] = 560,   // the spotter: 25 DPS
                 ["pd_count"] = 2,
             },
                 // half a point each: three turrets are out at once, so a level is worth 1.5 across them
@@ -263,98 +273,107 @@ public static class Classes
                 ItemDef.Own(GearSlot.Utility, "freight_bubble", "Bubble Projector", "the bubble, and what it soaks", "bubble_pool"),
             },
             Rows = new StatRow[] {
-                new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
+                new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 5, Dec = 1 },
                 new() { Group = "Deployed turrets", Id = "deploy_interval", Label = "Reload",           Base = 0.5, Unit = "s", Dec = 2, Inverse = true },
-                new() { Group = "Deployed turrets", Id = "deploy_range",    Label = "Range",            Base = 500, Unit = "u", Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_range",    Label = "Range",            Base = 650, Unit = "u", Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_hull",     Label = "Turret hull",      Base = 120, Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_max",      Label = "Out at once",      Base = 3, Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_cooldown", Label = "Between drops",    Base = 6, Unit = "s", Dec = 1, Inverse = true },
                 new() { Group = "Deployed turrets", Id = "deploy_reach",    Label = "Throw reach",      Base = 600, Unit = "u", Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_flight",   Label = "Throw flight",     Base = 0.8, Unit = "s", Dec = 1 },
                 new() { Group = "Deployed turrets", Id = "recall_pick",     Label = "Recall within",    Base = 60, Unit = "u", Dec = 0 },
+                new() { Group = "Spotter", Id = "paint_time", Label = "A hit paints for", Base = 5, Unit = "s", Dec = 1 },
+                new() { Group = "Time on target", Id = "tot_damage",   Label = "Each line lands",  Base = 40, Dec = 0 },
+                new() { Group = "Time on target", Id = "tot_width",    Label = "Line width",       Base = 14, Unit = "u", Dec = 0 },
+                new() { Group = "Time on target", Id = "tot_reach",    Label = "A gun joins within", Base = 1500, Unit = "u", Dec = 0 },
+                new() { Group = "Time on target", Id = "tot_cooldown", Label = "Cooldown",         Base = 16, Unit = "s", Dec = 1, Inverse = true },
                 new() { Group = "Bubble", Id = "bubble_pool", Label = "Damage it soaks", Base = 400, Dec = 0 },
                 new() { Group = "Bubble", Id = "bubble_radius", Label = "Radius",        Base = 260, Unit = "u", Dec = 0 },
                 new() { Group = "Bubble", Id = "bubble_time", Label = "Time up",         Base = 8, Unit = "s", Dec = 1 },
                 new() { Group = "Bubble", Id = "bubble_cooldown", Label = "Cooldown",    Base = 25, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Redeploy", Id = "redeploy_ring",     Label = "Ring round you", Base = 150, Unit = "u", Dec = 0 },
+                new() { Group = "Redeploy", Id = "redeploy_flight",   Label = "Lands after",    Base = 1.0, Unit = "s", Dec = 1 },
+                new() { Group = "Redeploy", Id = "redeploy_cooldown", Label = "Cooldown",       Base = 20, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://freight_hauler_hull.png", Length = 230f, HalfWidth = 59.74f,
                 Mains = new Vector2[] { new(0.0f, -50.6f) },
                 Pds   = new Vector2[] { new(-32.9f, 64.4f), new(32.9f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Bubble, Ab.Deploy } },
-        new() { Id = ShipClass.FreightTender, Name = "TENDER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "One main gun, two point-defence turrets, three deployable turrets, and an overdrive that lifts everything's rate of fire.",
-            Hint = "TENDER  ·  mouse aims the main gun",
+            Abilities = new[] { Ab.Guns, Ab.Deploy, Ab.Tot, Ab.Bubble, Ab.Redeploy } },
+        new() { Id = ShipClass.FreightTender, Name = "TENDER", Ready = true, Fit = Fit.Guns | Fit.Pd, Primary = Primary.Beam,
+            Blurb = "A mending lance that burns the first hostile it touches and mends the first friend, two point-defence turrets, and fields that lift and repair every friendly hull near it.",
+            Hint = "TENDER  ·  Space: the lance, onto the first thing it touches  ·  F overdrive field  ·  Q repair field  ·  E resupply",
             Drive = Drives.Boost,
             Nums = new() {
-                ["hull"] = 400,
+                ["hull"] = 380,
                 ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
                 ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
-                ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
+                // the mending lance: 4 a tick every 0.1 s (40 DPS) on a hostile, 650 u, the barrel round at 90 deg/s
+                ["main_count"] = 1, ["main_damage"] = 4, ["main_interval"] = 0.1, ["main_range"] = 650, ["main_turn"] = Mathf.Tau / 4f,
                 ["pd_count"] = 2,
             },
-            Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
-            Reach = new() { ["main_range"] = 1, ["deploy_range"] = 1, ["pd_range"] = 1 },
-            Cycle = new() { ["main_interval"] = 1, ["deploy_interval"] = 1, ["pd_interval"] = 1 },
-            Weapons = new[] { Dps.Main, Dps.Deployed, Dps.Pd },
+            Damage = new() { ["main_damage"] = 1 },
+            Reach = new() { ["main_range"] = 1, ["pd_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1, ["pd_interval"] = 1 },
+            Weapons = new[] { Dps.Main, Dps.Pd },
             Kit = new[] {
                 CargoGun,
                 ItemDef.Own(GearSlot.Utility, "freight_overdrive", "Overdrive Coils", "the overdrive, and how long it holds", "overdrive_mult"),
             },
             Rows = new StatRow[] {
-                new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
-                new() { Group = "Deployed turrets", Id = "deploy_interval", Label = "Reload",           Base = 0.5, Unit = "s", Dec = 2, Inverse = true },
-                new() { Group = "Deployed turrets", Id = "deploy_range",    Label = "Range",            Base = 500, Unit = "u", Dec = 0 },
-                new() { Group = "Deployed turrets", Id = "deploy_hull",     Label = "Turret hull",      Base = 120, Dec = 0 },
-                new() { Group = "Deployed turrets", Id = "deploy_max",      Label = "Out at once",      Base = 3, Dec = 0 },
-                new() { Group = "Deployed turrets", Id = "deploy_cooldown", Label = "Between drops",    Base = 6, Unit = "s", Dec = 1, Inverse = true },
-                new() { Group = "Deployed turrets", Id = "deploy_reach",    Label = "Throw reach",      Base = 600, Unit = "u", Dec = 0 },
-                new() { Group = "Deployed turrets", Id = "deploy_flight",   Label = "Throw flight",     Base = 0.8, Unit = "s", Dec = 1 },
-                new() { Group = "Deployed turrets", Id = "recall_pick",     Label = "Recall within",    Base = 60, Unit = "u", Dec = 0 },
-                new() { Group = "Overdrive", Id = "overdrive_mult", Label = "Rate of fire", Base = 2, Unit = "x", Dec = 1 },
-                new() { Group = "Overdrive", Id = "overdrive_time", Label = "Time up",      Base = 8, Unit = "s", Dec = 1 },
-                new() { Group = "Overdrive", Id = "overdrive_cooldown", Label = "Cooldown", Base = 24, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Mending lance", Id = "lance_heal", Label = "Mends a friend, a tick", Base = 0.8, Dec = 1 },
+                new() { Group = "Fields", Id = "field_radius", Label = "Every field reaches", Base = 500, Unit = "u", Dec = 0 },
+                new() { Group = "Overdrive field", Id = "overdrive_mult", Label = "Rate of fire", Base = 1.5, Unit = "x", Dec = 1 },
+                new() { Group = "Overdrive field", Id = "overdrive_time", Label = "Time up",      Base = 8, Unit = "s", Dec = 1 },
+                new() { Group = "Overdrive field", Id = "overdrive_cooldown", Label = "Cooldown", Base = 24, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Repair field", Id = "repair_share",    Label = "Of a full hull, a second", Base = 0.02, Dec = 2 },
+                new() { Group = "Repair field", Id = "repair_time",     Label = "Time up",  Base = 8, Unit = "s", Dec = 1 },
+                new() { Group = "Repair field", Id = "repair_cooldown", Label = "Cooldown", Base = 30, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Resupply", Id = "resupply_cut",      Label = "Off every cooldown", Base = 8, Unit = "s", Dec = 1 },
+                new() { Group = "Resupply", Id = "resupply_cooldown", Label = "Cooldown",           Base = 30, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://freight_tender_hull.png", Length = 230f, HalfWidth = 57.48f,
                 Mains = new Vector2[] { new(0.0f, -50.6f) },
                 Pds   = new Vector2[] { new(-31.6f, 64.4f), new(31.6f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Overdrive, Ab.Deploy } },
-        new() { Id = ShipClass.FreightBastion, Name = "BASTION", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
-            Blurb = "One main gun, two point-defence turrets, three deployable turrets, and a shockwave that throws what is near it clear, or holds a boss still.",
-            Hint = "BASTION  ·  mouse aims the main gun",
+            Abilities = new[] { Ab.Lance, Ab.Overdrive, Ab.Repair, Ab.Resupply } },
+        new() { Id = ShipClass.FreightBastion, Name = "BASTION", Ready = true, Fit = Fit.Guns | Fit.Pd, Primary = Primary.Lob, LobSide = Missiles.Mortar,
+            Blurb = "A siege mortar lobbed onto the cursor, a bunker buster for what holds a spot, two point-defence turrets, a shockwave that throws what is near it clear, or holds a boss or a structure still, and a gravity well that drags craft together under the mortar.",
+            Hint = "BASTION  ·  the mortar lands on the cursor, 150-1100 u",
             Drive = Drives.Boost,
             Nums = new() {
-                ["hull"] = 400,
+                ["hull"] = 420,
                 ["thrust"] = 63.5, ["reverse_thrust"] = 28.2, ["max_speed"] = 120, ["reverse_speed"] = 42.4,
                 ["turn_radius"] = 150, ["turn_rate"] = 0.85, ["strafe_speed"] = 60, ["strafe_thrust"] = 120,
-                ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 1.0, ["main_range"] = 800, ["shell_speed"] = 560,
+                // the siege mortar: 58.75 in 110 u every 2.35 s (25 DPS on one), 150-1100 u, 1.4 s in the air
+                ["main_count"] = 1, ["main_damage"] = 58.75, ["main_interval"] = 2.35, ["main_range"] = 1100,
                 ["pd_count"] = 2,
             },
-            Damage = new() { ["main_damage"] = 1, ["deploy_damage"] = 0.5 },
-            Reach = new() { ["main_range"] = 1, ["deploy_range"] = 1, ["wave_range"] = 1, ["pd_range"] = 1 },
-            Cycle = new() { ["main_interval"] = 1, ["deploy_interval"] = 1, ["pd_interval"] = 1 },
-            Weapons = new[] { Dps.Main, Dps.Deployed, Dps.Pd },
+            Damage = new() { ["main_damage"] = 1 },
+            Reach = new() { ["main_range"] = 1, ["wave_range"] = 1, ["pd_range"] = 1 },
+            Cycle = new() { ["main_interval"] = 1, ["pd_interval"] = 1 },
+            Weapons = new[] { Dps.Main, Dps.Pd },
             Kit = new[] {
                 CargoGun,
                 ItemDef.Own(GearSlot.Utility, "freight_emitter", "Shockwave Emitter", "the shockwave's reach and its push", "wave_range"),
             },
             Rows = new StatRow[] {
-                new() { Group = "Deployed turrets", Id = "deploy_damage",   Label = "Damage per shot",  Base = 6, Dec = 1 },
-                new() { Group = "Deployed turrets", Id = "deploy_interval", Label = "Reload",           Base = 0.5, Unit = "s", Dec = 2, Inverse = true },
-                new() { Group = "Deployed turrets", Id = "deploy_range",    Label = "Range",            Base = 500, Unit = "u", Dec = 0 },
-                new() { Group = "Deployed turrets", Id = "deploy_hull",     Label = "Turret hull",      Base = 120, Dec = 0 },
-                new() { Group = "Deployed turrets", Id = "deploy_max",      Label = "Out at once",      Base = 3, Dec = 0 },
-                new() { Group = "Deployed turrets", Id = "deploy_cooldown", Label = "Between drops",    Base = 6, Unit = "s", Dec = 1, Inverse = true },
-                new() { Group = "Deployed turrets", Id = "deploy_reach",    Label = "Throw reach",      Base = 600, Unit = "u", Dec = 0 },
-                new() { Group = "Deployed turrets", Id = "deploy_flight",   Label = "Throw flight",     Base = 0.8, Unit = "s", Dec = 1 },
-                new() { Group = "Deployed turrets", Id = "recall_pick",     Label = "Recall within",    Base = 60, Unit = "u", Dec = 0 },
+                new() { Group = "Siege mortar", Id = "mortar_min",    Label = "Nearest landing", Base = 150, Unit = "u", Dec = 0 },
+                new() { Group = "Siege mortar", Id = "mortar_flight", Label = "Time in the air", Base = 1.4, Unit = "s", Dec = 1 },
+                new() { Group = "Siege mortar", Id = "mortar_blast",  Label = "Blast radius",    Base = 110, Unit = "u", Dec = 0 },
+                new() { Group = "Bunker buster", Id = "buster_damage",   Label = "Damage (x2 on a boss or structure)", Base = 180, Dec = 0 },
+                new() { Group = "Bunker buster", Id = "buster_speed",    Label = "Round speed",  Base = 380, Unit = "u/s", Dec = 0 },
+                new() { Group = "Bunker buster", Id = "buster_range",    Label = "Range",        Base = 1400, Unit = "u", Dec = 0 },
+                new() { Group = "Bunker buster", Id = "buster_cooldown", Label = "Cooldown",     Base = 12, Unit = "s", Dec = 1, Inverse = true },
                 new() { Group = "Shockwave", Id = "wave_range",    Label = "Reach",          Base = 1000, Unit = "u", Dec = 0 },
                 new() { Group = "Shockwave", Id = "wave_push",     Label = "Throws them",    Base = 1000, Unit = "u", Dec = 0 },
-                new() { Group = "Shockwave", Id = "wave_disable",  Label = "Holds a boss",   Base = 3, Unit = "s", Dec = 1 },
+                new() { Group = "Shockwave", Id = "wave_disable",  Label = "Holds a boss or structure", Base = 3, Unit = "s", Dec = 1 },
                 new() { Group = "Shockwave", Id = "wave_cooldown", Label = "Cooldown",       Base = 30, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Gravity well", Id = "well_light",    Label = "Pulls a light",    Base = 200, Unit = "u/s", Dec = 0 },
+                new() { Group = "Gravity well", Id = "well_heavy",    Label = "Pulls a heavy",    Base = 100, Unit = "u/s", Dec = 0 },
+                new() { Group = "Gravity well", Id = "well_cooldown", Label = "Cooldown",         Base = 22, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 // frigate_c (the pack, J5): the main sits aft, on the ring turret the art draws at
@@ -363,7 +382,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0.0f, 53.48f) },
                 Pds   = new Vector2[] { new(-27.1f, 64.4f), new(27.1f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Shockwave, Ab.Deploy } },
+            Abilities = new[] { Ab.Guns, Ab.Buster, Ab.Shockwave, Ab.Well } },
 
         // -- page 3: heavy fighters --------------------------------------------
         new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.None,

@@ -893,7 +893,12 @@ public partial class _Shots : Node
             await W(0.9);                                       // the last throw has landed
             fship.Position = yard; fship.UseAbility("bubble", 0); await W(0.5);
             await Snap("79_freighter_turrets_and_bubble");
+            await LaneA6bTotFrame(hub, fship, yard);
+            await LaneA6bRedeployFrame(fship, yard);
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
+            await LaneA6bMortarFrame(hub, yard);
+            await LaneA6bWellFrame(hub, yard);
+            await LaneA6bLanceFrames(hub, yard);
             await Class(ShipClass.Battleship); await W(0.3);
             await FieldsFrames(hub, yard);
 
@@ -1064,6 +1069,96 @@ public partial class _Shots : Node
         await W(0.3); await Snap("43_lanea_flares_pull_a_mark");
         await W(5.0);
         cam.Zoom = z0;
+    }
+
+    // 6b (kits6b-J2) tot_lines: the freighter's Time on target -- a gunship 420 u above the yard painted,
+    // F, and four amber lines (the spotter's and its three sentries') converging on it in the one frame
+    async Task LaneA6bTotFrame(Hub hub, PlayerShip fship, Vector2 yard)
+    {
+        var mark = hub.SpawnRaider(yard + new Vector2(60, -420), Enemies.Gunship);
+        mark.Hp = 1e9; mark.ApplyStatus(Status.Disabled, 10);
+        fship.Position = yard; fship.Velocity = Vector2.Zero;
+        fship.PaintOn(mark, 5); fship.Sl("tot").Cool = 0;
+        fship.UseAbility("tot", 0);
+        await W(0.08); await Snap("79c_tot_lines");
+        mark.TakeDamage(1e12); await W(0.3);
+    }
+
+    // 6b (kits6b-J3) redeploy_ring: E folds the three sentries out and, 1.0 s later, they stand on the
+    // 150 u ring round the hull, 120 deg apart from the bow; the frame is their landing marks filling
+    // (0.6 s in), then the ring stood (1.2 s)
+    async Task LaneA6bRedeployFrame(PlayerShip fship, Vector2 yard)
+    {
+        fship.Position = yard; fship.Velocity = Vector2.Zero; fship.Rotation = 0f;
+        fship.Sl("redeploy").Cool = 0;
+        fship.UseAbility("redeploy", 0);
+        await W(0.6); await Snap("79d_redeploy_marks");
+        await W(0.6); await Snap("79e_redeploy_ring");
+    }
+
+    // 6b (kits6b-J4) mortar_circle: a bastion's siege mortar in the air -- the round climbing out of its
+    // aft mount toward a cursor 700 u ahead and the friendly 110 u landing circle filling there (0.7 s of
+    // its 1.4 s gone)
+    async Task LaneA6bMortarFrame(Hub hub, Vector2 yard)
+    {
+        Character.Class = ShipClass.FreightBastion; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var bs = hub.GetNode<PlayerShip>("Ship_1"); bs.Position = yard; bs.Velocity = Vector2.Zero; bs.Rotation = 0f;
+        await W(0.2);
+        var at = bs.LobPoint(yard + new Vector2(0, -700));
+        hub.ThrowMissile(new MissileSpec { Side = Missiles.Mortar, Damage = bs.Stats["main_damage"], Blast = (float)bs.Stats["mortar_blast"], Flight = bs.Stats["mortar_flight"] },
+                         bs.Position, at, bs.NetId);
+        await W(0.7); await Snap("79f_mortar_circle");
+        await W(1.0);
+    }
+
+    // 79g: the bastion's gravity well 500 u ahead, three held lights and a held gunship inside its 280 u
+    // ring being drawn in, and one light outside it left where it is. The well is a zone (Zones.All "well"):
+    // its disc with the pull's rings running in (ZoneNode._Draw).
+    async Task LaneA6bWellFrame(Hub hub, Vector2 yard)
+    {
+        var bs = hub.GetNode<PlayerShip>("Ship_1"); bs.Position = yard; bs.Velocity = Vector2.Zero; bs.Rotation = 0f;
+        var at = yard + new Vector2(0, -500);
+        var craft = new System.Collections.Generic.List<Raider>();
+        for (int i = 0; i < 3; i++) craft.Add(hub.SpawnRaider(at + Vector2.Up.Rotated(Mathf.Tau * i / 3f) * 240f));
+        craft.Add(hub.SpawnRaider(at + new Vector2(-170f, 170f), Enemies.Gunship));
+        craft.Add(hub.SpawnRaider(at + new Vector2(380f, 0f)));
+        foreach (var r in craft) { r.Hp = 1e9; r.ApplyStatus(Status.Disabled, 10); }
+        bs.Sl("well").Cool = 0; bs.AimPoint = at; bs.UseAbility("well", 0);
+        await W(0.6); await Snap("79g_gravity_well");
+        foreach (var z in hub.Laid.Where(z => z.Row == Zones.Well).ToList()) hub.Down(Spawns.Zone, z, burst: false, float.NaN);
+        foreach (var r in craft) hub.RaiderDown(r);
+        await W(0.3);
+    }
+
+    // 79h / 79i (kits6b-J7): the Tender's mending lance held on Space, the cursor on a held gunship 420 u
+    // ahead -- the red beam out of the main barrel onto it (79h_lance_burn); then a sentry of its own at 60 of
+    // 120 put on the line 220 u out -- the green beam stopping on the sentry (79i_lance_mend). Then its two
+    // fields (79j, 79k).
+    async Task LaneA6bLanceFrames(Hub hub, Vector2 yard)
+    {
+        Character.Class = ShipClass.FreightTender; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var td = hub.GetNode<PlayerShip>("Ship_1"); td.Position = yard; td.Velocity = Vector2.Zero; td.Rotation = 0f;
+        var at = yard + new Vector2(0, -420);
+        var foe = hub.SpawnRaider(at, Enemies.Gunship); foe.Hp = 1e9; foe.ApplyStatus(Status.Disabled, 12);
+        await W(0.3);
+        Input.ParseInputEvent(new InputEventMouseMotion { Position = GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * at) });
+        await W(2.2);                                      // the barrel round onto the cursor at 90 deg/s
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
+        await W(0.5); await Snap("79h_lance_burn");
+        var post = hub.Drop(td, yard + new Vector2(0, -220), 60, 120);
+        await W(0.4); await Snap("79i_lance_mend");
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = false });
+        if (post != null) hub.DeployedTaken(post);
+        hub.RaiderDown(foe);
+        await W(0.3);
+        // 79j / 79k (kits6b-J8): F, the overdrive field's amber 500 u ring round the tender; then Q, the repair
+        // field's green ring over it
+        td.Sl("overdrive").Cool = 0; td.UseAbility("overdrive", 0);
+        await W(0.4); await Snap("79j_overdrive_field");
+        td.Sl("repair").Cool = 0; td.UseAbility("repair", 0);
+        await W(0.4); await Snap("79k_repair_field");
+        td.Sl("overdrive").Left = 0; td.Sl("repair").Left = 0;
+        await W(0.2);
     }
 
     // SLICE 6c: the Warrior's blade held (its 160 u, ±55° wedge and the sweep across it), then its whirlwind (the 210 u ring).

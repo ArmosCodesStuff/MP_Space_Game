@@ -47,7 +47,7 @@ public sealed class LineDef
 
 public static class Lines
 {
-    public const int Rail = 0, PrismOut = 1, PrismThrough = 2, RailEnhanced = 3;
+    public const int Rail = 0, PrismOut = 1, PrismThrough = 2, RailEnhanced = 3, Tot = 4;
 
     public static readonly LineDef[] All =
     {
@@ -59,6 +59,9 @@ public static class Lines
         new() { Id = "prism_through", Wide = 36f, Stops = 0, Side = LineSide.Pilots, Fx = global::Fx.Rail, Beam = global::Beam.Rail },
         // an enhanced rail round (ActiveReload): the rail's line and credit, drawn and heard white
         new() { Id = Dealt.Rail, Width = "rail_width", Reach = "rail_range", Stops = 0, AtTarget = false, Fx = global::Fx.RailEnhanced, Beam = global::Beam.RailEnhanced },
+        // the freighter's Time on target (6b, D36): one line from each gun that can reach the paint,
+        // 14 u wide, ending AT the painted target, landing on every hostile on it
+        new() { Id = Dealt.Tot, Width = "tot_width", Reach = "tot_reach", Stops = 0, AtTarget = true, Fx = global::Fx.Tot, Beam = global::Beam.Tot },
     };
 
     public static LineDef Of(int row) => All[row >= 0 && row < All.Length ? row : Rail];

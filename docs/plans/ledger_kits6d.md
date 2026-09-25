@@ -540,3 +540,22 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
   pack into 47, 16 names nothing, total 10 -- the old total==10 was already stale with Unwebbed added), and the two sweep
   status-clear lists (Evading dropped).
 - next: none; slice 6d ready for its re-gate.
+
+## kits6d-merge2 · PRE (merge of version-l)
+- Intent: git merge version-l (bcab9c3, kits6b merged) into wt/kits6d; HEAD bd1d796ab942e0c560f194df3e740a9d5d99bf28. Conflicts: CHANGES.md, Dealt.cs, Fx.cs,
+  Items.cs, PlayerShip.cs, Shots.cs, SmokeTest.cs.txt.
+
+## kits6d-merge2 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. No engine run.
+- Dealt.cs: both sides' ids (this lane's Reverb/Venom rename kept; 6b's Tot/Mortar/Lance added).
+- Fx.cs: wire ids -- version-l's Tot = 16 kept, this lane's Venom renumbered to 17; row order tot then venom.
+- Shots.cs: version-l's Spotter = 9 / Buster = 10 kept; Pepper 11 / Rod 12 / Echo 13 / Pellet 14 renumbered to the end;
+  both sides' ShotDef fields (Command; Paint, Versus, VersusMult, Through) and rows.
+- Items.cs: PrimaryShots is the union (echo, pellet, spotter, mortar, lance); the "reverb" comment kept.
+- PlayerShip.cs: Lifts uses version-l's LiftStat, extended with Lift.Thrust => ThrustStat; AbilityDef.While (deleted
+  here in J13) dropped from both the own-row and 6b's Aura loop; Spec keeps version-l's Kind (pd -> Shell) plus this
+  lane's RepeatShare/Pellets; FireControl keeps OnFire + Prime's k and calls 6b's FireOnce(k), whose default branch
+  shoots Shoot(k).
+- SmokeTest.cs.txt: sustained-DPS check takes this lane's Echo formula with 6b's freighter wording; Fx checks list
+  Reverb/Tot/Venom, Fx.All.Length 18 with Fx.Venom == 17; Shots.All.Length 15 with Pepper/Rod/Echo/Pellet 11-14.
+- CHANGES.md: both handoffs and both Unreleased sections kept; this lane's wire ids updated to the renumbered ones.

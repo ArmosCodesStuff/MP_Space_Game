@@ -74,6 +74,13 @@ public static class Targeting
     public static readonly TargetFilter Throwable = new(forbid: Tag.Missile | Tag.Hulled | Tag.Structure | Tag.Dummy);
     // WHAT A HOOK SWINGS ROUND rather than tows (the Grapnel, Towing.cs): a boss, a structure, a dummy
     public static readonly TargetFilter Immovable = new(require: Tag.Boss | Tag.Structure | Tag.Dummy);
+    // WHAT A SHOCKWAVE REACHES (the bastion's): everything but a body in flight. Of it, the Immovable is
+    // HELD (Status.Disabled) and the rest is Throwable -- thrown clear.
+    public static readonly TargetFilter Shaken = new(forbid: Tag.Missile | Tag.Hulled);
+    // WHAT A GRAVITY WELL DRAGS (Zones.All "well"): raiding craft, light or heavy -- never a boss, a structure, a
+    // practice dummy or anything in flight.
+    public static readonly TargetFilter Pullable = new(require: Tag.Light | Tag.Heavy,
+                                                       forbid: Tag.Boss | Tag.Structure | Tag.Dummy | Tag.Missile | Tag.Hulled);
     // WHAT A TURRET LEFT STANDING TAKES: anything hostile -- a missile, a raider of any weight, a
     // boss, a station -- ranked as point defence ranks (Turret.Rank), so missiles and small craft
     // still come first. Point defence's own filter would keep it off a heavy, a boss and a pylon,
@@ -110,6 +117,15 @@ public static class Targeting
 }
 
 // Anything a status can be put on: a ship, a boss, an enemy, a base's craft.
+// WHAT STANDS BEHIND A SHIELD (a pirate base while a pylon stands): its TakeDamage stops everything
+// while Shielded, and TakeThrough is the one door past it -- the share a row names (ShotDef.Through,
+// Dealt.Deal's `through`), already cut to that share when it arrives.
+public interface IShielded
+{
+    bool Shielded { get; }
+    void TakeThrough(double d);
+}
+
 public interface IStatused
 {
     StatusSet Statuses { get; }

@@ -42,11 +42,25 @@ final test phase** -- rung 3 twice (LaneA6d Pepper, Rod, RodRecoil, Ramjet, Slin
 their Row checks; the rewritten walls, kit-carry, defaults, ability tour and sweep; the guard-table and five-wire-status
 checks), rung 4 (frames 76b-76f, 78b-78d), rung 5
 `six,six` (the Pepperbox, Rod -- now with its recoil --, Ramjet, Rewind, EMP and Shadow step guest pairs). Wire: Status
-bit 16 (Evading) is gone and unassigned; Shots rows pepper 9 / rod 10 /
-echo 11 / pellet 12, ShotLook Rod / Ghost, Fx.Venom 16, Raider.FlagJam 16 (DL11: renumber at the merge if another lane took
+bit 16 (Evading) is gone and unassigned; Shots rows pepper 11 / rod 12 /
+echo 13 / pellet 14 (renumbered past 6b's on the merge), ShotLook Rod / Ghost, Fx.Venom 17, Raider.FlagJam 16 (DL11: renumber at the merge if another lane took
 it); the ability ids change (roll, echo, stealth gone; pepperbox, rod, ramjet, slingshot, reverb, rewind, emp, veil, venom,
 step), so the protocol fingerprint moves. Owner question with its default built: the Wraith's v1 numbers were never
 committed (DL3), derived from the signed power rows. Detail, DL1-DL14 and what is owed: `docs/plans/ledger_kits6d.md`.
+**2026-09-25 (worktree `WarShips_wt_kits6b`, branch `wt/kits6b`): kits lane A slice 6b, the freighters -- all three
+built. FREIGHTER (spotter paint on the wire, Time on target on F, the Bubble over every friendly hull on Q, Redeploy on
+E); TENDER (the Mending lance on Space, a Beam primary through slice 4's `Mend`, now on every friendly hull; the
+Overdrive field on F, the Repair field on Q, Resupply on E); BASTION (the siege mortar, a Lob primary; Bunker buster
+on F; Shockwave on Q, holding what it cannot throw; Gravity well on E, a row of 6c's `Zones.All`). version-l (slices 4, 5, 6c)
+merged in. Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice
+(the LaneA6b* solo checks, LaneA6bBusterBossChecks in the boss fight, LaneA6bSiegeChecks in the siege, and every
+rewritten row, sweep and table check), rung 4 (frames 79c-79k), rung 5 `six,six` (LaneA6bPaintWireHost/Guest,
+LaneA6bTotHost/Guest, LaneA6bFieldsHost/Guest). Wire (appended, renumbered past 6c's on the merge): Shots.Spotter = 9,
+Shots.Buster = 10, Fx.Tot = 16, Zones.Well = 2, Beam.Tot = 10, Lines.Tot = 4, Missiles.Mortar = 2,
+FieldLook.Lance; the lance and the fields ride the ability slots (no new RPC). Detail and decisions (6b's D33-D45;
+kits5 also used D33-D37): `docs/plans/ledger_kits6b.md`. Merge gate 1 fixed (kits6b-J11): the well is a zone row
+(its own list and Fx row deleted), Redeploy's bow check off its knife edge, Time on target proved on a moving gunship
+(0/130/260 u/s), the Repair field proved to skip a wreck.
 
 **2026-09-25 (worktree `WarShips_wt_kits4`, branch `wt/kits4`): class kits lane A slice 4 -- F8 (the
 press's point, helm moves with the Grapnel's pull and swing, the host's mark and wards) and F10 (Mend)
@@ -342,9 +356,9 @@ whenever the ship is alive, on every hull that mounts it.
 | Battleship | main guns | fire mode | broadside (3 volleys, 14 s cooldown) | point defence (passive) |
 | Destroyer | main guns | fire mode | missile burst (magazine of 3) | R reload (9 s), point defence (passive) |
 | Carrier | fighters: attack | — | bomber strike | R recall, point defence (passive) |
-| Freighter | main gun | fire mode | bubble (400 soaked, 8 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
-| Tender | main gun | fire mode | overdrive (x2 rate of fire, 8 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
-| Bastion | main gun | fire mode | shockwave (1000 u, or a boss held 3 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
+| Freighter | spotter (a hit paints 5 s) | -- | time on target (every gun in 1500 u of the paint, 40 a line, 16 s) | Q bubble (400 soaked, 8 s, every friendly hull in it), E redeploy (a 150 u ring, 1.0 s), R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
+| Tender | mending lance (4 a tick on a foe, 0.8 on a friend, 650 u) | -- | overdrive field (x1.5 to all in 500 u, 8 s) | Q repair field (2% a second, 8 s), E resupply (8 s off every cooldown in 500 u), point defence (passive) |
+| Bastion | siege mortar (150-1100 u, 1.4 s) | -- | bunker buster (180; 360 on a boss or structure; 12 s) | Q shockwave (1000 u; a boss, structure or dummy held 3 s), E gravity well (900 u, 280 u, 6 s), point defence (passive) |
 | Sniper | railgun (hold to charge; Space in the white box while it reloads: x1.5) | — | Anchor (8 s rooted, x2.5, reach x1.4) | Q tether mine (2 charges), E flares |
 | Warrior | blade (26 every 0.40 s) | — | prism stance (2 s) | E lunge (420 u), Q whirlwind (2 s) |
 | Warden | proximity flak (45 DPS, 70 u fuse) | fire mode | six hunter-seekers (latched raiders first) | Q taunt (6 s), E flak curtain, point defence (passive), 10 DPS |
@@ -650,6 +664,32 @@ barrel roll: `Status.Evading` (bit 16 now unassigned) and its guard row, and the
 **Known broken:** engine-unproven (rungs 3-5 owed). The Wraith's numbers are a derived default, not a signed card (DL3).
 The Slingshot has no rung-5 pair (kits_v31 §8 does not list it; DL10). The kit-carry check was already stale on this
 branch after J1/J5 (the Echo could not wear its own gun); J8 fixed and rewrote it.
+### Class kits, lane A slice 6b: the Freighter, the Tender and the Bastion (2026-09-25, worktree wt/kits6b)
+
+**Freighter** (hull 450): its gun is a **spotter** (800 u, 31.25 every 1.25 s) whose hit PAINTS the target for 5 s,
+and the paint rides the pilot's slots to every peer. **F Time on target**: the spotter and every landed sentry
+within 1500 u of the paint fire one 14 u rail line each, in the same tick, 40 to every hostile on it, every 16 s
+(refused NO PAINT / COOLING). **Q Bubble** now covers every friendly hull inside it -- pilots, sentries, fleet craft.
+**E Redeploy**: every sentry folds and lands 1.0 s later on a 150 u ring round the hull, 120 deg apart, each with its
+hull, every 20 s. Sentries: 650 u, 5 every 0.5 s. Fire mode and the cargo gun are gone.
+**Bastion** (hull 420): its gun is a **siege mortar** lobbed onto the cursor (150-1100 u, 1.4 s in the air, 58.75 in
+110 u every 2.35 s). **F Bunker buster**: one slow round (380 u/s, 1400 u) that stops on the first body, 180 -- 360
+on a boss or structure, 90 through a pylon's shield -- every 12 s. **Q Shockwave**: throws what is within 1000 u
+clear and HOLDS a boss, a structure or a practice dummy 3 s. **E Gravity well**: at the cursor up to 900 u, 280 u,
+6 s, drags loose light craft in at 200 u/s and heavies at 100; bosses, structures, anything in flight and anything
+latched stay put; every 22 s. Fire mode and the sentries are gone.
+**Tender** (hull 380): Space the **Mending lance** -- a beam out of the main barrel (it follows the cursor at 90 deg/s),
+650 u, onto the FIRST body it touches, a tick every 0.1 s: 4 to a hostile (40 DPS), 0.8 mended on a friend (8 HP/s) --
+a pilot, a sentry, a ship of the fleet -- never both, and missiles pass through it. **F Overdrive field**: 8 s, you and
+every friendly pilot within 500 u (their sentries and craft with them) fire x1.5; two fields add; every 24 s. **Q Repair
+field**: 8 s, every friendly hull within 500 u, yours too, mended 2% of its full hull a second; every 30 s. **E
+Resupply**: 8 s off every ability still cooling on every pilot within 500 u, you included -- never the drive, never a
+Resupply; refused NOTHING COOLING when there is nothing to cut; every 30 s. Its cargo gun, fire mode and sentries are
+gone. The heal door (`Mend`) now reaches every friendly hull (`IMendable`).
+**Known broken:** engine-unproven (rungs 3-5 owed). Time on target, the Buster and the Tender's fields are not
+lifted by Weapons or REACH points or any item role (a default: the items lane's call). An ally's sentries are lifted
+by an Overdrive field through their pilot standing in it, not where the sentry stands (D38). The freight_main_gun
+item keeps its id on all three (a saved id).
 
 ### Class kits, lane A slice 4: helm moves, wards, the press's point, Mend -- F8, F10 (2026-09-25, worktree wt/kits4)
 
@@ -708,7 +748,7 @@ flight left) moves onto one, and a raider within 150 u is DAZZLED until 4 s afte
 no new latch; a JAMMED one drops the one it holds. **Tow and hurl** (`Towing.cs`): a hooked craft is held 160 u off
 the bow, hauled up to 3 s and hurled 600 u/s up to 900 u; the first hostile it strikes and the craft each take 60
 (120 for a heavy). The keys that use these are slice 6's.
-**Known broken:** engine-unproven (rungs 3-5 owed). A guest's sentries do not see the paint yet (host-only until 6b).
+**Known broken:** engine-unproven (rungs 3-5 owed). (A guest's sentries see the paint since 6b: it rides the pilot's slots.)
 A pulled mark jumps to its flare rather than sliding (the slide is 6c's drawing).
 
 ### Items by hull category, lane I (2026-09-25, worktree wt/items)

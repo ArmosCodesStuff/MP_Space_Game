@@ -80,7 +80,7 @@ public class ShipStats
 
     public double this[string id] => _byId.TryGetValue(id, out var s) ? s.Value : 0;
     // A row with more shares added to its OWN bonus -- a running lift's (PlayerShip.Cadence) -- so
-    // a part's +100% rate and an overdrive's x2 are x3 together, as two parts are. 0 for a row this
+    // a part's +100% rate and a running x2 lift are x3 together, as two parts are. 0 for a row this
     // sheet has not got, as the indexer answers.
     public double With(string id, double shares) => _byId.TryGetValue(id, out var s) ? s.With(shares) : 0;
 
