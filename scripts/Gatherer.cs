@@ -71,21 +71,28 @@ public class GathererDef : HullArt
 
 public static class Gathering
 {
+    // THE DRONE EVERY GATHERER FLIES (the pack's drone_salvager, gatherer.png: the owner's pick for
+    // both, 2026-09-25), told apart by its row's Tint. Its marks as tools/make_ships.ps1 prints them:
+    // its three bells, the claws' mouth its beam and its load leave from, and its span at the claws.
+    // (Declared before All: a static field's initialiser runs in the order it is written.)
+    private const string Drone = "res://gatherer.png";
+    private static readonly Nozzle[] DroneBells = { new(-3.85f, 18.94f, 3.53f), new(0f, 19.86f, 4.38f), new(3.96f, 19.01f, 3.67f) };
+    private static readonly Vector2 ClawMouth = new(0f, -13.36f);
+    private const float DroneSpan = 11.24f;
+
     // The index IS the id on the wire: the fleet is built and reported in this order (Yard's
     // per-gatherer arrays line up by position). So APPEND ONLY.
     public static readonly GathererDef[] All =
     {
-        new() { Id = "miner", Name = "Miner", Texture = "res://miner.png", Tab = "MINERS",
-                Length = 40f, Tint = new Color(0.63f, 0.46f, 0.31f), Emitter = new(0f, -17.14f), HalfWidth = 14.20f,
-                Nozzles = new Nozzle[] { new(-3.53f, 14.02f, 3.30f), new(0f, 14.82f, 3.75f), new(3.53f, 14.02f, 3.48f) },
+        new() { Id = "miner", Name = "Miner", Texture = Drone, Tab = "MINERS",
+                Length = 40f, Tint = new Color(0.63f, 0.46f, 0.31f), Emitter = ClawMouth, HalfWidth = DroneSpan, Nozzles = DroneBells,
                 Resource = "ore", Unit = "ore", Site = GatherSite.Rocks, Beam = GatherBeam.Shaft,
                 CargoTint = new Color(0.75f, 0.5f, 0.3f),
                 RateId = "mine_rate", RateName = "Mining beam", RateBlurb = "+10% mining speed",
                 Muster = new Vector2(-60, -300), MusterStep = new Vector2(30, 0) },
 
-        new() { Id = "salvager", Name = "Salvager", Texture = "res://salvager.png", Tab = "SALVAGERS",
-                Length = 40f, Tint = new Color(0.61f, 0.35f, 0.11f), Emitter = new(0f, -13.36f), HalfWidth = 11.24f,
-                Nozzles = new Nozzle[] { new(-3.85f, 18.94f, 3.53f), new(0f, 19.86f, 4.38f), new(3.96f, 19.01f, 3.67f) },
+        new() { Id = "salvager", Name = "Salvager", Texture = Drone, Tab = "SALVAGERS",
+                Length = 40f, Tint = new Color(0.61f, 0.35f, 0.11f), Emitter = ClawMouth, HalfWidth = DroneSpan, Nozzles = DroneBells,
                 Resource = "salvage", Unit = "salvage", Site = GatherSite.Wreck, Beam = GatherBeam.Scan,
                 CargoTint = new Color(0.75f, 0.78f, 0.82f),
                 RateId = "salvage_rate", RateName = "Salvage beam", RateBlurb = "+10% salvage speed",

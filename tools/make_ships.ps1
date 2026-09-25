@@ -559,8 +559,8 @@ $Finished = @(
        Nozzles = @(@(82, 588, 63), @(193, 588, 63)) }
     @{ Src = 'fighter_tri_a.png'; Nose = 'Up'; Out = 'enemy_talon_hull.png'; Length = 40
        Nozzles = @(@(61.5, 264, 23), @(147.5, 264, 23)) }
-    @{ Src = 'fighter_delta.png'; Nose = 'Up'; Out = 'enemy_pod_hull.png'; Length = 52
-       Nozzles = @(@(102, 243, 20), @(176, 243, 20)) }
+    @{ Src = 'drone_sensor.png'; Nose = 'Up'; Out = 'enemy_pod_hull.png'; Length = 52
+       Nozzles = @(,@(130, 241, 37)) }
     @{ Src = 'gunship_h.png'; Nose = 'Left'; Out = 'enemy_cross_hull.png'; Length = 120
        Marks = [ordered]@{ turret = @(161, 445); housing = @(191, 445) }
        Nozzles = @(@(108, 602, 62), @(210, 602, 62)) }
@@ -582,24 +582,21 @@ $Finished = @(
     @{ Src = 'cargo_4.png'; Nose = 'Left'; Out = 'hauler.png'; Length = 200
        Marks = [ordered]@{ pod0 = @(61, 245.5); pod1 = @(61, 340.5); pod2 = @(61, 434.5); podcorner = @(29, 210); pd = @(153.5, 51); side = @(22, 245.5) }
        Nozzles = @(@(89, 643, 50), @(216.5, 644, 51)) }
-    # the gatherers (Gathering.All): the beam and the load leave from the emitter (between the
-    # miner's scoops, in the salvager's claws); side is the span the raiders hold off
-    @{ Src = 'drone_mining.png'; Nose = 'Left'; Out = 'miner.png'; Length = 40
-       Marks = [ordered]@{ emitter = @(166, 38); side = @(7, 340) }
-       Nozzles = @(@(126.5, 387, 37), @(166, 396, 42), @(205.5, 387, 39)) }
-    @{ Src = 'drone_salvager.png'; Nose = 'Right'; Out = 'salvager.png'; Length = 40
+    # the gatherers (Gathering.All, every row: one drone, tinted per row): the beam and the load leave
+    # from the emitter, in the claws' mouth; side is the span the raiders hold off
+    @{ Src = 'drone_salvager.png'; Nose = 'Right'; Out = 'gatherer.png'; Length = 40
        Marks = [ordered]@{ emitter = @(165, 100); side = @(7, 120) }
        Nozzles = @(@(111.5, 557, 50), @(166, 570, 62), @(222, 558, 52)) }
     # the lanes' couriers (Lanes.All, all four rows)
     @{ Src = 'drone_economy.png'; Nose = 'Left'; Out = 'courier.png'; Length = 30
        Nozzles = @(@(92.5, 682, 46), @(140, 685, 48), @(187.5, 682, 46)) }
-    # the carrier's wing (Wings.All): the bomber's torpedoes leave from its pods' front (launch, the
-    # port pod; the starboard is its mirror)
-    @{ Src = 'interceptor_a.png'; Nose = 'Left'; Out = 'wing_fighter.png'; Length = 17
-       Nozzles = @(@(99.5, 536, 37), @(142, 536, 36), @(183, 501, 34), @(223.5, 536, 37), @(264, 536, 36)) }
-    @{ Src = 'interceptor_b.png'; Nose = 'Left'; Out = 'wing_bomber.png'; Length = 28.125
-       Marks = [ordered]@{ launch = @(80.5, 182) }
-       Nozzles = @(@(135, 515, 36), @(219, 515, 36)) }
+    # the carrier's wing (Wings.All): the bomber's torpedoes leave from its wingtip rails' front
+    # (launch, the port rail; the starboard is its mirror)
+    @{ Src = 'fighter_delta.png'; Nose = 'Up'; Out = 'wing_fighter.png'; Length = 17
+       Nozzles = @(@(102, 243, 20), @(176, 243, 20)) }
+    @{ Src = 'fighter_g.png'; Nose = 'Right'; Out = 'wing_bomber.png'; Length = 28.125
+       Marks = [ordered]@{ launch = @(16.5, 232) }
+       Nozzles = @(@(105.5, 446, 33), @(204.5, 446, 33)) }
 )
 $Turns = @{ Up = 0; Right = 1; Down = 2; Left = 3 }
 $Made = @()

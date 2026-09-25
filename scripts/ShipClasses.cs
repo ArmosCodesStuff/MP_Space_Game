@@ -141,11 +141,12 @@ public static class Wings
         // The bomber is the LARGER airframe (28.125 to the fighter's 17), so the two read apart
         // at a glance; 0.65 parked is the hauler's own (12 u across, inside the 21.3 u of white
         // beside the runway), and 1.6 / 1.0 / 0.6 s are the deck's moves (the lift's run up 118 u
-        // of runway ends at about its top speed). The art is the pack's interceptor_a and _b, the
-        // bells and the bomber's pods as tools/make_ships.ps1 prints them.
+        // of runway ends at about its top speed). The art is the pack's fighter_delta and fighter_g
+        // (the owner's picks), the bells and the bomber's wingtip rails as tools/make_ships.ps1
+        // prints them.
         new() { Id = "fighter", Name = "Fighter", Way = WingWay.Strafe,
                 Texture = "res://wing_fighter.png", Length = 17f,
-                Nozzles = new Nozzle[] { new(-2.67f, 8.44f, 1.18f), new(-1.31f, 8.44f, 1.15f), new(0f, 7.32f, 1.09f), new(1.29f, 8.44f, 1.18f), new(2.59f, 8.44f, 1.15f) },
+                Nozzles = new Nozzle[] { new(-2.62f, 8.29f, 1.42f), new(2.62f, 8.29f, 1.42f) },
                 CountStat = "fighter_count", SpeedStat = "fighter_speed", RangeStat = "fighter_range",
                 IntervalStat = "fighter_interval", DamageStat = "fighter_damage",
                 TurnStat = "fighter_turn", BurstStat = "fighter_burst", RestStat = "fighter_rest",
@@ -154,8 +155,8 @@ public static class Wings
 
         new() { Id = "bomber", Name = "Bomber", Way = WingWay.Strike,
                 Texture = "res://wing_bomber.png", Length = 28.125f,
-                Nozzles = new Nozzle[] { new(-2.31f, 13.90f, 1.98f), new(2.31f, 13.90f, 1.98f) },
-                Launch = new(-5.30f, -4.39f),                                  // the front of its torpedo pods
+                Nozzles = new Nozzle[] { new(-2.99f, 13.08f, 2.04f), new(3.11f, 13.08f, 2.04f) },
+                Launch = new(-8.48f, -0.12f),                                  // the front of its wingtip rails
                 Parks = true, LandedScale = 0.65f,
                 CountStat = "bomber_count", SpeedStat = "bomber_speed", AccelStat = "bomber_accel",
                 RangeStat = "launch_range",
@@ -416,9 +417,9 @@ public partial class Wing : Node2D
                 if (_cd <= 0 && Ammo > 0)
                 {
                     _cd += Carrier.Cadence(Def.IntervalStat); Ammo--;
-                    var dir = Vector2.Up.Rotated(Rotation);           // straight off the nose, out of one pod and then the other
-                    var pod = Ammo % 2 == 0 ? Def.Launch : Def.Launch with { X = -Def.Launch.X };
-                    Combat.LaunchTorpedo(Position + pod.Rotated(Rotation), dir, (float)S[Def.ShotSpeedStat],
+                    var dir = Vector2.Up.Rotated(Rotation);           // straight off the nose, off one wingtip rail and then the other
+                    var rail = Ammo % 2 == 0 ? Def.Launch : Def.Launch with { X = -Def.Launch.X };
+                    Combat.LaunchTorpedo(Position + rail.Rotated(Rotation), dir, (float)S[Def.ShotSpeedStat],
                                          (float)S[Def.ShotRangeStat], S[Def.DamageStat], source: Carrier);
                 }
                 if (Ammo <= 0) { _b = BSt.Return; Carrier.NoteStrikeDone(); }

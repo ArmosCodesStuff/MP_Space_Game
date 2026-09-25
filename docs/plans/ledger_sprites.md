@@ -201,6 +201,61 @@ in this lane; the main session owes rungs 3 and 4 (listed at the end).
   `Combat.KeelCovers` first: with L <= 2 HW both hulls are circles of HW, so the length change should
   not move a hit shape. Lane F (curve) edits the siege rows' numbers in Emplacements.cs.
 
+## RESUMED 2026-09-25: the owner re-chose the mapping (binding). Carrier carrier_a (pirate-carrier
+spare carrier_b), Wraith fighter_unit_a, Pod drone_sensor (the pylon too), Miner drone_salvager (the
+salvager too), wing fighter fighter_delta, wing bomber fighter_g. Now unused: drone_mining,
+interceptor_a/_b (+ the old spares cargo_1, fighter_tri_b). Jobs: J3c re-map, J4 siege, J5 players.
+
+### QUEUED (coordinator, owner ruling 2026-09-25): J3d bosses TWICE AS BIG, right after J3c
+- Default 2x (owner said "2 or 3x"): Rusty Bucket L 360 -> 720, Drake 420 -> 840, the multiplier ONE
+  data value on the boss rows (3x = one number). HIT SIZE scales too (HW 70 -> 140, 90 -> 180): the
+  "hit sizes unchanged" rule no longer applies to bosses. Everything reading a boss's length or
+  half-width follows the row (nose beam/burn origin L/2, the Drake's throw/tractor/rock points, escort
+  places, arena spawn distance and stand-offs, boss bar, camera/frames). Rewrite every check/frame
+  asserting old boss sizes (the "310" literal: find what it measures, rewrite from the 2x literals,
+  never loosen). Arena too small for an 840 u Drake -> a decision + report, not a shrunk ruling.
+  Owes frames 38, 39, 42, 62-66 and the rung-3 boss checks. Then J4, J5.
+
+### J3c re-map -- PRE
+- Intent: the Pod row onto drone_sensor (Up), the miner onto the salvager's art (one `$Finished` row,
+  one file both gatherer rows load; miner.png/salvager.png deleted), wing fighter fighter_delta (Up),
+  bomber fighter_g (Right) with its torpedoes on fighter_g's own weapon points; bells counted off the
+  art; every check/frame asserting the old rows rewritten; sprites.md mapping tables to the picks.
+- Start: a73d26e5f15572b0c3a4e492b5ad17b779bdecdc
+- Files: tools/make_ships.ps1 09c21642629b · scripts/Enemies.cs 6fe7b4fe523e · scripts/Gatherer.cs
+  fb719ec94158 · scripts/ShipClasses.cs a8e655389a75 · enemy_pod_hull.png 3d1e12eeac69 · miner.png
+  34781fb6ffb1 · salvager.png cffc7ca41279 · wing_fighter.png 3add16dc0d2e · wing_bomber.png
+  68879b26df28 · gatherer.png (new) · tools/smoketest/SmokeTest.cs.txt 6b232c654031 ·
+  tools/screens/Shots.cs.txt c1bda594db98 · docs/plans/sprites.md 8fe86d01207e · docs/DESIGN.md
+  d2350aeb60b7 · docs/CHANGES.md 0fe396740a87
+
+### J3c re-map -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. Rungs 3/4 owed.
+- Files: make_ships.ps1 (Pod row drone_sensor; ONE gatherer row -> gatherer.png; wing rows
+  fighter_delta / fighter_g), Enemies.cs (Pod 1 bell), Gatherer.cs (Drone/DroneBells/ClawMouth/
+  DroneSpan shared by both rows), ShipClasses.cs (wing bells, Launch on the rails, `pod` -> `rail`,
+  the art comment), enemy_pod_hull/wing_fighter/wing_bomber.png, gatherer.png (new), miner.png +
+  salvager.png deleted, SmokeTest (3 checks rewritten), sprites.md (§1 picks + §2 rows), DESIGN.md,
+  CHANGES.md (J3c entry; J1/J3 entries brought to what is true now).
+- Commit: the J3c commit (hash = J3d's Start).
+- **D16** Pod bells: ONE, the stern vent box (x 111.5-148.5, aft rim y 241 of drone_sensor): the round
+  drone's eight pods are sensor lenses, not bells. The raider check asserts bells {2,2,2,1,2,2}.
+- **D17** Bomber torpedo points = fighter_g's WINGTIP RAILS' front (port (16.5, 232) nose-up px ->
+  (-8.48, -0.12) u), the art's longest, symmetric weapon points; the inner guns (+-40 px, 2.5 u) are
+  the alternative. Check bound 7.2-9.8 u (8.5 +- the old 1.3 u tolerance), not on an edge.
+- **D18** One pack file on two rows is ONE game file named for what both rows are (`gatherer.png`),
+  its marks shared by name; the pack's unused files (drone_mining, interceptor_a/_b, ...) stay in
+  art_source/pack (the owner's delivery, D1) -- "art nothing loads" meant the game's miner/salvager.png.
+- Parked bomber: fighter_g is 298 x 456 px -> 11.95 u across at 65% (was 12): the deck check holds.
+- Rung 3 owed: rewritten "the fleet wears the pack ..." (fighter 2 bells; one drone, two tints),
+  "a torpedo leaves from a wingtip rail's front, not the nose" (7.2-9.8 u), "every raider's art ...
+  flames from its own bells" (pod 1); unchanged but re-read: "two craft may share one pad" (miner
+  Extent 14.2 -> 11.2), "salvager's beam is a narrow scan", "a parked bomber sits at 65% ...".
+- Rung 4 owed: 0 (title foes), 12, 13, 16b, 16c, 27, 28-28e, 46, 48, 59, 59b, 80 -- the pod's one
+  flame at its vent, both gatherers as the claw drone in their tints, the fighter's 2 and the
+  bomber's 2 flames, torpedoes off the wingtips.
+- Next: J3d bosses 2x.
+
 ### OWED to the main session (nothing here has run above rung 2)
 - Rung 3 (`tools\smoketest\run.ps1 -Solo`, two seeds for the new checks):
   - new "the title screen's foes wear their raider rows' tints, the Web on its own art"

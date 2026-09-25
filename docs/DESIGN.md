@@ -747,7 +747,7 @@ under the base. A route or a range that moves must keep the 500.
   defence on the stern quarters. **Destroyer**: main turrets on the fore spine and the central plate,
   point defence on the stern quarters, the turrets at 0.8x.
   **Raiders** (the pack): the webifier `fighter_swept`, the gunship `frigate_b` (its turret on its
-  painted twin), the talon `fighter_tri_a`, the pod `fighter_delta`, the cross `gunship_h` (the gunship's
+  painted twin), the talon `fighter_tri_a`, the pod `drone_sensor` (a round drone; its one bell the stern vent), the cross `gunship_h` (the gunship's
   hull with the rack stripped; its turret on the clean aft deck), the lancerkin `frigate_d` (its turret
   on the plate aft of its tubes), and the title screen's Web `crescent_a` in the webifier's red. Their
   painted guns stay: too small to see under a turret. **Bosses** (the pack): the Rusty Bucket
@@ -756,12 +756,14 @@ under the base. A route or a range that moves must keep the 500.
   black; a pure multiply, since the hull reads on space without a lift -- with their painted guns (a boss has no moving turret) and their
   bells listed on the row (2 and 5; a boss draws no flame). HalfWidth 70 and 90 did not move, so the
   Drake's 310 u throw literal stands. **The fleet** (the pack): the hauler `cargo_4` (`Hauler.Art`; its
-  six painted cargo frames are the six pods, its point defence on the bow dome), the miner
-  `drone_mining` and the salvager `drone_salvager` (each tinted the average colour of the art it
-  replaced; the beam and the unloading load leave from the row's `Emitter`, between the scoops and in
-  the claws), the lanes' couriers `drone_economy` (a file of their own, `courier.png`, 30 u, in the
-  stations' livery), the wing's fighter `interceptor_a` (5 bells) and bomber `interceptor_b` (its
-  torpedoes leave from the front of its pods, one pod then the other: `WingDef.Launch`). The hauler's
+  six painted cargo frames are the six pods, its point defence on the bow dome), the miner and the
+  salvager one drone, `drone_salvager` (`gatherer.png`, the owner's pick for both: told apart by the
+  row's tint, the average colour of the art each first replaced; the beam and the unloading load leave
+  from the row's `Emitter`, the claws' mouth), the lanes' couriers `drone_economy` (a file of their own,
+  `courier.png`, 30 u, in the stations' livery), the wing's fighter `fighter_delta` and bomber
+  `fighter_g` (its torpedoes leave from the front of its wingtip rails, one then the other:
+  `WingDef.Launch`). **One pack file on two rows is one game file**, named for what both rows are
+  (`gatherer.png`), never a copy per row. The hauler's
   and the gatherers' `Extent` -- what a raider holds off, not a hit size -- is measured off the art.
 - **Turrets**: the owner's twin-barrelled turret is every main turret (`turret_main.png`, lifted out
   of its drawing by an outline, barrels up, the housing's centre the pivot); point defence is a

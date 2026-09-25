@@ -467,38 +467,60 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### The owner's own picks: the pod, the miner and the wing re-arted (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+The owner re-chose six rows of the mapping (`docs/plans/sprites.md` §1, "the owner's picks"); four are
+built here, the carrier and the Wraith come with the player ships:
+- **Pod**: `drone_sensor`, a round drone. It flies on ONE bell, its stern vent (it had two). Hit size
+  unchanged (`HitShare` of its unchanged 52 u).
+- **Miner**: the salvager's drone, `drone_salvager`, in the miner's tint. Both gatherer rows load ONE
+  file, `gatherer.png` (its bells, its claws' mouth and its span shared by name in `Gathering`);
+  `miner.png` and `salvager.png` are deleted. The miner's beam leaves from the claws' mouth, and its
+  Extent is the drone's drawn span, 11.2 u (was 14.2).
+- **Wing fighter**: `fighter_delta` (the pod's old art), two bells (it had five).
+- **Wing bomber**: `fighter_g`. Its torpedoes leave from the front of its wingtip rails, 8.5 u off the
+  keel (the old pods' were 5.3). Parked at 65% it is still 12 u across.
+
+**Checks:** rewritten -- "the fleet wears the pack" (fighter 2 bells; the miner and the salvager one
+texture in their two tints), "a torpedo leaves from a wingtip rail's front, not the nose" (7.2-9.8 u
+off its launcher's keel, was 4.0-6.6 off the pods), "every raider's art ... flames from its own bells"
+(the pod 1).
+
+**Known broken (J3c):** UNPROVEN at rung 3 (those three) and rung 4 (frames 0, 12, 13, 16b, 16c, 27,
+28-28e, 46, 48, 59, 59b, 80 by eye: the pod's one flame, the gatherers' tints on one drone, the wing).
+
 ### The base's fleet and the carrier's wing wear the owner's new sprites (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
 
-The hauler is the pack's `cargo_4`, the miner `drone_mining`, the salvager `drone_salvager`, the lanes'
-couriers `drone_economy` (a new file, `courier.png`: they borrowed the miner's and salvager's art
-before), the wing's fighter `interceptor_a` and bomber `interceptor_b`. Each row derives from
-`HullArt` (`GathererDef`, `LaneDef`, `WingDef`, and the Hauler's own `Hauler.Art`) and flies on the
-bells its art has: hauler 2, miner / salvager / courier 3, fighter 5, bomber 2. The rest, off the art
-(`tools/make_ships.ps1` prints every mark):
+The hauler is the pack's `cargo_4`, the miner and the salvager `drone_salvager` (the owner's picks,
+above), the lanes' couriers `drone_economy` (a new file, `courier.png`: they borrowed the miner's and
+salvager's art before), the wing's fighter `fighter_delta` and bomber `fighter_g`. Each row derives
+from `HullArt` (`GathererDef`, `LaneDef`, `WingDef`, and the Hauler's own `Hauler.Art`) and flies on
+the bells its art has: hauler 2, miner / salvager / courier 3, fighter 2, bomber 2. The rest, off the
+art (`tools/make_ships.ps1` prints every mark):
 - **Hauler**: the six pods are the six painted cargo frames (smaller and further aft than the old
   pods); its point defence moved from the spine to the bow dome. Its three inline flames and its two
   copies of `Length / GetHeight` are gone.
 - **Gatherers**: tinted the old art's average colour (sprites.md Q5): miner (0.63, 0.46, 0.31),
   salvager (0.61, 0.35, 0.11). The beam and the unloading load leave from the row's `Emitter`
-  (between the miner's scoops, in the salvager's claws), not 0.45 L ahead. `Gatherer.Length` is the
-  row's `Length`.
+  (the claws' mouth), not 0.45 L ahead. `Gatherer.Length` is the row's `Length`.
 - **Extent** (the ellipse a raider holds station off and measures its reach to; the fleet has no hit
-  shape) is measured off the art (sprites.md): hauler 40.9 u at its frames' rails (was 24), miner 14.2
-  and salvager 11.2 at their drawn span (both were 12).
+  shape) is measured off the art (sprites.md): hauler 40.9 u at its frames' rails (was 24), the
+  gatherers 11.2 at their drawn span (both were 12).
 - **Couriers**: 22 -> 30 u (sprites.md Q6: at 22 the new art is 8.6 u wide).
-- **Bomber**: its torpedoes leave from the front of its pods, one pod then the other (`WingDef.Launch`),
-  not 0.45 L ahead on the keel. Parked at 65% it is 12 u across (was 18): still inside the white.
+- **Bomber**: its torpedoes leave from the front of its wingtip rails, one then the other
+  (`WingDef.Launch`), not 0.45 L ahead on the keel. Parked at 65% it is 12 u across (was 18): still
+  inside the white.
 
 **Checks:** new "the fleet wears the pack" (all six rows trimmed, bell counts, couriers 30 u in the
-livery, gatherer tints, emitters, Extent = drawn span); new "a torpedo leaves from a pod's front, not
-the nose" (every round in half a second, 4.0-6.6 u off its launcher's keel); the courier-sharing,
+livery, gatherer tints, emitters, Extent = drawn span); new "a torpedo leaves from a wingtip rail's
+front, not the nose" (every round in half a second, off its launcher's keel); the courier-sharing,
 salvager-scan and hauler-clears-the-station checks read the rows (`Def.Length`, `Def.Emitter`,
 `Hauler.Art.Length`); the bomber-size message and the parked-bomber comment lost the old art's words.
 
 **Known broken (J3):** UNPROVEN at rung 3 (the two new checks and the three rewritten) and rung 4
 (frames 7, 8, 12-16, 16b, 16c, 27, 28-28e, 46, 59, 59b by eye). No new courier frame: 16b and 16c
 (zoom 3) already show one close. The hauler's wider Extent lets a raider reach it from about 17 u
-further off its keel; the gatherers' moved by +2.2 / -0.8 u.
+further off its keel; the gatherers' moved by -0.8 u.
 
 ### The bosses are red and black (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
 
@@ -536,7 +558,7 @@ is one helper, `Trimmed`, which the raider check now uses too.
 
 The six raider rows and the title screen's Web now wear the pack in `art_source/pack_2026-09-24/`
 (`docs/plans/sprites.md`): webifier `fighter_swept`, gunship `frigate_b`, talon `fighter_tri_a`, pod
-`fighter_delta`, cross `gunship_h`, lancerkin `frigate_d`, the Web `crescent_a`. The files keep their
+`drone_sensor` (the owner's pick, above), cross `gunship_h`, lancerkin `frigate_d`, the Web `crescent_a`. The files keep their
 names, so no path moved; hit sizes did not move either (each row's `HitShare` of its unchanged Length).
 
 - `tools/make_ships.ps1` has a `$Finished` table: a row turns a pack file nose-up (quarter turns,
@@ -554,7 +576,7 @@ names, so no path moved; hit sizes did not move either (each row's `HitShare` of
   practice fighter reads the webifier's row instead of naming its file.
 
 **Checks:** the title screen's foes wear their raider rows' tints, the Web on its own art (new);
-every raider's art is trimmed to its drawing and flames from its own two bells at the stern, the
+every raider's art is trimmed to its drawing and flames from its own bells at the stern, the
 gunship drawn 136 u (new); frame `80_every_enemy_hull` (was `80_new_enemies`: now all six rows).
 Compiles (typecheck 0 errors, `-Quick` below); rungs 3 and 4 not run in this lane.
 

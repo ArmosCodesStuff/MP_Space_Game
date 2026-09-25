@@ -2362,17 +2362,18 @@ public partial class _Test : Node
         float cone = 0; foreach (Vector2[] bl in bolts) cone = Mathf.Max(cone, Mathf.Abs(Mathf.AngleDifference(aim, (bl[^1] - nose).Angle())));
         Check(bolts.Count >= 2 && cone < 0.33f, $"salvager's beam is a narrow scan: {bolts.Count} arcs within {cone:0.00} rad of centre");
         Check(miner.BeamTo.DistanceTo(Y.WorkSpot(miner).target) < 0.01f, "miner's single beam holds on its asteroid");
-        // THE PACK'S ART ON THE BASE'S FLEET (tools/make_ships.ps1): the hauler cargo_4, the miner
-        // drone_mining, the salvager drone_salvager, the lanes' couriers drone_economy (a file of
-        // their own now, drawn 30 u), the wing's fighter and bomber interceptor_a and _b. Each texture
-        // is trimmed to its drawing, and each flies on the bells its art has, counted off the art --
-        // the hauler 2, the miner, the salvager and a courier 3 (their three thruster blocks), the
-        // fighter 5, the bomber 2 -- every one aft of the hull's centre. The grey gatherers wear the
-        // average colour of the art they replaced; a gatherer's beam leaves from its emitter on the
-        // keel ahead of its centre (the scoops, the claws), and raiders hold off its drawn span.
+        // THE PACK'S ART ON THE BASE'S FLEET (tools/make_ships.ps1, the owner's picks of 2026-09-25):
+        // the hauler cargo_4, the miner AND the salvager drone_salvager (one file, told apart by their
+        // tints), the lanes' couriers drone_economy (a file of their own, drawn 30 u), the wing's
+        // fighter fighter_delta and bomber fighter_g. Each texture is trimmed to its drawing, and each
+        // flies on the bells its art has, counted off the art -- the hauler 2, a gatherer and a
+        // courier 3 (their three thruster blocks), the fighter 2, the bomber 2 -- every one aft of the
+        // hull's centre. The grey gatherers wear the average colour of the art they first replaced; a
+        // gatherer's beam leaves from its emitter on the keel ahead of its centre (the claws' mouth),
+        // and raiders hold off its drawn span.
         {
             var fleet = new (HullArt row, int bells)[] { (Hauler.Art, 2), (miner.Def, 3), (salv.Def, 3), (Lanes.All[0], 3),
-                                                        (Wings.Of(WingKind.Fighter), 5), (Wings.Of(WingKind.Bomber), 2) };
+                                                        (Wings.Of(WingKind.Fighter), 2), (Wings.Of(WingKind.Bomber), 2) };
             var loose = fleet.Where(f => !Trimmed(f.row.Texture)).Select(f => f.row.Texture).ToList();
             var cour = Nodes<Courier>().First(); var cArt = Nodes<Sprite2D>(cour).First();
             Sprite2D HullOf(Gatherer g) => Nodes<Sprite2D>(g).First();
@@ -2380,10 +2381,11 @@ public partial class _Test : Node
             Check(loose.Count == 0 && fleet.All(f => f.row.Nozzles.Length == f.bells && f.row.Nozzles.All(n => n.Y > 0f && n.Y <= f.row.Length * 0.5f + 1f))
                   && Lanes.All.All(l => l.Texture == "res://courier.png" && l.Length == 30f && l.Nozzles.Length == 3)
                   && Math.Abs(cArt.Texture.GetHeight() * cArt.Scale.Y - 30f) < 0.05f && cArt.Modulate == Lanes.Livery
+                  && HullOf(miner).Texture == HullOf(salv).Texture
                   && HullOf(miner).Modulate == new Color(0.63f, 0.46f, 0.31f) && HullOf(salv).Modulate == new Color(0.61f, 0.35f, 0.11f)
                   && new[] { miner, salv }.All(g => g.Def.Emitter.X == 0f && g.Def.Emitter.Y < 0f && g.Def.Emitter.Y > -g.Def.Length * 0.5f
                                                     && g.Extent.halfLength == g.Def.Length * 0.5f && Math.Abs(g.Extent.halfWidth - DrawnHalf(g)) < 0.3f),
-                  $"the fleet wears the pack: trimmed, a flame per bell (hauler/miner/salvager/courier/fighter/bomber {string.Join("/", fleet.Select(f => f.row.Nozzles.Length))}), couriers 30 u in the livery, the gatherers tinted, beaming from the scoops and the claws, held off at their drawn span (miner {miner.Extent.halfWidth:0.0} of {DrawnHalf(miner):0.0} u, salvager {salv.Extent.halfWidth:0.0} of {DrawnHalf(salv):0.0}; loose: {string.Join(", ", loose)})");
+                  $"the fleet wears the pack: trimmed, a flame per bell (hauler/miner/salvager/courier/fighter/bomber {string.Join("/", fleet.Select(f => f.row.Nozzles.Length))}), couriers 30 u in the livery, the miner and the salvager one drone in two tints, beaming from the claws, held off at their drawn span (miner {miner.Extent.halfWidth:0.0} of {DrawnHalf(miner):0.0} u, salvager {salv.Extent.halfWidth:0.0} of {DrawnHalf(salv):0.0}; loose: {string.Join(", ", loose)})");
         }
         double mined0 = Y.Delivered("ore"), salv0 = Y.Delivered("salvage");
         for (int i = 0; i < 12000 && (Y.Delivered("ore") - mined0 < 99.9 || Y.Delivered("salvage") - salv0 < 99.9); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -3627,9 +3629,10 @@ public partial class _Test : Node
         Shot first = null;
         for (int i = 0; i < 1200 && first == null; i++) { first = InFlight().FirstOrDefault(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Check(first != null, "bombers launch torpedoes");
-        // A TORPEDO LEAVES FROM A POD, not the nose: each round, on the frame it first shows, sits off
-        // its launcher's keel (the bomber nearest it) by the pods' span on the art -- their inner and
-        // outer edges, 4.0 and 6.6 u out on the 28.125 u airframe. The first round and every one
+        // A TORPEDO LEAVES FROM A WINGTIP RAIL, not the nose: each round, on the frame it first shows,
+        // sits off its launcher's keel (the bomber nearest it) by the rails' reach on fighter_g's art
+        // -- 8.5 u out on the 28.125 u airframe (138.5 of its 456 px) -- within 1.3 u, the half-span
+        // the old pods allowed a round that has flown its first frame. The first round and every one
         // launched in the half second below.
         float OffKeel(Shot rd)
         {
@@ -3644,7 +3647,7 @@ public partial class _Test : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             foreach (var rd in InFlight().Where(x => x.Kind == Shots.Torpedo && rounds.Add(x)).ToList()) offKeel.Add(OffKeel(rd));
         }
-        Check(offKeel.All(o => o > 4.0f && o < 6.6f), $"a torpedo leaves from a pod's front, not the nose ({string.Join(", ", offKeel.Select(o => o.ToString("0.0")))} u off its launcher's keel, {offKeel.Count} rounds)");
+        Check(offKeel.All(o => o > 7.2f && o < 9.8f), $"a torpedo leaves from a wingtip rail's front, not the nose ({string.Join(", ", offKeel.Select(o => o.ToString("0.0")))} u off its launcher's keel, {offKeel.Count} rounds)");
         float spd = (first.GlobalPosition - q0).Length() / (30f / 60f);
         Check(first.Dir == dir0 && Math.Abs(spd - 300) < 2, $"torpedo runs straight at a steady 300 u/s (no tracking; {spd:0})");
         Check(Smoke(first).Count > 3, "torpedo leaves a smoke trail");
@@ -4677,17 +4680,18 @@ public partial class _Test : Node
             // THE PACK'S ART ON EVERY RAIDER ROW (tools/make_ships.ps1). Each texture is trimmed to its
             // drawing -- it fills 98.5% of its height and reaches a side within 2 px -- so a row's
             // Length is the drawn hull, nose to tail, and the hit sizes read off it are unchanged. And a
-            // flame for every bell the art has: two on each, counted off the art (the light's centre
-            // spine and the pod's tail are not bells), every one at the stern.
+            // flame for every bell the art has, counted off the art: two on each (the light's centre
+            // spine is not a bell) but the pod, a round drone (drone_sensor) with one stern vent --
+            // every one at the stern.
             {
                 var arts = Enemies.All.Select(e => e.Texture).Append("res://enemy_light_tier_2.png");
                 var loose = arts.Where(t => !Trimmed(t)).ToList();
-                int[] bells = { 2, 2, 2, 2, 2, 2 };   // webifier, gunship, talon, pod, cross, lancerkin
+                int[] bells = { 2, 2, 2, 1, 2, 2 };   // webifier, gunship, talon, pod, cross, lancerkin
                 var hvArt = hv.GetChildren().OfType<Sprite2D>().First();
                 Check(loose.Count == 0 && Enemies.All.Select(e => e.Nozzles.Length).SequenceEqual(bells)
                       && Enemies.All.All(e => e.Nozzles.All(n => n.Y > e.Length * 0.4f && n.Y <= e.Length * 0.5f + 1f))
                       && hvArt.Texture.ResourcePath.EndsWith("enemy_heavy_hull.png") && Math.Abs(hvArt.Texture.GetHeight() * hvArt.Scale.Y - 136f) < 0.5f,
-                      $"every raider's art is trimmed to its drawing and flames from its own two bells at the stern; the gunship is drawn 136 u (loose: {string.Join(", ", loose)}; bells {string.Join("/", Enemies.All.Select(e => e.Nozzles.Length))})");
+                      $"every raider's art is trimmed to its drawing and flames from its own bells at the stern (two, the pod's one vent); the gunship is drawn 136 u (loose: {string.Join(", ", loose)}; bells {string.Join("/", Enemies.All.Select(e => e.Nozzles.Length))})");
             }
             double HvLaser() => hm.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
             double HvMissile() => hm.DamageBySource.Where(kv => kv.Key == $"heavy:{hv.NetId}:missile").Sum(kv => kv.Value);
