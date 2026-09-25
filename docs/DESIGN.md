@@ -1378,8 +1378,9 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   readonly field or a table row is as constant as what holds it, and the harness's own checks that move
   a row and put it back (`BuildChecks`) prove the array element changes either way. `StructRow` now takes
   any value type of the game's assembly, or any `System.ValueTuple`N`, whose public instance fields are
-  all Plain OR A DELEGATE, readonly or not; `Show` prints a delegate field as its type name (what code is
-  assigned there is part of the build even though its behaviour is not compared), null as `null`.
+  all Plain OR A DELEGATE, readonly or not; `Show` prints a delegate field only as its delegate type name
+  (`Func`2`), null as `null`, so WHICH code is assigned and what it computes are NOT compared: a changed
+  `Count` rule still goes unseen, while the row's other fields (`Kind`, `Way`, `Nth`, `At`, `Step`) are.
 - **"No Character part" was the wrong bar for "nothing about the pilot."** `Character` carries its own
   `const` bounds (`Dir`, `MaxBonus`, `MaxStock`, `PaidKept`, `SaveDelay`) -- the same for every peer on
   this build whichever pilot is loaded, so they belong in the fingerprint and always were part of it.

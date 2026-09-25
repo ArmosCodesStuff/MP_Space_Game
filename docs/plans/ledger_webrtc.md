@@ -642,3 +642,8 @@ Owed on the R1 records commit (it carries J10 and J9c):
   log (`[solo]` role), no FAIL or ERROR line anywhere in quick/solo/solo/six.
 - next: docs/CHANGES.md Handoff and the R1 Unreleased entry updated to carry this result (same commit);
   done.
+
+### R1S (coordinator) -- gate 3's two comment defects
+- Gate 3 (opus) passed the code and failed two comments: Net.cs StructRow + DESIGN.md claimed the assigned delegate moves the
+  fingerprint (Show prints only its type name, Func`2); Unlocks.cs (from the walls merge) said Plain() never hashes a plain struct.
+- Fixed both as the gate wrote them; comments only. quick net_r1s ALL GREEN. Chain net_r1r2 still covers the code. Next: merge into version-l.

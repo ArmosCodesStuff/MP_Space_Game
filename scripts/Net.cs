@@ -242,10 +242,10 @@ public partial class Net : Node
     // struct (StatusSet.Guards' StatusGuard, EmplacementDef.Gun's TurretSpec) is no less part of the
     // build for having settable fields, and `IsReadOnlyAttribute` only ever told us the struct itself,
     // never the array holding it, could not be reassigned in place. A DELEGATE FIELD (WaveCrew.Count)
-    // is part of the row too: two builds with different rules for how many of a kind a wave brings
-    // are different builds, even though the delegate's own text is only its type name (`Show`), never
-    // the code inside it -- what moves the fingerprint is which named method or lambda class is
-    // assigned, not what that code computes.
+    // no longer keeps its row out, but it is written only as its delegate type name (`Show`, e.g.
+    // Func`2): WHICH code is assigned there, and what it computes, are NOT compared. The row's other
+    // fields (Kind, Way, Nth, At, Step) are, so Waves.Patrol, Waves.HuntPin and WaveDef.Crew are
+    // hashed field by field while a changed Count rule still goes unseen.
     private static bool StructRow(Type t) =>
         t.IsValueType && !t.IsPrimitive && !t.IsEnum
         && (t.Assembly == typeof(Net).Assembly || (t.Namespace == "System" && t.Name.StartsWith("ValueTuple`", StringComparison.Ordinal)))

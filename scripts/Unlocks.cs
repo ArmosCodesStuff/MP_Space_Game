@@ -32,8 +32,8 @@ using System.Linq;
 public enum Measure { Pilot, Boss }                 // the pilot's highest level reached (Character.Peak); the base owner's highest boss beaten
 public enum Opens { Ability, ChipSlot, Economy, Raids }
 
-// A RECORD CLASS, not a struct: Net.Fingerprint's Plain() hashes a record (its compiler-made
-// <Clone>$) but never a plain struct, and this table's levels and boss gates must reach the
+// A RECORD CLASS: Net.Fingerprint's Plain() hashes it (its compiler-made <Clone>$), and this
+// table's levels and boss gates must reach the
 // build handshake like any other row (a host and a guest on different Unlocks tables must be
 // refused, not silently disagree about what is open). ToString is written out, not the
 // compiler's default, so the hashed text is a stable, readable line per row.
