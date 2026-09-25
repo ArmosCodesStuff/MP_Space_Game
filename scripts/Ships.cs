@@ -407,8 +407,8 @@ public static class Classes
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
             },
-                // 1.3 = 5% of the blade's 26
-            Damage = new() { ["blade_damage"] = 1.3 },
+                // 1.3 = 5% of the blade's 26, 2 of the lunge's 40
+            Damage = new() { ["blade_damage"] = 1.3, ["lunge_damage"] = 2 },
             Reach = new() { ["blade_reach"] = 1 },
             Cycle = new() { ["blade_interval"] = 1 },
             Weapons = new[] { Dps.Blade },
@@ -421,12 +421,18 @@ public static class Classes
                 new() { Group = "Blade", Id = "blade_damage",   Label = "Damage (each body)", Base = 26, Dec = 0 },
                 new() { Group = "Blade", Id = "blade_interval", Label = "Between swings",     Base = 0.40, Unit = "s", Dec = 2, Inverse = true },
                 new() { Group = "Blade", Id = "blade_reach",    Label = "Reach",              Base = 160, Unit = "u", Dec = 0 },
+                // the lunge (kits_v2 card, kits_v31 §3.4): a fixed 420 u in 0.3 s, 40 a body, half damage taken, 7 s
+                new() { Group = "Lunge", Id = "lunge_reach",    Label = "Dash",               Base = 420, Unit = "u", Dec = 0 },
+                new() { Group = "Lunge", Id = "lunge_time",     Label = "In",                 Base = 0.3, Unit = "s", Dec = 1 },
+                new() { Group = "Lunge", Id = "lunge_damage",   Label = "Damage (each body)", Base = 40, Dec = 0 },
+                new() { Group = "Lunge", Id = "lunge_guard",    Label = "Damage taken",       Base = 0.5, Unit = "x", Dec = 2 },
+                new() { Group = "Lunge", Id = "lunge_cooldown", Label = "Cooldown",           Base = 7, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://heavy_warrior_hull.png", Length = 120f, HalfWidth = 31.54f,
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
             // the weapon row, then the three it learns in this order (the walls read it: kits_v31 §3.6)
-            Abilities = new[] { Ab.Blade } },
+            Abilities = new[] { Ab.Blade, Ab.Lunge } },
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd,
             Blurb = "Fast. Point defence that hits ten times as hard as a warship's, a modest main gun, and hunter-seekers that each take a target of their own.",
             Hint = "WARDEN  ·  mouse aims the main gun",

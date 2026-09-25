@@ -1110,7 +1110,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
         TickAbilities(delta);
 
-        if (Net.Sim) { FireControl(delta); Swings(delta); }
+        if (Net.Sim) { FireControl(delta); Swings(delta); DashSweeps(); }
         foreach (var t in _turrets) t.Tick(delta);
         for (int i = _wings.Count - 1; i >= 0; i--)
         {
@@ -1250,6 +1250,69 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         }
     }
 
+    // ── a dash (AbilityDef.Dash: the lunge) ─────────────────────────────────
+    // THE PRESS, on the host: the row's Time up, its cooldown, where and which way it started (the
+    // slot's At and Own, which the wire carries), the hardening, and nothing struck yet.
+    private readonly HashSet<IHittable> _dashStruck = new();
+    public void StartDash(string id)
+    {
+        var d = Abilities.Find(Class, id)?.Dash;
+        ref var sl = ref Sl(id);
+        if (d == null || sl.Left > 0 || sl.Cool > 0) return;
+        sl.Left = Stats[d.Time]; sl.Cool = Cooling(Stats[d.Cooldown]);
+        sl.At = Position; sl.Own = Rotation;
+        _dashStruck.Clear();
+        if (d.Guard != null) ApplyStatus(Status.Hardened, sl.Left, Stats[d.Guard]);   // the dash says how hard
+    }
+    // THE HOST'S SWEEP: every hostile body within the hull's half-beam (plus its own radius) of the line
+    // from the press's spot, along its heading, `progress` (0..1) of the way to the row's Reach, struck
+    // once a dash for the row's Damage. Run every frame the row is up, and at 1 by its Expire.
+    public void DashSweep(string id, double progress)
+    {
+        var d = Abilities.Find(Class, id)?.Dash;
+        if (d == null || !Net.Sim) return;
+        ref var sl = ref Sl(id);
+        var from = sl.At;
+        var to = from + Vector2.Up.Rotated((float)sl.Own) * (float)(Stats[d.Reach] * Math.Clamp(progress, 0, 1));
+        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
+        {
+            if (_dashStruck.Contains(h)) continue;
+            var near = Geometry2D.GetClosestPointToSegment(h.Position, from, to);
+            if (near.DistanceTo(h.Position) > MyArt.HalfWidth + h.HitRadius) continue;
+            _dashStruck.Add(h);
+            Dealt.Deal(h, Stats[d.Damage], this, id);
+            if (h is Node2D n) Popups.NoteImpact(n, h.Position);
+        }
+    }
+    private void DashSweeps()
+    {
+        foreach (var def in Abilities.For(Class))
+            if (def.Dash is { } d && Sl(def.Id).Left > 0) DashSweep(def.Id, 1 - Sl(def.Id).Left / Stats[d.Time]);
+    }
+    // THE OWNER'S CARRY: from the first frame it sees a dash row's Left (the host's press, here at once
+    // on the host, a packet later on a guest), the hull goes the row's Reach along its nose over the
+    // row's whole Time, whatever the lifts, the helm or its speed -- exactly Reach, the last frame's step
+    // cut to what is left. A fresh press is told from a stale packet by its cooldown jumping back up.
+    private AbilityDef _dashRow;
+    private double _dashLeft, _dashCool0 = double.NegativeInfinity, _dashAt;
+    private bool DashCarry(float dt)
+    {
+        if (Disabled) { _dashLeft = 0; return false; }
+        if (_dashLeft <= 0)
+            foreach (var def in Abilities.For(Class))
+            {
+                if (def.Dash == null || Sl(def.Id).Left <= 0) continue;
+                if (Sl(def.Id).Cool <= _dashCool0 - (_clock - _dashAt) + 1.0) continue;    // the dash already flown
+                _dashRow = def; _dashLeft = Stats[def.Dash.Time]; _dashCool0 = Sl(def.Id).Cool; _dashAt = _clock;
+                break;
+            }
+        if (_dashLeft <= 0 || _dashRow?.Dash is not { } d) return false;
+        double step = Math.Min(dt, _dashLeft);
+        _dashLeft -= step;
+        Position += Vector2.Up.Rotated(Rotation) * (float)(Stats[d.Reach] / Stats[d.Time] * step);
+        return true;
+    }
+
     // ── the owner steers it: naval handling ──────────────────────────────────
     private void LocalFlight(float dt)
     {
@@ -1279,7 +1342,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             (throttle, rudder) = Autopilot.Capital(Position, Rotation, Velocity, (float)Stats["max_speed"], dest, 60f);
         if (Pinned) { throttle = 1f; rudder = 0f; strafe = 0f; AutopilotTo = null; }   // forced thrust, no rudder, no slide
         Thrusting = throttle != 0f;
-        Steer(throttle, rudder, strafe, dt);
+        if (!DashCarry(dt)) Steer(throttle, rudder, strafe, dt);   // a dash carries the hull instead of the helm
 
         // the main guns aim at the cursor; the hull does not follow it
         if (!Demo) Trigger = false;              // a display ship's driver owns the trigger

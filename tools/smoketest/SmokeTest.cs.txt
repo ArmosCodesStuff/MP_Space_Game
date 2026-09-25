@@ -4956,6 +4956,145 @@ public partial class _Test : Node
         w.Position = yonder; w.Velocity = Vector2.Zero;
     }
 
+    // ── SLICE 6c: THE WARRIOR'S LUNGE (kits_v2 card; kits_v31 §3.4: a fixed 420 u in 0.3 s, never priced
+    // from speed; 40 a body; half damage taken; cooldown 7 s). Three varied runs (VaryNear spot, VaryAngle
+    // heading): at rest, already at top speed ahead, and on the V boost (x1.5, the drive interaction).
+    // Each: the hull goes 420 +- 5 u along its nose (sideways under 5) in 0.3 s +- 0.05, whatever it was
+    // doing (measured on the frame the dash ends); two or three gunships on the line (70-380 u ahead, under 20 u off it) lose 40 each, ONCE,
+    // and one 150-250 u off the line nothing; DealtBy["lunge"] grows 40 a body; a 100 blow inside the dash
+    // lands for 50 and one after it for 100; the cooldown reads 7.0 and a second press inside it is
+    // refused and goes nowhere.
+    async Task LaneA6cLungeChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.HeavyWarrior);
+        var w = Me;
+        var sh = new ShipStats(ShipClass.HeavyWarrior);
+        Check(sh["lunge_reach"] == 420 && Math.Abs(sh["lunge_time"] - 0.3) < 1e-9 && sh["lunge_damage"] == 40 && sh["lunge_guard"] == 0.5
+              && sh["lunge_cooldown"] == 7 && Unlocks.Nth(ShipClass.HeavyWarrior, 1) == Ab.Lunge && Ab.Lunge.Default == global::Godot.Key.E,
+              $"the lunge's rows: {sh["lunge_reach"]:0} u in {sh["lunge_time"]:0.0} s, {sh["lunge_damage"]:0} a body, x{sh["lunge_guard"]:0.0} taken, {sh["lunge_cooldown"]:0} s; the Warrior's ability 1, on E");
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            var nose = Vector2.Up.Rotated(rot);
+            w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Sl("boost").Cool = 0; w.Statuses.Clear(Status.Hardened);
+            w.Position = at; w.Velocity = run == 1 ? nose * 190f : Vector2.Zero; w.Rotation = rot;
+            if (run == 2)
+            {
+                w.DriveHeld = true; w.PressDrive();
+                for (int i = 0; i < 30 && w.Sl("boost").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                w.DriveHeld = false;
+            }
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            at = w.Position; rot = w.Rotation; nose = Vector2.Up.Rotated(rot);          // re-taken after the wait
+            var side = new Vector2(-nose.Y, nose.X);
+            int onLine = run < 2 ? 2 : 3;
+            var spots = Enumerable.Range(0, onLine).Select(k => at + nose * Vary(70f + 110f * k, 150f + 110f * k) + side * Vary(-20f, 20f))
+                                  .Append(at + nose * Vary(120f, 300f) + side * (run % 2 == 0 ? 1f : -1f) * Vary(150f, 250f)).ToArray();
+            var foes = spots.Select(p => { var f = H.SpawnRaider(p, Enemies.Gunship); f.Hp = 1e9; return f; }).ToArray();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int k = 0; k < foes.Length; k++) foes[k].Position = spots[k];
+            var hp0 = foes.Select(f => f.Hp).ToArray();
+            double dealt0 = w.DealtBy.TryGetValue("lunge", out var dv0) ? dv0 : 0;
+            var from = w.Position; double cPress = w.Clock;
+            w.UseAbility("lunge", 0);
+            for (int i = 0; i < 30 && w.Sl("lunge").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double cool0 = w.Sl("lunge").Cool;
+            double inHp = w.Hp;
+            w.Hit(100, w.Position - nose * 200f, "test:lunge_in");                     // inside the dash: half of it
+            double inTook = inHp - w.Hp;
+            // the carry runs in lockstep with the row's Left (the owner's LocalFlight, then the tick), so
+            // the hull stands where the dash ended on the first frame Left is spent -- before any coast
+            for (int i = 0; i < 60 && w.Sl("lunge").Left > 0; i++)
+            {
+                for (int k = 0; k < foes.Length; k++) foes[k].Position = spots[k];
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            var endAt = w.Position; double took = w.Clock - cPress;
+            var moved = endAt - from;
+            float along = moved.Dot(nose), across = Mathf.Abs(moved.Dot(side));
+            var lost = Enumerable.Range(0, foes.Length).Select(k => hp0[k] - foes[k].Hp).ToArray();
+            double dealt = (w.DealtBy.TryGetValue("lunge", out var dv1) ? dv1 : 0) - dealt0;
+            Check(Math.Abs(along - 420f) < 5f && across < 5f && Math.Abs(took - 0.3) < 0.05,
+                  $"the lunge {(run == 0 ? "from rest" : run == 1 ? "at top speed" : "on the boost")} at heading {Mathf.RadToDeg(rot):0} deg: {along:0.0} u along the nose (420), {across:0.0} u sideways, over {took:0.00} s from the press (0.3)");
+            Check(lost.Take(onLine).All(l => Math.Abs(l - 40) < 1e-6) && lost[onLine] == 0 && Math.Abs(dealt - 40 * onLine) < 1e-6,
+                  $"the lunge strikes each of the {onLine} gunships on its line once for 40 ({string.Join(" / ", lost.Take(onLine).Select(l => l.ToString("0.##")))}) and the one {Mathf.Abs((spots[onLine] - at).Dot(side)):0} u off it nothing ({lost[onLine]:0.##}); DealtBy[lunge] +{dealt:0.##}");
+            await Wait(0.1);
+            double outHp = w.Hp;
+            w.Hit(100, w.Position - nose * 200f, "test:lunge_out");
+            double outTook = outHp - w.Hp;
+            w.Velocity = Vector2.Zero;
+            var still = w.Position;
+            string refused = Abilities.Find(w.Class, "lunge").Refuse?.Invoke(w, null);
+            w.UseAbility("lunge", 0);
+            for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(Math.Abs(inTook - 50) < 1e-6 && Math.Abs(outTook - 100) < 1e-6 && Math.Abs(cool0 - 7.0) < 0.05 && refused == "COOLING"
+                  && w.Sl("lunge").Left <= 0 && w.Position.DistanceTo(still) < 20f,
+                  $"a 100 blow inside the lunge lands for {inTook:0.#} (50), after it {outTook:0.#} (100); cooldown {cool0:0.00} s (7.0); pressed again it says {refused ?? "nothing"} and goes {w.Position.DistanceTo(still):0} u");
+            foreach (var f in foes) f.TakeDamage(1e12);
+            w.Velocity = Vector2.Zero; w.Sl("lunge").Cool = 0;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        w.Position = yonder; w.Velocity = Vector2.Zero;
+    }
+
+    // ── SLICE 6c, RUNG 5: A GUEST'S LUNGE. The guest (LaneA6cLungeGuestChecks, after lane B's drives and
+    // before its freighter) flies a WARRIOR, turns to a varied heading at rest and presses E: its own hull
+    // goes 420 +- 5 u along the nose, it reads the host's HARDENED bit and the host's 7 s cooldown on its
+    // slot. The host (LaneA6cLungeHostWatch from before lane B's window, LaneA6cLungeHostChecks after it)
+    // sees its copy of the guest start the lunge HARDENED with the cooldown at 7, and 0.8 s later stand
+    // within 20 u of 420 u along the heading it pressed at -- the owner's carry and the host's line agree.
+    sealed class LaneA6cLungeSeen { public bool Started, Done, Hard; public Vector2 From, End; public float Rot; public double Cool, T; }
+    LateSampler LaneA6cLungeHostWatch(LaneA6cLungeSeen seen)
+    {
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.HeavyWarrior } g || seen.Done) return false;
+            if (!seen.Started)
+            {
+                if (g.Sl("lunge").Left <= 0) return false;
+                seen.Started = true; seen.From = g.Sl("lunge").At; seen.Rot = (float)g.Sl("lunge").Own;
+                seen.Cool = g.Sl("lunge").Cool; seen.Hard = g.Statuses.Has(Status.Hardened);
+                return false;
+            }
+            seen.T += GetProcessDeltaTime();
+            if (seen.T < 0.8) return false;
+            seen.End = g.Position; seen.Done = true;
+            return true;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6cLungeHostChecks(LateSampler watch, LaneA6cLungeSeen seen)
+    {
+        await RealTime(() => seen.Done, Wan ? 10 : 5);
+        watch.QueueFree();
+        var nose = Vector2.Up.Rotated(seen.Rot);
+        var want = seen.From + nose * 420f;
+        Check(seen.Done && seen.Hard && Math.Abs(seen.Cool - 7.0) < 0.1 && seen.End.DistanceTo(want) < 20f,
+              $"arena host: the guest's lunge -- HARDENED here at its press ({seen.Hard}), cooling {seen.Cool:0.00} s (7), and its hull 0.8 s later {seen.End.DistanceTo(want):0.0} u from 420 u along the heading it pressed at (under 20)");
+    }
+    async Task LaneA6cLungeGuestChecks()
+    {
+        await SetClass(ShipClass.HeavyWarrior);
+        var me = Me; me.AutopilotTo = null;
+        await RealTime(() => Math.Abs(me.MaxHp - 300) < 1e-6, Wan ? 20 : 10);           // the host's word for the hull
+        me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+        await Wait(0.4);
+        me.Velocity = Vector2.Zero;
+        var from = me.Position; var nose = Vector2.Up.Rotated(me.Rotation); var side = new Vector2(-nose.Y, nose.X);
+        bool sawHard = false;
+        var watch = new LateSampler { Probe = () => { sawHard |= Me is { } m && m.Statuses.Has(Status.Hardened); return false; } };
+        AddChild(watch);
+        me.UseAbility("lunge", 0);
+        await RealTime(() => me.Sl("lunge").Left > 0, Wan ? 4 : 2);
+        double coolHere = me.Sl("lunge").Cool;
+        await Wait(0.8);
+        watch.QueueFree();
+        var moved = me.Position - from;
+        Check(Math.Abs(moved.Dot(nose) - 420f) < 5f && Mathf.Abs(moved.Dot(side)) < 5f && sawHard && coolHere > 6.0,
+              $"arena guest: its own E -- the hull carried {moved.Dot(nose):0.0} u along its nose (420), {Mathf.Abs(moved.Dot(side)):0.0} sideways; the host's HARDENED bit read here ({sawHard}); the host's cooldown on its slot {coolHere:0.0} s");
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -10839,10 +10978,10 @@ public partial class _Test : Node
                           $"and the three original hulls take it where they always did -- 6% of the gun or the torpedoes (+{Rise(ShipClass.Battleship, "main_damage"):0.0} on the battleship) -- and nothing at all on the fighters, the missiles or the point defence, whose rows are declared at zero and stay there");
                     // the gear that lifts "every weapon" reaches the same list, and nothing else
                     Check(string.Join(",", Classes.EveryDamageStat())
-                          == "blade_damage,deploy_damage,fighter_damage,hunter_damage,main_damage,missile_damage,rail_damage,torpedo_damage"
+                          == "blade_damage,deploy_damage,fighter_damage,hunter_damage,lunge_damage,main_damage,missile_damage,rail_damage,torpedo_damage"
                           && Classes.All.Where(c => c.Ready).All(c => c.Damage.Count > 0)
                           && Classes.All.Where(c => c.Ready).All(c => c.Damage.Keys.All(k => new ShipStats(c.Id)[k] > 0)),
-                          $"eight weapon stats in the whole game, every flyable class names at least one, and every one it names is a row on its own sheet");
+                          $"nine weapon stats in the whole game, every flyable class names at least one, and every one it names is a row on its own sheet");
 
                     // ── AND THE K WINDOW'S DAMAGE BLOCK IS A ROW PER SYSTEM (ClassDef.Weapons) ──
                     // Its total added four named figures -- main, missile, broadside, point defence
@@ -11117,6 +11256,7 @@ public partial class _Test : Node
 
             // ── WARRIOR: the blade (slice 6c) ──
             await LaneA6cBladeChecks(yonder);
+            await LaneA6cLungeChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -11501,6 +11641,8 @@ public partial class _Test : Node
                     ["shockwave"] = sp => sp.Sl("shockwave").Cool > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Wave),
                     ["railgun"]   = sp => sp.Held == 0f && sp.Sl("railgun").Left > sp.Stats["rail_charge"] - 0.1,
                     ["blade"]     = sp => sp.Trigger && Abilities.Find(sp.Class, "blade").State(sp, null).Lit,
+                    ["lunge"]     = sp => sp.Sl("lunge").Left > sp.Stats["lunge_time"] - 0.1 && sp.Statuses.Has(Status.Hardened)
+                                          && sp.Sl("lunge").Cool > sp.Stats["lunge_cooldown"] - 0.1,
                     ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && InFlight().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
                     ["roll"]      = sp => sp.Statuses.Has(Status.Evading) && sp.Sl("roll").Left > sp.Stats["roll_time"] + sp.Stats["boost_time"] - 0.1,
                     ["echo"]      = sp => sp.Sl("echo").Left > sp.Stats["echo_time"] - 0.1,
@@ -14708,7 +14850,10 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 10 && Net.I.Players.Count < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.I.Players.Count == 2, "arena host: the guest joined");
             await Wait(1.0);
+            var lungeSeen = new LaneA6cLungeSeen();
+            var lungeWatch = LaneA6cLungeHostWatch(lungeSeen);             // slice 6c: the guest lunges inside lane B's window
             await LaneBHostDrives();                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
+            await LaneA6cLungeHostChecks(lungeWatch, lungeSeen);
             // ── TWO OF THE NINE, IN A SESSION ─────────────────────────────────────
             // Everything the nine classes put on the wire had only ever flown alone: the status
             // bits, the slot array a class names itself, a turret dropped into the world, an
@@ -15002,6 +15147,7 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.IsOnline && Net.LocalId != 1 && Net.I.JoinedBy == "address", $"arena guest: joined, by the typed address ({Net.I.JoinedBy})");
             await LaneBGuestDrives();                                       // lane B: the drives across peers (its host half: LaneBHostDrives)
+            await LaneA6cLungeGuestChecks();                                // slice 6c: a guest's lunge (its host half: LaneA6cLungeHostChecks)
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.

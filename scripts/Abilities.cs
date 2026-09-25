@@ -106,6 +106,9 @@ public class AbilityDef
     // stops. See RampSpec below -- the row names three stat ids and a condition; the math is not
     // its own. No row uses it yet (6d, the Dart's Ramjet).
     public RampSpec Ramp;
+    // A DASH (DashSpec below): pressed, it carries the hull a fixed distance along its nose, and the
+    // host strikes what lies on that line. The Warrior's lunge is the first row.
+    public DashSpec Dash;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
@@ -132,6 +135,17 @@ public class RampSpec
         => holding
             ? Math.Clamp(own + ((condHolds ? build : 0) - bleed * yawShare) * dt, 0, cap)
             : Math.Max(0, own - cap * dt);
+}
+
+// A DASH: a FIXED distance along the nose in a fixed time, never priced from speed (kits_v31 §3.4) --
+// no lift, hold or throttle changes it, and the hull's own velocity is left as it was. The OWNER
+// carries its hull (PlayerShip.DashCarry: from the first frame it sees the row's Left, for the row's
+// whole Time, so a guest that hears of its press a packet late still goes the whole way); the HOST
+// strikes every hostile body on the line from where it was pressed, once each (PlayerShip.DashSweep),
+// and hardens the hull for the Time at the Guard share. A row names stat ids, never numbers:
+public class DashSpec
+{
+    public string Reach, Time, Damage, Guard, Cooldown;   // u, s, per body, x damage taken, s
 }
 
 // THE CATALOGUE. Every ability in the game, once. A class's row (Ships.cs) lists the ones it
@@ -316,6 +330,19 @@ public static class Ab
             ? new SlotState { Line = $"CHARGE {s.Sl("railgun").Left:0.0}s", Lit = true,
                               Busy = (float)(s.Sl("railgun").Left / s.Stats["rail_charge"]) }
             : Timed(s, "railgun", "rail_cooldown", "READY"),
+    };
+
+    // THE LUNGE (the Warrior's E): 420 u along the nose in 0.3 s, 40 to each body on the way, half
+    // damage taken while it runs. It ends a prism stance.
+    public static readonly AbilityDef Lunge = new()
+    {
+        Id = "lunge", Name = "Lunge", Short = "LUNGE", Default = Key.E,
+        Blurb = "A dash of 420 u straight ahead in 0.3 s: 40 to everything on the way, half damage taken while it runs.",
+        Dash = new DashSpec { Reach = "lunge_reach", Time = "lunge_time", Damage = "lunge_damage", Guard = "lunge_guard", Cooldown = "lunge_cooldown" },
+        Press = (s, _) => s.StartDash("lunge"),
+        Expire = s => s.DashSweep("lunge", 1),
+        Refuse = (s, _) => s.Sl("lunge").Left > 0 ? "LUNGING" : s.Sl("lunge").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "lunge", "lunge_cooldown", "LUNGE"),
     };
 
     public static readonly AbilityDef Hunters = new()

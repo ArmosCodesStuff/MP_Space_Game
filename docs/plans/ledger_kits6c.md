@@ -168,3 +168,24 @@ with [IO.File]::WriteAllText (PowerShell's utf8 adds a BOM to the subject).
   the blade on it, sweep witness ["blade"], reach case blade_reach (+pairs 31), rush_guard -> taunt_guard, arena host
   Warrior (hull 300, own rows + 7, host-applied HARDENED + Fx.Emp ring); frame 74b_warrior_blade_swing (LaneA6cBladeFrames).
 - Checkpoint: the commit below. Next: kits6c-J2 Lunge.
+
+## kits6c-J2 · PRE
+- tier opus. Intent: Lunge (E, ability 1): DashSpec row on AbilityDef (owner-side carry along the nose, 420 u in 0.3 s, never priced from speed; host sweeps the start line and strikes each body once for 40, credit lunge; Hardened 0.5 for the 0.3 s; cooldown 7 s). HEAD a2fee51ae0d6194a40fc532b85a37f907038a8d1
+- scripts/Abilities.cs 0e8055639c30e84e210e20a18dbeca64b1f01bfb
+- scripts/PlayerShip.cs 0401394ec675414dc9ce76baef8e4e97a7deee82
+- scripts/Ships.cs 417f2f1a452223cea8c17aa0b2623b4c3b4c5b1b
+- scripts/Items.cs 7a4df5f01bbdc0680705d29937984a1ec73e8e39
+- tools/smoketest/SmokeTest.cs.txt 96ad32b633a57609c7d648e06dd707d2761fdf47
+## kits6c-J2 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- Built: DashSpec (AbilityDef.Dash: Reach / Time / Damage / Guard / Cooldown stat ids); PlayerShip.StartDash (host press:
+  Left, cooldown, At + Own = the start, Hardened at the Guard share), DashSweep (host: the start line, each body once,
+  credit = the row id; every frame + at 1 by Expire), DashCarry (owner: the whole Time from the first frame it sees Left,
+  a stale packet told from a fresh press by the cooldown jumping back up > 1 s; replaces Steer while it runs). Ab.Lunge
+  (E), Warrior rows lunge_reach 420 / lunge_time 0.3 / lunge_damage 40 / lunge_guard 0.5 / lunge_cooldown 7; Damage
+  lunge_damage 2; Items @output + lunge_damage. Warrior Abilities {Blade, Lunge}.
+- Checks: LaneA6cLungeChecks (new: rows; 3 runs rest / top speed / boosted: 420 +- 5 u in 0.3 s, 2-3 bodies 40 once,
+  off-line 0, DealtBy, 50 in / 100 after, cooldown 7.0, second press COOLING); rung 5 LaneA6cLungeHostWatch /
+  LaneA6cLungeHostChecks / LaneA6cLungeGuestChecks (new); rewritten: EveryDamageStat (+lunge_damage, nine), sweep witness
+  ["lunge"].
+- Next: kits6c-J3 Whirlwind.
