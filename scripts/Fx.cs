@@ -493,6 +493,7 @@ public enum FieldLook
     Shimmer,   // hex plates over the hull, pulsing, and the row's tag under it (the Taunt's guard)
     Plume,     // a long hot plume out of the stern over the engine's own (a drive's boost)
     Wedge,     // a fan on the ship's guard (IPrism.GuardAngle), one shade a band of Prism.Bands (the prism stance)
+    Lance,     // a beam out of the main barrel, the slot's Own long, green on a friend and red on a foe (the Tender's lance)
 }
 
 public class FieldDef
@@ -524,9 +525,13 @@ public static class Fields
         new() { Id = "boost", Slot = "boost", Look = FieldLook.Plume, HullShare = 1.8f, Tint = new(1f, 0.85f, 0.55f) },
         // the prism stance (kits_v2 Warrior card): the guard's wedge, SQUARE bright and SLANT faint, on every peer
         new() { Id = "prism", Slot = "prism", Look = FieldLook.Wedge, HullShare = 1.1f, Tint = new(0.75f, 0.95f, 1f) },
+        // the Tender's mending lance (kits6b-J7): the beam while the trigger holds, pale on nothing, on every peer
+        new() { Id = "lance", Slot = PlayerShip.LanceSlot, Look = FieldLook.Lance, Tint = new(0.85f, 0.95f, 1f) },
     };
 
     public static FieldDef Of(string id) => System.Array.Find(All, f => f.Id == id);
+    // the lance's two colours: what it mends, and what it burns
+    public static readonly Color LanceMend = new(0.45f, 1f, 0.55f), LanceBurn = new(1f, 0.45f, 0.3f);
 
     // WHAT IS UP, from four readers, so the rule is provable with no ship at all: does the ship have
     // the slot, the slot's Left and Own, a stat off its sheet, and its hull's length.
@@ -623,6 +628,18 @@ public static class Fields
                 {
                     var art = s.MyArt;
                     Plume.Draw(s, new Vector2(0, art.Length * 0.5f - art.EngineInset), Vector2.Down, f.Radius, c, 1f, true);
+                    break;
+                }
+                case FieldLook.Lance:
+                {   // out of the main barrel as it points on this peer, as far as the host said it reached,
+                    // in the colour of what it is on (the slot's N): a friend mended, a foe burned, or nothing
+                    var sl = s.Sl(f.Row.Slot);
+                    var (at, dir) = s.MainBore;
+                    Vector2 a = s.ToLocal(at), b = s.ToLocal(at + dir * (float)sl.Own);
+                    var col = sl.N == PlayerShip.LanceMend ? LanceMend : sl.N == PlayerShip.LanceBurn ? LanceBurn : c;
+                    s.DrawLine(a, b, col with { A = 0.3f }, 9f);
+                    s.DrawLine(a, b, col, 3f);
+                    if (sl.N != PlayerShip.LanceNone) s.DrawCircle(b, 7f, col with { A = 0.6f });
                     break;
                 }
             }

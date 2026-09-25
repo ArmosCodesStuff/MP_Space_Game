@@ -10,7 +10,7 @@ using System;
 // what used to happen only on the host: the burst when one is lost and when it comes back, and the
 // rebuild counting down (the BASE menu read "rebuilt in 0 s" for the whole thirty).
 // ─────────────────────────────────────────────────────────────────────────────
-public abstract partial class UtilityShip : Node2D, IRaidTarget, ITagged
+public abstract partial class UtilityShip : Node2D, IRaidTarget, ITagged, IMendable
 {
     public Tag Tags => Tag.Fleet;
     // WHAT COMING FOR IT IS WORTH (IRaidTarget). This class is the one that names the interface,
@@ -36,6 +36,12 @@ public abstract partial class UtilityShip : Node2D, IRaidTarget, ITagged
     public abstract bool InReach { get; }           // out in the field, where a raider can get at it
     public abstract bool Lost { get; }              // destroyed: waiting to be rebuilt
     public abstract (float halfLength, float halfWidth) Extent { get; }
+    // ...as a hull a friend may mend (Mend.Give, kits6b-J7): out in the field, not lost
+    bool IMendable.Mendable => InReach && !Lost;
+    double IMendable.HullNow => Hull;
+    double IMendable.HullMax => MaxHull;
+    float IMendable.BodyRadius => Extent.halfWidth;
+    void IMendable.Mended(double d) => Hull += d;
     protected abstract float LostBlast { get; }
     protected abstract float RebuiltBlast { get; }
     protected abstract void OnLost();               // off the field at once: its state, and its arm or pad

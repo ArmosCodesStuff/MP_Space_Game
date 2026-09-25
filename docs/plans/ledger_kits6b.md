@@ -337,3 +337,20 @@ Done: J2, J3, J4 (a3265f7, 43b0953, 19cfffa). Next is kits6b-J5; no PRE written.
 - Files: Mend.cs 6cd5c59, PlayerShip.cs 69938b8, Deployed.cs 26f5efa, UtilityShip.cs 4b4a9da, Turrets.cs 471d84e,
   Abilities.cs a4cb677, Ships.cs 44e89bb, Dealt.cs c9c0020, Items.cs d69fd08, Fx.cs ea7dcc2, SmokeTest.cs.txt 5dc1fee,
   Shots.cs.txt 05fa0d7. HEAD ba6a4f945ca200fd95a84e83dd62614d508801f3.
+### kits6b-J7 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Mend.cs: IMendable (PlayerShip, DeployedTurret, UtilityShip), Give(IMendable ..), Friendlies(hub).
+  Ab.Lance ("lance", Weapon, Hold, Space; its slot line LANCE / MENDING / BURNING); Primary.Beam -> FireOnce ->
+  PlayerShip.LanceTick(MainBore) (Turret.Bore); Dealt.Lance, Items.PrimaryShots + "lance" (Spin-up Feed ramps the
+  beam). Fields row "lance" (FieldLook.Lance appended): the beam drawn from the slot on every peer. Tender row: hull
+  380, Primary.Beam, Fit Guns|Pd, main 4 / 0.1 s / 650 u / main_turn 90 deg/s, lance_heal 0.8, overdrive_mult 2 ->
+  1.5 (J8's field number, moved here with its rewritten check), Abilities {Lance, Overdrive}; deploy rows, cargo-gun
+  numbers and FireMode gone (the freight_main_gun item keeps its id).
+- Old truths rewritten: the TENDER overdrive block (shells + a sentry at x2 -> lance ticks at x1.5), the rate-lift
+  literal check (the tender's main_interval 1.0 -> 0.1: part 0.05, part + x2 0.1/3), sweep A fitRows (Fit.Guns:
+  "guns|lance"), witness + "lance", witness "overdrive" + 1.5.
+- Checks written: LaneA6bLanceChecks (solo, after LaneA6bWellChecks: sheet; 3 runs first body / in flight / reach /
+  full; Mend's kinds on a miner) + LaneA6bLanceTriggerChecks (3 runs: the barrel at 90 deg/s, 0.1 s ticks, let go);
+  sweep B `main_range when Primary.Beam`; frames 79h_lance_burn, 79i_lance_mend (Shots.cs.txt LaneA6bLanceFrames).
+  Test phase owes: solo x2, screens.
+- Next: kits6b-J8 (Overdrive field aura, Repair field, Resupply).

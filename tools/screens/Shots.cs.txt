@@ -893,6 +893,7 @@ public partial class _Shots : Node
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
             await LaneA6bMortarFrame(hub, yard);
             await LaneA6bWellFrame(hub, yard);
+            await LaneA6bLanceFrames(hub, yard);
             await Class(ShipClass.Battleship); await W(0.3);
             await FieldsFrames(hub, yard);
 
@@ -1120,6 +1121,28 @@ public partial class _Shots : Node
         await W(0.6); await Snap("79g_gravity_well");
         hub.Wells.Clear();
         foreach (var r in craft) hub.RaiderDown(r);
+        await W(0.3);
+    }
+
+    // 79h / 79i (kits6b-J7): the Tender's mending lance held on Space, the cursor on a held gunship 420 u
+    // ahead -- the red beam out of the main barrel onto it (79h_lance_burn); then a sentry of its own at 60 of
+    // 120 put on the line 220 u out -- the green beam stopping on the sentry (79i_lance_mend).
+    async Task LaneA6bLanceFrames(Hub hub, Vector2 yard)
+    {
+        Character.Class = ShipClass.FreightTender; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var td = hub.GetNode<PlayerShip>("Ship_1"); td.Position = yard; td.Velocity = Vector2.Zero; td.Rotation = 0f;
+        var at = yard + new Vector2(0, -420);
+        var foe = hub.SpawnRaider(at, Enemies.Gunship); foe.Hp = 1e9; foe.ApplyStatus(Status.Disabled, 12);
+        await W(0.3);
+        Input.ParseInputEvent(new InputEventMouseMotion { Position = GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * at) });
+        await W(2.2);                                      // the barrel round onto the cursor at 90 deg/s
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
+        await W(0.5); await Snap("79h_lance_burn");
+        var post = hub.Drop(td, yard + new Vector2(0, -220), 60, 120);
+        await W(0.4); await Snap("79i_lance_mend");
+        Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = false });
+        if (post != null) hub.DeployedTaken(post);
+        hub.RaiderDown(foe);
         await W(0.3);
     }
 

@@ -17,7 +17,7 @@ using System.Collections.Generic;
 // deals damage or loses hull; a guest's copy tracks and draws. Raiders will go for it like any
 // other thing the base owns (Hub.RaiderTargets), which is the point of leaving one somewhere.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
+public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost, IMendable
 {
     public PlayerShip Ship;               // the pilot who dropped it; null on a guest whose ship has not arrived
     public int OwnerId;
@@ -62,6 +62,12 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
     public StatusSet Statuses => _status;
     public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(s, seconds, share); }
     public (float halfLength, float halfWidth) Extent => (Radius, Radius);
+    // ...and as a hull a friend may mend (Mend.Give, kits6b-J7)
+    bool IMendable.Mendable => Alive;
+    double IMendable.HullNow => Hp;
+    double IMendable.HullMax => MaxHp;
+    float IMendable.BodyRadius => Radius;
+    void IMendable.Mended(double d) => Hp += d;
     // what the scope and the HUD call it: its owner's, because three of them stand together
     public string Label => Ship != null ? $"{Ship.Pilot}'S TURRET" : "TURRET";
     // the host's word on its hull (Hub.NetHulls, the one hull clock for every kind that has one);

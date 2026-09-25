@@ -18,7 +18,7 @@ using System.Linq;
 //     reports hull, ability state and wing positions back;
 //   everyone else interpolates.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurretHost, IPrism
+public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurretHost, IPrism, IMendable
 {
     public int OwnerId = 1;
 
@@ -44,6 +44,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public bool Covers(Vector2 p, float pad) => Combat.KeelCovers(this, MyArt.Length, MyArt.HalfWidth, p, pad);
     bool IRaidTarget.InReach => Alive;
     (float halfLength, float halfWidth) IRaidTarget.Extent => (MyArt.Length * 0.5f, MyArt.HalfWidth);
+    // ...and as a hull a friend may mend (Mend.Give): never a wreck
+    bool IMendable.Mendable => Alive;
+    double IMendable.HullNow => Hp;
+    double IMendable.HullMax => MaxHp;
+    float IMendable.BodyRadius => HitRadius;
+    void IMendable.Mended(double d) => Hp += d;
 
     // ── death: stasis, and the escape pod ───────────────────────────────────
     // 24 s in stasis, then F re-boards at a third of the hull (the owner's ruling). A party with a
@@ -1393,6 +1399,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         switch (Stats.Def.Primary)
         {
             case Primary.Lob: Lob(); break;
+            case Primary.Beam: { var (at, dir) = MainBore; LanceTick(at, dir); break; }
             default:
                 if (Staggered) { _mains[_nextBarrel % _mains.Count].Shoot(); _nextBarrel = (_nextBarrel + 1) % _mains.Count; }
                 else foreach (var m in _mains) m.Shoot();
@@ -1409,6 +1416,41 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var dir = off.LengthSquared() > 1f ? off.Normalized() : Vector2.Up.Rotated(Rotation);
         return Position + dir * Mathf.Clamp(off.Length(), (float)Stats["mortar_min"], (float)Stats["main_range"]);
     }
+    // THE MENDING LANCE (the Tender's primary, Primary.Beam, kits6b-J7, D44): one tick of a beam out of
+    // `from` along `dir` (FireOnce: the main barrel, which follows the cursor at main_turn), main_range
+    // long, onto the FIRST body it touches, nearest first -- a hostile takes main_damage through the door
+    // (Dealt.Lance), a friendly hull is mended lance_heal (Mend.Give, "lance"): never both, never this
+    // hull, and nothing in flight (a missile, a hulled round) stops it. Host only. What it touched rides
+    // the lance's slot to every peer, so each draws it (Fields' Lance look): Left while the trigger holds,
+    // N one of Lance*, Own how far it reached. Returns what it touched.
+    public const string LanceSlot = "lance";
+    public const int LanceNone = 0, LanceMend = 1, LanceBurn = 2;
+    public (Vector2 at, Vector2 dir) MainBore => _mains.Count > 0 ? _mains[0].Bore : (Position, Vector2.Up.Rotated(Rotation));
+    public int LanceTick(Vector2 from, Vector2 dir)
+    {
+        if (!Net.Sim) return LanceNone;
+        float reach = (float)Stats["main_range"];
+        var to = from + dir.Normalized() * reach;
+        var pool = new List<(Vector2 at, float r, IHittable foe, IMendable friend)>();
+        foreach (var h in Targeting.Hittable(Combat.Hostiles, Targeting.Attackable))
+            if (!TagExt.Is(h, Tag.Missile | Tag.Hulled)) pool.Add((h.Position, h.HitRadius, h, null));
+        foreach (var m in Mend.Friendlies(MyHub))
+            if (!ReferenceEquals(m, this)) pool.Add((m.Position, m.BodyRadius, null, m));
+        var first = Lines.Pick(from, to, 0f, 1, pool, p => p.at, p => p.r);
+        int touched = LanceNone; float len = reach;
+        if (first.Count > 0)
+        {
+            var (at, _, foe, friend) = first[0];
+            len = Mathf.Clamp((at - from).Dot(dir.Normalized()), 0f, reach);
+            if (foe != null) { Dealt.Deal(foe, Stats["main_damage"], this, Dealt.Lance); touched = LanceBurn; }
+            else { Mend.Give(friend, Stats["lance_heal"], this, Dealt.Lance); touched = LanceMend; }
+        }
+        ref var sl = ref Sl(LanceSlot);
+        sl.Left = Cadence("main_interval") * 2;          // drawn a tick past the last, so a held beam never blinks
+        sl.N = touched; sl.Own = len;
+        return touched;
+    }
+
     private void Lob()
     {
         var from = _mains.Count > 0 ? _mains[0].GlobalPosition : Position;

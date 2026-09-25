@@ -210,6 +210,21 @@ public static class Ab
         Show = (s, _) => new SlotState { Line = s.Staggered ? "STAGGERED" : "SALVO", Lit = s.Trigger },
     };
 
+    // THE MENDING LANCE (the Tender's primary, kits6b-J7): held, a beam out of the main barrel onto the first
+    // body it touches, a tick every main_interval (PlayerShip.LanceTick, on the host): it burns a hostile and
+    // mends a friend. Its slot says what it is on, on every peer.
+    public static readonly AbilityDef Lance = new()
+    {
+        Weapon = true, Id = PlayerShip.LanceSlot, Name = "Mending lance", Short = "LANCE", Kind = AbilityKind.Hold, Default = Key.Space,
+        Blurb = "Hold for a beam out of the main barrel. The first thing it touches, it burns if it is hostile and mends if it is a friend -- a pilot, a sentry, the fleet.",
+        Show = (s, _) =>
+        {
+            ref var sl = ref s.Sl(PlayerShip.LanceSlot);
+            bool on = sl.Left > 0;
+            return new SlotState { Line = !on ? "LANCE" : sl.N == PlayerShip.LanceMend ? "MENDING" : sl.N == PlayerShip.LanceBurn ? "BURNING" : "LANCE", Lit = s.Trigger || on };
+        },
+    };
+
     public static readonly AbilityDef FireMode = new()
     {
         Weapon = true, Id = "firemode", Name = "Fire mode", Short = "MODE", Default = Key.G, Local = true,
