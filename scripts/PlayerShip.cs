@@ -318,11 +318,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // or levelled.
     private ShipStats BuildSheet()
     {
-        if (Mine && !Demo) _loadout = (string[])Character.LoadoutFor(Class).Clone();   // a COPY: the window edits the saved one in place
-        var pct = Equipment.Bonuses(Class, Loadout, Levels);
+        if (Mine && !Demo) _fitted = (string[])Character.LoadoutFor(Class).Clone();   // a COPY: the window edits the saved one in place
+        var loadout = Loadout;
+        var pct = Equipment.Bonuses(Class, loadout, Peak, Levels);
         if (Mine && !Demo) pct = ShipStats.Sum(pct, Character.Bonuses);
         pct = ShipStats.Sum(pct, Progression.Shares(_bought, Class));       // the pilot's own percentages
-        return new ShipStats(Class, pct, ShipStats.Sum(Progression.Flats(_bought, Class), Equipment.Adds(Class, Loadout, Levels)));
+        return new ShipStats(Class, pct, ShipStats.Sum(Progression.Flats(_bought, Class), Equipment.Adds(Class, loadout, Peak, Levels)));
     }
 
     // THE WING, brought to the sheet's counts: gear adds fighters or takes bombers away, and may be
@@ -369,8 +370,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     // The pilot's purchased upgrades (Progression), and the highest level it has reached (its PEAK,
     // what the level walls read: Unlocks). The host needs both: it resolves hull and damage, and it
-    // is held to the walls. Either one changing refits the ship (Restat). A ship no identity has
-    // reached yet is a level-1 pilot's.
+    // is held to the walls: a chip slot opens on the sheet the moment the peak reaches it (Loadout).
+    // Either one changing refits the ship (Restat). A ship no identity has reached yet is a level-1
+    // pilot's.
     private int[] _bought = new int[Progression.All.Length];
     public int[] Bought => _bought;
     public int Peak { get; private set; } = 1;
@@ -401,17 +403,20 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // parts (on the host, what the identity carried; your own, from Character -- copied, never
     // shared). A change to EITHER refits: a level bought for a part already fitted is the same
     // loadout, and must refit all the same.
-    private string[] _loadout;
-    public string[] Loadout => _loadout ?? Equipment.Default(Class);
+    // WHAT IS FITTED IS KEPT WHOLE (_fitted: what this hull can wear); what FLIES is what the
+    // pilot's peak has opened of it (Loadout), so a chip slot that opens mid-session applies the
+    // chip already in it, with nothing sent again.
+    private string[] _fitted;
+    public string[] Loadout => Equipment.Sanitize(Class, _fitted, Peak);
     private Dictionary<string, int> _levels = new();
     public IReadOnlyDictionary<string, int> Levels => _levels;
     public void SetEquipment(string[] ids, IReadOnlyDictionary<string, int> levels)
     {
-        var l = Equipment.Sanitize(Class, ids);
+        var f = Equipment.Sanitize(Class, ids, Unlocks.Top);
         var lv = Equipment.SanitizeLevels(levels?.Select(kv => (kv.Key, kv.Value)));
-        if (_loadout != null && l.AsSpan().SequenceEqual(_loadout)
+        if (_fitted != null && f.AsSpan().SequenceEqual(_fitted)
             && lv.Count == _levels.Count && lv.All(kv => _levels.GetValueOrDefault(kv.Key) == kv.Value)) return;
-        _loadout = l; _levels = lv;
+        _fitted = f; _levels = lv;
         Restat();
     }
 

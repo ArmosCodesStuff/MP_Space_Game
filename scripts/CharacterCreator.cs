@@ -128,8 +128,8 @@ public partial class CharacterCreator : CanvasLayer
 
     // What a ship of this class would come out of the yard with, for this pilot.
     private static double ClassHull(ShipClass c) =>
-        new ShipStats(c, Equipment.Bonuses(c, Character.LoadoutFor(c), Character.GearLevel),
-                      Equipment.Adds(c, Character.LoadoutFor(c), Character.GearLevel))["hull"];
+        new ShipStats(c, Equipment.Bonuses(c, Character.LoadoutFor(c), Character.Peak, Character.GearLevel),
+                      Equipment.Adds(c, Character.LoadoutFor(c), Character.Peak, Character.GearLevel))["hull"];
 
     private void Rebuild()
     {
@@ -147,10 +147,8 @@ public partial class CharacterCreator : CanvasLayer
                 Disabled = !e.Ready,
                 FocusMode = Control.FocusModeEnum.None,
                 // THE HULL IT WILL ACTUALLY HAVE, from the same sheet the ship fights with and the
-                // K window prints -- this pilot's parts fitted, the starting kit included. The
-                // blurbs used to hand-write it ("300 hull"), which is the bare class row: every
-                // real pilot flies 25% more than that from its five basic chips, so the card
-                // disagreed with the ship from its first flight.
+                // K window prints -- this pilot's parts fitted, in the chip slots its level has
+                // opened -- so a pilot whose chips lift its hull reads that here, not the bare class row.
                 Text = e.Ready
                     ? $"{e.Name}  ·  {ClassHull(e.Id):0} hull{(Character.Class == e.Id ? "     [ SELECTED ]" : "")}\n{e.Blurb}"
                     : $"{e.Name}     — not yet flyable\n{e.Blurb}",

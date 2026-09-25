@@ -326,7 +326,7 @@ public partial class _Shots : Node
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
             rs2.Position = keepR2; rs2.Velocity = Vector2.Zero; await W(0.3);
         }
-        // the equipment window (I): five parts and five chips, the class's own
+        // the equipment window (I): five parts and six chip slots, the class's own, no chip fitted
         {
             H.ToggleEquipment(); await W(0.4);
             await Snap("55_equipment");
@@ -345,8 +345,21 @@ public partial class _Shots : Node
             for (int k = 0; k < keep.Length; k++) bl[k] = keep[k];
             Character.GearHold.Clear(); P(H, "ApplyLocalIdentity"); await W(0.2);
         }
+        // ...and the chip walls (Unlocks): a pilot whose highest level is 4 has chip slots 1 and 2
+        // open, both filled; slots 3-6 read LOCKED · L8 / L10 / L12 / L14 with no button, and the
+        // Engine Chip in the hold has its EQUIP greyed ("next chip slot opens at level 8")
+        {
+            var bl = Character.LoadoutFor(Character.Class); var keep = (string[])bl.Clone(); int keepPeak = Character.Peak;
+            Character.Peak = 4; bl[5] = "chip_combat_1"; bl[6] = "chip_armour_2";
+            Character.Stow("chip_engine_1");
+            P(H, "ApplyLocalIdentity"); H.ToggleEquipment(); await W(0.4);
+            await Snap("58b_eq_chip_walls");
+            H.ToggleEquipment(); await W(0.2);
+            for (int k = 0; k < keep.Length; k++) bl[k] = keep[k];
+            Character.Peak = keepPeak; Character.GearHold.Clear(); P(H, "ApplyLocalIdentity"); await W(0.2);
+        }
         // the hull bar with its fill's edge running through both readouts: every letter must read
-        // (dark on the fill, light past it) -- "HULL 180 / 375" and "WARP READY" split mid-word
+        // (dark on the fill, light past it) -- "HULL 144 / 300" and "WARP READY" split mid-word
         {
             var hs = H.GetNode<PlayerShip>("Ship_1"); double hp0 = hs.Hp;
             hs.Hp = hs.MaxHp * 0.48; await W(0.2);

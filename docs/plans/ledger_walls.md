@@ -115,3 +115,47 @@ for 3 classes pressed through DoAbility; the generic refusal/host-gate checks pr
 `Measure.Boss`, `Opens.Economy`, `Opens.Raids`; rows {Boss, 3, Economy, "hauler_autosell"} and {Boss, 1, Raids};
 delete `Economy.Upgrade.NeedsBoss` (Economy.cs:82, :39, :119) and `Lanes.NeedsBoss` (Lanes.cs:103); Yard.cs:263,
 BasePanel.cs:120-129, Raids.cs:53 ask Unlocks. Grep the harness for NeedsBoss and rewrite each to the table.
+
+## Job 2 PRE (fresh agent, 2026-09-25)
+- intent: F15 as planned above: ChipSlots 6, ChipKind + KindCap 3, chip_basic deleted (Default fits no chips),
+  Sanitize/Bonuses/Adds take the peak, ChipFit, Load's displaced list, EquipmentWindow 6 rows + locked rows,
+  PlayerShip re-sanitises on a peak change; harness old-truth numbers rewritten; ChipChecks; Shots frame eq_chip_walls.
+- start: a56424581d8d29ba1a04a0ca605b78925fa772aa
+- files (hash-object at start):
+  - scripts/Equipment.cs a2c659c3cbd0a126dbfd09f3cbc751587703b298
+  - scripts/Character.cs a3d5a3cca069c202e706df7eb704448a71423ad5
+  - scripts/CharacterCreator.cs 735d70540bd9efade999021169d5fb485389dbd8
+  - scripts/EquipmentWindow.cs 26c89e9ae2ca6093209f4d05343073561d49c434
+  - scripts/PlayerShip.cs 0942c026545bf8deb01f6cb164c16b08e427ceb2
+  - tools/smoketest/SmokeTest.cs.txt 984bac06b2d2a6f9c90a09baa29e8e0d29be4d9a
+  - tools/screens/Shots.cs.txt 199b283e6bec1f46364523af3f97dcde21705507
+  - docs/CHANGES.md 6e05268b16ce178f177bc1cc3e62cc7449bd60ac
+
+## Job 2 POST
+- verdict: typecheck 0 errors; `verify.ps1 -Quick` ALL CHECKS PASSED. Rungs 3/4/5 owed.
+- files: Equipment.cs (ChipSlots 6, ChipKind/ItemDef.Kind/KindCap, chip_basic gone, Default no chips,
+  Sanitize(c, ids, peak), ChipFit, Bonuses/Adds(.., peak, ..)), Character.cs (Load: displaced = whatever
+  Sanitize with the peak empties), EquipmentWindow.cs (6 rows, locked rows, EQUIP via ChipFit + tooltip),
+  PlayerShip.cs (`_fitted` kept whole, `Loadout` = Sanitize at Peak, so a peak rise applies a chip already
+  fitted), CharacterCreator.cs, Ships.cs (comments), SmokeTest.cs.txt, Shots.cs.txt, CHANGES.md.
+- D10: the plan's Worst() message figures "150 and 100" were wrong arithmetic: -60% leaves 120 of a
+  battleship's 300 and 80 of a carrier's 200; those are written.
+- D11: the unclaimed-loot fixture (:768) gets `std_drive` (a kit part, refused), not chip_combat_1 (a real
+  drop would be kept and fail "no kit").
+- D12: level_walls check 15 (rung 5) is the THIRD player (guest2, a battleship): it claims peak 3 with five
+  chips (armour, combat, combat, armour, engine) -> 324 hull on the host, itself and Guesty (318 if all five).
+  Guesty's gear is now four Armour Chips I (the host holds it to 3: 248, not 264); the arena guest's
+  destroyer two Armour Chips I (290).
+- rung 3 owed: `ChipChecks` (3 classes x: open slots/sheet, the Utility cap, ChipFit, 3 save files; +1 no-peak
+  file); Solo equipment block (EQUIP/UNEQUIP Armour Chip I = full x1.08; Balanced x1.28 / x1.29 levelled; hold
+  is the pilot's; save round trip with the chip; EQUIP greyed at peak 8 "at most 3 Combat chips" / "next chip
+  slot opens at level 10", `CHIP 4  ·  LOCKED · L10`); every rewritten number (CHANGES entry lists them).
+- rung 4 owed: frame `58b_eq_chip_walls` (read by eye once: two chips, four LOCKED rows, greyed EQUIP); the
+  sweep now draws 109 frames (the Handoff's "108" is the main session's to update).
+- rung 5 owed: host "a guest at peak 3 with five chips fitted flies one: 324"; third player's own 324; Guesty's
+  view of the third player 324; Guesty "hull replicated ... 248"; arena host 140 / 400 / deploy 6 / guest
+  destroyer 290; arena guest 400.
+- note: the -Quick run began in a gap between the main session's engine runs; a solo smoke run started while
+  it was going (separate folders; nothing shared).
+- commit: (this commit) "Walls job 2 (F15): six chip slots, the kind caps, no starting chips".
+- next: job 4 (small, independent of 3), then job 3 for a fresh agent.

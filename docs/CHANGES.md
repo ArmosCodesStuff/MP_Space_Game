@@ -467,6 +467,34 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Level walls, job 2 (F15): six chip slots on every hull, the kind caps, no starting chips (2026-09-25, lane C, `wt/walls`)
+
+**Every hull has six chip slots** (`Equipment.ChipSlots` 6), opened in order by the pilot's peak
+(`Unlocks`: level 2, 4, 8, 10, 12, 14), with **at most 3 Combat and 3 Utility chips** (`ChipKind` on
+`ItemDef`, `Equipment.KindCap`; the Combat Chip is Combat, Armour, Engine and Targeting are Utility).
+**`chip_basic` is deleted and `Equipment.Default` fits no chips**: a stock ship is its class row (a
+battleship 300 hull where it flew 375). `Equipment.Sanitize(c, ids, peak)` empties a chip in an unopened
+slot or over its kind's cap, and `Bonuses` / `Adds` take the peak, so the host holds a guest's claim to
+its own walls. `PlayerShip` keeps what is fitted whole and flies what its peak opens (`Loadout`), so a
+slot opening mid-session applies its chip. `Character.Load` moves every chip it cannot fly into the hold
+(never deleted). The equipment window shows six chip rows, a locked one reading `CHIP 4  ·  LOCKED · L10`
+with no button; EQUIP uses the first open empty slot (`Equipment.ChipFit`) and greys out with why ("next
+chip slot opens at level 10", "at most 3 Combat chips").
+
+**Checks:** `ChipChecks` (new, rung 3): open slots at levels 1/2/4/8/14 = 0/1/2/3/6 through Sanitize and
+the sheet, the Utility cap, `ChipFit`'s five answers, and files at levels 1/3/14 with five Combat chips
+loading 0/1/3 fitted and the rest held, x battleship / warden / echo, plus a file with no peak. Solo
+(rung 3): EQUIP and UNEQUIP of an Armour Chip I (+8% hull) in place of the five kit chips, and EQUIP greyed
+with both reasons and a locked row at peak 8. Rewritten to the stock numbers (no chips): the creator card
+(300), broadside 214.8, a shell 17.9, the refit's fraction (60/300, 108/540, 45/225), the destroyer 250,
+the missiles 147, a torpedo 137.5, the carrier's 93.6 DPS reference, the worst-case stack (-37% / -45% /
+-60%, chips counted three of a kind), hull points +5 / +10, the arena's 140 / 400 / 6. Rung 5 (new or
+rewritten): the arena guest's two Armour Chips (290); Guesty's four Armour Chips held to three on the host
+(248); the third player's five chips at peak 3 flying one on the host, on itself and on the other guest (324).
+Shots: `58b_eq_chip_walls` (new, peak 4: two chips, four locked rows, a greyed EQUIP).
+
+**Known broken:** none known; compiles (rungs 1-2), rungs 3, 4 and 5 not yet run.
+
 ### Level walls, job 1: the unlock table, the pilot's peak, save format 3 (2026-09-25, lane C, `wt/walls`)
 
 **`scripts/Unlocks.cs` is the one table of what a pilot's level opens** (docs/plans/level_walls.md with

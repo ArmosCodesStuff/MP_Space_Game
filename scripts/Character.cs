@@ -278,17 +278,20 @@ public static class Character
             if (at >= 0) Spent.Add(at);
         }
         // Every part id read from the file goes through Equipment.Migrated first (see there). A
-        // dropped part that no longer fits the slot it was fitted in is not lost: it goes into the
-        // hold, and the slot takes the class's own kit.
+        // dropped part the file has fitted where it may not fly is never lost: it goes into the hold.
+        // That is a part that no longer fits its slot (the slot takes the class's own kit), a chip in
+        // a slot this pilot's peak has not opened, and a chip over its kind's cap (Equipment.Sanitize,
+        // read with the peak loaded above).
         Loadout.Clear();
         var displaced = new List<string>();
         foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass)))
             if (c.HasSectionKey("equipment", sc.ToString()))
             {
                 var ids = ((string)c.GetValue("equipment", sc.ToString(), "")).Split(',').Select(Equipment.Migrated).ToArray();
+                var clean = Equipment.Sanitize(sc, ids, Peak);
                 for (int k = 0; k < ids.Length && k < Equipment.Slots; k++)
-                    if (Equipment.ById(ids[k]) is { Kit: false } part && !Equipment.Fits(part, Equipment.SlotAt(k), sc)) displaced.Add(part.Id);
-                Loadout[sc] = Equipment.Sanitize(sc, ids);
+                    if (Equipment.ById(ids[k]) is { Kit: false } part && clean[k] != part.Id) displaced.Add(part.Id);
+                Loadout[sc] = clean;
             }
         // The hold, loot and hints: parts and hints this build knows, and counts above zero.
         // (`gid`, not `id`: `id` is the CHARACTER's id, the parameter this method was called with.)
