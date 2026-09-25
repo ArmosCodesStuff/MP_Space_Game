@@ -18,7 +18,7 @@ using System.Linq;
 //     reports hull, ability state and wing positions back;
 //   everyone else interpolates.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurretHost
+public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurretHost, IPrism
 {
     public int OwnerId = 1;
 
@@ -833,6 +833,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // Pinned holds the ship to StatusSet.PinSpeed of top speed, thrusting, unable to turn.
     private StatusSet _status;
     public StatusSet Statuses => _status;
+    // A PRISM while Parrying is on it (F11, on the wire): its guard faces the cursor, ±90° off the nose
+    public bool Prismatic => _status.Has(Status.Parrying);
+    public float GuardAngle => Melee.Guard(Melee.Nose(this), (AimPoint - Position).Angle(), Prism.GuardMax);
     public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(s, seconds, share); }
     public bool Pinned => _status.Has(Status.Pinned);
 

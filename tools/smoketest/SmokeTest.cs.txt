@@ -4085,6 +4085,140 @@ public partial class _Test : Node
         }
     }
 
+    // ── F11 · THE PRISM (lane A slice 5, kits5-J2) ────────────────────────────────────────────
+    // Pure (Prism.Resolve): theta is the asserted input (kits_v2 Warrior card): {0, 14, 16, 45, 59, 61, 120, 180}
+    // gives SQUARE, SQUARE, SLANT, SLANT, SLANT, OPEN, OPEN, OPEN, from 3 varied guards, the light coming in
+    // on either side of the guard.
+    void LaneAPrismBandChecks()
+    {
+        float[] thetas = { 0f, 14f, 16f, 45f, 59f, 61f, 120f, 180f };
+        int[] want = { 0, 0, 1, 1, 1, -1, -1, -1 };
+        for (int run = 0; run < 3; run++)
+        {
+            float gAng = VaryAngle(); var g = Vector2.Right.Rotated(gAng);
+            float sign = run % 2 == 0 ? 1f : -1f;
+            var got = thetas.Select(t => Prism.Resolve(g, -g.Rotated(sign * Mathf.DegToRad(t))).Band).ToArray();
+            Check(got.SequenceEqual(want) && Prism.Bands[0].Id == "square" && Prism.Bands[1].Id == "slant",
+                  $"a guard at {Mathf.RadToDeg(gAng):0} deg, the light {(sign > 0 ? "left" : "right")} of it at theta 0/14/16/45/59/61/120/180: SQUARE, SQUARE, SLANT, SLANT, SLANT, OPEN, OPEN, OPEN ({string.Join(",", got)})");
+        }
+    }
+
+    // Pure (Prism.Resolve): SQUARE sends 75% back along g and lets 25% straight on; SLANT at 40 deg
+    // mirrors 50% at 80 deg off the line back to the source and bends 50% by 20 deg, to the other side of
+    // the light from the mirror (the card's "SLANT at 40 deg mirrors 25 at 80 deg and bends 25 by 20 deg"),
+    // from 3 varied guards and both sides.
+    void LaneAPrismResolveChecks()
+    {
+        for (int run = 0; run < 3; run++)
+        {
+            var g = Vector2.Right.Rotated(VaryAngle());
+            float sign = run % 2 == 0 ? 1f : -1f;
+            var uSq = -g.Rotated(sign * Mathf.DegToRad(Vary(1f, 13f)));
+            var sq = Prism.Resolve(g, uSq);
+            Check(sq.Band == 0 && sq.Out.DistanceTo(g) < 1e-4f && sq.Through.DistanceTo(uSq) < 1e-4f
+                  && Math.Abs(sq.OutShare - 0.75) < 1e-9 && Math.Abs(sq.ThroughShare - 0.25) < 1e-9,
+                  $"SQUARE at theta {sq.Theta:0.0}: 0.75 back along the guard, 0.25 straight on ({sq.OutShare} / {sq.ThroughShare})");
+            var u = -g.Rotated(sign * Mathf.DegToRad(40f));
+            var sl = Prism.Resolve(g, u);
+            float mirrorOff = Mathf.RadToDeg(Mathf.Abs(sl.Out.AngleTo(-u))), bend = Mathf.RadToDeg(Mathf.Abs(u.AngleTo(sl.Through)));
+            bool otherSide = Mathf.Sign(u.Cross(sl.Out)) != Mathf.Sign(u.Cross(sl.Through));
+            Check(sl.Band == 1 && Mathf.Abs(mirrorOff - 80f) < 0.01f && Mathf.Abs(bend - 20f) < 0.01f && otherSide
+                  && Math.Abs(sl.OutShare - 0.5) < 1e-9 && Math.Abs(sl.ThroughShare - 0.5) < 1e-9,
+                  $"SLANT at 40 deg ({(sign > 0 ? "left" : "right")}): half mirrored at 80 deg ({mirrorOff:0.00}), half bent 20 deg ({bend:0.00}) to the other side of the light ({otherSide})");
+        }
+    }
+
+    // World (Prism.Catch, host): the pilot Parrying, its guard on its nose, a 50 beam tick from a source
+    // 400-1500 u off. SQUARE (theta 1-12 deg): a gunship on the guard 300-900 u out loses 37.5, credited
+    // "prism". SLANT at 40 deg: a gunship on the mirror loses 25. OPEN (theta 65-170) and a ring: not caught.
+    // A RAY reaches 900 u, a beam 1500: a gunship 1000-1400 u out on the guard is untouched by a caught ray.
+    // The pilot's hull never moves. 3 varied spots and headings, the light from either side.
+    async Task LaneAPrismSplitChecks(Vector2 yonder)
+    {
+        var pm = Me;
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = rot;
+            pm.Hp = pm.MaxHp; pm.ApplyStatus(Status.Parrying, 5.0);
+            var g = Vector2.Up.Rotated(rot);
+            float sign = run % 2 == 0 ? 1f : -1f;
+            var uSq = -g.Rotated(sign * Mathf.DegToRad(Vary(1f, 12f)));
+            var uSl = -g.Rotated(sign * Mathf.DegToRad(40f));
+            var mirror = (uSl - 2f * uSl.Dot(g) * g).Normalized();
+            var spots = new[] { at + g * Vary(300f, 900f), at + mirror * Vary(300f, 1400f), at + g * Vary(1000f, 1400f) };
+            var foes = spots.Select(s => { var f = H.SpawnRaider(s, Enemies.Gunship); f.Hp = 1e9; return f; }).ToArray();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            void Place() { for (int k = 0; k < 3; k++) foes[k].Position = spots[k]; pm.Position = at; pm.Rotation = rot; pm.AimPoint = at + g * 600f; }
+            double hull0 = pm.Hp;
+
+            Place(); var hp = foes.Select(f => f.Hp).ToArray();
+            double dealt0 = pm.DealtBy.TryGetValue(Dealt.Prism, out var dv) ? dv : 0;
+            bool sq = Prism.Catch(pm, BlowKind.Beam, at - uSq * Vary(400f, 1500f), at + uSq * Vary(300f, 800f), 50, $"test:beam#{run}a");
+            double credited = (pm.DealtBy.TryGetValue(Dealt.Prism, out var dv2) ? dv2 : 0) - dealt0;
+            double sqLost = hp[0] - foes[0].Hp;
+            Check(sq && Math.Abs(sqLost - 37.5) < 1e-6 && Math.Abs(credited - 37.5) < 1e-6,
+                  $"a Parrying pilot at {Mathf.RadToDeg(rot):0} deg catches a 50 beam tick SQUARE: the gunship on its guard loses 37.5 ({sqLost:0.##}), credited as \"prism\" ({credited:0.##})");
+
+            Place(); hp = foes.Select(f => f.Hp).ToArray();
+            bool sl = Prism.Catch(pm, BlowKind.Beam, at - uSl * Vary(400f, 1500f), at + uSl * Vary(300f, 800f), 50, $"test:beam#{run}b");
+            double slLost = hp[1] - foes[1].Hp;
+            Check(sl && Math.Abs(slLost - 25) < 1e-6,
+                  $"...and a SLANT tick at 40 deg: the gunship on the mirror, {spots[1].DistanceTo(at):0} u out, loses 25 ({slLost:0.##})");
+
+            Place(); hp = foes.Select(f => f.Hp).ToArray();
+            var uOpen = -g.Rotated(sign * Mathf.DegToRad(Vary(65f, 170f)));
+            bool open = Prism.Catch(pm, BlowKind.Beam, at - uOpen * 800f, at + uOpen * 500f, 50, $"test:beam#{run}c");
+            bool ring = Prism.Catch(pm, BlowKind.Area, at - uSq * 800f, at + uSq * 500f, 50, $"test:ring#{run}");
+            Check(!open && !ring && Enumerable.Range(0, 3).All(k => hp[k] == foes[k].Hp),
+                  $"...an OPEN tick (theta past 60) and a ring are not caught, and nothing is split ({open} / {ring})");
+
+            Place(); hp = foes.Select(f => f.Hp).ToArray();
+            bool ray = Prism.Catch(pm, BlowKind.Ray, at - uSq * 600f, at, 10, $"test:ray#{run}");
+            double rayNear = hp[0] - foes[0].Hp, rayFar = hp[2] - foes[2].Hp;
+            Check(ray && Math.Abs(rayNear - 7.5) < 1e-6 && rayFar == 0,
+                  $"...a caught ray (10) reaches 900 u: the gunship on the guard {spots[0].DistanceTo(at):0} u out takes 7.5 ({rayNear:0.##}), the one {spots[2].DistanceTo(at):0} u out nothing ({rayFar:0.##})");
+            Check(pm.Hp == hull0, $"...and the catcher's own hull never moves ({hull0:0.#} -> {pm.Hp:0.#})");
+
+            pm.Statuses.Clear(Status.Parrying);
+            foreach (var f in foes) f.TakeDamage(1e12);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        pm.Position = yonder; pm.Velocity = Vector2.Zero;
+    }
+
+    // World (Prism.Walk, what Boss.Burn judges a beam with): a 50 tick down a 60 u segment through the
+    // pilot, from 3 varied bearings. Not Parrying, the pilot loses 50. Parrying with its guard on the
+    // source, it loses nothing and the gunship on its guard loses 37.5: the walk stopped at the catcher.
+    async Task LaneAPrismWalkChecks(Vector2 yonder)
+    {
+        var pm = Me;
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            var g = Vector2.Up.Rotated(rot);
+            var u = -g.Rotated(Mathf.DegToRad(Vary(-10f, 10f)));
+            var a = at - u * Vary(500f, 1200f); var b = at + u * Vary(300f, 900f);
+            var spot = at + g * Vary(300f, 900f);
+            var foe = H.SpawnRaider(spot, Enemies.Gunship); foe.Hp = 1e9;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            foe.Position = spot; pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = rot; pm.AimPoint = at + g * 600f;
+            pm.Statuses.Clear(Status.Parrying); pm.Hp = pm.MaxHp;
+            double h0 = pm.Hp;
+            Prism.Walk(a, b, 30f, 50, a, $"test:walk#{run}a", new[] { pm });
+            double bare = h0 - pm.Hp;
+            pm.Hp = pm.MaxHp; pm.ApplyStatus(Status.Parrying, 5.0);
+            double f0 = foe.Hp; h0 = pm.Hp;
+            Prism.Walk(a, b, 30f, 50, a, $"test:walk#{run}b", new[] { pm });
+            Check(Math.Abs(bare - 50) < 1e-6 && pm.Hp == h0 && Math.Abs(f0 - foe.Hp - 37.5) < 1e-6,
+                  $"a 50 beam tick walked through the pilot from {Mathf.RadToDeg(u.Angle()):0} deg: bare it lands 50 ({bare:0.##}); Parrying it lands 0 and the gunship on the guard loses 37.5 ({f0 - foe.Hp:0.##})");
+            pm.Statuses.Clear(Status.Parrying); pm.Hp = pm.MaxHp;
+            foe.TakeDamage(1e12);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        pm.Position = yonder; pm.Velocity = Vector2.Zero;
+    }
+
     // ── F12 · THE MELEE ARC AND THE GUARD CLAMP (lane A slice 5, kits5-J1) ─────────────────────
     // Pure (Melee.Pick, Melee.Guard): the blade's literals (160 u, ±55°, kits_v2 Warrior card) and the
     // whirlwind's (210 u, all round) from 3 varied spots and facings. A body well inside the wedge and one
@@ -9908,6 +10042,10 @@ public partial class _Test : Node
             LaneAChargeTableHashedChecks();
             LaneAMeleeArcChecks();
             await LaneAMeleeStrikeChecks(yonder);
+            LaneAPrismBandChecks();
+            LaneAPrismResolveChecks();
+            await LaneAPrismSplitChecks(yonder);
+            await LaneAPrismWalkChecks(yonder);
             await LaneBHelmChecks(yonder);
             await LaneBStrafeChecks(yonder);
             await LaneBBoostChecks(yonder);

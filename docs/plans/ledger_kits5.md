@@ -55,3 +55,19 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
 - Files: scripts/Melee.cs (new); SmokeTest.cs.txt (LaneAMeleeArcChecks, LaneAMeleeStrikeChecks after
   LaneAChargeTableHashedChecks, freighter in solo). Trap: SmokeTest.cs.txt is LF; write it in binary.
 - Next: kits5-J2.
+### kits5-J2 · PRE · F11a prism: bands, resolve, children on Lines, Parrying, the Burn walk (D30) -- tier opus
+- Intent: new scripts/Prism.cs; Lines rows prism_out / prism_through + Wide / Side / reach override; Status.Parrying 32;
+  PlayerShip : IPrism; Boss.Burn's beam judged through Prism.Walk. Checks LaneAPrismBandChecks, LaneAPrismResolveChecks,
+  LaneAPrismSplitChecks, LaneAPrismWalkChecks.
+- Files: scripts/Prism.cs (new), scripts/Lines.cs, scripts/Statuses.cs, scripts/PlayerShip.cs, scripts/Boss.cs, SmokeTest.cs.txt, this ledger.
+- HEAD 91f1a1ce460659eda9b758b6e44aa89a4d1b3f43 · Lines.cs 217413dba35614e131ba1b5608ec095f5dfa869f · Statuses.cs adc4ed3e918a07dcaa259013ef3b4818c7fc48d8 · PlayerShip.cs 91bfcf083601bcebc85e830529be06b5adf5ded8 · Boss.cs e0c794b34c74d2d622a36a7b986acfcb529d3d1a · SmokeTest.cs.txt d8c63791d8483111b8a7ba282548dbbe1213ebd6
+### kits5-J2 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Prism.cs (BlowKind {Beam, Ray, Shot, Area}, Bands square/slant, IPrism, Resolve, Catch, Walk);
+  Lines rows PrismOut (1) / PrismThrough (2) with LineDef.Wide + Side and Strike's reach/source/skip; Status.Parrying
+  = 32 (on the wire); PlayerShip : IPrism (guard = Melee.Guard(nose, cursor, 90°)); Boss.Burn's beam through
+  Prism.Walk (nearest first; it was list order). Children use Fx.Rail / Beam.Rail until 6c gives the stance its own
+  rows (D30). Lines.All grew 2 rows: the protocol fingerprint moves.
+- Files: scripts/Prism.cs (new), Lines.cs, Dealt.cs (Dealt.Prism), Statuses.cs, PlayerShip.cs, Boss.cs; SmokeTest.cs.txt
+  (LaneAPrismBandChecks, LaneAPrismResolveChecks, LaneAPrismSplitChecks, LaneAPrismWalkChecks after the melee pair).
+- Next: kits5-J3.

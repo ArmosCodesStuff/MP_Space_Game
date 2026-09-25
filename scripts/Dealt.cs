@@ -15,7 +15,7 @@
 public static class Dealt
 {
     public const string Pd = "pd", Turret = "turret", Rail = "rail", Emp = "emp", Echo = "echo",
-        Outpost = "outpost", Base = "base";
+        Outpost = "outpost", Base = "base", Prism = "prism";
 
     // EVERY BLOW THROUGH THE DOOR, whoever dealt it -- a blow with no ship behind it (the base's
     // own laser, a shot whose shooter has gone) included, which no NoteDealt hears. A listener
