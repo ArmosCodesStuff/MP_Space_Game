@@ -3186,6 +3186,45 @@ public partial class _Test : Node
         pm.Position = yonder; pm.Velocity = Vector2.Zero;
     }
 
+    // ── F23 · LINES: what a line strikes, and the railgun's row (lane A slice 3, J9) ─────────────
+    // Pure (Lines.Pick): 3 varied layouts -- an angle, a start, three bodies on the line at varied
+    // spots handed over in a shuffled order, one body just off its side and one past its end -- with
+    // Stops 0 / 1 / 2: everything on it, the nearest, the nearest two, always nearest first. Then the
+    // railgun's row against the kit's literals: 2500 x 14 u, through everything, the rail bar and report.
+    void LaneALinesChecks()
+    {
+        for (int run = 0; run < 3; run++)
+        {
+            var a = new Vector2(Vary(-3000f, 3000f), Vary(-3000f, 3000f));
+            var dir = Vector2.Right.Rotated(VaryAngle());
+            var side = dir.Orthogonal();
+            float length = Vary(1500f, 2500f), half = Vary(5f, 12f);
+            var b = a + dir * length;
+            var pool = new List<(string name, Vector2 at, float r)>();
+            float[] along = { Vary(100f, 400f), Vary(600f, 900f), Vary(1100f, 1400f) };
+            for (int k = 0; k < 3; k++)
+            {
+                float r = Vary(10f, 30f);
+                pool.Add(($"on{k}", a + dir * along[k] + side * Vary(-1f, 1f) * (half + r - 2f), r));
+            }
+            float rOff = Vary(10f, 30f);
+            pool.Add(("beside", a + dir * Vary(200f, 1300f) + side * (half + rOff + Vary(8f, 40f)) * (run % 2 == 0 ? 1 : -1), rOff));
+            pool.Add(("beyond", a + dir * (length + rOff + Vary(20f, 200f)), rOff));
+            var shuffled = pool.OrderBy(_ => Rng.Randi()).ToList();
+            string Names(List<(string name, Vector2 at, float r)> l) => string.Join(",", l.Select(t => t.name));
+            var all = Lines.Pick(a, b, half, 0, shuffled, t => t.at, t => t.r);
+            var one = Lines.Pick(a, b, half, 1, shuffled, t => t.at, t => t.r);
+            var two = Lines.Pick(a, b, half, 2, shuffled, t => t.at, t => t.r);
+            Check(Names(all) == "on0,on1,on2" && Names(one) == "on0" && Names(two) == "on0,on1",
+                  $"a line {length:0} x {half * 2:0} u at {Mathf.RadToDeg(dir.Angle()):0} deg, handed its bodies as {Names(shuffled)}: Stops 0 strikes on0,on1,on2, Stops 1 on0, Stops 2 on0,on1, nearest first, never the one beside it or past its end ({Names(all)} / {Names(one)} / {Names(two)})");
+        }
+        var rail = Lines.All[Lines.Rail];
+        var sheet = new ShipStats(ShipClass.HeavySniper);
+        Check(rail.Id == "rail" && rail.Stops == 0 && rail.Fx == Fx.Rail && rail.Beam == Beam.Rail
+              && Math.Abs(sheet[rail.Reach] - 2500) < 1e-9 && Math.Abs(sheet[rail.Width] - 14) < 1e-9 && Math.Abs(sheet["rail_damage"] - 150) < 1e-9,
+              $"the railgun is a Lines row: 2500 x 14 u (reach {sheet[rail.Reach]:0}, width {sheet[rail.Width]:0}), through everything (Stops {rail.Stops}), the rail bar and report, 150 a line");
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -7958,6 +7997,7 @@ public partial class _Test : Node
             LaneASpeedAddChecks();
             await LaneAHeavyRowsChecks(yonder);
             await LaneAShotStopsChecks(yonder);
+            LaneALinesChecks();
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);

@@ -822,3 +822,22 @@ Jobs (each: PRE, edit + its checks, typecheck + verify -Quick, POST, commit):
   so every existing shot's behaviour is unchanged.
 - Files: scripts/Shots.cs; SmokeTest.cs.txt (`LaneAShotStopsChecks`, called after LaneAHeavyRowsChecks).
 - Checkpoint: the commit after this entry. Next: J9 (F23 Lines).
+
+### J9 · PRE · F23 Lines (D25) -- tier opus
+- Intent: new scripts/Lines.cs (LineDef {Id, Width, Reach, Stops, Fx, Beam}, Lines.All with the rail row,
+  Lines.Pick (pure, ordered along the line), Lines.Strike (host)); PlayerShip.FireRail through Lines.Strike,
+  same literals. Checks: LaneALinesChecks.
+- Files: scripts/Lines.cs (new), scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt, this ledger.
+- HEAD 7cf51d8af1fa55687b3e7ffec70d32d09fd76cce · PlayerShip.cs d45ff469157f5688f25c5fe71b922779317479d4 · SmokeTest.cs.txt 45ab12c583e338ba8af6db247d757b7ff4eb1f16
+
+## COORDINATOR NOTE 4 (2026-09-25): slice 3 is the LAST slice built in this worktree (owner: slices side by side)
+Slices 4, 5 and 6a-6d now build in their own worktrees (WarShips_wt_kits4, _kits5, _kits6a.._kits6d, ledgers ledger_kits4.md ...).
+Finish slice 3 here as planned (build, gate, fix, gate 2, merge). Any agent asked to START slice 4, 5 or 6 in this worktree: touch
+nothing, and return status blocked with open "NOTE 4: moved to parallel lanes".
+### J9 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. FireRail is one call: `Lines.Strike(Lines.Rail, this, nose, heading, rail_damage)`, then its cooldown;
+  the hit test (DistToSegment <= half width + HitRadius), the door (Dealt.Rail), NoteImpact, Fx.Rail and
+  Beam.Rail are the row's. Bodies are now struck nearest first (the order was the list's); nothing reads it.
+- Files: scripts/Lines.cs (new), scripts/PlayerShip.cs (FireRail); SmokeTest.cs.txt (`LaneALinesChecks`).
+- Checkpoint: the commit after this entry. Next: J10 (F6).

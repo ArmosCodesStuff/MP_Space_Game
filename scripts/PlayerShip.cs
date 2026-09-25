@@ -646,22 +646,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Sl("railgun").Left > 0 || Sl("railgun").Cool > 0) return;
         Sl("railgun").Left = Stats["rail_charge"];
     }
-    // The charge is spent (the Railgun row's Expire, on the host).
+    // The charge is spent (the Railgun row's Expire, on the host): its line (Lines.Rail) from the nose.
     public void FireRail()
     {
-        var a = Aim.Nose(this, MyArt.Length * 0.5f);
-        var b = a + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"];
-        float halfWidth = (float)Stats["rail_width"] * 0.5f;
-        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
-        {
-            if (Combat.DistToSegment(h.Position, a, b) <= halfWidth + h.HitRadius)
-            {
-                Dealt.Deal(h, Stats["rail_damage"], this, Dealt.Rail);
-                if (h is Node2D n) Popups.NoteImpact(n, h.Position);
-            }
-        }
-        Fx.Line(Fx.Rail, a, b);                             // the line it threw, on every peer
-        Combat.Flash(a, b, Beam.Rail);                      // ...and its report, on every peer: this runs on the host alone
+        Lines.Strike(Lines.Rail, this, Aim.Nose(this, MyArt.Length * 0.5f), Vector2.Up.Rotated(Rotation), Stats["rail_damage"]);
         Sl("railgun").Cool = Cooling(Stats["rail_cooldown"]);
     }
 
