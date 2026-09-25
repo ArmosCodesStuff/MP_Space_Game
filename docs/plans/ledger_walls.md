@@ -315,5 +315,28 @@ BasePanel.cs:120-129, Raids.cs:53 ask Unlocks. Grep the harness for NeedsBoss an
 - rung 3 owed: the rewritten "the build fingerprint covers ... and the unlock table" check.
 - rung 5 owed: none new (no wire shape changed; the fingerprint's own value changing is what rung 5
   a moment ago (job 1) already proves the build-mismatch refusal with).
-- commit: (next) "Walls fix 1: Unlocks.All reaches the build fingerprint".
+- commit: 2fe112c "Walls fix 1: Unlocks.All reaches the build fingerprint".
 - next: fix 2 (finding 2, major -- guest2's restart fixture).
+
+### Fix 2 PRE (finding 2, major -- third player's restart fixture illegal for its peak)
+- model: sonnet
+- intent: the guest2 role fits five chips at peak 3 (only chip slot 1 open) directly into the raw
+  loadout array, to prove the over-cap sheet math (324 hull, D12). `Character.Load` at the restart
+  re-runs `Equipment.Sanitize` at that peak and displaces the four over-cap chips into the hold, so
+  "nor after a restart" (asserting `GearHold.Values.Sum() == 2`) now fails for real (6, not 2). Fix
+  the assertion to the true post-Sanitize total and set, not the fixture (changing the fixture would
+  gut the 324-hull proof two checks above it).
+- start: 2fe112ce375ab706cc4edecedda9a359939670ea
+- files (hash-object at start):
+  - tools/smoketest/SmokeTest.cs.txt c38c014d20bdecd32932ab65d0b8c701c526c6c9
+
+### Fix 2 POST
+- verdict: typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED (run once for the combined fix
+  2 + 3-5 edit; see fix 3-5 POST for the same green).
+- files: tools/smoketest/SmokeTest.cs.txt (:9449-9467 -- computes `expectHold` from `RolledFor` (the
+  two kill parts already proved present) plus the four known displaced chip ids, sorted the same way
+  `HoldIds()` sorts; asserts `Sum() == 6` and `HoldIds() == expectHold` instead of the old `== 2`).
+- rung 3 owed: n/a (guest2 is rung 5 only).
+- rung 5 owed: the rewritten "nor after a restart" check itself.
+- commit: (fix 2) "Walls fix 2: the third player's restart re-sanitises its over-cap chips".
+- next: fix 3-5 (grouped, share SmokeTest.cs.txt).

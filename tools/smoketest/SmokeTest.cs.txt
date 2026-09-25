@@ -9446,12 +9446,18 @@ public partial class _Test : Node
             // the kill it was owed came again with the rest -- and is not paid twice
             Check(Character.Exp == exp3 && Character.GearHold.Values.Sum() == 2 && Character.Unclaimed.Count == 0,
                   $"third player: a kill it already had is not paid again on its return (exp {exp3} -> {Character.Exp}, {Character.GearHold.Values.Sum()} parts)");
-            // ...nor after a restart: the serials paid are on its file (a restart is a load from it)
+            // ...nor after a restart: the serials paid are on its file (a restart is a load from it).
+            // THE RESTART ALSO RE-RUNS Sanitize AT THIS PEAK (Character.cs ~291), same as any other
+            // load: four of the five chips fitted at peak 3 above (9364-9366 -- only chip slot 1 is
+            // open) come back out of the ship and land in the hold beside the two kill parts.
             long lastPaid = Character.PaidKills.LastOrDefault();
             Character.Load(Character.Id);
+            string expectHold = string.Join(",", RolledFor(Character.Id).Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Concat(new[] { "chip_armour_1", "chip_combat_1", "chip_combat_1", "chip_engine_1" }).OrderBy(x => x, StringComparer.Ordinal));
             Priv(H, "NetKill", Missions.Bounty, 1, 3, lastPaid, new[] { "fr_flak_1", "fr_flak_2" }, Vector2.Zero);   // the kind leads now
-            Check(lastPaid != 0 && Character.PaidKills.Contains(lastPaid) && Character.Exp == exp3 && Character.GearHold.Values.Sum() == 2,
-                  $"third player: nor after a restart -- the kills it was paid for are on its file (exp {exp3} -> {Character.Exp}, {Character.GearHold.Values.Sum()} parts)");
+            Check(lastPaid != 0 && Character.PaidKills.Contains(lastPaid) && Character.Exp == exp3
+                  && Character.GearHold.Values.Sum() == 6 && HoldIds() == expectHold,
+                  $"third player: nor after a restart -- the kills it was paid for are on its file, and the four over-cap chips come back to the hold (exp {exp3} -> {Character.Exp}, {Character.GearHold.Values.Sum()} parts, {HoldIds()})");
             await GuestLevelsAndPresses();
             // IT LEAVES, on purpose, by pressing HOST: a goodbye, so nothing to retry -- and the host keeps
             // no place for it (the host checks that goodbye got out: HOST used to cut a guest's off)
