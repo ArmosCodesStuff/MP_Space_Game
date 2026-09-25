@@ -102,7 +102,7 @@ public static class Items
                                    "wave_push", "rail_damage", "hunter_damage", "echo_share", "lunge_damage", "whirl_damage" }),
         ("@area",          new[] { "bubble_radius", "wave_range", "echo_radius", "whirl_reach", "hunter_range", "launch_range", "taunt_reach" }),
         ("@duration",      new[] { "bubble_time", "overdrive_time", "wave_disable", "stealth_time", "roll_time", "echo_time", "whirl_time", "prism_time", "anchor_time", "tether_hold", "taunt_time",
-                                   "brace_time" }),
+                                   "brace_time", "ciws_time" }),
     };
 
     // The stat ids a key stands for on hull `c`: a role's rows the hull has, or the id itself.

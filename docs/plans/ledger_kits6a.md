@@ -220,3 +220,25 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   literals; 3 runs: 24 broadside shells while braced, a second guard 0.67/0.5/0.2 -> the stronger kept). The sweep's
   witness row "brace". REWRITTEN: the battleship bar order line (+ "brace").
 - Owed at rung 3: all of the above. Next: kits6a-J3 (CIWS).
+
+### kits6a-J3 · PRE · CIWS (A6a-3) -- tier opus
+- Intent: the SCOPED lift foundation: AbilityDef RateOn (the one interval stat a row's RateStat reaches; null = every
+  reload), DamageStat + DamageOn (a damage lift on one damage stat); PlayerShip.Lifts(kind, on), Cadence(stat) and
+  DamageOf(stat) read them; Spec(pd) takes DamageOf("pd_damage"). Ab.Ciws (E, timed row: ciws_time 6, ciws_rate 8 on
+  pd_interval, ciws_damage 3 on pd_damage, While !Disabled, ciws_cooldown 20 from the press). BB bar + Ciws.
+  Checks: NEW LaneA6aCiwsChecks, LaneA6aCiwsDisableChecks, LaneA6aCiwsRankChecks; frame LaneA6aCiwsFrames; witness "ciws".
+- Files: scripts/Abilities.cs, scripts/Ships.cs, scripts/PlayerShip.cs, scripts/Items.cs, tools/smoketest/SmokeTest.cs.txt, tools/screens/Shots.cs.txt.
+- HEAD d9b813cfd2306c12b04a9a36f1cef983aa335364 · Abilities.cs 787b4a439c949686314b071e38c3c215f8dd2d20 · Ships.cs fd3651accee7e3ae3c95fbaa9cb3663c43db4fa3 · PlayerShip.cs 4ed54a73c44efb45bfb6ed1c8d2a3b80952771e0 · Items.cs 99fc23d4c32be6ae7e7daa285253d2e9650a11a7 · SmokeTest.cs.txt 3bc33d2917ae334ca5f2d2bddeffc5a9fadcf595 · Shots.cs.txt 5bb73590976091ff0fee983dcf2a5b799baef7dc
+### kits6a-J3 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase.
+- Built: AbilityDef RateOn / DamageStat / DamageOn (the scoped lift); PlayerShip.Lifts(kind, on), Cadence(stat) passes
+  its stat, FireRate takes unscoped rows alone, DamageOf(stat); Spec(pd).Damage = DamageOf("pd_damage"). Ab.Ciws (E,
+  timed row via RunFor, While !Disabled); BB rows ciws_time 6 / ciws_rate 8 / ciws_damage 3 / ciws_cooldown 20; BB bar
+  + Ciws (learn order Broadside, Brace, CIWS); Items @duration + ciws_time.
+- Checks NEW: LaneA6aCiwsChecks (rows; 3 runs: 48 +- 3 in 1.0 s from a blow, PD 1.5 / 0.0625, mains 2.0, 20.0 s,
+  COOLING, bar CIWS, back to 0.5 / 0.5 after 6 s), LaneA6aCiwsDisableChecks (3 runs: Disabled 1.0-1.5 s -> PD 0.5 /
+  0.5 and still firing, x3 / x8 again once it clears), LaneA6aCiwsPreyChecks (3 runs: a gunship never taken, a
+  60-hull webifier down < 2.5 s); frame LaneA6aBbFrames (85a_bb_brace, 85b_bb_ciws); witness "ciws". REWRITTEN: the
+  battleship bar order line (+ "ciws").
+- Owed: rung 3 the three checks; rung 4 the two frames. Next: kits6a-J4 (CV row).

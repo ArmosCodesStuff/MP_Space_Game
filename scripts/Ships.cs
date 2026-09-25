@@ -185,6 +185,10 @@ public static class Classes
                 new() { Group = "Brace", Id = "brace_time",     Label = "Lasts",        Base = 3, Unit = "s", Dec = 1 },
                 new() { Group = "Brace", Id = "brace_share",    Label = "Damage taken", Base = 0.35, Unit = "x", Dec = 2 },
                 new() { Group = "Brace", Id = "brace_cooldown", Label = "Cooldown",     Base = 25, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "CIWS", Id = "ciws_time",     Label = "Lasts",             Base = 6, Unit = "s", Dec = 1 },
+                new() { Group = "CIWS", Id = "ciws_rate",     Label = "PD rate of fire",   Base = 8, Unit = "x", Dec = 1 },
+                new() { Group = "CIWS", Id = "ciws_damage",   Label = "PD damage",         Base = 3, Unit = "x", Dec = 1 },
+                new() { Group = "CIWS", Id = "ciws_cooldown", Label = "Cooldown",          Base = 20, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 // battleship_bb05 (the pack, J5): 4 mains on the flanking twins (the two forward
@@ -195,7 +199,7 @@ public static class Classes
                 Pds   = new Vector2[] { new(-58.99f, 71.73f), new(58.99f, 71.73f) },
                 MainBears = new Vector2[] { new(0f, 150f), new(0f, 150f), new(30f, 180f), new(30f, 180f) },
                 TurretTexScale = 1.9f / 5.5f, MainBarrel = 23.18f, PdBarrel = 10.45f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Brace } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Brace, Ab.Ciws } },
 
         new() { Id = ShipClass.Carrier, Name = "CARRIER", Ready = true, Targets = 3, Fit = Fit.Wing | Fit.Pd,
             Blurb = "No main gun: point defence, a fighter wing, torpedo bombers off its deck.",

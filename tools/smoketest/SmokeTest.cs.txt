@@ -5116,6 +5116,135 @@ public partial class _Test : Node
         }
     }
 
+    // ── SLICE 6a: CIWS (the Battleship's E, v1: both PD mounts x8 rate and x3 damage for 6 s, 20 s from the press) ──
+    // Three varied runs (VaryNear spot, VaryAngle heading, the light raider 0.25-0.5 of the 460 u reach at a VaryAngle
+    // bearing): E, then both mounts on it and aimed; from the first blow after that, 1.0 s takes 48 (2 x 1.5 every
+    // 0.0625 s) +- one shot a mount; the PD spec reads 1.5 and 0.0625 while the MAIN guns keep 2.0 s (scoped); the
+    // cooldown 20.0 from the press and a second E refused COOLING; 6.2-6.5 s after the press the spec is back to 0.5
+    // every 0.5 s. The bar reads CIWS while it runs.
+    async Task LaneA6aCiwsChecks(Vector2 yonder)
+    {
+        var bs = new ShipStats(ShipClass.Battleship);
+        Check(bs["ciws_time"] == 6 && bs["ciws_rate"] == 8 && bs["ciws_damage"] == 3 && bs["ciws_cooldown"] == 20 && bs["pd_range"] == 460
+              && bs["pd_damage"] == 0.5 && bs["pd_interval"] == 0.5 && Ab.Ciws.Default == global::Godot.Key.E && Ab.Ciws.RateOn == "pd_interval"
+              && Ab.Ciws.DamageOn == "pd_damage" && Unlocks.Nth(ShipClass.Battleship, 3) == Ab.Ciws,
+              $"CIWS's rows: {bs["ciws_time"]:0} s (6), x{bs["ciws_rate"]:0} rate (8) and x{bs["ciws_damage"]:0} damage (3) on the PD alone, {bs["ciws_cooldown"]:0} s (20), PD {bs["pd_range"]:0} u; E; the battleship's ability 3 ({Unlocks.Nth(ShipClass.Battleship, 3)?.Name})");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Battleship);
+        var s = Me; var e = Abilities.KeyFor(ShipClass.Battleship, "ciws");
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float head = VaryAngle();
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = head; }
+            s.Sl("ciws").Left = 0; s.Sl("ciws").Cool = 0;
+            Hold(); await Wait(0.2); Hold();
+            var prey = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * 460f * Vary(0.25f, 0.5f));
+            prey.Hp = 9000; prey.ApplyStatus(Status.Disabled, 30);
+            var pds = s.PdTurrets;
+            bool OnAndAimed(Turret t) => ReferenceEquals(t.Target, prey)
+                && Mathf.Abs(Mathf.AngleDifference(t.GlobalRotation, (prey.Position - t.GlobalPosition).Angle())) < Mathf.DegToRad(4f);
+            for (int i = 0; i < 240 && !pds.All(OnAndAimed); i++) { Hold(); await Frame(); }
+            Key(e); await Frame(); Hold();
+            double tp = s.Clock, cool = s.Sl("ciws").Cool;
+            Key(e); await Frame(); await Frame();
+            string again = s.FailNote("ciws"), line = Abilities.Find(ShipClass.Battleship, "ciws").State(s, null).Line;
+            double pdDmg = s.Spec(true).Damage, pdGap = s.Spec(true).Interval, mainGap = s.Spec(false).Interval;
+            double was = prey.Hp;
+            for (int i = 0; i < 30 && prey.Hp >= was; i++) { Hold(); await Frame(); }
+            double hp0 = prey.Hp, c0 = s.Clock;                                    // timed from a blow, not the key
+            while (s.Clock - c0 < 1.0) { Hold(); await Frame(); }
+            double got = hp0 - prey.Hp;
+            while (s.Clock < tp + Vary(6.2f, 6.5f)) { Hold(); await Frame(); }
+            double endDmg = s.Spec(true).Damage, endGap = s.Spec(true).Interval;
+            Check(pds.Count == 2 && Math.Abs(pdDmg - 1.5) < 1e-9 && Math.Abs(pdGap - 0.0625) < 1e-9 && Math.Abs(mainGap - 2.0) < 1e-9
+                  && Math.Abs(got - 48) <= 3 + 1e-9 && Math.Abs(cool - 20) < 0.1 && again == "COOLING" && line.StartsWith("CIWS")
+                  && Math.Abs(endDmg - 0.5) < 1e-9 && Math.Abs(endGap - 0.5) < 1e-9,
+                  $"CIWS run {run}: a light raider {prey.Position.DistanceTo(at):0} u off at heading {Mathf.RadToDeg(head):0} deg takes {got:0.0} in 1.0 s from the first blow (48 +- 3); the PD {pdDmg:0.00} every {pdGap:0.0000} s (1.5 / 0.0625), the main guns every {mainGap:0.00} s (2.0); "
+                  + $"cooldown {cool:0.00} (20), E again {again} (COOLING), the bar '{line}'; after 6 s {endDmg:0.00} every {endGap:0.00} s (0.5 / 0.5)");
+            prey.TakeDamage(1e12);
+            s.Sl("ciws").Cool = 0;
+            await Wait(0.2);
+        }
+    }
+
+    // ── SLICE 6a: CIWS UNDER AN OVERSHOOT (kits_v31 decision 13, default: the overshoot disables CIWS -- it is a gun --
+    // while the plain PD keeps firing). Three varied runs (VaryNear spot, VaryAngle heading, Disabled for 1.0-1.5 s
+    // applied 0.5-1.5 s into the run): while Disabled the PD spec reads 0.5 every 0.5 s and a light raider still takes
+    // blows (> 0, <= 2 x 0.5 x 3 in 1.0 s); once it clears, inside the 6 s, the spec is 1.5 every 0.0625 s again.
+    async Task LaneA6aCiwsDisableChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Battleship);
+        var s = Me;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float head = VaryAngle();
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = head; }
+            s.Sl("ciws").Left = 0; s.Sl("ciws").Cool = 0; s.Statuses.Clear(Status.Disabled);
+            Hold(); await Wait(0.2); Hold();
+            var prey = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * 460f * Vary(0.25f, 0.45f));
+            prey.Hp = 9000; prey.ApplyStatus(Status.Disabled, 30);
+            for (int i = 0; i < 240 && !s.PdTurrets.All(t => ReferenceEquals(t.Target, prey)); i++) { Hold(); await Frame(); }
+            s.UseAbility("ciws", 0); await Frame();
+            double tp = s.Clock;
+            while (s.Clock < tp + Vary(0.5f, 1.5f)) { Hold(); await Frame(); }
+            float off = Vary(1.0f, 1.5f);
+            s.ApplyStatus(Status.Disabled, off);
+            await Frame(); Hold();
+            double dDmg = s.Spec(true).Damage, dGap = s.Spec(true).Interval, h0 = prey.Hp, c0 = s.Clock;
+            while (s.Clock - c0 < 0.9) { Hold(); await Frame(); }
+            double tookOff = h0 - prey.Hp;
+            while (s.Disabled) { Hold(); await Frame(); }
+            await Frame();
+            double bDmg = s.Spec(true).Damage, bGap = s.Spec(true).Interval, left = s.Sl("ciws").Left;
+            Check(Math.Abs(dDmg - 0.5) < 1e-9 && Math.Abs(dGap - 0.5) < 1e-9 && tookOff > 0 && tookOff <= 3.0 + 1e-9
+                  && left > 0 && Math.Abs(bDmg - 1.5) < 1e-9 && Math.Abs(bGap - 0.0625) < 1e-9,
+                  $"CIWS + overshoot run {run} (Disabled {off:0.00} s): the PD {dDmg:0.00} every {dGap:0.00} s while disabled (0.5 / 0.5) and still firing ({tookOff:0.0} in 0.9 s, > 0 and <= 3); "
+                  + $"cleared with {left:0.0} s of CIWS left: {bDmg:0.00} every {bGap:0.0000} s (1.5 / 0.0625)");
+            prey.TakeDamage(1e12);
+            s.Sl("ciws").Left = 0; s.Sl("ciws").Cool = 0;
+            await Wait(0.2);
+        }
+    }
+
+    // ── SLICE 6a: CIWS KEEPS POINT DEFENCE'S PREY AND RANK (kits_v31 §7: "CV patrol vs BB CIWS vs FR sentries vs PD --
+    // all rank by one Turret.Rank"; A6a-3: never a heavy, a boss or a hulk). Three varied runs: a heavy gunship 150-300
+    // u off and a light webifier (60 hull) at another VaryAngle bearing, both inside 460 u; under CIWS no mount ever
+    // takes the gunship, the light dies inside 2.5 s, and then the mounts stay idle while the gunship loses nothing.
+    async Task LaneA6aCiwsPreyChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Battleship);
+        var s = Me;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float head = VaryAngle(), a1 = VaryAngle();
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = head; }
+            s.Sl("ciws").Left = 0; s.Sl("ciws").Cool = 0;
+            Hold(); await Wait(0.2); Hold();
+            var heavyAt = at + Vector2.Right.Rotated(a1) * Vary(150f, 300f);
+            var lightAt = at + Vector2.Right.Rotated(a1 + Vary(1.2f, 2.4f)) * Vary(120f, 200f);
+            var heavy = H.SpawnRaider(heavyAt, Enemies.Gunship); heavy.Hp = 9000; heavy.ApplyStatus(Status.Disabled, 30);
+            var light = H.SpawnRaider(lightAt, Enemies.Webifier); light.Hp = 60; light.ApplyStatus(Status.Disabled, 30);
+            s.UseAbility("ciws", 0);
+            double tp = s.Clock; bool onHeavy = false; double diedAt = -1;
+            while (s.Clock < tp + 4.0)
+            {
+                Hold(); heavy.Position = heavyAt; await Frame();
+                onHeavy |= s.PdTurrets.Any(t => ReferenceEquals(t.Target, heavy));
+                if (diedAt < 0 && (!GodotObject.IsInstanceValid(light) || !light.Alive)) diedAt = s.Clock - tp;
+            }
+            Check(!onHeavy && diedAt > 0 && diedAt < 2.5 && heavy.Hp == 9000 && s.PdTurrets.All(t => t.Target == null || !ReferenceEquals(t.Target, heavy)),
+                  $"CIWS prey run {run}: a gunship {heavyAt.DistanceTo(at):0} u off never taken ({!onHeavy}, lost {9000 - heavy.Hp:0.0}); a 60-hull webifier {lightAt.DistanceTo(at):0} u off down at {diedAt:0.00} s (< 2.5)");
+            heavy.TakeDamage(1e12);
+            s.Sl("ciws").Left = 0; s.Sl("ciws").Cool = 0;
+            await Wait(0.2);
+        }
+    }
+
     async Task LaneA6cBladeChecks(Vector2 yonder)
     {
         var sh = new ShipStats(ShipClass.HeavyWarrior);
@@ -11051,7 +11180,7 @@ public partial class _Test : Node
 
         // ── THE BROADSIDE (F): the main turrets swing onto the cursor through a 0.5 s wind-up, then
         //    every main gun fires six volleys 0.25 s apart at x1.25; a 12 s cooldown; the ship steers throughout ──
-        Check(Abilities.For(ShipClass.Battleship).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "broadside", "brace", "warp" })
+        Check(Abilities.For(ShipClass.Battleship).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "firemode", "broadside", "brace", "ciws", "warp" })
               && Abilities.KeyFor(ShipClass.Battleship, "broadside") == global::Godot.Key.F,
               "the battleship's bar: guns, fire mode, the BROADSIDE on F -- no missile, no reload, and no key for point defence, which is passive");
         Check(ship.Stats["broadside_volleys"] == 6 && ship.Stats["broadside_mult"] == 1.25 && ship.Stats["broadside_windup"] == 0.5
@@ -13594,6 +13723,9 @@ public partial class _Test : Node
             await LaneA6aBraceChecks(yonder);
             await LaneA6aBraceWarpChecks(yonder);
             await LaneA6aBraceSplitChecks(yonder);
+            await LaneA6aCiwsChecks(yonder);
+            await LaneA6aCiwsDisableChecks(yonder);
+            await LaneA6aCiwsPreyChecks(yonder);
 
             // ── WARRIOR: the blade (slice 6c) ──
             await LaneA6cBladeChecks(yonder);
@@ -14015,6 +14147,7 @@ public partial class _Test : Node
                     ["flares"]    = sp => sp.Sl("flares").Cool > sp.Stats["flare_cooldown"] - 0.1 && H.Salvos.Any(sv2 => sv2.At.DistanceTo(sp.Position) < 5f),
                     ["taunt"]     = sp => sp.Sl("taunt").Left > sp.Stats["taunt_time"] - 0.1 && sp.Statuses.Has(Status.Hardened),
                     ["brace"]     = sp => sp.Sl("brace").Left > sp.Stats["brace_time"] - 0.1 && sp.Statuses.Has(Status.Hardened) && Math.Abs(sp.Held - 0.5f) < 1e-3f,
+                    ["ciws"]      = sp => sp.Sl("ciws").Left > sp.Stats["ciws_time"] - 0.1 && Math.Abs(sp.Spec(true).Damage - sp.Stats["pd_damage"] * 3) < 1e-9,
                     ["curtain"]   = sp => sp.Sl("curtain").Cool > sp.Stats["curtain_cooldown"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId && z.Row == Zones.Curtain),
                 };
                 var onBars = Classes.All.Where(cd2 => cd2.Ready).SelectMany(cd2 => cd2.Abilities)

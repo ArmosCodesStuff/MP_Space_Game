@@ -142,15 +142,21 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public float StrafeMult => (float)Stat.Scale(Lifts(Lift.Strafe));
     // REACH: every running row's ReachStat, the same rule (the anchor's x1.4 on the railgun's line)
     public float ReachMult => (float)Stat.Scale(Lifts(Lift.Reach));
-    private enum Lift { Rate, Speed, Strafe, Reach }
+    // DAMAGE: the stat's own figure, lifted by every running row whose DamageOn names it (the CIWS's x3 on pd_damage)
+    public double DamageOf(string stat) => Stats[stat] * Stat.Scale(Lifts(Lift.Damage, stat));
+    private enum Lift { Rate, Speed, Strafe, Reach, Damage }
     private readonly List<double> _lifts = new();
-    private double Lifts(Lift kind)
+    // `on` is the stat a scoped row must name (RateOn / DamageOn); a rate asked with none takes the unscoped rows alone
+    private double Lifts(Lift kind, string on = null)
     {
         _lifts.Clear();
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
-            string stat = kind switch { Lift.Rate => def.RateStat, Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, _ => def.StrafeStat ?? def.SpeedStat };
+            string stat = kind switch {
+                Lift.Rate => def.RateOn == null || def.RateOn == on ? def.RateStat : null,
+                Lift.Damage => def.DamageOn != null && def.DamageOn == on ? def.DamageStat : null,
+                Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, _ => def.StrafeStat ?? def.SpeedStat };
             if (stat != null && sl.Left > 0 && (def.While == null || def.While(this))) _lifts.Add(Stats[stat]);
             // a RAMP's running total is already a share (F1, D18): 1 + it reads the same as any
             // other lift's raw multiplier would, and it keeps lifting through its post-run drain,
@@ -204,7 +210,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // refire are not a gun's reload, and no class that has them carries a rate row.)
     // Burst Feed's window (Items.Door.AfterDrive) lifts the primary's reloads alone, for AfterDriveSecs
     // after the drive's run ends.
-    public double Cadence(string intervalStat) => Stats.With(intervalStat, Lifts(Lift.Rate)
+    public double Cadence(string intervalStat) => Stats.With(intervalStat, Lifts(Lift.Rate, intervalStat)
         + (_afterDrive > 0 && Items.IdsOf("@primary_rate", Class).Contains(intervalStat)
             ? Items.Shares(Items.Door.AfterDrive, Stats, default) : 0));
     private double _afterDrive;
@@ -307,7 +313,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var art = MyArt;
         return new TurretSpec {
             Prey     = Targeting.PointDefence,        // what its PD takes: a main gun never picks
-            Damage   = pd ? Stats["pd_damage"]   : Stats["main_damage"],
+            Damage   = pd ? DamageOf("pd_damage") : Stats["main_damage"],
             Interval = Cadence(pd ? "pd_interval" : "main_interval"),
             Range    = (float)(pd ? Stats["pd_range"] : Stats["main_range"]),
             Turn     = (float)(pd ? Stats["pd_turn"]  : Stats["main_turn"]),

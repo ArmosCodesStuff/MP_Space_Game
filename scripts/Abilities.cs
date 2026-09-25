@@ -95,6 +95,10 @@ public class AbilityDef
     // names one, and its SpeedStat otherwise: the boost's slide is a row of its own (surge_strafe), so
     // gear can lift the slide without the top speed (Convoy Rig) or the top speed without the slide.
     public string RateStat, SpeedStat, StrafeStat;
+    // A SCOPED LIFT: RateOn names the ONE interval stat its RateStat reaches (the CIWS's x8 on pd_interval alone);
+    // null reaches every reload, as above. DamageStat lifts the damage stat DamageOn names, the same share rule
+    // (PlayerShip.DamageOf). `While` narrows both.
+    public string RateOn, DamageStat, DamageOn;
     // WHILE IT RUNS, what it lifts the REACH of the ship's weapons by (the anchor's x1.4), added like every
     // other lift (PlayerShip.ReachMult). A gun that reads it multiplies its own range row: the railgun.
     public string ReachStat;
@@ -371,6 +375,22 @@ public static class Ab
         Press = (s, _) => s.RunFor("brace"),
         Refuse = (s, _) => s.Sl("brace").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => Timed(s, "brace", "brace_cooldown", "BRACED"),
+    };
+
+    // CIWS (the Battleship's E, v1): 6 s of both point-defence mounts at x8 rate and x3 damage (1.5 every 0.0625 s,
+    // 24 DPS a mount) on PD's own prey and rank (Targeting.PointDefence, Turret.Rank); 20 s from the press. A scoped
+    // lift (RateOn / DamageOn): nothing but the PD mounts. An overshoot's Disabled stops the lift (decision 13: it is
+    // a gun), while the plain PD keeps firing.
+    public static readonly AbilityDef Ciws = new()
+    {
+        Id = "ciws", Name = "CIWS", Short = "CIWS", Default = Key.E,
+        Blurb = "For 6 s both point-defence turrets fire eight times as fast for three times the damage: missiles, fighters and light craft within 460 u.",
+        Time = "ciws_time", Cooldown = "ciws_cooldown",
+        RateStat = "ciws_rate", RateOn = "pd_interval", DamageStat = "ciws_damage", DamageOn = "pd_damage",
+        While = s => !s.Disabled,
+        Press = (s, _) => s.RunFor("ciws"),
+        Refuse = (s, _) => s.Sl("ciws").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "ciws", "ciws_cooldown", "CIWS"),
     };
 
     // ── the heavy fighters ───────────────────────────────────────────────────
