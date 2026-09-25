@@ -312,7 +312,7 @@ public static class Items
     // ── THE CONDITIONS (§3.1, I6): a line whose up counts only in a situation lifts a SHEET ROW AT x1
     // (base 1; the line's share takes it to 1 + share), and the row is read at ONE door. A row fills
     // in its id, label, door, the ceiling its share stops at (0: none) and, for a door that weighs a
-    // blow, When. Every row is on the sheet of every hull a conditional line naming it fits
+    // blow, When. Every row is on the sheet of every hull a line naming it fits
     // (RowsOf), so a hull with none of the gear reads x1 and every door is a no-op on it.
     public enum Door { Dealt, Taken, Tracking, Kill, Web, AfterDrive, Spin }
     public readonly record struct Blow(IHittable Target, double OwnLeft, double D, double OwnMax);
@@ -349,11 +349,12 @@ public static class Items
         new() { Id = "spinup_damage",   Label = "Primary ramp on one target", Door = Door.Spin },
     };
 
-    // The condition rows on hull `c`'s sheet: every one a conditional line that fits it names.
+    // The condition rows on hull `c`'s sheet: every one a line that fits it names -- a Conditional
+    // (unpriced) line's, and a priced line's whose up is a situation row too (Spin-up Feed's ramp).
     public static IEnumerable<Condition> RowsOf(ShipClass c)
     {
         var cat = Hulls.Of(c);
-        var named = Lines.Where(l => l.Conditional && (l.Cat == null || l.Cat == cat)).SelectMany(l => l.Up).Select(u => u.key).ToHashSet();
+        var named = Lines.Where(l => l.Cat == null || l.Cat == cat).SelectMany(l => l.Up).Select(u => u.key).ToHashSet();
         return Conditions.Where(r => named.Contains(r.Id));
     }
 
