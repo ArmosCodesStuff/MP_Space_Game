@@ -55,7 +55,10 @@ explicit and binding.
    docs/plans/, never only in the conversation), then compact when ANY of these is true: the
    context passes ~200k tokens; a slice is committed; a design or decision document has landed and
    its outcome is written down; the work turns to a different subject; a big log or report has
-   been read and its conclusion written down. Do not compact every turn: it throws away the prompt
+   been read and its conclusion written down; **several agents or a workflow are about to be
+   launched** (owner, 2026-09-25) -- write each agent's prompt to a file in the scratchpad first,
+   tell the owner "compact now", and launch after the compact, so every one of their wake-ups is
+   paid at the small context's price, not the large one's. Do not compact every turn: it throws away the prompt
    cache (a cached re-read costs about a tenth of fresh input) and the detail that then has to be
    re-read. Hold off only while waiting on a job whose purpose is not in the state note yet.
    Claude cannot run `/compact` itself: at a trigger it writes the note and tells the owner
