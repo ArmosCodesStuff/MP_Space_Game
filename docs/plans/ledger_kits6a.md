@@ -287,3 +287,25 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   Brace and CIWS rows).
 - Default taken: the checks set the hub's picks (H.AddTarget) as a pilot would, so Refuse and the press agree.
 - Next: kits6a-J6 (Supercarrier Q).
+
+### kits6a-J6 · PRE · Supercarrier Q (A6a-6) -- tier opus
+- Intent: Ab.Supercarrier id "super" (Q, Sends Patrol through Launch, CoolAfter, super_cooldown 30 from the END;
+  refused RUNNING / COOLING); CV Rows super_cooldown; CV bar + Supercarrier (ability 3). Checks: NEW LaneA6aSuperChecks,
+  LaneA6aSuperMissileChecks, LaneA6aSuperWingsChecks; frame LaneA6aSuperFrames; witness "super".
+- Files: scripts/Abilities.cs, scripts/Ships.cs, tools/smoketest/SmokeTest.cs.txt, tools/screens/Shots.cs.txt.
+- HEAD ef8366ab275c55b97a9683cc3c97aba36d1c1c6f · Abilities.cs 5774583e442fed2ae5ed61018aca05285b6cc3a4 · Ships.cs 27316c47a59f977cba7522a252c898a58e7202dc · SmokeTest.cs.txt 125a42d101cab9b9485d6685fc0e4270fd94ba1e · Shots.cs.txt f043b28080eb3656d2553f301f45cc932f18d62c
+### kits6a-J6 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase.
+- Built: Ab.Supercarrier (id "super", Q, Sends Patrol via Launch, CoolAfter: Cool = 20 + Cooling(30) at the press;
+  refused RUNNING / COOLING); CV Rows super_cooldown 30; CV bar Attack, Recall, Bombers, Gunships, Supercarrier
+  (learn order F E Q). The Fx patrol ring (slot "super") draws from this slot with no Fx edit.
+- Checks NEW: LaneA6aSuperChecks (rows; 3 runs: 3 craft 0.83 +- 0.05 s apart, a webifier 250-450 u taken, one 850-1100
+  u never, 20 / 50 at the press, RUNNING, bar SUPER; run 0 to the end: none out, 29.4-30 cooling, COOLING),
+  LaneA6aSuperMissileChecks (3 runs: a seeker from 480-560 u taken <= 1.5 s before a webifier beside it, downed, hull
+  untouched, credited "patrol"), LaneA6aSuperWingsChecks (3 runs: fighters on attack + 2 gunships on the circle + 3
+  patrol within 700 u of the carrier, 6 fighters+patrol out); frame LaneA6aSuperFrames (85c_cv_supercarrier);
+  witness "super".
+- Not built: a rung-5 Supercarrier pair (lane E's WingsHostSortie / WingsGuestWatch already prove a host-sent patrol
+  on a guest's carrier); a warp-return check (the patrol's leash back to the ring after a jump is lane E's Wing law).
+- Next: kits6a-J7 (DD row + director battery + Long Lance).

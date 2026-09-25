@@ -85,6 +85,7 @@ public partial class _Shots : Node
         await LaneA6cTauntFrames(hub, yard);
         await LaneA6cCurtainFrames(hub, yard);
         await LaneA6aBbFrames(hub, yard);
+        await LaneA6aSuperFrames(hub, yard);
         // 84: a chunk torn from a practice dummy, mid-tumble, with its sparks, smoke and scar
         var d1 = hub.GetNode<TargetDummy>("TargetDummy1");
         Me().Position = d1.GlobalPosition + new Vector2(0, 320); Me().Velocity = Vector2.Zero;
@@ -113,6 +114,22 @@ public partial class _Shots : Node
         foreach (var w in webs) w.TakeDamage(1e12);
         s.Sl("brace").Left = 0; s.Sl("brace").Cool = 0; s.Sl("ciws").Left = 0; s.Sl("ciws").Cool = 0; s.Statuses.Clear(Status.Hardened);
         await W(0.3);
+    }
+
+    // SLICE 6a: the carrier's Q on a real press (85c): the dashed 600 u patrol ring round the hull and the three amber
+    // craft circling inside it, 4 s on.
+    async Task LaneA6aSuperFrames(Hub hub, Vector2 yard)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel");
+        Character.Class = ShipClass.Carrier; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var s = hub.GetNode<PlayerShip>("Ship_1"); s.Visible = true; s.Position = yard; s.Velocity = Vector2.Zero; s.Rotation = 0.5f;
+        s.Sl("super").Left = 0; s.Sl("super").Cool = 0;
+        zp.SetValue(hub, 0.55f); await W(1.0);
+        s.UseAbility("super", 0);
+        await W(4.0); s.Position = yard; s.Velocity = Vector2.Zero; await Snap("85c_cv_supercarrier");
+        foreach (var w in N<Wing>().Where(w => w.Carrier == s && w.Kind == WingKind.Patrol)) w.SendOut(null, s.Clock);
+        s.Sl("super").Left = 0; s.Sl("super").Cool = 0;
+        await W(0.5);
     }
 
     // SLICE 6c: the Warden's taunt on a real press (82c): Q with two webifiers standing 600-800 u off -- the 1000 u

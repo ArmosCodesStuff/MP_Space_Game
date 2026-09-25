@@ -340,6 +340,19 @@ public static class Ab
         Show = (s, _) => Timed(s, "gunships", "gunship_cooldown", "GUNSHIPS"),
     };
 
+    // SUPERCARRIER (the Carrier's Q, kits_v3 §3.1 / v31 §3.2): a second, automated wing -- the fighter's own numbers --
+    // circling the carrier for 20 s and taking whatever Turret.Rank puts first inside 600 u of it, missiles included
+    // (Wings.All "patrol"). 30 s from the END. Its slot id is the patrol ring's (Fx.Fields keys the ring on "super").
+    public static readonly AbilityDef Supercarrier = new()
+    {
+        Id = "super", Name = "Supercarrier", Short = "SUPER", Default = Key.Q,
+        Blurb = "A second wing circles the carrier for 20 s, taking anything that comes within 600 u of it, missiles included.",
+        Sends = WingKind.Patrol, Cooldown = "super_cooldown", CoolAfter = true,
+        Press = (s, _) => s.Launch("super", null),
+        Refuse = (s, _) => s.Sl("super").Left > 0 ? "RUNNING" : s.Sl("super").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "super", "super_cooldown", "SUPER"),
+    };
+
     // ── the freighters ───────────────────────────────────────────────────────
     public static readonly AbilityDef Deploy = new()
     {

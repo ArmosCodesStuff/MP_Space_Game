@@ -5387,6 +5387,160 @@ public partial class _Test : Node
         }
     }
 
+    // ── SLICE 6a: THE SUPERCARRIER (the Carrier's Q, kits_v3 §3.1 + v31 §3.2, decision 10 at its default: 20 s up, 30 s from
+    // the END; the fighter's own numbers, 3 craft 0.83 s apart; anything within 600 u of the carrier, missiles included).
+    // Three varied runs (VaryNear spot, VaryAngle heading; a held webifier 250-450 u off and another 850-1100 u off at
+    // other VaryAngle bearings): Q -- three patrol craft leave 0.83 +- 0.05 s apart; the near one is taken by the patrol
+    // (a craft's Target, its hull falling), the far one never; the slot up 20.0 s and cooling 50.0 (20 + 30) at the press;
+    // Q again refused RUNNING. Run 0 is held to the end: 20.4 s on no patrol craft is out, the cooldown reads 29.4-30.0
+    // and Q is refused COOLING. The bar reads SUPER while it runs.
+    async Task LaneA6aSuperChecks(Vector2 yonder)
+    {
+        var cv = new ShipStats(ShipClass.Carrier);
+        Check(cv["super_cooldown"] == 30 && cv["patrol_time"] == 20 && cv["patrol_range"] == 600 && cv["fighter_count"] == 3 && Ab.Supercarrier.Id == "super"
+              && Ab.Supercarrier.Default == global::Godot.Key.Q && Ab.Supercarrier.CoolAfter && Ab.Supercarrier.Sends == WingKind.Patrol
+              && Unlocks.Nth(ShipClass.Carrier, 3) == Ab.Supercarrier && Wings.Of(WingKind.Patrol).LaunchInterval == 0.83,
+              $"the Supercarrier's rows: {cv["patrol_time"]:0} s up (20), {cv["super_cooldown"]:0} s after (30), {cv["patrol_range"]:0} u (600), {cv["fighter_count"]:0} craft 0.83 s apart; Q; the carrier's ability 3 ({Unlocks.Nth(ShipClass.Carrier, 3)?.Name})");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Carrier);
+        var s = Me; var q = Abilities.KeyFor(ShipClass.Carrier, "super");
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        List<Wing> Ps() => Nodes<Wing>().Where(w => w.Carrier == s && w.Kind == WingKind.Patrol && !w.Done).ToList();
+        double was = PdReachOff(s);
+        try
+        {
+            for (int run = 0; run < 3; run++)
+            {
+                var at = VaryNear(yonder, 300f); float head = VaryAngle(), a1 = VaryAngle();
+                void Hold() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = head; }
+                s.Sl("super").Left = 0; s.Sl("super").Cool = 0;
+                Hold(); await Wait(0.2); Hold();
+                var nearAt = at + Vector2.Right.Rotated(a1) * Vary(250f, 450f);
+                var farAt = at + Vector2.Right.Rotated(a1 + Vary(1.5f, 3.0f)) * Vary(850f, 1100f);
+                Raider Held(Vector2 p) { var r = H.SpawnRaider(p, Enemies.Webifier); r.Hp = 1e9; r.ApplyStatus(Status.Disabled, 60); return r; }
+                var near = Held(nearAt); var far = Held(farAt);
+                await Frame(); Hold();
+                Key(q); await Frame();
+                double tp = s.Clock, left = s.Sl("super").Left, cool = s.Sl("super").Cool;
+                Key(q); await Frame();
+                string again = s.FailNote("super"), line = Abilities.Find(ShipClass.Carrier, "super").State(s, null).Line;
+                var outAt = new Dictionary<Wing, double>();
+                double nearHp = near.Hp; bool farTaken = false, nearTaken = false;
+                while (s.Clock < tp + 8.0)
+                {
+                    Hold(); near.Position = nearAt; far.Position = farAt; await Frame();
+                    foreach (var w in Ps()) if (!w.Inside && !outAt.ContainsKey(w)) outAt[w] = s.Clock;
+                    farTaken |= far.Hp < 1e9;
+                    nearTaken |= near.Hp < nearHp;
+                }
+                var times = outAt.Values.OrderBy(x => x).ToList();
+                bool spaced = times.Count == 3 && Math.Abs(times[1] - times[0] - 0.83) <= 0.05 && Math.Abs(times[2] - times[1] - 0.83) <= 0.05;
+                Check(Ps().Count == 3 && spaced && nearTaken && !farTaken && Math.Abs(left - 20) < 0.1 && Math.Abs(cool - 50) < 0.1 && again == "RUNNING" && line.StartsWith("SUPER"),
+                      $"Supercarrier run {run}: {Ps().Count} patrol craft (3) out {string.Join(" / ", times.Select(t => $"{t - tp:0.00}"))} s after the press (0.83 apart: {spaced}); a webifier {nearAt.DistanceTo(at):0} u off taken ({nearTaken}), one {farAt.DistanceTo(at):0} u off never ({!farTaken}); "
+                      + $"up {left:0.0} s (20), cooling {cool:0.0} (50 = 20 + 30); Q again {again} (RUNNING); the bar '{line}'");
+                if (run == 0)
+                {
+                    while (s.Clock < tp + 20.4) { Hold(); await Frame(); }
+                    Key(q); await Frame();
+                    string cooling = s.FailNote("super"); double coolEnd = s.Sl("super").Cool; int outEnd = Ps().Count(w => !w.Inside);
+                    Check(outEnd == 0 && coolEnd >= 29.4 && coolEnd <= 30.0 && cooling == "COOLING" && s.Sl("super").Left <= 0,
+                          $"Supercarrier at 20.4 s: {outEnd} patrol craft out (0), cooling {coolEnd:0.0} s (30 from the end), Q {cooling} (COOLING)");
+                }
+                near.TakeDamage(1e12); far.TakeDamage(1e12);
+                foreach (var w in Ps()) w.SendOut(null, s.Clock);
+                s.Sl("super").Left = 0; s.Sl("super").Cool = 0;
+                await Wait(0.5);
+            }
+        }
+        finally { s.Stats.SetBase("pd_range", was); }
+    }
+
+    // ── SLICE 6a: THE PATROL TAKES MISSILES (kits_v31 §3.2 and §7: "CV patrol vs BB CIWS vs FR sentries vs PD -- all four
+    // take missiles, all rank by one Turret.Rank"). Three varied runs (VaryNear spot, the seeker fired at the carrier from
+    // 480-560 u at a VaryAngle bearing, the carrier's point defence out of reach so the patrol is on trial, a held
+    // webifier 200-350 u off at another bearing so the rank has a choice): Q, three craft circling; the seeker is taken
+    // before the webifier (a craft's Target is the seeker within 1.5 s of its launch), downed before it lands (the hull
+    // untouched), credited "patrol".
+    async Task LaneA6aSuperMissileChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Carrier);
+        var s = Me;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        List<Wing> Ps() => Nodes<Wing>().Where(w => w.Carrier == s && w.Kind == WingKind.Patrol && !w.Done).ToList();
+        double was = PdReachOff(s);
+        try
+        {
+            for (int run = 0; run < 3; run++)
+            {
+                var at = VaryNear(yonder, 300f); float a1 = VaryAngle();
+                void Hold() { s.Position = at; s.Velocity = Vector2.Zero; }
+                s.Sl("super").Left = 0; s.Sl("super").Cool = 0; s.Hp = s.MaxHp;
+                Hold(); await Wait(0.2); Hold();
+                var webAt = at + Vector2.Right.Rotated(a1 + Vary(1.5f, 3.0f)) * Vary(200f, 350f);
+                var web = H.SpawnRaider(webAt, Enemies.Webifier); web.Hp = 1e9; web.ApplyStatus(Status.Disabled, 60);
+                s.UseAbility("super", 0);
+                await RealTime(() => Ps().Count(w => w.FighterPhase == "Circle") >= 3, 12);
+                Hold();
+                var from = at + Vector2.Right.Rotated(a1) * Vary(480f, 560f);
+                double c0 = s.DealtBy.GetValueOrDefault("patrol"); int down0 = Shot.Intercepted; double hull0 = s.Hp;
+                var sk = Combat.Fire(Shots.Seeker, from, s.Position - from, 135f, 4000f, 25, targetId: s.NetId, turnRate: 2f);
+                double fired = s.Clock, takenAt = -1;
+                while (sk != null && sk.Alive && s.Clock < fired + 10)
+                {
+                    Hold(); web.Position = webAt; await Frame();
+                    if (takenAt < 0 && Ps().Any(w => ReferenceEquals(w.Engaging, sk))) takenAt = s.Clock - fired;
+                }
+                Check(sk != null && !sk.Alive && takenAt >= 0 && takenAt <= 1.5 && Shot.Intercepted > down0 && s.Hp >= hull0 && s.DealtBy.GetValueOrDefault("patrol") > c0,
+                      $"patrol vs missile run {run}: a seeker fired at the carrier from {from.DistanceTo(at):0} u, a webifier {webAt.DistanceTo(at):0} u off beside it -- taken at {takenAt:0.00} s (<= 1.5, before the webifier), downed ({!sk.Alive}), the hull untouched ({s.Hp >= hull0}), credited \"patrol\" ({s.DealtBy.GetValueOrDefault("patrol") - c0:0.0})");
+                web.TakeDamage(1e12);
+                foreach (var w in Ps()) w.SendOut(null, s.Clock);
+                s.Sl("super").Left = 0; s.Sl("super").Cool = 0;
+                await Wait(0.5);
+            }
+        }
+        finally { s.Stats.SetBase("pd_range", was); }
+    }
+
+    // ── SLICE 6a: THE CARRIER'S THREE WINGS AT ONCE (kits_v31 §7: "CV patrol vs CV gunships -- split by anchor"; kits_v3
+    // §3.1: the first wing keeps its orders). Three varied runs (VaryNear spot; a held gunship 1300-2200 u off at a
+    // VaryAngle bearing, attacked by the fighters and picked for the gunships): Space (attack), E, Q -- 3 s on, the three
+    // fighters away on it, two gunships on its 240 u circle, three patrol craft within 700 u of the carrier; 6 fighters
+    // and patrol craft out together.
+    async Task LaneA6aSuperWingsChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Carrier);
+        var s = Me;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        List<Wing> Of(WingKind k) => Nodes<Wing>().Where(w => w.Carrier == s && w.Kind == k && !w.Done).ToList();
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; }
+            s.Sl("super").Left = 0; s.Sl("super").Cool = 0; s.Sl("gunships").Left = 0; s.Sl("gunships").Cool = 0;
+            Hold(); await Wait(0.2); Hold();
+            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(1300f, 2200f);
+            var tgt = H.SpawnRaider(spot, Enemies.Gunship); tgt.Hp = 1e9; tgt.ApplyStatus(Status.Disabled, 60);
+            await Frame();
+            H.ClearSelection(); H.AddTarget(tgt);
+            s.OrderAttack(tgt);
+            s.UseAbility("gunships", tgt.NetId, new[] { tgt.NetId });
+            s.UseAbility("super", 0);
+            double tp = s.Clock;
+            while (s.Clock < tp + Vary(5.0f, 6.0f)) { Hold(); tgt.Position = spot; await Frame(); }
+            int fightersOut = Of(WingKind.Fighter).Count(w => !w.Inside), guns = Of(WingKind.Gunship).Count(w => Mathf.Abs(w.Position.DistanceTo(spot) - 240f) <= 30f);
+            int patrolHome = Of(WingKind.Patrol).Count(w => !w.Inside && w.Position.DistanceTo(at) <= 700f);
+            Check(ReferenceEquals(s.WingTarget, tgt) && fightersOut == 3 && guns == 2 && patrolHome == 3 && fightersOut + patrolHome == 6,
+                  $"three wings run {run}: a gunship {spot.DistanceTo(at):0} u off -- {fightersOut} fighters away on it (3), {guns} gunships on its circle (2), {patrolHome} patrol craft within 700 u of the carrier (3): 6 fighters and patrol out together");
+            tgt.TakeDamage(1e12);
+            foreach (var w in Of(WingKind.Patrol).Concat(Of(WingKind.Gunship))) w.SendOut(null, s.Clock);
+            s.RecallWing();
+            s.Sl("super").Left = 0; s.Sl("super").Cool = 0; s.Sl("gunships").Left = 0; s.Sl("gunships").Cool = 0;
+            await Wait(1.0);
+        }
+    }
+
     async Task LaneA6cBladeChecks(Vector2 yonder)
     {
         var sh = new ShipStats(ShipClass.HeavyWarrior);
@@ -13896,6 +14050,9 @@ public partial class _Test : Node
             await LaneA6aCarrierRowChecks(yonder);
             await LaneA6aGunshipChecks(yonder);
             await LaneA6aGunshipFireChecks(yonder);
+            await LaneA6aSuperChecks(yonder);
+            await LaneA6aSuperMissileChecks(yonder);
+            await LaneA6aSuperWingsChecks(yonder);
 
             // ── WARRIOR: the blade (slice 6c) ──
             await LaneA6cBladeChecks(yonder);
@@ -14319,6 +14476,7 @@ public partial class _Test : Node
                     ["brace"]     = sp => sp.Sl("brace").Left > sp.Stats["brace_time"] - 0.1 && sp.Statuses.Has(Status.Hardened) && Math.Abs(sp.Held - 0.5f) < 1e-3f,
                     ["ciws"]      = sp => sp.Sl("ciws").Left > sp.Stats["ciws_time"] - 0.1 && Math.Abs(sp.Spec(true).Damage - sp.Stats["pd_damage"] * 3) < 1e-9,
                     ["gunships"]  = sp => sp.Sl("gunships").Left > sp.Stats["gunship_time"] - 0.1 && sp.WingCount(WingKind.Gunship) == (int)sp.Stats["gunship_count"],
+                    ["super"]     = sp => sp.Sl("super").Left > sp.Stats["patrol_time"] - 0.1 && sp.WingCount(WingKind.Patrol) == (int)sp.Stats["fighter_count"],
                     ["curtain"]   = sp => sp.Sl("curtain").Cool > sp.Stats["curtain_cooldown"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId && z.Row == Zones.Curtain),
                 };
                 var onBars = Classes.All.Where(cd2 => cd2.Ready).SelectMany(cd2 => cd2.Abilities)
