@@ -811,7 +811,7 @@ public static class Ab
 
     // SLINGSHOT (the Dart's E, kits_v2's card): the heading AND the whole velocity (the slide included) snapped onto the
     // cursor's bearing, up to 180°, the speed kept -- a snap, not a turn, so the Ramjet keeps what it built (the host's
-    // copy skips the report: SkipYaw). A sprint's rod leaves down the new nose. 6 s.
+    // copy skips the reports: SkipYawFor). A sprint's rod leaves down the new nose. 6 s.
     public static readonly AbilityDef Slingshot = new()
     {
         Id = "slingshot", Name = "Slingshot", Short = "SLING", Default = Key.E, TakesPoint = true,

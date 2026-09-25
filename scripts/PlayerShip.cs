@@ -951,11 +951,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     // THE HOST'S OWN COPY OF A GUEST'S RAMP (v3 §3.6 Authority), stepped once a report, over the time since the last:
     // the yaw from the two reported headings, clamped to the hull's turn rate (a report cannot claim a sharper turn),
-    // and none across a snap (SkipYaw: the Slingshot's heading is a snap, not a turn). The host prices only from this.
+    // and none across a snap (SkipYawFor: the Slingshot's heading is a snap, not a turn; every report inside the window,
+    // which spans the reliable press and the unreliable report racing it). The host prices only from this.
     private void RampsFromReport(float rot, float age)
     {
         float yaw = age > 0 ? Mathf.AngleDifference(_rampRot, rot) / age : 0f;
-        if (SkipYaw) { yaw = 0f; SkipYaw = false; }
+        if (_clock < _skipYawUntil) yaw = 0f;
         _rampRot = rot;
         double turnRate = Stats["turn_rate"], dt = Math.Min(age, 0.5f);
         double share = turnRate > 0 ? Math.Min(1, Math.Abs(yaw) / turnRate) : 0;
@@ -969,8 +970,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         }
     }
     private float _rampRot;
-    // the next report's heading change is a snap, not a turn (set on the host by a row that snaps the heading)
-    public bool SkipYaw;
+    // the reports inside the next `secs` carry a snap, not a turn (set on the host by a row that snaps the heading)
+    private double _skipYawUntil;
+    public void SkipYawFor(double secs) => _skipYawUntil = _clock + secs;
 
     // THE SNAP (the owner, AbilityDef.AtOnce): the nose and the whole velocity onto the bearing to `at`, the speed kept.
     // The heading is SET, not turned: no yaw, so a Ramp keeps its total (the host's copy skips the report, Slung).
@@ -992,7 +994,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         ref var sl = ref Sl(id);
         if (!Net.Sim || !Alive || sl.Cool > 0) return;
         sl.Cool = Cooling(Stats[cool]);
-        if (!Mine) SkipYaw = true;
+        if (!Mine) SkipYawFor(0.4);
     }
 
     // SLIPSTREAM (a stat row, the Dart's passive): a hull whose sheet names slip_speed takes slip_guard of every blow
@@ -1333,14 +1335,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Position = spot; Rotation = Aim.Face(spot, t.Position); _yawRate = 0f;
         Velocity = Vector2.Up.Rotated(Rotation) * speed;
     }
-    // its press on the HOST: the cooldown, the spot noted, the host's ramjet-style copies told a snap came (SkipYaw), every
+    // its press on the HOST: the cooldown, the spot noted, the host's ramjet-style copies told a snap came (SkipYawFor), every
     // web let go. The reach is judged with 1.25x slack: a guest's position here is a report behind its own.
     public void Stepped(IHittable t)
     {
         ref var sl = ref Sl("step");
         if (!Net.Sim || !Alive || sl.Cool > 0 || !Steppable(t) || Position.DistanceTo(t.Position) > Stats["step_reach"] * 1.25) return;
         sl.Cool = Cooling(Stats["step_cooldown"]); sl.At = StepSpot(Position, t, (float)Stats["step_behind"]);
-        if (!Mine) SkipYaw = true;
+        if (!Mine) SkipYawFor(0.4);
         LetGoWebs();
     }
     private double _primed = 1;
