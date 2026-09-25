@@ -3262,13 +3262,19 @@ public partial class _Test : Node
     // the charge starts on the frame the press is taken), then let go. Returns the reach read on the
     // last held frame, how far the hull went, and whether the release cancelled it. `during` runs every
     // held frame (a check that swings the bow mid-charge). `driver`: pressed and held as a driver does
-    // (PressDrive, DriveHeld) rather than by the key -- for a peer whose keys a focused box may take.
+    // (PressDrive, DriveHeld) rather than by the key -- for a peer whose keys a focused box may take;
+    // DriveHeld is a plain field TickOwner reads directly, so releasing it lands one frame later --
+    // but a raw key's release is a queued InputEventKey, which Input.IsKeyPressed(V) (what TickOwner
+    // reads for a real key hold) does not reflect for a full frame beyond that: two frames of charge
+    // still run after KeyUp before the drop is seen, not one, so the lookahead below must anticipate
+    // two frames for a key hold or every jump lands 2 frames -- ~27 u at 800 u/s -- long.
     async Task<(float reach, Vector2 moved, bool cancelled)> WarpHold(PlayerShip s, double held, Action during = null, bool driver = false)
     {
         var at = s.Position;
         if (driver) { s.DriveHeld = true; s.PressDrive(); }
         else KeyDown(global::Godot.Key.V);
-        for (int i = 0; i < 60 * 12 && !(s.Charging && s.ChargeHeld + GetProcessDeltaTime() >= held); i++)
+        double lookahead = (driver ? 1 : 2) * GetProcessDeltaTime();
+        for (int i = 0; i < 60 * 12 && !(s.Charging && s.ChargeHeld + lookahead >= held); i++)
         {
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             during?.Invoke();
