@@ -18420,7 +18420,13 @@ public partial class _Test : Node
         {
             var hm = Me; var keepH = hm.Position;
             hm.Position = Hub.BasePos + new Vector2(2000, 0); hm.Velocity = Vector2.Zero; hm.Rotation = 0f; await Wait(0.3);
-            float hvBearing = VaryAngle(), hvOut = Vary(2600f, 3400f);
+            // A FULL VaryAngle() COULD DOUBLE BACK: `hm` sits only 2000 u out, so a bearing pointed
+            // roughly at the base plus a 2600-3400 u throw could land the heavy on the BASE's side of
+            // it -- inside the base's own guns, taking the base (or whatever it hit first) as its
+            // target and dying there instead of cruising in on `hm` at all. Held within ~57 deg of
+            // straight out from the base, it always lands farther from the base than `hm` is.
+            var hmOutward = (hm.Position - Hub.BasePos).Normalized();
+            float hvBearing = hmOutward.Angle() + Vary(-1.0f, 1.0f), hvOut = Vary(2600f, 3400f);
             var hv = H.SpawnRaider(hm.Position + Vector2.Right.Rotated(hvBearing) * hvOut, Enemies.Gunship);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(hv.Heavy && Math.Abs(hv.Length - 4 * Raider.LightLength) < 1e-3 && Math.Abs(Raider.HeavyDps - 2.58 * Raider.RaiderDps) < 1e-9 && Raider.RaiderDps == 1,
