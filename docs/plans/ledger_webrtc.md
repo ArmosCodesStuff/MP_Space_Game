@@ -905,3 +905,48 @@ subject. Harness `Vary` takes floats (`Vary(3f, 20f)`).
   handshake check on P(19481), the channel check `r <= Link.Channels().Count`, the host's listener-port
   check (was the LAN address), `NetworkIdle` wording; `PretendProtocol` -> `PretendAt = Auth` in guest2.
 - next: R2c, the roles moved (§10.3) and R2's owed rung-5 checks.
+
+### HANDOFF for the fresh agent (R2c onward) -- this agent stopped at ~150k after R2b
+Read: the R2b POST above, plan §3.3, §3.8, §3.9, §6, §10.2-10.4 (R2-R4 rows), §13 R2-R5. Net.cs's session
+section (grep `── hosting`, `── the host's desk`, `── the guest's desk`, `PumpSession`, `── joining`) is
+the API: `Net.I.Invite()`, `LastInvite`, `Pending` (`.All`, `.Find`), `TakeCode(text)`, `Join(text)`,
+`ReplyCode`/`ReplyAt`, `FreshFrom`/`FreshReply()`, `JoinedBy` ("paste"/"address"), `Addresses`,
+`Net.PretendAt = Net.Pretend.Code|Auth`, `Hang(id)`. The harness clipboard is `_Test.Clip` (static;
+`HermeticNetwork()` swaps `Rendezvous.Clipboard`/`Copy` to it and `Link.Servers` to `BoxStun`).
+Landmarks (SmokeTest.cs.txt as of dc6ac67): courier `CourierFile` 695, `Rewrite` 700 (the box pair),
+R1's paste-row courier check ~850-900, role dispatch 1176, `ArenaMp` 10304, `Mp` 11014 (host 11017,
+guest2 11222, guest after), `R2SwitchChecks` just above `S2HeldBossHost`.
+**R2c · the roles moved (§10.3)** (files: SmokeTest.cs.txt, maybe Net.cs for a fix): `guest` joins BY
+INVITE: the host role, once hosting, calls `Net.I.Invite()` and writes `Clip` (its invite) to
+`CourierFile("invite", P(27115), n)`; the guest reads it, waits `Vary(0.5f, 3f)`, and puts it through the
+JOIN box's handler (`SessionMenu`'s LineEdit TextSubmitted, or `Net.I.Join`); it writes `Net.I.ReplyCode`
+to `CourierFile("reply", ...)`; the host puts that through the reply box's handler (`ReplyBox`
+TextSubmitted -> `TakeCode`), and ONCE per run through the clipboard seam instead (set `Clip` to a
+Discord-style `Message(reply)`: the pickup takes it). Under `-Wan` the courier `Rewrite`s both codes to
+the box pair. `guest2` by ADDRESS: first `PretendAt = Code` -> refused over TCP before any peer (its text
+"That host is on a different build of the game (theirs {build} {proto:x8}, yours ...)" and the host's
+"Refused {name} on a different build ..." counted once; `refusals` at the host now counts both lines
+starting "Refused": raise the host's expected count to 2 or split), then `PretendAt = Auth` refused
+in-band (existing check), then joins. New checks: `Net.I.JoinedBy` == "paste" for guest, "address" for
+guest2/aguest; the paste guest's drop (host `Drop(id)`): no reconnect attempt for 20 s (`!Net.I.Connecting
+&& !Net.I.Reconnecting` throughout), guest status "Lost the connection to {hostName}. Ask them for a new
+invite code: your place is held 90 s. Your own world keeps running."; the host's status "{name} dropped.
+Send them this invite to come back (their place is held 90 s): COPY." and a new paste entry; the courier
+carries the fresh invite; the guest lands back in its held place WITH its rejoin token (Hub's existing
+"claimed its place with the rejoin token" line); the live-holder replacement (S2b owed: the guest rejoins
+before the host's watchdog lets its old peer go -- e.g. guest `Net.SkipGoodbye` + GoOffline, then joins the
+fresh invite at once; the host hands the place over, `_replacing`). Role limits in run.ps1 (120/150 s)
+may need raising for the courier waits. `aguest` unchanged (address retries at 2/8/14 s, RECONNECT 19 s).
+**R3** words (§6.1/6.2 table: most literals are already in Net.cs; add the listener-moved text if
+`ListenPort != port`), COPY NETWORK REPORT (§6.3: `Net.Report()` + a SessionMenu button, per invite/reply
+the STUN row + ms (`Gather.Row`, `DoneAt - Began`), candidates dropped by `Fit`, code length; per join
+the times; per-row gap/backlog via `Link.Backlog`; ReplyWindowS; pickup on), Hints "multiplayer" row
+(§6.3 literal), Shots: replace `51_address_hidden` with `51_invite_ready` + `52_reply_countdown`, add
+`reply_expired` and `join_failed` at the next free numbers (grep `Snap("5` / `Snap("6`), checks for each.
+**R4** the watchdog blackhole check (`Box("POST", "/box/blackhole?s=12")` after the guest's return under
+-Wan: both ends drop at 8 +/- 1 s, the fresh invite brings it back) and the rate check at 150/40/5 with
+per-row gap/backlog printed. **R5** pack/install/play/snapshot/manifest NOTES texts (§8), DESIGN, README
+"Playing with a friend", CHANGES (Unreleased + Handoff + Known broken = §10.5) in the LAST job.
+Env: `typecheck\typecheck.ps1` from typecheck/, `.\verify.ps1 -Quick` at the repo root (log to a new
+name outside the tree). Python edits: write the script to the scratchpad with the Write tool (a bash
+heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu once this job).
