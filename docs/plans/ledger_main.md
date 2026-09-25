@@ -4,7 +4,7 @@
 Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
-- test-phase / task ww2f2xd5l (wf_8c62491c-3b2, attempt 2, review [] = all 5 scopes merged, last lt 68ad42c): rounds (5 chains, triage, pooled fixes) -> seed sweep ->
+- test-phase / task w00jjvfec (wf_8c62491c-3b2, attempt 3 at 16:20, review [] = all 5 scopes merged, last lt 68ad42c): rounds (5 chains, triage, pooled fixes) -> seed sweep ->
   extras -> bar -> release. lands: 3 lines to the owner + the frames (framesForOwner, netOwed); a stop -> docs/plans/ledger_test.md
   and the journal, fix, relaunch: Workflow({scriptPath: <scripts>\test-phase.js, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 2, review: []}}).
   Watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout) re-armed at each expiry while it runs.
@@ -15,7 +15,7 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   call returns at once); relaunch with args {attempt: 3, review: []}; dbg6_s2/s3 (six on slots 2+3 at once, foreground) proves the slots.
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. Wait for task ww2f2xd5l (relaunched 15:30 with grouped fixes, fixed fix-merge branch and asserted gate); take its return as above.
+1. Wait for task w00jjvfec (grouped fixes; launch-call rule for runners); take its return as above. Delete the Landed row once dbg6 is read.
 2. After the release: the two-machine test (NOTES.txt) as a ledger row; the fable_report_1/2 "after the release" lists, each a lane + retrospective.
 
 ## Owner questions (one line each, with its default)
