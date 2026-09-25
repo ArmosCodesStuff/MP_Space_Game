@@ -1576,6 +1576,7 @@ public partial class Hub : Node2D
         if (Hints.Wants("abilities") && Selected != null) Hints.Meet("abilities");
         if (Hints.Wants("raid") && !InArena && Raiders.Count > 0) Hints.Meet("raid");
         if (Hints.Wants("stasis") && !me.Alive) Hints.Meet("stasis");
+        if (Hints.Wants("reload") && me.ReloadView.Running) Hints.Meet("reload");     // an active reload's first round spent
         if (Hints.Wants("boss") && InArena && IsInstanceValid(Boss)) Hints.Meet("boss");
         // the hull's own drive card (warp or boost) once something far off is picked; the slide's once a hostile is near
         if (me.Drive is { } dv && Hints.Wants(dv.Id) && WarpAim() is { has: true } aim && aim.at.DistanceTo(me.Position) > Hints.WarpMeet) Hints.Meet(dv.Id);

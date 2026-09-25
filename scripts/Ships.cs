@@ -142,13 +142,13 @@ public static class Classes
     // THE MOUNTS MORE THAN ONE HULL IS BORN WITH -- one ItemDef each, fitted to every hull that
     // carries it below. A part fits the hulls whose SIGNATURE row it names (ItemDef.Needs), so a
     // shared mount names one id per hull: the cargo gun the three freighters' three systems, the
-    // light cannon the sniper's railgun and the warden's hunters, the dart cannon the three
+    // light cannon the warden's hunters, the dart cannon the three
     // lights'. Written above All because static fields start in the order they are written, and
     // All is what fits them.
     private static readonly ItemDef CargoGun = ItemDef.Own(GearSlot.Weapon, "freight_main_gun", "Mk I Cargo Gun",
         "the freighter's single main turret", "bubble_pool", "overdrive_mult", "wave_range");
     private static readonly ItemDef HeavyCannon = ItemDef.Own(GearSlot.Weapon, "heavy_main_gun", "Mk I Light Cannon",
-        "the single light turret", "rail_damage", "hunter_count");
+        "the single light turret", "hunter_count");
     private static readonly ItemDef LightCannon = ItemDef.Own(GearSlot.Weapon, "light_main_gun", "Mk I Dart Cannon",
         "the light's single turret", "roll_time", "echo_time", "stealth_time");
 
@@ -367,37 +367,40 @@ public static class Classes
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Shockwave, Ab.Deploy } },
 
         // -- page 3: heavy fighters --------------------------------------------
-        new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.Guns,
-            Blurb = "Fast. A light main gun, and a railgun: locked while it charges, then a straight blue line through everything on it.",
-            Hint = "SNIPER  ·  mouse aims the main gun",
+        new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.None,
+            Blurb = "Fast and far. A railgun with one round in the chamber: hold to charge, let go for a straight blue line through everything on it. Time a press while it reloads and the next round hits half again as hard.",
+            Hint = "SNIPER  ·  Space: hold to charge, release to fire  ·  Space in the white box while it reloads: next round x1.5",
             Drive = Drives.Boost,
             Nums = new() {
-                ["hull"] = 140,
+                ["hull"] = 240,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
-                ["main_count"] = 1, ["main_damage"] = 6, ["main_interval"] = 0.8, ["main_range"] = 900, ["shell_speed"] = 700,
             },
-                // 7.5 = 5% of the railgun's 150, what a level is worth on a battleship's shell
-            Damage = new() { ["main_damage"] = 1, ["rail_damage"] = 7.5 },
-            Reach = new() { ["main_range"] = 1, ["rail_range"] = 1 },
-            Cycle = new() { ["main_interval"] = 1, ["rail_charge"] = 1 },
-            Weapons = new[] { Dps.Main, Dps.Railgun },
+                // 6.0 = 5% of the railgun's 120, what a level is worth on a battleship's shell
+            Damage = new() { ["rail_damage"] = 6.0 },
+            Reach = new() { ["rail_range"] = 1 },
+            Cycle = new() { ["rail_charge"] = 1, ["rail_reload"] = 1 },
+            Weapons = new[] { Dps.Railgun },
             Kit = new[] {
-                HeavyCannon,
-                ItemDef.Own(GearSlot.Utility, "heavy_railgun", "Railgun Mount", "the railgun's charge and its slug", "rail_damage"),
+                ItemDef.Own(GearSlot.Weapon, "heavy_railgun", "Railgun Mount", "the railgun: its round, its charge and its reload", "rail_damage"),
             },
             Rows = new StatRow[] {
-                new() { Group = "Railgun", Id = "rail_damage", Label = "Damage",         Base = 150, Dec = 0 },
-                new() { Group = "Railgun", Id = "rail_charge", Label = "Charge (locked)",Base = 3, Unit = "s", Dec = 1, Inverse = true },
-                new() { Group = "Railgun", Id = "rail_range",  Label = "Reach",          Base = 2500, Unit = "u", Dec = 0 },
-                new() { Group = "Railgun", Id = "rail_width",  Label = "Beam width",     Base = 14, Unit = "u", Dec = 0 },
-                new() { Group = "Railgun", Id = "rail_cooldown", Label = "Cooldown",     Base = 1, Unit = "s", Dec = 1, Inverse = true },
+                // sniper_active_reload.md 2.1: one round, 3.0 s to reload, the spot 40-60% of it, x1.5
+                new() { Group = "Railgun", Id = "rail_damage",  Label = "Damage, full charge", Base = 120, Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_charge",  Label = "Charge to full",      Base = 0.8, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Railgun", Id = "rail_tap",     Label = "Released at once",    Base = 40, Unit = "%", Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_reload",  Label = "Reload",              Base = 3.0, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Railgun", Id = "rail_spot_at", Label = "Sweet spot opens",    Base = 40, Unit = "% of the reload", Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_spot",    Label = "Sweet spot",          Base = 20, Unit = "% of the reload", Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_perfect", Label = "Perfect round",       Base = 1.5, Unit = "x", Dec = 1 },
+                new() { Group = "Railgun", Id = "rail_range",   Label = "Reach",               Base = 2500, Unit = "u", Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_width",   Label = "Beam width",          Base = 14, Unit = "u", Dec = 0 },
             },
             Art = new ClassArt {
                 Texture = "res://heavy_sniper_hull.png", Length = 120f, HalfWidth = 30.03f,
                 Mains = new Vector2[] { new(0.0f, -24.0f) },
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Railgun } },
+            Abilities = new[] { Ab.Railgun } },
         new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Ready = true, Fit = Fit.None,
             Blurb = "Fast and close. A blade that cuts everything in front of it, a dash, a spin, and a prism stance that splits light.",
             Hint = "WARRIOR  ·  Space swings the blade",

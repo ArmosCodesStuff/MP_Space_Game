@@ -755,23 +755,20 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     // ── THE HEAVY FIGHTERS ──────────────────────────────────────────────
-    // The railgun commits: while it charges the ship cannot turn or thrust (its row's Hold of x0,
-    // taken after the lifts: see Held), and at the end everything on the line takes the whole of it.
-    public void ChargeRail()
+    // THE RAILGUN'S SHOT (its row's Loose, on the host, when a charge stroke is let go on a seated
+    // round): the band the charge reached (Charges.Of: rail_tap at once, ramping to the whole at full)
+    // times the round in the chamber (ActiveReload.Take: x rail_perfect enhanced, drawn and heard
+    // white) of rail_damage, from the nose along the heading as far as rail_range; then the chamber
+    // is spent and reloads by itself.
+    public void FireRail(double share)
     {
-        if (Sl("railgun").Left > 0 || Sl("railgun").Cool > 0) return;
-        Sl("railgun").Left = Stats["rail_charge"];
-    }
-    // The charge is spent (the Railgun row's Expire, on the host): the band its charge reached
-    // (Charges.Of("railgun")) says how much of rail_damage goes down which line, from the nose
-    // along the heading, as far as rail_range.
-    public void FireRail()
-    {
-        double charged = 1 - Sl("railgun").Left / Stats["rail_charge"];
-        var (mult, line) = Charges.At(Charges.Of("railgun"), charged);
+        var r = ActiveReload.Rail;
+        var (mult, line) = Charges.At(Charges.Of(r.Id), share, id => Stats[id]);
+        double round = ActiveReload.Take(this, r);
+        if (round > 1) line = Lines.RailEnhanced;
         var nose = Aim.Nose(this, MyArt.Length * 0.5f);
-        Lines.Strike(line, this, nose, nose + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"], Stats["rail_damage"] * mult);
-        Sl("railgun").Cool = Cooling(Stats["rail_cooldown"]);
+        Lines.Strike(line, this, nose, nose + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"], Stats["rail_damage"] * mult * round);
+        ActiveReload.Spent(this, r);
     }
 
     // Six missiles, each on a target of its own while there are targets to go round; what is left
@@ -1724,6 +1721,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f - MyArt.EngineInset), Vector2.Down, MyArt.Length, Accent,
                        0.25f + 0.75f * Mathf.Abs(SpeedAhead) / (float)Stats["max_speed"], Thrusting || Mathf.Abs(SpeedAhead) > 2f);
         Melee.Draw(this);                           // a blade or a spin swinging, on every peer
+        ActiveReload.Draw(this);                    // an enhanced round's glint at the muzzle, on every peer
         foreach (var (p, t) in _signals)
         {
             bool yellow = (int)(t * 7) % 2 == 0;                           // flashing

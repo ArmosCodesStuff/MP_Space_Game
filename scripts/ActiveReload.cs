@@ -1,3 +1,4 @@
+using Godot;
 using System;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -144,6 +145,39 @@ public static class ActiveReload
             v.Off = 0;
         }
         if (!v.Running && Seated(sl)) v.Said = sl.N == (int)Chamber.Enhanced ? Verdict.Perfect : Verdict.None;
+    }
+
+    // THE GUN'S SLOT ON THE BAR (§4.3), in step with the owner's view: RELOAD / PERFECT while it
+    // reloads, CHARGE while a stroke fills a seated round, then READY or the enhanced round's x.
+    public static SlotState Slot(PlayerShip s, ReloadSpec r)
+    {
+        var v = s.ReloadView;
+        if (v.Running)
+            return v.Said == Verdict.Perfect ? new SlotState { Line = "PERFECT", Lit = true }
+                 : new SlotState { Line = $"RELOAD {Math.Max(0, v.Length - v.Since):0.0}s",
+                                   Busy = (float)(v.Length > 0 ? Math.Clamp(1 - v.Since / v.Length, 0, 1) : 0) };
+        if (v.Charge > 0)
+        {
+            double full = Math.Max(1e-6, s.Cadence(r.Charge));
+            return new SlotState { Line = $"CHARGE {Math.Max(0, full - v.Charge):0.0}s", Lit = true, Busy = (float)Math.Max(0, 1 - v.Charge / full) };
+        }
+        return s.Sl(r.Id).N == (int)Chamber.Enhanced ? new SlotState { Line = $"x{s.Stats[r.Perfect]:0.0#} ROUND", Lit = true }
+                                                     : new SlotState { Line = "READY" };
+    }
+
+    // EVERY PEER (§3.6): a white glint at the muzzle while an enhanced round is seated -- read from
+    // the slot, which rides the host's report, so allies see a 180 line coming. The owner's too.
+    public static void Draw(PlayerShip s)
+    {
+        if (!s.Alive) return;
+        foreach (var def in Abilities.For(s.Class))
+        {
+            if (def.Reload is not { } r || s.Sl(r.Id).N != (int)Chamber.Enhanced) continue;
+            var tip = new Vector2(0, -s.MyArt.Length * 0.5f);
+            float k = 0.8f + 0.2f * Mathf.Sin(Time.GetTicksMsec() * 0.012f);
+            s.DrawCircle(tip, 10f * k, new Color(1f, 1f, 1f, 0.22f));
+            s.DrawCircle(tip, 3.5f, new Color(1f, 1f, 1f, 0.95f));
+        }
     }
 
     // OWNER ONLY, never on the wire: the owner's own clock since its own shot (Since of Length),

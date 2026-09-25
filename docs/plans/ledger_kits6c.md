@@ -340,3 +340,32 @@ hold) = seat the chamber (N = Seated, Left 0, ReloadView = default), KeyDown(Spa
 - scripts/Items.cs 522b3d7d042dc710397a399afbee4d5c634b8353
 - tools/smoketest/SmokeTest.cs.txt dbbd1d8beb26ae1800ea0c2cd7297fa6d8f38152
 - tools/screens/Shots.cs.txt e04412b7a33f00ff8d28725a841c7dfa219312ce
+## kits6c-J6 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- Built: Sniper row (Fit.None, hull 240, Hint per §4.3, Blurb; rows rail_damage 120 / rail_charge 0.8 / rail_tap 40 /
+  rail_reload 3.0 / rail_spot_at 40 / rail_spot 20 / rail_perfect 1.5 / rail_range / rail_width; rail_cooldown and the
+  main_* rows gone; Damage rail_damage 6.0; Cycle rail_charge + rail_reload; Weapons {Dps.Railgun}; Kit = Weapon
+  "heavy_railgun" only -- J8 adds the Anchor's Utility part; HeavyCannon now needs hunter_count only). Ab.Railgun = Space
+  Hold Weapon row (Reload = ActiveReload.Rail, Elapsed = Seat, Loose = FireRail(share), Show = ActiveReload.Slot);
+  Sniper Abilities {Railgun} (J8-J10 append Anchor, Tether, Flares). FireRail(share): Charges band (x Take, the
+  enhanced round down Lines.RailEnhanced) then Spent; ChargeRail deleted. Charge.cs: ChargeBand.Pct (a band's Mult read
+  from the firer's sheet, percent), Charges.At(bands, share, stat); the railgun's table = the README ruling's ramp
+  {0: rail_tap} -> {1: x1, Ramp}. Dps.Railgun = 120 x 1.5 / 3.8 = 47.4. Beam / Fx / Lines row rail_enhanced appended
+  (Beam 9, Fx 15, Lines 3). ActiveReload.Slot (the bar's words) + ActiveReload.Draw (the muzzle glint, every peer, from
+  the slot). Hints row "reload", met in Hub when the owner's view first reloads.
+- Harness rewritten (6.3): LaneAHoldChecks, F24 ROOTED, ANCHORED now go through the Anchor (helper SniperAnchor: UseAbility
+  "anchor", a second press weighs it, waits out the release) -- THEY GO LIVE ONLY WHEN J8 BUILDS row "anchor" (Hold 0,
+  F, a second press releases after anchor_release); rail credit, rung-5 railgun heard (RailFire helper: seat, Space held
+  a full charge, let go); F23 rail row 120 + NEW enhanced-row check; F7 bands (ramp 40 -> 100% read from rail_tap, 120)
+  and the fingerprint mutant on the full band; kit carriers heavy_main_gun 1; Default(HeavySniper)[0] heavy_railgun;
+  Weapons rise 7.2 of 120; sniper DPS 47.4, one line; L window row (no "Damage per shot"); sniper first shot (hull free
+  while charging, 120 on release); cruise missile (nothing while charging, then 120); sweep witness "railgun" (Trigger,
+  seated, CHARGE) and its rail_range case (the row's Loose); Beam pinned rail_enhanced 0.63; Shots 73b via Loose.
+- Checks: NEW LaneA6cReloadChecks (S1-S6, S8, S9; 3 runs); NEW rung 5 LaneA6cReloadHostWatch / HostChecks / GuestChecks
+  (G1-G3: blows 120 / 180 / 120 / 120 / 180 on dummy 1 held down the guest copy's nose); NEW frames
+  73d_sniper_enhanced_glint, 73e_sniper_enhanced_rail (LaneA6cRailFrames); the F23 enhanced-row check.
+- Owed: S7 (anchored bar) in J8's LaneA6cAnchorChecks; G4 / G5 need the host / guest / guest2 scenario (a third pilot's
+  claim refused; guest2 sees the glint and hears rail_enhanced, not rail_perfect) -- default: written in J7 or J10 if
+  the guest2 role has a window, else recorded as owed. Pre-existing stale: two `Fx.All.Length == 10` checks (~11431,
+  ~11452) already read 15 rows before this lane's 16th; not this lane's truth to rewrite (recorded, untouched).
+- Next: kits6c-J7 ReloadBar (§4) + frame 73c; then J8 Anchor (also makes the SniperAnchor callers live).

@@ -2231,35 +2231,31 @@ public partial class _Test : Node
         foreach (var m in boss.Type.Moves) boss.S(m.Id).Due = held[m.Id];
     }
 
-    // THE HOLD (F2, with F1's share rule). The railgun's charge rooted the hull through
-    // Status.Disabled, which on a pilot now also silences its guns and its keys, so the lock is its
-    // row's Hold of x0: a share taken after the lifts, on the whole helm. From three seeded headings,
-    // a different pair of keys held each time, the charging hull neither moves nor turns; the charge
-    // spent, W moves it again.
+    // THE HOLD (F2, with F1's share rule). A row's Hold of x0 roots the hull: a share taken after the
+    // lifts, on the whole helm (Status.Disabled would also silence its guns and its keys). The Sniper's
+    // is its ANCHOR (kits6c: the railgun's locked charge is gone; the Anchor row lands in kits6c-J8).
+    // From three seeded headings, a different pair of keys held each time, the anchored hull neither
+    // moves nor turns; weighed, W moves it again.
     async Task LaneAHoldChecks(PlayerShip sn)
     {
         var pairs = new[] { (global::Godot.Key.W, global::Godot.Key.A), (global::Godot.Key.S, global::Godot.Key.D), (global::Godot.Key.W, global::Godot.Key.D) };
         foreach (var (k1, k2) in pairs)
         {
-            sn.Sl("railgun").Left = 0; sn.Sl("railgun").Cool = 0;
             sn.Rotation = VaryAngle(); sn.Velocity = Vector2.Zero; await Wait(0.2);
-            sn.UseAbility("railgun", 0);
-            for (int i = 0; i < 30 && sn.Sl("railgun").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            var at = sn.Position; float rot = sn.Rotation;               // from the first frame the charge runs
+            await SniperAnchor(sn, true);
+            var at = sn.Position; float rot = sn.Rotation;               // from the first frame the Anchor runs
             KeyDown(k1); KeyDown(k2); await Wait(0.6);
             float moved = sn.Position.DistanceTo(at), turned = Mathf.Abs(Mathf.AngleDifference(rot, sn.Rotation));
-            bool rooted = sn.Held == 0f && sn.Sl("railgun").Left > 0;
+            bool rooted = sn.Held == 0f && sn.Sl("anchor").Left > 0;
             KeyUp(k1); KeyUp(k2);
-            sn.Sl("railgun").Left = 0.001;                               // spend the charge now
-            for (int i = 0; i < 30 && sn.Sl("railgun").Left > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await SniperAnchor(sn, false);                               // weighed: the release runs out
             var free = sn.Position;
             KeyDown(global::Godot.Key.W); await Wait(0.8); KeyUp(global::Godot.Key.W);
             float after = sn.Position.DistanceTo(free);
             Check(rooted && moved < 1f && turned < 0.005f && sn.Held == 1f && after > 5f,
-                  $"the railgun's charge is a hold of x0 on the whole helm: {k1}+{k2} held 0.6 s at {Mathf.RadToDeg(rot):0} deg move it {moved:0.00} u and turn it {Mathf.RadToDeg(turned):0.00} deg; the charge spent, W moves it {after:0} u");
+                  $"the Anchor is a hold of x0 on the whole helm: {k1}+{k2} held 0.6 s at {Mathf.RadToDeg(rot):0} deg move it {moved:0.00} u and turn it {Mathf.RadToDeg(turned):0.00} deg; weighed, W moves it {after:0} u");
             sn.Velocity = Vector2.Zero;
         }
-        sn.Sl("railgun").Left = 0; sn.Sl("railgun").Cool = 0;
     }
 
     // DISABLED ON A PILOT (F2): the capitals' warp overshoot will be its one cause. It stops the helm,
@@ -2838,19 +2834,14 @@ public partial class _Test : Node
                 var dir = Vector2.Up.Rotated(sn.Rotation);               // the railgun fires along the hull's heading
                 var tgt = H.SpawnRaider(at + dir * Vary(200f, 400f), Enemies.Gunship);
                 tgt.Hp = 1e9;
-                sn.Sl("railgun").Left = 0; sn.Sl("railgun").Cool = 0;
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 double hp0 = tgt.Hp, dealt0 = sn.DealtBy.GetValueOrDefault("rail");
-                sn.UseAbility("railgun", 0);
-                for (int i = 0; i < 30 && sn.Sl("railgun").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                sn.Sl("railgun").Left = 0.001;                           // spend the charge now
-                for (int i = 0; i < 30 && sn.Sl("railgun").Left > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                await RailFire(sn);                                      // a full charge on Space, let go
                 await Wait(0.1);
                 double lost = hp0 - tgt.Hp, credited = sn.DealtBy.GetValueOrDefault("rail") - dealt0;
                 Check(lost > 0 && Math.Abs(lost - credited) < 1e-6,
                       $"the railgun, the pilot {at.DistanceTo(tgt.Position):0} u off along its heading: DealtBy[\"rail\"] grew {credited:0.0}, the target lost {lost:0.0}");
                 tgt.TakeDamage(1e12);
-                sn.Sl("railgun").Cool = 0;
             }
         }
 
@@ -3160,7 +3151,7 @@ public partial class _Test : Node
     // Shift + A/D slide the nine sideways at half their top (lights 130, heavies 95, freighters 60;
     // full slide in 0.25 s, 0.25 s and 0.5 s), the nose holding its heading. The capitals carry
     // strafe_speed 0 and pivot as they always did. A web or Disabled leaves no slide; a hold of x0
-    // (the railgun's charge today, the Anchor in 6c) roots it. The share rule on the pure figure:
+    // (the Sniper's Anchor) roots it. The share rule on the pure figure:
     // buffs add, holds multiply after the sum.
     async Task<(float across, float turned, float ahead)> Slide(PlayerShip s, global::Godot.Key side, double secs)
     {
@@ -3210,22 +3201,19 @@ public partial class _Test : Node
             Check(Math.Abs(acrossOff) < 1f && s.Position.DistanceTo(at) < 1f, $"F24: disabled, Shift + A/D slides a {cls} at {acrossOff:0.00} u/s ({s.Position.DistanceTo(at):0.00} u moved): none");
             s.Velocity = Vector2.Zero; await Wait(0.2);
         }
-        // ROOTED: the sniper's railgun charge is a hold of x0 -- Shift + A/D moves it nowhere
+        // ROOTED: the sniper's Anchor is a hold of x0 -- Shift + A/D moves it nowhere
         {
             await SetClass(ShipClass.HeavySniper);
             var sn = Me; sn.AutopilotTo = null;
             sn.Position = VaryNear(yonder, 300f); sn.Rotation = VaryAngle(); sn.Velocity = Vector2.Zero; await Wait(0.3);
-            sn.Sl("railgun").Left = 0; sn.Sl("railgun").Cool = 0;
-            sn.UseAbility("railgun", 0);
-            for (int i = 0; i < 30 && sn.Sl("railgun").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            var at = sn.Position; double secs = Math.Min(1.0, sn.Sl("railgun").Left - 0.1);
+            await SniperAnchor(sn, true);
+            var at = sn.Position; double secs = Math.Min(1.0, sn.Sl("anchor").Left - 0.1);
             bool held = sn.Held == 0f;
             var (acrossHeld, _, _) = await Slide(sn, Vary(0f, 1f) < 0.5f ? global::Godot.Key.D : global::Godot.Key.A, secs);
             Check(held && Math.Abs(acrossHeld) < 0.01f && sn.Position.DistanceTo(at) < 0.5f,
-                  $"F24: held at x0 (the railgun's charge), Shift + A/D moves the sniper {sn.Position.DistanceTo(at):0.00} u in {secs:0.0} s at {acrossHeld:0.00} u/s: none");
-            sn.Sl("railgun").Left = 0.001;
-            for (int i = 0; i < 30 && sn.Sl("railgun").Left > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            sn.Sl("railgun").Cool = 0; sn.Velocity = Vector2.Zero;
+                  $"F24: held at x0 (the Anchor), Shift + A/D moves the sniper {sn.Position.DistanceTo(at):0.00} u in {secs:0.0} s at {acrossHeld:0.00} u/s: none");
+            await SniperAnchor(sn, false);
+            sn.Velocity = Vector2.Zero;
         }
         // A CAPITAL: Shift + A/D is the rudder; dead in the water it pivots and never slides
         {
@@ -3594,20 +3582,18 @@ public partial class _Test : Node
             Check(!deadBoost && s.Alive, $"in stasis V boosts nothing ({deadBoost}); re-boarded, alive again");
         }
 
-        // ANCHORED: a hull held at x0 (the sniper's railgun charge; the Anchor in 6c) is refused
+        // ANCHORED: a hull held at x0 (the sniper's Anchor) is refused the boost
         {
             await SetClass(ShipClass.HeavySniper);
             var sn = Me; sn.AutopilotTo = null;
             sn.Position = VaryNear(yonder, 300f); sn.Rotation = VaryAngle(); sn.Velocity = Vector2.Zero; await Wait(0.3);
-            sn.Sl("railgun").Left = 0; sn.Sl("railgun").Cool = 0; sn.Sl("boost").Cool = 0;
-            sn.UseAbility("railgun", 0);
-            for (int i = 0; i < 30 && sn.Sl("railgun").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            sn.Sl("boost").Cool = 0;
+            await SniperAnchor(sn, true);
             Key(global::Godot.Key.V); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(sn.Held == 0f && sn.Sl("boost").Left <= 0 && sn.FailNote("boost") == "ANCHORED",
-                  $"held at x0 (the railgun's charge), V is refused {sn.FailNote("boost")} and nothing runs");
-            sn.Sl("railgun").Left = 0.001;
-            for (int i = 0; i < 30 && sn.Sl("railgun").Left > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            sn.Sl("railgun").Cool = 0; sn.Velocity = Vector2.Zero;
+                  $"held at x0 (the Anchor), V is refused {sn.FailNote("boost")} and nothing runs");
+            await SniperAnchor(sn, false);
+            sn.Velocity = Vector2.Zero;
         }
 
         // THE CARDS: a hull meets its own drive's card (far off picked) and, if it slides, the strafe card
@@ -3945,8 +3931,13 @@ public partial class _Test : Node
         var rail = Lines.All[Lines.Rail];
         var sheet = new ShipStats(ShipClass.HeavySniper);
         Check(rail.Id == "rail" && rail.Stops == 0 && !rail.AtTarget && rail.Fx == Fx.Rail && rail.Beam == Beam.Rail
-              && Math.Abs(sheet[rail.Reach] - 2500) < 1e-9 && Math.Abs(sheet[rail.Width] - 14) < 1e-9 && Math.Abs(sheet["rail_damage"] - 150) < 1e-9,
-              $"the railgun is a Lines row: 2500 x 14 u (reach {sheet[rail.Reach]:0}, width {sheet[rail.Width]:0}), through everything (Stops {rail.Stops}), its whole reach (AtTarget {rail.AtTarget}), the rail bar and report, 150 a line");
+              && Math.Abs(sheet[rail.Reach] - 2500) < 1e-9 && Math.Abs(sheet[rail.Width] - 14) < 1e-9 && Math.Abs(sheet["rail_damage"] - 120) < 1e-9,
+              $"the railgun is a Lines row: 2500 x 14 u (reach {sheet[rail.Reach]:0}, width {sheet[rail.Width]:0}), through everything (Stops {rail.Stops}), its whole reach (AtTarget {rail.AtTarget}), the rail bar and report, 120 a line");
+        var hot = Lines.All[Lines.RailEnhanced];
+        Check(hot.Id == rail.Id && hot.Width == rail.Width && hot.Reach == rail.Reach && hot.Stops == 0 && !hot.AtTarget
+              && hot.Fx == Fx.RailEnhanced && hot.Beam == Beam.RailEnhanced && Fx.Of(Fx.RailEnhanced).Shape == FxShape.Bar
+              && Math.Abs(Fx.Of(Fx.RailEnhanced).Width - 1.5f * Fx.Of(Fx.Rail).Width) < 1e-4f,
+              $"an enhanced rail round is the rail's own line, credit and hitbox, drawn white {Fx.Of(Fx.RailEnhanced).Width:0.0} wide (1.5 x {Fx.Of(Fx.Rail).Width:0.0}) and heard as its own beam row");
     }
 
     // ── F23 · A LINE THAT STOPS AT ITS TARGET (lane A slice 3, gate fix J12) ────────────────────
@@ -4043,7 +4034,8 @@ public partial class _Test : Node
     //  - a ramp (sniper_active_reload.md 1.4: 40% at once rising to 100% at full): 0.40 + 0.60 x share,
     //    and 1.00 held past full;
     //  - steps (kits_v2's tap 8 and full 45): 8/45 down the tap's line short of full, 1 down the full line after;
-    //  - the railgun's own table: the whole (x1) down the rail line, however far its charge got (the kit's 150).
+    //  - the railgun's own table (the README ruling): rail_tap's 40% at once, ramping to the whole 120 at full,
+    //    down the rail line.
     void LaneAChargeBandChecks()
     {
         var ramp = new[] { new ChargeBand { At = 0, Mult = 0.40, Line = 1 }, new ChargeBand { At = 1, Mult = 1.00, Line = 1, Ramp = true } };
@@ -4060,12 +4052,14 @@ public partial class _Test : Node
         {
             var (rm, rl) = Charges.At(ramp, sh);
             var (sm, sl) = Charges.At(steps, sh);
-            var (km, kl) = Charges.At(Charges.Of("railgun"), sh);
-            var (k0, kl0) = Charges.At(Charges.Of("railgun"), Vary(0.05f, 0.95f));
+            var snSheet = new ShipStats(ShipClass.HeavySniper);
+            float part = Vary(0.05f, 0.95f);
+            var (km, kl) = Charges.At(Charges.Of("railgun"), sh, id => snSheet[id]);
+            var (k0, kl0) = Charges.At(Charges.Of("railgun"), part, id => snSheet[id]);
             Check(Math.Abs(rm - 1) < 1e-9 && rl == 1 && Math.Abs(sm * 45 - 45) < 1e-9 && sl == 3
-                  && km == 1 && kl == Lines.Rail && k0 == 1 && kl0 == Lines.Rail
-                  && Math.Abs(new ShipStats(ShipClass.HeavySniper)["rail_damage"] * km - 150) < 1e-9,
-                  $"a charge held to {sh * 100:0}% of full: the ramp holds at 100% ({rm * 100:0.0}), steps give the full 45 down the full line ({sm * 45:0.00}, line {sl}), the railgun its whole 150 down the rail line ({km:0.##} x, line {kl})");
+                  && km == 1 && kl == Lines.Rail && Math.Abs(k0 - (0.40 + 0.60 * part)) < 1e-9 && kl0 == Lines.Rail
+                  && Math.Abs(snSheet["rail_damage"] * km - 120) < 1e-9,
+                  $"a charge held to {sh * 100:0}% of full: the ramp holds at 100% ({rm * 100:0.0}), steps give the full 45 down the full line ({sm * 45:0.00}, line {sl}), the railgun its whole 120 down the rail line ({km:0.##} x, line {kl}); let go at {part * 100:0}% it fires {k0 * 100:0.0}% (40% rising to 100%)");
         }
     }
 
@@ -4081,7 +4075,7 @@ public partial class _Test : Node
         string lines = parts.FirstOrDefault(p => p.StartsWith("Lines.All=", StringComparison.Ordinal)) ?? "";
         Check(charges.Contains("Id=railgun") && charges.Contains("ChargeBand{") && lines.Contains("AtTarget=False") && lines.Contains("Reach=rail_range"),
               $"the build's fingerprint reads the charge bands and the lines row by row ({(charges == "" ? "no Charges.All part" : charges)} / {(lines == "" ? "no Lines.All part" : lines)})");
-        var band = Charges.Of("railgun")[0];
+        var band = Charges.Of("railgun")[^1];                    // the full charge's band: its Mult is a number
         int build = FingerprintNow();
         foreach (double m in new double[] { Vary(0.2f, 0.6f), Vary(1.2f, 2f), Vary(3f, 9f) })
         {
@@ -5384,6 +5378,255 @@ public partial class _Test : Node
             Check(honestNoGive == Verdict.Missed && withGive == (edge + g3 >= open ? Verdict.Perfect : Verdict.Missed),
                   $"with no leeway (the host's own ship) the claim is the host's share: at {edge:0.000} a claim of 0.5 is {honestNoGive}; with the cap's give it may reach {edge + g3:0.000}: {withGive}");
         }
+    }
+
+    // ── SLICE 6c HELPERS (kits6c-J6) ──────────────────────────────────────────────────────────────
+    // THE RAILGUN THROUGH ITS KEY: the chamber seated plain (it may be anywhere in a reload), Space held
+    // `hold` seconds (a full charge and 0.1 s by default) and let go; returns once the chamber is spent.
+    async Task RailFire(PlayerShip sn, double hold = -1)
+    {
+        var key = Abilities.KeyFor(sn.Class, "railgun");
+        KeyUp(key); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        sn.Sl("railgun").Left = 0; sn.Sl("railgun").N = (int)Chamber.Seated; sn.ReloadView = default;
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        KeyDown(key);
+        await Wait(hold >= 0 ? hold : sn.Cadence("rail_charge") + 0.1);
+        KeyUp(key);
+        for (int i = 0; i < 30 && !ActiveReload.Reloading(sn.Sl("railgun")); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+    // THE SNIPER'S HOLD OF x0 IS ITS ANCHOR (the railgun's locked charge is gone; the row lands in kits6c-J8):
+    // dropped (on) waits for the row to run; weighed (off) presses it again and waits out its release.
+    async Task SniperAnchor(PlayerShip sn, bool on)
+    {
+        if (on) { sn.Sl("anchor").Left = 0; sn.Sl("anchor").Cool = 0; }
+        sn.UseAbility("anchor", 0);
+        for (int i = 0; i < 60 && (sn.Sl("anchor").Left > 0) != on; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        if (!on) sn.Sl("anchor").Cool = 0;
+    }
+
+    // ── SLICE 6c: THE SNIPER'S RAILGUN AND ITS ACTIVE RELOAD, through Space (sniper_active_reload.md §6) ──
+    // S1 the table against the ruling, once: reload 3.0 s, the spot 0.6 s from 1.2 to 1.8 s, x1.5, 120, a 0.8 s
+    //   charge, 40% at once; hull 240, no guns, Space is the railgun, 180 every 3.8 s = 47.4 on the sheet.
+    // Then three varied runs (VaryNear spot, VaryAngle heading, three gunships on the line 250-1000 u ahead),
+    // each timed on the host's own reload from the frame it shows, never on the key:
+    //   a fresh plain round let go after 0.4 s deals the ramp's 84 (40% + 60% x 0.5 of 120; S6), within two
+    //   frames of the hold;
+    //   A a timing stroke pressed at Vary(1.30, 1.70) s is PERFECT on the owner's view and the host's chamber
+    //     with one rail_perfect cue (S2, S8); held on to 3.4 s it fires nothing; the chamber is not seated at
+    //     2.95 s and is ENHANCED at 3.05 s (S5, S6); the next full charge deals 180 +- 0.5 to each of the three
+    //     with one rail_enhanced report (S2, S6, S8);
+    //   B run 0 a press at 1.15 s then one at 1.5 s, run 1 one at 0.9 s then 1.5 s, run 2 one at 1.85 s:
+    //     MISSED and still MISSED, one rail_miss and no rail_perfect; seated plain, a full charge deals 120 (S3, S4, S8);
+    //   C a perfect at 1.5 s and another press at 1.6 s: still PERFECT, one rail_perfect; ENHANCED, 180 (S4);
+    //   D no press (runs 0, 1), or a press at 1.5 s from a wreck (run 2: the chamber stays EMPTY): seated
+    //     plain, a full charge deals 120 (S9).
+    // S7 (the Anchor's x2.5 on the whole bar) is LaneA6cAnchorChecks' (kits6c-J8).
+    async Task LaneA6cReloadChecks(Vector2 yonder)
+    {
+        var st = new ShipStats(ShipClass.HeavySniper);
+        var r = ActiveReload.Rail;
+        var (open, close) = ActiveReload.Spot(st, r);
+        Check(st["rail_reload"] == 3.0 && Math.Abs(open * 3.0 - 1.2) < 1e-9 && Math.Abs(close * 3.0 - 1.8) < 1e-9 && Math.Abs((close - open) * 3.0 - 0.6) < 1e-9
+              && st["rail_perfect"] == 1.5 && st["rail_damage"] == 120 && Math.Abs(st["rail_charge"] - 0.8) < 1e-9 && st["rail_tap"] == 40
+              && st["hull"] == 240 && !st.Def.Has(Fit.Guns) && !st.All.Any(x => x.Id == "rail_cooldown" || x.Id == "main_damage")
+              && Abilities.TriggerOf(ShipClass.HeavySniper) == Ab.Railgun && Ab.Railgun.Default == global::Godot.Key.Space && Ab.Railgun.Reload == r
+              && Math.Abs(st.SustainedDps - 120 * 1.5 / 3.8) < 1e-6,
+              $"the Sniper's railgun rows: reload {st["rail_reload"]:0.0} s, the spot {(close - open) * 3.0:0.00} s from {open * 3.0:0.00} to {close * 3.0:0.00} s (0.6 of 3.0), x{st["rail_perfect"]:0.0}, {st["rail_damage"]:0} a line, a {st["rail_charge"]:0.0} s charge, {st["rail_tap"]:0}% at once; hull {st["hull"]:0} (240), no guns, Space; {st.SustainedDps:0.0} DPS (47.4)");
+        await SetClass(ShipClass.HeavySniper);
+        var sn = Me; var key = Abilities.KeyFor(ShipClass.HeavySniper, "railgun");
+        double full = sn.Cadence("rail_charge") + 0.1;
+        Chamber Ch() => (Chamber)sn.Sl("railgun").N;
+        bool Loading() => ActiveReload.Reloading(sn.Sl("railgun"));
+        bool Seat() => ActiveReload.Seated(sn.Sl("railgun"));
+        double El() => sn.Sl("railgun").Own - sn.Sl("railgun").Left;            // seconds into this reload, the host's own
+        int Heard(string k) => Sfx.Played.GetValueOrDefault(k);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            var spots = new[] { Vary(250f, 450f), Vary(520f, 720f), Vary(800f, 1000f) }
+                .Select(d => at + nose * d + nose.Orthogonal() * Vary(-4f, 4f)).ToArray();
+            var foes = spots.Select(p => { var f = H.SpawnRaider(p, Enemies.Gunship); f.Hp = 1e9; return f; }).ToArray();
+            void Pose() { sn.Position = at; sn.Velocity = Vector2.Zero; sn.Rotation = rot; for (int k = 0; k < 3; k++) foes[k].Position = spots[k]; }
+            async Task Until(Func<bool> done, int cap = 400) { for (int i = 0; i < cap && !done(); i++) { Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); } }
+            async Task Hold(double secs) { double t0 = sn.Clock; await Until(() => sn.Clock - t0 >= secs); }
+            // a charge stroke on the seated round, Space held `secs` and let go: what each foe lost, once the reload shows
+            async Task<double[]> Shoot(double secs)
+            {
+                KeyUp(key); Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                var hp0 = foes.Select(f => f.Hp).ToArray();
+                KeyDown(key); await Hold(secs); KeyUp(key);
+                await Until(Loading, 30); Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                return foes.Select((f, k) => hp0[k] - f.Hp).ToArray();
+            }
+            // a timing stroke `t` s into the reload, held 0.05 s
+            async Task PressAt(double t) { await Until(() => El() >= t || !Loading()); KeyDown(key); await Hold(0.05); KeyUp(key); Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            bool Each(double[] lost, double want, double tol) => lost.All(x => Math.Abs(x - want) <= tol);
+            string L(double[] lost) => string.Join(" / ", lost.Select(x => x.ToString("0.0")));
+
+            // a fresh plain round, let go after 0.4 s (24 frames): the ramp's 84 (two frames either way: +- 3.75)
+            sn.Sl("railgun").Left = 0; sn.Sl("railgun").N = (int)Chamber.Seated; sn.ReloadView = default;
+            Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var tap = await Shoot(0.4);
+            Check(Each(tap, 84, 3.75) && Loading() && Ch() == Chamber.Empty && Math.Abs(sn.Sl("railgun").Own - 3.0) < 1e-6,
+                  $"a plain round let go after 0.4 s of its 0.8 s charge, heading {Mathf.RadToDeg(rot):0} deg: {L(tap)} to the three on the line (84: 40% + 60% x 0.5 of 120); the chamber EMPTY, a {sn.Sl("railgun").Own:0.00} s reload (3.0)");
+
+            // A: the perfect press, held through the seat
+            double p = Vary(1.30f, 1.70f); int tick0 = Heard("rail_perfect");
+            await Until(() => El() >= p || !Loading());
+            var hpA = foes.Select(f => f.Hp).ToArray();
+            KeyDown(key);
+            await Until(() => Ch() != Chamber.Empty, 10);
+            var verdict = Ch(); var said = sn.ReloadView.Said; double pressed = El();
+            int ticks = Heard("rail_perfect") - tick0;
+            double shotAt = sn.Clock - El();
+            await Until(() => sn.Clock - shotAt >= 2.95); bool early = Seat();
+            await Until(() => sn.Clock - shotAt >= 3.05); bool seated = Seat() && Ch() == Chamber.Enhanced;
+            await Until(() => sn.Clock - shotAt >= 3.4); KeyUp(key);
+            Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var heldLost = foes.Select((f, k) => hpA[k] - f.Hp).ToArray();
+            Check(verdict == Chamber.Perfect && said == Verdict.Perfect && ticks == 1 && !early && seated && Ch() == Chamber.Enhanced && heldLost.All(x => x == 0),
+                  $"a timing stroke at {pressed:0.00} s of the 3.0 s reload (drawn 1.30-1.70): the host's chamber {verdict}, the owner's view {said}, {ticks} rail_perfect cue; seated at 2.95 s: {early} (no), ENHANCED at 3.05 s: {seated}; held to 3.4 s it fired nothing ({L(heldLost)}), the round still {Ch()}");
+            int rep0 = Heard("rail_enhanced");
+            var hot = await Shoot(full);
+            Check(Each(hot, 180, 0.5) && Heard("rail_enhanced") - rep0 == 1 && Ch() == Chamber.Empty,
+                  $"the next stroke, a full charge on the enhanced round: {L(hot)} to each on the line (180 = 120 x 1.5), one rail_enhanced report ({Heard("rail_enhanced") - rep0}), the chamber spent");
+
+            // B: outside the spot, and one press a reload
+            double miss = run == 0 ? 1.15 : run == 1 ? 0.9 : 1.85;
+            int click0 = Heard("rail_miss"), tickB = Heard("rail_perfect");
+            await PressAt(miss); var first = Ch();
+            if (run < 2) await PressAt(1.5);
+            var second = Ch();
+            await Until(Seat);
+            var seatB = Ch();
+            var plainB = await Shoot(full);
+            Check(first == Chamber.Missed && second == Chamber.Missed && Heard("rail_miss") - click0 == 1 && Heard("rail_perfect") == tickB
+                  && seatB == Chamber.Seated && Each(plainB, 120, 0.5),
+                  $"a press at {miss:0.00} s is {first}{(run < 2 ? $", and one at 1.5 s after it leaves it {second}" : "")}; {Heard("rail_miss") - click0} rail_miss, {Heard("rail_perfect") - tickB} rail_perfect; it seats {seatB} and deals {L(plainB)} (120)");
+
+            // C: a perfect, then another press: still one
+            int tickC = Heard("rail_perfect");
+            await PressAt(1.5); var c1 = Ch();
+            await PressAt(1.6); var c2 = Ch();
+            int ticksC = Heard("rail_perfect") - tickC;
+            await Until(Seat);
+            var seatC = Ch();
+            var hotC = await Shoot(full);
+            Check(c1 == Chamber.Perfect && c2 == Chamber.Perfect && ticksC == 1 && seatC == Chamber.Enhanced && Each(hotC, 180, 0.5),
+                  $"a perfect at 1.5 s ({c1}) and a second press at 1.6 s ({c2}): {ticksC} rail_perfect; it seats {seatC} and deals {L(hotC)} (180)");
+
+            // D: the round after an enhanced one, no press (or pressed from a wreck): plain
+            var wreckSaid = Chamber.Empty;
+            if (run == 2)
+            {
+                await Until(() => El() >= 1.0 || !Loading());
+                sn.Restore(0, false, 50);
+                await PressAt(1.5); wreckSaid = Ch();
+                typeof(PlayerShip).GetField("_stasis", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(sn, 0.0);
+                sn.UseAbility("reboard", 0); await Wait(0.1); sn.Hp = sn.MaxHp;
+            }
+            await Until(Seat);
+            var seatD = Ch();
+            var plainD = await Shoot(full);
+            Check(wreckSaid == Chamber.Empty && seatD == Chamber.Seated && Each(plainD, 120, 0.5) && sn.Alive,
+                  $"the round after the enhanced one{(run == 2 ? $", pressed at 1.5 s from a wreck (the chamber stayed {wreckSaid})" : ", no press")}: seats {seatD}, deals {L(plainD)} (120)");
+
+            foreach (var f in foes) f.TakeDamage(1e12);
+            KeyUp(key);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        sn.Position = yonder; sn.Velocity = Vector2.Zero;
+    }
+
+    // ── SLICE 6c, RUNG 5: A GUEST'S ACTIVE RELOAD (sniper_active_reload.md §6 G1-G3). The guest
+    // (LaneA6cReloadGuestChecks, right after its prism stance) flies a SNIPER at rest on a varied heading;
+    // the host (LaneA6cReloadHostWatch, beside the lunge's watch) holds dummy 1 a varied 300-500 u down its
+    // copy of the guest's nose and counts every blow. The guest fires five full charges: 1 plain; then G1
+    // an honest press at Vary(1.35, 1.60) s on its own clock is PERFECT on its view at once, and the host's
+    // report shows ENHANCED after the seat; G2 two lies of 0.5 sent straight to the host at 0.3 s and 1.5 s
+    // into a reload are MISSED (clamped to the host's clock, one press a reload), so it seats plain; G3 a
+    // claim of 7.0 at 0.3 s is MISSED, and on the next reload one of NaN at 1.5 s is judged on the host's
+    // clock, PERFECT. The host asserts the five blows: 120, 180, 120, 120, 180, and saw ENHANCED on its copy.
+    // G4 / G5 (a third pilot's claim on the guest's ship; what it sees and hears) need the host / guest /
+    // guest2 scenario: owed (ledger kits6c).
+    sealed class LaneA6cReloadSeen { public readonly List<double> Blows = new(); public bool Enhanced; public TargetDummy Dummy; public Vector2 Home; public float Off; public double Last; }
+    LateSampler LaneA6cReloadHostWatch(LaneA6cReloadSeen seen)
+    {
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.HeavySniper } g || seen.Blows.Count >= 5) return false;
+            if (seen.Dummy == null)
+            {
+                seen.Dummy = H.GetNodeOrNull<TargetDummy>("TargetDummy1");
+                if (seen.Dummy == null) return false;
+                seen.Home = seen.Dummy.Position; seen.Off = Vary(300f, 500f); seen.Last = seen.Dummy.Total;
+            }
+            seen.Dummy.Position = g.Position + Vector2.Up.Rotated(g.Rotation) * seen.Off;
+            if (seen.Dummy.Total > seen.Last + 1e-6) seen.Blows.Add(seen.Dummy.Total - seen.Last);
+            seen.Last = seen.Dummy.Total;
+            seen.Enhanced |= g.Sl("railgun").N == (int)Chamber.Enhanced;
+            return seen.Blows.Count >= 5;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6cReloadHostChecks(LateSampler watch, LaneA6cReloadSeen seen)
+    {
+        await RealTime(() => seen.Blows.Count >= 5, Wan ? 60 : 40);
+        watch.QueueFree();
+        if (seen.Dummy != null) seen.Dummy.Position = seen.Home;
+        var want = new[] { 120.0, 180, 120, 120, 180 };
+        bool ok = seen.Blows.Count >= 5 && want.Select((w, k) => Math.Abs(seen.Blows[k] - w) < 0.5).All(x => x);
+        Check(ok && seen.Enhanced,
+              $"arena host: the guest's railgun, {seen.Off:0} u down its nose -- blows {string.Join(" / ", seen.Blows.Select(b => b.ToString("0.0")))} (want 120 plain, 180 after its honest perfect press, 120 after two lies of 0.5, 120 after a claim of 7.0, 180 after a NaN claim at 1.5 s); ENHANCED read on this copy ({seen.Enhanced})");
+    }
+    async Task LaneA6cReloadGuestChecks()
+    {
+        await SetClass(ShipClass.HeavySniper);
+        var me = Me; me.AutopilotTo = null;
+        await RealTime(() => Math.Abs(me.MaxHp - 240) < 1e-6, Wan ? 20 : 10);           // the host's word for the hull
+        me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+        await Wait(Wan ? 1.5 : 0.8);
+        var key = Abilities.KeyFor(ShipClass.HeavySniper, "railgun");
+        bool Ready() => ActiveReload.Seated(me.Sl("railgun")) && !me.ReloadView.Running;
+        async Task Shot()
+        {
+            await RealTime(Ready, Wan ? 8 : 5);
+            me.Velocity = Vector2.Zero;
+            KeyDown(key); await Wait(me.Cadence("rail_charge") + (Wan ? 0.35 : 0.25)); KeyUp(key);
+            await RealTime(() => me.ReloadView.Running, 2);
+        }
+        async Task At(double t) => await RealTime(() => me.ReloadView.Since >= t || !me.ReloadView.Running, 4);
+        await Shot();                                                                     // 1: plain, 120
+        // G1: an honest press on its own clock
+        double p = Vary(1.35f, 1.60f);
+        await At(p);
+        KeyDown(key);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var said = me.ReloadView.Said; double since = me.ReloadView.Since;
+        KeyUp(key);
+        await RealTime(() => me.Sl("railgun").N == (int)Chamber.Enhanced, Wan ? 6 : 4);
+        var g1 = (Chamber)me.Sl("railgun").N;
+        Check(said == Verdict.Perfect && g1 == Chamber.Enhanced,
+              $"arena guest: its own Space {since:0.00} s into the reload (drawn 1.35-1.60) is {said} on its bar at once, and the host's report seats it {g1}");
+        await Shot();                                                                     // 2: enhanced, 180
+        // G2: two lies of 0.5, straight to the host
+        await At(0.3); me.AskReloadPress("railgun", 0.5f);
+        await At(1.5); me.AskReloadPress("railgun", 0.5f);
+        await RealTime(Ready, Wan ? 8 : 5);
+        var g2 = (Chamber)me.Sl("railgun").N;
+        await Shot();                                                                     // 3: plain, 120
+        // G3: a claim of 7.0 early, then NaN in the spot on the next reload
+        await At(0.3); me.AskReloadPress("railgun", 7.0f);
+        await RealTime(Ready, Wan ? 8 : 5);
+        var g3a = (Chamber)me.Sl("railgun").N;
+        await Shot();                                                                     // 4: plain, 120
+        await At(1.5); me.AskReloadPress("railgun", float.NaN);
+        await RealTime(() => me.Sl("railgun").N == (int)Chamber.Enhanced, Wan ? 6 : 4);
+        var g3b = (Chamber)me.Sl("railgun").N;
+        await Shot();                                                                     // 5: enhanced, 180
+        Check(g2 == Chamber.Seated && g3a == Chamber.Seated && g3b == Chamber.Enhanced,
+              $"arena guest: two claims of 0.5 at 0.3 s and 1.5 s seat it {g2} (plain: clamped to the host's clock, one press a reload); 7.0 at 0.3 s seats it {g3a}; NaN at 1.5 s, judged on the host's clock, {g3b}");
     }
 
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
@@ -6945,7 +7188,7 @@ public partial class _Test : Node
             // and what a SAVED loadout does with one that no longer fits: the hull's own, as ever
             var saved = Equipment.Sanitize(ddC, new[] { "bs_main_battery", "std_drive", "basic_deflector", "reinforced_frame", "dd_missile_rack", "", "", "", "", "", "" }, 14);
             Check(wrongHull.Count == 0 && carries.Count == 19 && anyHull.Count == 3
-                  && carries["freight_main_gun"].Count() == 3 && carries["light_main_gun"].Count() == 3 && carries["heavy_main_gun"].Count() == 2
+                  && carries["freight_main_gun"].Count() == 3 && carries["light_main_gun"].Count() == 3 && carries["heavy_main_gun"].Count() == 1
                   && anyHull.All(i => Classes.All.Where(c => c.Ready).All(c => Equipment.Fits(i, i.Slot, c.Id)))
                   && Equipment.Fits(Equipment.ById("freight_main_gun"), GearSlot.Weapon, ShipClass.FreightTender)
                   && !Equipment.Fits(Equipment.ById("freight_bubble"), GearSlot.Utility, ShipClass.FreightTender)
@@ -9969,8 +10212,7 @@ public partial class _Test : Node
                   // EVERY class comes out of the yard with its own two mounts, not the battleship's
                   && Classes.All.Where(c => c.Ready).All(c => Equipment.Default(c.Id).Take(5).All(id =>
                          Equipment.ById(id) is { } part && Equipment.Fits(part, part.Slot, c.Id)))
-                  && Equipment.Default(ShipClass.HeavySniper)[0] == "heavy_main_gun"
-                  && Equipment.Default(ShipClass.HeavySniper)[4] == "heavy_railgun"
+                  && Equipment.Default(ShipClass.HeavySniper)[0] == "heavy_railgun"
                   && Equipment.Default(ShipClass.LightWraith)[4] == "light_stealth_veil"
                   && Classes.All.Where(c => c.Ready).All(c => Equipment.Default(c.Id).Length == 11 && Equipment.Default(c.Id).Skip(5).All(x => x == "")),
                   "the defaults: common parts in five slots, every one of the twelve classes starts with mounts it can actually wear -- a carrier's Fighter Hangars, a sniper's Railgun Mount, a wraith's Stealth Veil -- and six empty chip slots");
@@ -11247,7 +11489,7 @@ public partial class _Test : Node
                     int[] two = new int[Progression.All.Length];
                     two[System.Array.FindIndex(Progression.All, u => u.Id == "damage")] = 2;   // two Weapons levels
                     // A SHARE, so two levels is 6% of whatever that weapon is on that hull -- the
-                    // railgun's 150, the hunters' 45, the blade's 26. The class still says WHICH
+                    // railgun's 120, the hunters' 45, the blade's 26. The class still says WHICH
                     // stats; what changed is that the figure compounds instead of being a step.
                     double Rise(ShipClass c, string stat)
                         => new ShipStats(c, Progression.Shares(two, c))[stat] - new ShipStats(c)[stat];
@@ -11257,8 +11499,8 @@ public partial class _Test : Node
                           && Math.Abs(Rise(ShipClass.HeavyWarrior, "blade_damage") - Six(ShipClass.HeavyWarrior, "blade_damage")) < 1e-9
                           && Math.Abs(Rise(ShipClass.FreightHauler, "deploy_damage") - Six(ShipClass.FreightHauler, "deploy_damage")) < 1e-9
                           && Math.Abs(Rise(ShipClass.LightEcho, "main_damage") - Six(ShipClass.LightEcho, "main_damage")) < 1e-9
-                          && Math.Abs(Rise(ShipClass.HeavySniper, "rail_damage") - 9) < 1e-9,
-                          $"two Weapons levels are 6% of each weapon the class declares: the sniper's railgun +{Rise(ShipClass.HeavySniper, "rail_damage"):0.0} of its 150, the warden's hunters +{Rise(ShipClass.HeavyWarden, "hunter_damage"):0.0}, the warrior's blade +{Rise(ShipClass.HeavyWarrior, "blade_damage"):0.00} of its 26, a dropped turret +{Rise(ShipClass.FreightHauler, "deploy_damage"):0.00}");
+                          && Math.Abs(Rise(ShipClass.HeavySniper, "rail_damage") - 7.2) < 1e-9,
+                          $"two Weapons levels are 6% of each weapon the class declares: the sniper's railgun +{Rise(ShipClass.HeavySniper, "rail_damage"):0.0} of its 120, the warden's hunters +{Rise(ShipClass.HeavyWarden, "hunter_damage"):0.0}, the warrior's blade +{Rise(ShipClass.HeavyWarrior, "blade_damage"):0.00} of its 26, a dropped turret +{Rise(ShipClass.FreightHauler, "deploy_damage"):0.00}");
                     // ...and change NOTHING a saved pilot already had on the three it could reach
                     Check(Math.Abs(Rise(ShipClass.Battleship, "main_damage") - Six(ShipClass.Battleship, "main_damage")) < 1e-9
                           && Rise(ShipClass.Battleship, "pd_damage") == 0
@@ -11279,10 +11521,10 @@ public partial class _Test : Node
                     // -- so the sniper read 7.50 DPS beside a railgun worth 37.50, and the two
                     // point-defence lines were drawn on the five classes that mount none.
                     var snL = new ShipStats(ShipClass.HeavySniper);
-                    Check(Math.Abs(snL.SustainedDps - 45.0) < 1e-6
-                          && Math.Abs(snL.DamageLines.First(l => l.Label.StartsWith("Railgun")).Dps - 37.5) < 1e-6
-                          && snL.DamageLines.Count() == 2 && !snL.DamageLines.Any(l => l.Label.Contains("Point defence")),
-                          $"the sniper's total counts its railgun: the gun 6/0.8 = 7.5 and the rail 150/(3+1) = 37.5 -- 45 DPS, not 7.50, and no point-defence line on a hull that mounts none ({snL.SustainedDps:0.00})");
+                    Check(Math.Abs(snL.SustainedDps - 120 * 1.5 / 3.8) < 1e-6
+                          && Math.Abs(snL.DamageLines.First(l => l.Label.StartsWith("Railgun")).Dps - 120 * 1.5 / 3.8) < 1e-6
+                          && snL.DamageLines.Count() == 1 && !snL.DamageLines.Any(l => l.Label.Contains("Point defence")),
+                          $"the sniper's total is its railgun: 180 (a perfect round, 120 x 1.5) every 3.8 s (the 3.0 s reload and the 0.8 s charge) = 47.4 DPS, and no point-defence line on a hull that mounts none ({snL.SustainedDps:0.00})");
                     Check(Math.Abs(new ShipStats(ShipClass.HeavyWarden).SustainedDps - (12 / 0.6 + 6 * 45 / 14.0 + 5 / 0.5)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.FreightHauler).SustainedDps - 50.0) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.HeavyWarrior).SustainedDps - 26 / 0.40) < 1e-6
@@ -11478,33 +11720,40 @@ public partial class _Test : Node
                   $"the shockwave throws what is within 1000 u a thousand units clear, and nothing beyond it ({nd1 - nd0:0} u / {fd1 - fd0:0} u)");
             near.TakeDamage(99999); far.TakeDamage(99999); await Wait(0.2);
 
-            // ── SNIPER: 3 s locked in place, then 150 down a 2500 u line ──
+            // ── SNIPER: a 0.8 s charge on Space, the hull free, then 120 down a 2500 u line ──
             await SetClass(ShipClass.HeavySniper);
             var sn = Me; var dTgt = H.GetNode<TargetDummy>("TargetDummy1");
-            // One Weapons point on this hull is +1 on the gun AND +7.5 on the railgun. The L window
-            // printed a single "next +1" for the pair, because it read the row's Per and not what
-            // the purchase actually does (Progression.StatsFor).
+            // A Weapons point on this hull is 3% of its railgun. The L window printed a single
+            // "next +1", because it read the row's Per and not what the purchase actually does
+            // (Progression.StatsFor).
             Key(global::Godot.Key.L); await Wait(0.15);
             var spw = Nodes<PilotWindow>().FirstOrDefault();
             var sRow = spw == null ? null : Nodes<Label>(Nodes<HBoxContainer>(spw).First(r => r.Name == "Pilot_damage")).First();
             // A SHARE READS AS A PERCENTAGE: +3% of each weapon the class names, where the window
             // used to advertise a step of +1 the purchase never actually gave.
-            Check(sRow != null && sRow.Text.Contains("Damage per shot") && sRow.Text.Contains("+3% a level")
+            Check(sRow != null && !sRow.Text.Contains("Damage per shot") && sRow.Text.Contains("+3% a level")
                   && sRow.Text.Contains("Railgun · Damage") && !sRow.Text.Contains("+0.03"),
-                  $"the sniper's Weapons row prints what a point really buys -- 3% of its gun AND 3% of its railgun, as a percentage rather than three hundredths of a damage ({sRow?.Text.Replace('\n', '|')})");
+                  $"the sniper's Weapons row prints what a point really buys -- 3% of its railgun (it has no gun now), as a percentage rather than three hundredths of a damage ({sRow?.Text.Replace('\n', '|')})");
             Key(global::Godot.Key.L); await Wait(0.1);
             float railAt = Vary(900f, 2200f);                     // anywhere inside its 2500 u reach
             sn.Position = dTgt.Position + new Vector2(0, railAt); sn.Velocity = Vector2.Zero; sn.Rotation = 0f; await Wait(0.3);
             double dmg0 = dTgt.Total;
-            sn.UseAbility("railgun", 0); await Wait(0.2);
+            var railKey = Abilities.KeyFor(ShipClass.HeavySniper, "railgun");
+            sn.Sl("railgun").Left = 0; sn.Sl("railgun").N = (int)Chamber.Seated; sn.ReloadView = default;
+            KeyDown(railKey); await Wait(0.2);
             var wasAt = sn.Position;
-            KeyDown(global::Godot.Key.W); KeyDown(global::Godot.Key.A); await Wait(1.0); KeyUp(global::Godot.Key.W); KeyUp(global::Godot.Key.A);
-            Check(sn.Held == 0f && sn.Position.DistanceTo(wasAt) < 1f,
-                  $"the railgun charges with the hull held at x0 (its row's Hold): W and A move it nowhere ({sn.Position.DistanceTo(wasAt):0.00} u)");
-            for (int i = 0; i < 60 * 4 && dTgt.Total == dmg0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Math.Abs(dTgt.Total - dmg0 - sn.Stats["rail_damage"]) < 0.01 && sn.Held == 1f
-                  && Math.Abs(new ShipStats(ShipClass.HeavySniper)["rail_damage"] - 150) < 1e-9,
-                  $"then its railgun's whole {sn.Stats["rail_damage"]:0.0} lands {railAt:0} u away, on the line, and the hull is free again ({dTgt.Total - dmg0:0.0})");
+            KeyDown(global::Godot.Key.W); await Wait(0.5); KeyUp(global::Godot.Key.W);
+            float charging = sn.Position.DistanceTo(wasAt);
+            bool free = sn.Held == 1f && dTgt.Total == dmg0;
+            sn.Position = dTgt.Position + new Vector2(0, railAt); sn.Velocity = Vector2.Zero; sn.Rotation = 0f;
+            await Wait(0.3);                                      // 1.0 s held: past the 0.8 s charge
+            KeyUp(railKey);
+            for (int i = 0; i < 60 && dTgt.Total == dmg0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(free && charging > 5f,
+                  $"the railgun charges with the hull free (no lock: the Anchor is the Sniper's hold): W moves it {charging:0} u while Space is held, and nothing fires until it is let go");
+            Check(Math.Abs(dTgt.Total - dmg0 - sn.Stats["rail_damage"]) < 0.01
+                  && Math.Abs(new ShipStats(ShipClass.HeavySniper)["rail_damage"] - 120) < 1e-9 && ActiveReload.Reloading(sn.Sl("railgun")),
+                  $"let go, its railgun's whole {sn.Stats["rail_damage"]:0.0} lands {railAt:0} u away, on the line, and the chamber reloads ({dTgt.Total - dmg0:0.0})");
 
             await LaneAHoldChecks(sn);
             await LaneADisabledChecks(yonder);
@@ -11551,6 +11800,7 @@ public partial class _Test : Node
             await LaneA6cWhirlChecks(yonder);
             await LaneA6cPrismStanceChecks(yonder);
             LaneA6cReloadJudgeChecks();
+            await LaneA6cReloadChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -11733,9 +11983,13 @@ public partial class _Test : Node
                     void XrHold() { xrShip.Position = xrAt; xrShip.Velocity = Vector2.Zero; xrShip.Rotation = xrHead; }
                     XrHold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); XrHold();
                     var xrCm = XCruise(xrAt + Vector2.Up.Rotated(xrHead) * Vary(600f, 2200f));
-                    xrShip.UseAbility("railgun", 0);
-                    double xrDrop = await XFirstBlow(xrCm, 6, XrHold);
-                    Check(Math.Abs(xrDrop - xrShip.Stats["rail_damage"]) < 1e-6 && !xrCm.Alive,
+                    xrShip.Sl("railgun").Left = 0; xrShip.Sl("railgun").N = (int)Chamber.Seated;
+                    var xrKey = Abilities.KeyFor(ShipClass.HeavySniper, "railgun");
+                    KeyDown(xrKey);
+                    double xrHeld = await XFirstBlow(xrCm, xrShip.Cadence("rail_charge") + 0.1, XrHold);   // nothing lands while it charges
+                    KeyUp(xrKey);
+                    double xrDrop = await XFirstBlow(xrCm, 2, XrHold);
+                    Check(xrHeld == 0 && Math.Abs(xrDrop - xrShip.Stats["rail_damage"]) < 1e-6 && !xrCm.Alive,
                           $"the railgun brings a cruise missile down: {xrDrop:0.0} off its 30 hull, the rail's own {xrShip.Stats["rail_damage"]:0}, {xrCm.Position.DistanceTo(xrAt):0} u down its line");
                     xrCm.Intercept();
                 }
@@ -11933,7 +12187,8 @@ public partial class _Test : Node
                     ["bubble"]    = sp => sp.BubbleUp && Math.Abs(sp.BubbleLeft - sp.Stats["bubble_pool"]) < 0.5,
                     ["overdrive"] = sp => Math.Abs(sp.FireRate - (float)sp.Stats["overdrive_mult"]) < 1e-3f,
                     ["shockwave"] = sp => sp.Sl("shockwave").Cool > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Wave),
-                    ["railgun"]   = sp => sp.Held == 0f && sp.Sl("railgun").Left > sp.Stats["rail_charge"] - 0.1,
+                    ["railgun"]   = sp => sp.Trigger && ActiveReload.Seated(sp.Sl("railgun")) && sp.ReloadView.Charge > 0
+                                          && Abilities.Find(sp.Class, "railgun").State(sp, null).Line.StartsWith("CHARGE"),
                     ["blade"]     = sp => sp.Trigger && Abilities.Find(sp.Class, "blade").State(sp, null).Lit,
                     ["lunge"]     = sp => sp.Sl("lunge").Left > sp.Stats["lunge_time"] - 0.1 && sp.Statuses.Has(Status.Hardened)
                                           && sp.Sl("lunge").Cool > sp.Stats["lunge_cooldown"] - 0.1,
@@ -12206,8 +12461,8 @@ public partial class _Test : Node
                         case "rail_range":
                         {
                             // The line goes off the NOSE, so the hull is turned to whatever
-                            // heading this run drew and the two marks stand on it. The charge is
-                            // cut to one frame: what is measured here is the shot, not the wait.
+                            // heading this run drew and the two marks stand on it. A full charge is
+                            // let go on a seated round (its row's Loose): the shot, not the wait.
                             pilot.Rotation = bearing;
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             var railWay = Vector2.Up.Rotated(pilot.Rotation);
@@ -12215,14 +12470,13 @@ public partial class _Test : Node
                             var mkIn = await Marker(railFrom + railWay * (float)(reach * Vary(0.55f, 0.90f)));
                             var mkOut = await Marker(railFrom + railWay * (float)(reach * Vary(1.10f, 1.30f)));
                             double inWas = mkIn.Hp, outWas = mkOut.Hp;
-                            pilot.Sl("railgun").Left = 0; pilot.Sl("railgun").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "railgun", 0 });
-                            pilot.Sl("railgun").Left = 0.001;
+                            pilot.Sl("railgun").Left = 0; pilot.Sl("railgun").N = (int)Chamber.Seated;
+                            Abilities.Find(pilot.Class, "railgun").Loose(pilot, 1.0);
                             await Wait(0.12);
                             proved = Math.Abs(inWas - mkIn.Hp - pilot.Stats["rail_damage"]) < 0.01 && mkOut.Hp == outWas;
                             told = $"the slug takes {inWas - mkIn.Hp:0} off what stands {railFrom.DistanceTo(mkIn.Position):0} u down the line and {outWas - mkOut.Hp:0} off what stands {railFrom.DistanceTo(mkOut.Position):0} u down it";
                             Sink(mkIn); Sink(mkOut);
-                            pilot.Sl("railgun").Left = 0; pilot.Sl("railgun").Cool = 0;
+                            pilot.Sl("railgun").Left = 0; pilot.Sl("railgun").N = (int)Chamber.Seated;
                             break;
                         }
                         case "hunter_range":
@@ -14115,7 +14369,7 @@ public partial class _Test : Node
                 ["deployed"] = (new(0.7f, 0.95f, 1f), "laser_light", 1.26f),       ["hauler"] = (new(0.7f, 0.95f, 1f), "laser_light", 1.41f),
                 ["light_raider"] = (new(1f, 0.3f, 0.25f), "laser_light", 0.84f),   ["heavy_raider"] = (new(1f, 0.35f, 0.25f), "laser_light", 0.71f),
                 ["fighter"] = (new(0.7f, 0.95f, 1f), "laser_fighter", 1.00f),      ["bolt"] = (new(1f, 0.5f, 0.35f), "laser_boss", 0.90f),
-                ["rail"] = (new(0.45f, 0.70f, 1f), "laser_boss", 0.71f),
+                ["rail"] = (new(0.45f, 0.70f, 1f), "laser_boss", 0.71f),      ["rail_enhanced"] = (new(0.92f, 0.96f, 1f), "laser_boss", 0.63f),
             };
             var ids = Beam.All.Select(b => b.Id).OrderBy(x => x).ToList();
             var beamMove = Lancer.Moves.First(m => m.Id == "beam");
@@ -15153,9 +15407,12 @@ public partial class _Test : Node
             var lungeWatch = LaneA6cLungeHostWatch(lungeSeen);             // slice 6c: the guest lunges inside lane B's window
             var prismSeen = new LaneA6cPrismSeen();
             var prismWatch = LaneA6cPrismHostWatch(prismSeen);             // slice 6c: ...and then takes a prism stance
+            var reloadSeen = new LaneA6cReloadSeen();
+            var reloadWatch = LaneA6cReloadHostWatch(reloadSeen);           // slice 6c: ...and then fires a railgun, timing its reloads
             await LaneBHostDrives();                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
             await LaneA6cLungeHostChecks(lungeWatch, lungeSeen);
             await LaneA6cPrismHostChecks(prismWatch, prismSeen);
+            await LaneA6cReloadHostChecks(reloadWatch, reloadSeen);
             // ── TWO OF THE NINE, IN A SESSION ─────────────────────────────────────
             // Everything the nine classes put on the wire had only ever flown alone: the status
             // bits, the slot array a class names itself, a turret dropped into the world, an
@@ -15254,9 +15511,8 @@ public partial class _Test : Node
                 railShip.Position = railAt; railShip.Velocity = Vector2.Zero;
                 railShip.Rotation = (railAt - railEar.Position).Angle() + Mathf.Pi / 2f;      // its nose (Up) away from the guest
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                railShip.UseAbility("railgun", 0);
-                await RealTime(() => railShip.Sl("railgun").Cool > 0, 6);
-                Check(railShip.Sl("railgun").Cool > 0 && railShip.Position.DistanceTo(railEar.Position) < 800f,
+                await RailFire(railShip);
+                Check(ActiveReload.Reloading(railShip.Sl("railgun")) && railShip.Position.DistanceTo(railEar.Position) < 800f,
                       $"arena host: a sniper's railgun fired {railShip.Position.DistanceTo(railEar.Position):0} u from the guest, for it to hear");
                 await Wait(0.3);
             }
@@ -15451,6 +15707,7 @@ public partial class _Test : Node
             await LaneBGuestDrives();                                       // lane B: the drives across peers (its host half: LaneBHostDrives)
             await LaneA6cLungeGuestChecks();                                // slice 6c: a guest's lunge (its host half: LaneA6cLungeHostChecks)
             await LaneA6cPrismGuestChecks();                                // slice 6c: a guest's prism stance (its host half: LaneA6cPrismHostChecks)
+            await LaneA6cReloadGuestChecks();                               // slice 6c: a guest's active reload (its host half: LaneA6cReloadHostChecks)
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.

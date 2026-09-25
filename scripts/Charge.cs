@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,6 +16,8 @@ using System.Linq;
 // A BAND (ChargeBand) MUST FILL IN:
 //   At     the share of the full charge at which this band begins (0 = at once, 1 = full)
 //   Mult   what the weapon's damage is multiplied by in this band
+//   Pct    (instead of Mult) the stat id on the firer's sheet that says it, in percent, so gear and
+//          lifts move it like any row (the railgun's tap, rail_tap)
 //   Line   the Lines row it fires down in this band (a tap may stop at the first body, a full
 //          charge go through everything)
 //   Ramp   true: the multiplier rises in a straight line from the band below's to this one's as
@@ -26,6 +29,7 @@ using System.Linq;
 public sealed class ChargeBand
 {
     public double At, Mult = 1;
+    public string Pct;
     public int Line;
     public bool Ramp;
 }
@@ -40,19 +44,22 @@ public static class Charges
 {
     public static readonly ChargeTable[] All =
     {
-        // the sniper's railgun: its charge is locked and always completes, so it has one band --
-        // the whole of rail_damage down the rail line, through everything (the kit's 150)
-        new() { Id = "railgun", Bands = new[] { new ChargeBand { At = 0, Mult = 1, Line = Lines.Rail } } },
+        // the sniper's railgun (sniper_active_reload.md 1.4): let go at once it fires rail_tap (40%) of
+        // rail_damage, rising in a straight line to the whole at full, down the rail line either way
+        new() { Id = "railgun", Bands = new[] { new ChargeBand { At = 0, Pct = "rail_tap", Line = Lines.Rail },
+                                                new ChargeBand { At = 1, Mult = 1, Line = Lines.Rail, Ramp = true } } },
     };
 
     // A WEAPON'S BANDS by its ability id; null for a weapon with no table.
     public static ChargeBand[] Of(string id) => All.FirstOrDefault(t => t.Id == id)?.Bands;
 
     // WHAT A CHARGE OF `share` (0 = none, 1 = full, more = held past full) FIRES AS: the multiplier
-    // on the weapon's damage and the line it goes down. Pure, so a table is provable apart from
+    // on the weapon's damage and the line it goes down. `stat` reads the firer's sheet for a band
+    // that names a Pct (null: such a band fires its Mult). Pure, so a table is provable apart from
     // any weapon that uses it.
-    public static (double mult, int line) At(ChargeBand[] bands, double share)
+    public static (double mult, int line) At(ChargeBand[] bands, double share, Func<string, double> stat = null)
     {
+        double M(ChargeBand b) => b.Pct != null && stat != null ? stat(b.Pct) / 100 : b.Mult;
         int i = 0;
         while (i + 1 < bands.Length && bands[i + 1].At <= share) i++;
         var b = bands[i];
@@ -60,8 +67,8 @@ public static class Charges
         {
             var up = bands[i + 1];
             double t = (share - b.At) / (up.At - b.At);
-            return (b.Mult + (up.Mult - b.Mult) * t, b.Line);
+            return (M(b) + (M(up) - M(b)) * t, b.Line);
         }
-        return (b.Mult, b.Line);
+        return (M(b), b.Line);
     }
 }

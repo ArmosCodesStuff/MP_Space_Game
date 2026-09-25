@@ -814,17 +814,19 @@ public partial class _Shots : Node
             }
             // THE RAIL'S FLASH: the 2 px line every peer draws for a railgun's report (Beam.Rail), inside
             // the blue bar -- a sniper 520 u under dummy 1 firing up through it, snapped the frame after
-            // the rail goes (its cooldown starts as it fires), inside the flash's 0.1 s. The hub sets the
-            // camera's zoom from its own ZoomLevel every frame: set that, not the camera's.
+            // the rail goes (a full charge let go on a seated round, its row's Loose), inside the flash's
+            // 0.1 s. The hub sets the camera's zoom from its own ZoomLevel every frame: set that, not the camera's.
             await Class(ShipClass.HeavySniper);
             {
                 var rzp = typeof(Hub).GetProperty("ZoomLevel"); float rz0 = (float)rzp.GetValue(hub);
                 var rs = Me(); rs.Visible = true;
                 void RailHold() { rs.Position = d1.Position + new Vector2(0, 520); rs.Velocity = Vector2.Zero; rs.Rotation = 0f; }
                 RailHold(); rzp.SetValue(hub, 0.7f); await W(1.2);
-                RailHold(); rs.UseAbility("railgun", 0);
-                for (int i = 0; i < 60 * 5 && rs.Sl("railgun").Cool <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                RailHold(); rs.Sl("railgun").Left = 0; rs.Sl("railgun").N = (int)Chamber.Seated;
+                Abilities.Find(ShipClass.HeavySniper, "railgun").Loose(rs, 1.0);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 await Snap("73b_sniper_rail_flash");
+                await LaneA6cRailFrames(rs, RailHold);
                 rzp.SetValue(hub, rz0); await W(0.4);
             }
             // a freighter with its three turrets out, and the bubble up over them
@@ -1035,6 +1037,18 @@ public partial class _Shots : Node
         await W(1.6);
         Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
         cam.Zoom = z0;
+    }
+
+    // SLICE 6c: the Sniper's enhanced round (sniper_active_reload.md §3.6) -- the white glint at the muzzle
+    // while it is seated, then its shot: the rail's bar in white, 1.5x as wide. The same sniper and zoom as 73b.
+    async Task LaneA6cRailFrames(PlayerShip rs, System.Action hold)
+    {
+        await W(0.5);
+        hold(); rs.Sl("railgun").Left = 0; rs.Sl("railgun").N = (int)Chamber.Enhanced;
+        await W(0.3); await Snap("73d_sniper_enhanced_glint");
+        hold(); Abilities.Find(ShipClass.HeavySniper, "railgun").Loose(rs, 1.0);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await Snap("73e_sniper_enhanced_rail");
     }
 
     // SLICE 6c: the Warrior's prism stance -- the wedge on its guard (SQUARE bright, SLANT faint), then a

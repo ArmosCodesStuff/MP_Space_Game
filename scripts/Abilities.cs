@@ -337,18 +337,17 @@ public static class Ab
         Show = (s, _) => new SlotState { Line = s.Stilled ? "HELD" : "SWING", Lit = s.Trigger },
     };
 
+    // THE RAILGUN (the Sniper's primary, sniper_active_reload.md): one round in the chamber (ActiveReload.Rail).
+    // Seated, Space held charges it and its release fires (Loose, handed the charge share); after
+    // every shot it reloads by itself, and Space inside the sweet spot enhances the round loading.
     public static readonly AbilityDef Railgun = new()
     {
-        Id = "railgun", Name = "Railgun", Short = "RAIL", Default = Key.F,
-        Blurb = "A charge you cannot turn or thrust through, then a straight blue line through everything on it.",
-        Press = (s, _) => s.ChargeRail(),
-        Hold = 0,                                           // the charge: rooted, heading and all
-        Expire = s => s.FireRail(),
-        Refuse = (s, _) => s.Sl("railgun").Left > 0 ? "CHARGING" : s.Sl("railgun").Cool > 0 ? "COOLING" : null,
-        Show = (s, _) => s.Sl("railgun").Left > 0
-            ? new SlotState { Line = $"CHARGE {s.Sl("railgun").Left:0.0}s", Lit = true,
-                              Busy = (float)(s.Sl("railgun").Left / s.Stats["rail_charge"]) }
-            : Timed(s, "railgun", "rail_cooldown", "READY"),
+        Weapon = true, Id = "railgun", Name = "Railgun", Short = "RAIL", Kind = AbilityKind.Hold, Default = Key.Space,
+        Blurb = "Hold to charge, let go to fire: a straight blue line through everything on it. It reloads in 3 s after every shot; Space in the white box (0.6 s of the 3 s) makes the next round hit x1.5.",
+        Reload = ActiveReload.Rail,
+        Elapsed = s => ActiveReload.Seat(s, ActiveReload.Rail),
+        Loose = (s, share) => s.FireRail(share),
+        Show = (s, _) => ActiveReload.Slot(s, ActiveReload.Rail),
     };
 
     // THE LUNGE (the Warrior's E): 420 u along the nose in 0.3 s, 40 to each body on the way, half
