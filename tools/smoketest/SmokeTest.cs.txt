@@ -7176,8 +7176,10 @@ public partial class _Test : Node
     // Three varied runs (VaryNear spot, VaryAngle heading; a held webifier 250-450 u off and another 850-1100 u off at
     // other VaryAngle bearings): Q -- three patrol craft leave 0.83 +- 0.05 s apart; the near one is taken by the patrol
     // (a craft's Target, its hull falling), the far one never; the slot up 20.0 s and cooling 50.0 (20 + 30) at the press;
-    // Q again refused RUNNING. Run 0 is held to the end: 20.4 s on no patrol craft is out, the cooldown reads 29.4-30.0
-    // and Q is refused COOLING. The bar reads SUPER while it runs.
+    // Q again refused RUNNING. Run 0 is held to the end: at 20.4 s the cooldown reads 29.4-30.0 and Q is refused COOLING,
+    // and the patrol flies home and docks (kits_v3 §3.1 "At 20 s they fly home and dock"): all 3 still out at 19.7 s, every
+    // one docked by 26 s. Between runs the patrol is sent home and waited in, so a run counts only its own craft. The bar reads
+    // SUPER while it runs.
     async Task LaneA6aSuperChecks(Vector2 yonder)
     {
         var cv = new ShipStats(ShipClass.Carrier);
@@ -7224,15 +7226,20 @@ public partial class _Test : Node
                       + $"up {left:0.0} s (20), cooling {cool:0.0} (50 = 20 + 30); Q again {again} (RUNNING); the bar '{line}'");
                 if (run == 0)
                 {
+                    while (s.Clock < tp + 19.7) { Hold(); await Frame(); }
+                    bool leftLate = Ps().Count == 3;
                     while (s.Clock < tp + 20.4) { Hold(); await Frame(); }
                     Key(q); await Frame();
-                    string cooling = s.FailNote("super"); double coolEnd = s.Sl("super").Cool; int outEnd = Ps().Count(w => !w.Inside);
-                    Check(outEnd == 0 && coolEnd >= 29.4 && coolEnd <= 30.0 && cooling == "COOLING" && s.Sl("super").Left <= 0,
-                          $"Supercarrier at 20.4 s: {outEnd} patrol craft out (0), cooling {coolEnd:0.0} s (30 from the end), Q {cooling} (COOLING)");
+                    string cooling = s.FailNote("super"); double coolEnd = s.Sl("super").Cool;
+                    while (Ps().Count > 0 && s.Clock < tp + 30.0) { Hold(); await Frame(); }
+                    double docked = s.Clock - tp;
+                    Check(leftLate && Ps().Count == 0 && docked <= 26.0 && coolEnd >= 29.4 && coolEnd <= 30.0 && cooling == "COOLING" && s.Sl("super").Left <= 0,
+                          $"Supercarrier at 20.4 s: cooling {coolEnd:0.0} s (30 from the end), Q {cooling} (COOLING); the patrol flies home and docks: 3 still out at 19.7 s ({leftLate}), the last docked at {docked:0.0} s (by 26)");
                 }
                 near.TakeDamage(1e12); far.TakeDamage(1e12);
                 foreach (var w in Ps()) w.SendOut(null, s.Clock);
                 s.Sl("super").Left = 0; s.Sl("super").Cool = 0;
+                for (double home = s.Clock; Ps().Count > 0 && s.Clock < home + 10.0;) { Hold(); await Frame(); }
                 await Wait(0.5);
             }
         }

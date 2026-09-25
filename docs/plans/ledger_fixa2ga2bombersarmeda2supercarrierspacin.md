@@ -20,3 +20,10 @@ Reproduced all four at solo@11400714819323392986 (tag ..._a2, FAIL 186): lines 4
 Kind check, not code: the check refitted through `SetClass` (a class change: the wing rebuilt fresh, armed). It now
 runs the in-service refit, `PlayerShip.Restat`, as a part or purchase does; asserts the same literal "still 2 ready
 of 5". Proved solo@11400714819323392986 (tag ..._d): PASS (2 -> 2). Checks: the carrier wing block's rearm check.
+
+## POST a2-supercarrier-spacing
+
+Kind check: kits_v3 §3.1 "At 20 s they fly home and dock", as the code does. `LaneA6aSuperChecks` now waits the
+patrol home between runs (so a run counts only its own craft) and asserts at the end: 3 still out at 19.7 s, all
+docked by 26 s, cooling 29.4-30, Q COOLING. solo@11400714819323392986 (tag ..._d): runs 0-2 0.03/0.85/1.68 PASS;
+the last docked at 22.7 s. Checks: LaneA6aSuperChecks (runs 0-2, the 20.4 s end).
