@@ -1283,7 +1283,10 @@ public partial class _Shots : Node
         ds.Demo = demo; ds.Velocity = Vector2.Zero;
         await W(5.0);
         Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
-        cam.Zoom = z0;
+        // the sprint carries the dart far enough that the class swap can free THIS camera and hand the
+        // viewport a fresh one (unlike the shorter holds above): fetch it again rather than zoom a stale ref.
+        cam = GetViewport().GetCamera2D();
+        if (GodotObject.IsInstanceValid(cam)) cam.Zoom = z0;
     }
 
     // SLICE 6d: the Echo firing while it slides sideways, each round's pale echo leaving where its round left 0.6 s
