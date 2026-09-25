@@ -370,3 +370,28 @@ the Warden's rack 6 -> 7 hunters and no flare row; E under no part / Swarm Rack 
 re-announced Swarm Rack T1 -> the host's salvo drawn on the guest has 7, evenly); REWRITTEN ItemsTableChecks (the
 sniper wears 11; Swarm Rack fits the sniper). ItemsAnchorLiftChecks' no-part run now wears the kit Utility.
 Next: items-J3 (the record, the final POST).
+
+## items-J3 PRE -- tier opus
+Intent: the record -- CHANGES.md Handoff (the reconcile replaces the EXPECTED RED line) + Unreleased (a reconcile
+paragraph; Known broken's stale red deleted), DESIGN.md role law (a member may be ~id; the unpriced four); the final
+POST. HEAD cc016f363226eaca38daccb722bc9dfc4b3a1479. Hashes:
+  docs/CHANGES.md 7176662642449a91b1fb7fd7d44fdb6e7ec5af3d
+  docs/DESIGN.md f5e7d04eccbc3274dcf769ebbeb2c14645b76ec1
+## items-J3 POST -- the reconcile's final
+Verdict: done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED at HEAD. Own diff read. Docs only:
+docs/CHANGES.md (Handoff: the reconcile replaces the EXPECTED RED line; Unreleased "Items by hull category": a
+reconciled paragraph, the new checks, Known broken's stale red deleted), docs/DESIGN.md (the role law: `~id` as a
+role member; an empty price role is unpaid, an empty up is a bug).
+THE FINAL TEST PHASE OWES (engine-unproven: nothing of the reconcile has run on the engine):
+- rung 3 (solo) x2 seeds: ItemsReconcileChecks, ItemsAnchorLiftChecks, ItemsFlareRiderChecks (all three inside
+  ItemsDoorChecks / after ItemsTableChecks); ItemsTableChecks (the rewritten every-stat check with the R-D5 four,
+  sniper wears 11, Swarm Rack fits the sniper) -- NO LONGER expected red; plus the kits' LaneA6cFlaresChecks,
+  LaneADecoyChecks and the ability sweep's flares witness (the salvo now draws its count from the seed: 6 unchanged).
+- rung 5 (six) x2: ItemsFlareRiderGuestChecks (arena guest, after LaneA6cFlaresGuestChecks: waits out the host's
+  16 s cooldown, so it costs ~20 s of the guest run), LaneADecoyGuestChecks / LaneA6cFlaresGuestChecks (the seed's N
+  now packs row + 64 x count).
+- rung 4: no new frame (the flare count is 7 / 8 points of the existing salvo art); frame 43_lanea_flares_pull_a_mark
+  and 73g_sniper_flares_key unchanged by eye.
+Open (defaults built; owner questions): R-D5 the four unpriced (line, hull) pairs; R-D2's left-out ability outputs
+(CIWS, Prism, Ramjet, Veil's primed volley, Grapnel rip, Resupply, Supercarrier); R-D4 Rapid Action lifts the rail
+reload too (else +20% rate is ~+4% DPS on the Sniper).

@@ -107,9 +107,13 @@ NetIds.Decoy, Hub.NetDecoy (the protocol fingerprint moves). Detail and decision
 **2026-09-25 (worktree `WarShips_wt_items`, branch `wt/items`): lane I, items by hull category, built
 J1-J6; compiles, rung 2 green. engine-unproven: rungs owed in the final test phase** (solo x2, six x2,
 screens). 48 lines x 10 tiers (`Items.cs`), rarity deleted, Loot on tiers, conditional doors, save format
-4 with no migrations. EXPECTED RED at rung 3 until the kits reconcile: `ItemsTableChecks` "every stat a part
-names is on every hull it fits" (`flare_count`, `@area` / `@duration` rows the kits add). Detail and the
-kit assumptions the reconcile job checks: `docs/plans/ledger_items.md` (J7 POST; J8 the merge gate's three fixes).
+4 with no migrations. **Reconciled with the built kits (items-J1..J3, after slices 6a-6d merged)**: the railgun
+joins the primary roles, Tactical / Field Core lift a lift row's EXCESS (`~anchor_rate`, `~overdrive_mult`), TOT,
+the Buster, the Repair field and the gunships join `@output`, six ability reaches join `@area`, and the Sniper's
+`flare_count` row (carried in the salvo's spawn seed N: row + 64 x count) lets Swarm Rack fit it. Unpriced by
+default (no such system on the hull): Salvo / Magazine Core on the Battleship, Heavy Barrel on the Sniper and the
+Warrior. Compiles, rung 2 green; engine-unproven. Detail, the audit and decisions R-D1..R-D6:
+`docs/plans/ledger_items.md` (LANE I RECONCILE).
 
 **2026-09-25 (worktree `WarShips_wt_raids`, branch `wt/raids`): lane G, raids v2 -- squads and a boss
 fight's adds, J1-J6 + the merge gate's fixes (GFa, GFb) built; compiles, rung 2 green. engine-unproven:
@@ -807,14 +811,24 @@ tail. The echo's blast is weighed once (`Items.Repeats`): Redline T10 no longer 
 The boost's slide has its own row, `surge_strafe` (x1.5): Convoy Rig lifts it alone, so a freighter's
 boosted top speed stays x1.5; Burner Drive's `surge_lift` is now top speed and thrust only.
 
+**Reconciled with the built kits (items-J1, J2).** The Sniper's railgun is its primary: the Gunner Chip lifts
+it, Rapid Action shortens its charge AND reload and prices its range. A role member may be `~id` (the excess of a
+lift row): Tactical Core lifts the Anchor's x2.5 to x2.875 and prices its x1.4 reach to x1.288; Field Core lifts
+the Overdrive field's x1.5 to x1.625 (it was x1.875, the whole multiplier). `@output` gains Time on target, the
+Buster, the Repair field and the Carrier's gunships; `@area` the Tender's fields, the Lance run, the rod, the
+Shadow step and the EMP; `@duration` the Repair field. The Flares' count is the Sniper's `flare_count` row (6),
+drawn by every peer from the salvo's seed (`Decoys.Pack`), so Swarm Rack fits the Sniper (7 flares, 8 from T6).
+Unpriced where the hull has no such system: Salvo / Magazine Core on the Battleship, Heavy Barrel on the Sniper
+and the Warrior (an owner question; `ItemsTableChecks` names exactly these four).
+
 **Checks:** new `ItemsLawChecks`, `ItemsTableChecks`, `ItemsLineChecks`, `ItemsLootChecks`,
-`ItemsParRowsChecks`, `ItemsDoorChecks`, `ItemsEchoChecks`, `ItemsBoostLiftChecks` (rung 3), `ItemsGuestChecks` (rung 5), frame
+`ItemsParRowsChecks`, `ItemsDoorChecks`, `ItemsEchoChecks`, `ItemsBoostLiftChecks`, `ItemsReconcileChecks`,
+`ItemsAnchorLiftChecks`, `ItemsFlareRiderChecks` (rung 3), `ItemsGuestChecks`, `ItemsFlareRiderGuestChecks` (rung 5), frame
 `6d_k_stats_conditions`; about 20 rewritten onto the new ids (the save round trip at version 4, the
 old ids read as nothing, recycler, gear levels, chips, the guest carrier's Magazine Core T9), frames 6b,
 58, 58b, 81c, 10b. **Rungs:** 1 and 2 in the worktree; none of it has run on the engine.
 
-**Known broken:** `ItemsTableChecks` "every stat a part names is on every hull it fits" is red until the
-kits reconcile (`flare_count`; `@area` / `@duration` rows of abilities the kits have not built). A
+**Known broken:** none known in the items; a
 capital that pays top speed in four slots and three Combat chips reaches -108%, which the x0.1 floor
 holds (a design flag for the owner: §3 prices each line alone, never the stack).
 

@@ -970,7 +970,11 @@ piece of player state that is **not** host-owned — it is identity, not a resou
   touches a turret count: the mounts are fixed on the drawing, and a part cannot add one.
 - **A line names ROLES, not classes** (`Items.Roles`): `@primary`, `@output`, `@area`, `@duration` and
   the rest expand onto the rows of that role the hull's sheet has, so a kit's new row joins a role in
-  one table and every line of the category lifts it. `~id` lifts a x-multiplier row's excess over x1.
+  one table and every line of the category lifts it. `~id` lifts a x-multiplier row's excess over x1, as a
+  line's key or as a role's member: "ability output" on a LIFT row (the Overdrive field's x1.5, the Anchor's
+  x2.5) moves what the ability adds, never the whole multiplier. A price whose role finds no row on a hull is
+  simply not paid there (the Battleship has no ability reach; the railgun and the blade have no tracking);
+  an up that finds no row is a bug (`ItemsTableChecks`).
 - **A conditional line lifts a sheet row at x1, read at one door** (`Items.Conditions`): craft,
   execute and redline damage in `Dealt.Deal` (through the pilot, `PlayerShip.Outgoing`), a kill's
   cooldown cut there too, small hits in `Guarded`, point defence swinging onto craft, a web's hold and
