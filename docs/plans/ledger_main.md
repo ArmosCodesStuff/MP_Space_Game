@@ -10,8 +10,10 @@ Engine outputs for the running batches: S = C:\Users\logan\AppData\Local\Temp\cl
     (COORDINATOR NOTE at the end of wt_art's ledger_sprites.md). Check for a zoom-out and replace it if found. Send the owner
     the frames it returns.
 - wf_ab65d36a-eb3 / task w79l6jmmg, "lane-kits-slice2". The result is {kits, gate}. J5, then J6, J7 and the gate. Does not merge.
-- wf_2778a53a-b3b / task wdwwml9cf, "lane-net-r1-prove". The result is {net, gate}. The first gate found a StructRow problem (fix round R1Q).
-  Does not merge.
+- wf_9ca7cc0a-4ad / task wzr1lvthu, "lane-net-r1r" (the new way). Gate 2 failed 94ad917 on WaveCrew being left out of the fingerprint.
+  Merges version-l into the lane, fixes it, chain net_r1r (quick,solo,solo,six in %TEMP%\warships_rungs), opus gate 3, then a haiku
+  merge into version-l. Returns {net, gate, merge}. merge=true: remove the net merge from Next. merge=false (a dirty tree or a conflict): merge by hand.
+  gate fail or red: one more fix batch, written from the gate's problems.
 
 ## Next (the new way: speed first, test at the end)
 1. Merge net, kits and art into version-l, each once its gate passes.
@@ -28,4 +30,6 @@ Engine outputs for the running batches: S = C:\Users\logan\AppData\Local\Temp\cl
 
 ## Notes
 - Merge risks: Hub.NetIdentity peak (walls) vs net; ClassArt.PdRing removed (kits) vs art rows; Ships.cs art rows vs kits rows.
-- Do not commit to version-l files that the lanes edit while wq9tnfn98 can still merge. CLAUDE.md, tools\ and ledger_main.md are safe.
+- Keep the version-l tree CLEAN while wzr1lvthu runs: its merge step refuses to merge into a dirty tree. Commit ledger edits at once.
+- Follow-up from net gate 2 (not blocking): these constant tables are Lists or Dictionaries, so the fingerprint never hashes them:
+  NetIds.Widths, Spawns.All (the wire kind index), Hints.All, Sfx._gap and Abilities.Reserved. The fix is to make them arrays or row tables.
