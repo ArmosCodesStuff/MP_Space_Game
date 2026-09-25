@@ -857,3 +857,35 @@ nothing, and return status blocked with open "NOTE 4: moved to parallel lanes".
   `LaneAMissileIdsHost` after the host's "host sees 3 ships"; `LaneAMissileIdsGuest` after the guest's
   "a raider that existed before this guest joined").
 - Checkpoint: the commit after this entry. Next: J11 (F7 charge bands, the slice's CHANGES).
+
+### J11 · PRE · F7 charge bands (D27), and the slice's record -- tier opus
+- Intent: new scripts/Charge.cs (ChargeBand {At, Mult, Line, Ramp}; Charges.All by weapon id; Charges.At pure);
+  FireRail fires the band its charge reached (the railgun's one band: from 0, x1, the rail line -- same
+  literals). CHANGES Unreleased + Handoff, DESIGN note. Checks: LaneAChargeBandChecks.
+- Files: scripts/Charge.cs (new), scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt, docs/CHANGES.md,
+  docs/DESIGN.md, this ledger.
+- HEAD 73d8521711b07d622762dbfb7edc280162c5ab04 · PlayerShip.cs 8cd51c606dc36eed59f356b225171e10a0190a97 · SmokeTest.cs.txt 65a0d4a8a17ff2fea424d8c0148e170688e5d636 · CHANGES.md 42c7a617d9cde39b5999bbaf882f2782789d329e · DESIGN.md 6c8f17c86da41c846e0b2d44747b227b3799e941
+### J11 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. FireRail reads its charge (1 - Left / rail_charge, >= 1 at the Expire) through
+  `Charges.All["railgun"]` (one band: from 0, x1, Lines.Rail) and fires that much of rail_damage down that line.
+- Files: scripts/Charge.cs (new), scripts/PlayerShip.cs (FireRail); SmokeTest.cs.txt (`LaneAChargeBandChecks`);
+  docs/CHANGES.md (Handoff + Unreleased for slice 3); docs/DESIGN.md (Stops, and the bands, under the kits
+  section); this ledger.
+- Checkpoint: the commit after this entry. Slice 3 is complete (J8-J11).
+
+**SLICE 3 · WHAT THE FINAL TEST PHASE OWES** (no engine was run in slice 3)
+- Rung 3 (`quick,solo,solo`, two seeds), all in solo after LaneAHeavyRowsChecks:
+  - NEW `LaneAShotStopsChecks` (9 lines "a shell with Stops 1/2/0 ... the first N lose 10 each, once");
+  - NEW `LaneALinesChecks` (3 x "a line ... Stops 0 strikes on0,on1,on2 ..."; "the railgun is a Lines row: 2500 x 14 u");
+  - NEW `LaneAMissileIdsChecks` ("three predicted missiles thrown at once: ... the same three ids"; "...and all three land");
+  - NEW `LaneAChargeBandChecks` (3 x "a charge N% of full ..."; 3 x "a charge held to N% of full ...");
+  - unchanged, now through Lines + Charges: "then its railgun's whole 150.0 lands ... on the line", the J5
+    "the railgun ... DealtBy[\"rail\"]" x3, the ability sweep's railgun row; every shell/slug/torpedo/seeker
+    check (Strike rewritten: struck-once + Stops 1) -- the PD, main-gun, torpedo, cruise-missile and siege lines.
+- Rung 5 (`six,six`): NEW host "host: three predicted missiles thrown for the guests, each with its own id" and
+  guest "guest: the host's three predicted missiles arrive each with its id ..."; NetMissile's signature changed,
+  so every guest line that sees a heavy's or an outpost's missile (the outpost blockade, the heavy's throw).
+- Rung 4: no frame owed (nothing drawn changed: the rail bar is the same row, same ends).
+- Traps to read first on a red: LaneAShotStopsChecks spawns 3 gunships per case (9 per run) and kills them;
+  LaneAMissileIdsHost's three 40 s missiles land at (-7000, 7000) +- 900 u with 0 damage.

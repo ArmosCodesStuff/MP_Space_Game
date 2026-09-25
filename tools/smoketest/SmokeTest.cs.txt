@@ -3277,6 +3277,37 @@ public partial class _Test : Node
               $"guest: the host's three predicted missiles arrive each with its id, the host's, three different ones in the missiles' space ({string.Join(", ", got)})");
     }
 
+    // ── F7 · CHARGE BANDS (lane A slice 3, J11) ───────────────────────────────────────────────
+    // Pure (Charges.At), each at 3 varied charges, never on a band's edge:
+    //  - a ramp (sniper_active_reload.md 1.4: 40% at once rising to 100% at full): 0.40 + 0.60 x share,
+    //    and 1.00 held past full;
+    //  - steps (kits_v2's tap 8 and full 45): 8/45 down the tap's line short of full, 1 down the full line after;
+    //  - the railgun's own table: the whole (x1) down the rail line, however far its charge got (the kit's 150).
+    void LaneAChargeBandChecks()
+    {
+        var ramp = new[] { new ChargeBand { At = 0, Mult = 0.40, Line = 1 }, new ChargeBand { At = 1, Mult = 1.00, Line = 1, Ramp = true } };
+        var steps = new[] { new ChargeBand { At = 0, Mult = 8.0 / 45, Line = 2 }, new ChargeBand { At = 1, Mult = 1, Line = 3 } };
+        float[] shares = { Vary(0.05f, 0.30f), Vary(0.35f, 0.65f), Vary(0.70f, 0.95f) };
+        foreach (float sh in shares)
+        {
+            var (rm, rl) = Charges.At(ramp, sh);
+            var (sm, sl) = Charges.At(steps, sh);
+            Check(Math.Abs(rm - (0.40 + 0.60 * sh)) < 1e-9 && rl == 1 && Math.Abs(sm * 45 - 8) < 1e-9 && sl == 2,
+                  $"a charge {sh * 100:0}% of full: a ramp's 40% -> 100% gives {rm * 100:0.0}% (want {(0.40 + 0.60 * sh) * 100:0.0}), steps give the tap's 8 of 45 down the tap's line ({sm * 45:0.00}, line {sl})");
+        }
+        foreach (float sh in new[] { Vary(1.05f, 1.4f), Vary(1.5f, 2.5f), Vary(3f, 6f) })
+        {
+            var (rm, rl) = Charges.At(ramp, sh);
+            var (sm, sl) = Charges.At(steps, sh);
+            var (km, kl) = Charges.At(Charges.All["railgun"], sh);
+            var (k0, kl0) = Charges.At(Charges.All["railgun"], Vary(0.05f, 0.95f));
+            Check(Math.Abs(rm - 1) < 1e-9 && rl == 1 && Math.Abs(sm * 45 - 45) < 1e-9 && sl == 3
+                  && km == 1 && kl == Lines.Rail && k0 == 1 && kl0 == Lines.Rail
+                  && Math.Abs(new ShipStats(ShipClass.HeavySniper)["rail_damage"] * km - 150) < 1e-9,
+                  $"a charge held to {sh * 100:0}% of full: the ramp holds at 100% ({rm * 100:0.0}), steps give the full 45 down the full line ({sm * 45:0.00}, line {sl}), the railgun its whole 150 down the rail line ({km:0.##} x, line {kl})");
+        }
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -8051,6 +8082,7 @@ public partial class _Test : Node
             await LaneAShotStopsChecks(yonder);
             LaneALinesChecks();
             await LaneAMissileIdsChecks(yonder);
+            LaneAChargeBandChecks();
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);

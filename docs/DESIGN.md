@@ -604,6 +604,16 @@ before, and are NOT copied here:
 Numbers for the curve, bosses, raids, chips and items are `numbers_curve_raids_items.md`'s, not the
 kits'. Progress, decisions taken where the spec is silent, and the engine rungs owed: `docs/plans/ledger_kits.md`.
 
+**Stops: one rule for "how many bodies before it ends"** (slice 3). A flyer (`ShotDef.Stops`, and a
+shot's own `Shot.Stops`) and a line (`LineDef.Stops`, `Lines.cs`) both mean the same by it: 1 = the
+first body, n = the first n, 0 = everything on its path; each body is struck once. A piercing slug,
+the railgun, Time on target's lines and the prism's children are rows, never a new loop. Trap: a
+blow may end a body and remove it from the list being walked, so `Shot.Strike` asks for the next
+body afresh after each blow, and `Lines.Strike` picks every body before it deals the first.
+**A charged weapon reads its bands** (`Charge.cs`, `Charges.All` by ability id): the share of the full
+charge picks a multiplier and a line row; a ramp is a band flag, not code. The Sniper's active reload
+(6c) is the railgun's table rewritten, not a new path.
+
 ### The helm: capital ships handle like naval ships
 
 The developer's call: *no strafing, a turning radius, move as if in a medium* — and *slow*: speeds
