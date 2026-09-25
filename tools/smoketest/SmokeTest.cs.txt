@@ -4738,6 +4738,19 @@ public partial class _Test : Node
         return r;
     }
 
+    // A GUEST'S TIERED PART, ON BOTH ENDS (rung 5): the guest's carrier wears Magazine Core T9 (+25% x
+    // 1.1^8 = +53.59% every ability output, one Utility level short of none) -- its torpedoes hit
+    // x1.5359 of the class row on the host's copy, which decides the damage, and on the guest's own;
+    // its condition rows (a capital's craft rows) are there at x1, and nothing it faces is a craft
+    // to a turret swinging onto the practice dummy.
+    void ItemsGuestChecks(PlayerShip s, string end)
+    {
+        double k = s == null ? 0 : s.Stats["torpedo_damage"] / new ShipStats(ShipClass.Carrier)["torpedo_damage"];
+        var dummy = H.GetNodeOrNull<TargetDummy>("TargetDummy1");
+        Check(s != null && NearI(k, 1.5358972, 1e-6) && s.Stats["craft_damage"] == 1 && s.Stats["craft_tracking"] == 1 && (dummy == null || s.TrackingOn(dummy) == 1f),
+              $"{end} of the guest's carrier: Magazine Core T9 puts its torpedoes at x{k:0.0000} of the class row (1 + 0.25 x 1.1^8 = 1.5359); craft rows x{s?.Stats["craft_damage"]:0.00} / x{s?.Stats["craft_tracking"]:0.00}");
+    }
+
     // THE CONDITIONAL DOORS (I6, §3.3): each conditional line's row is x1 on the sheet of every hull
     // it fits, and counts only in its situation, at its one door. Literals from §3.3: +25% at T1,
     // +59% at T10 (x2.3579), Ablative 20% to its 40% ceiling, Web Breaker 25% to 60%, Burst Feed 20%
@@ -5110,6 +5123,23 @@ public partial class _Test : Node
     }
 
     // THE DROP ROW (§3.2): crates by level, the base tier and its 20 / 70 / 10 roll, 70% own category.
+    // THE MODEL PAR WAS BUILT ON (I8): lane F's curve assumed the items of docs/plans/models/numbers_v2.py
+    // -- GROW 1.10, UP1 0.25, MULT1 0.20, CHIP1 0.08, STEP 0.03, LADDER (500, 1.10), base_tier
+    // 1 + (L-1)//4, BAND (0.20, 0.70, 0.10), own category 0.70, scrap 100 x 1.25^(t-1). The rows the game
+    // reads are those numbers, so a change to either side is caught here, against the model's literals.
+    void ItemsParRowsChecks()
+    {
+        bool rows = NearI(Tiers.Growth, 1.10) && NearI(Tiers.Power, 0.25) && NearI(Tiers.Multiplier, 0.20) && NearI(Tiers.Chip, 0.08)
+                    && NearI(Equipment.LevelStep, 0.03) && NearI(Equipment.LevelCost, 500) && NearI(Equipment.LevelGrowth, 1.10)
+                    && Loot.TierEvery == 4 && NearI(Loot.Lower, 0.20) && NearI(Loot.Higher, 0.10) && NearI(1 - Loot.Lower - Loot.Higher, 0.70) && NearI(Loot.Own, 0.70)
+                    && NearI(Tiers.ScrapBase, 100) && NearI(Tiers.ScrapGrowth, 1.25);
+        var lv = new[] { 1, 4, 5, 20, 33, 37, 40 };
+        var want = new[] { 1, 1, 2, 5, 9, 10, 10 };
+        var got = lv.Select(Loot.BaseTier).ToArray();
+        Check(rows && got.SequenceEqual(want),
+              $"the item rows are the model's (numbers_v2.py): x1.10 a tier, T1 25% / 20% / chip 8%, salvage +3% at 500 x 1.10^n, drops 20 / 70 / 10 around 1 + (L-1)/4 (L1 4 5 20 33 37 40 -> {string.Join(" ", got)}), 70% own category, scrap 100 x 1.25^(t-1)");
+    }
+
     void ItemsLootChecks()
     {
         Check(new[] { 1, 5, 6, 10, 11, 20 }.Select(Loot.CratesFor).SequenceEqual(new[] { 2, 2, 3, 3, 4, 4 }),
@@ -7692,6 +7722,7 @@ public partial class _Test : Node
         ItemsTableChecks();
         ItemsLineChecks();
         ItemsLootChecks();
+        ItemsParRowsChecks();
 
         // ── equipment (I): per-class gear; common defaults, and six chip slots with no chip in them ──
         {
@@ -12886,6 +12917,7 @@ public partial class _Test : Node
             double gTop = g == null ? 0 : g.Stats["turn_rate"] / new ShipStats(ShipClass.Carrier)["turn_rate"];
             Check(Math.Abs(gTop - 1.265) < 1e-9,
                   $"a guest's slot levels come with its identity, and the host's own do not leak into its ship: rudder limit x{gTop:0.0000} here (level 2: 1 + 0.25 x 1.06 = 1.265; the host's level 40 would be 1.55)");
+            ItemsGuestChecks(g, "the host's copy");
             var dummy = H.GetNode<TargetDummy>("TargetDummy1");
             Check(g != null && g.WingTarget == dummy, "guest's Space order reached the host");
             Check(dummy.Total > 5, $"guest's wing hit the dummy on the host ({dummy.Total:0.0})");
@@ -13342,6 +13374,7 @@ public partial class _Test : Node
             Check(heardFighters > 0, $"guest hears its fighters' beams as the fighter's own row, sent by index ({heardFighters} heard since it joined)");
             Check(mine != null && Math.Abs(mine.MaxHp - 248) < 1e-6 && Math.Abs(mine.Hp - 248) < 1e-6,
                   $"hull replicated from the host, which applied this pilot's own gear held to three of a kind (three of its four Armour Chips I: 200 x 1.24 = 248; {mine?.Hp:0})");
+            ItemsGuestChecks(mine, "the guest's own copy");
             int streamed0 = _streamGot; ulong streamAt = Time.GetTicksMsec();
             await Wait(12.0);                      // strike done, bombers home and docked
             // THE HOST'S TEN A SECOND ARRIVE, over the 12 s just waited: nothing thrown away unsent. The

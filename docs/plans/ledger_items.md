@@ -170,3 +170,15 @@ big, T10 at its 40% ceiling; Reset Core T1 x3 (no kill keeps, a kill x0.75); Web
 0.2 / 0.4 / 0.68 and the 60% ceiling; Burst Feed during / within 4 s / after; Spin-up ramp, cap 125, PD no ramp,
 new target and silence reset. Helpers WearI / WornOffI / HeldI.
 Next: J5 (ItemsGuestChecks in a guest role, ItemsParRowsChecks, chip budget), J6 (frames), J7 (docs, final POST).
+
+## J5 PRE -- tier opus
+Intent: the guest-role item check and the Par rows check (the save round trip at version 4 and the chip budget
+landed in J1: SaveCoverage, ItemsTableChecks). HEAD ce495eb. Hashes:
+  tools/smoketest/SmokeTest.cs.txt af0ba219d9974c1ce77f43c07e09ea667188ef06
+## J5 POST
+Verdict: done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED. Own diff read. Harness only.
+Checks written (engine-unproven: rungs owed in the final test phase): NEW ItemsGuestChecks (rung 5, called on the
+host's copy of the guest carrier and on the guest's own copy: Magazine Core T9 torpedoes x1.5359 of the class row,
+craft rows x1, tracking onto the dummy x1); NEW ItemsParRowsChecks (rung 3: Tiers / Equipment salvage / Loot rows
+equal numbers_v2.py's GROW, UP1, MULT1, CHIP1, STEP, LADDER, BAND, own 0.70, scrap; BaseTier at 7 levels).
+Next: J6 frames, J7 docs + final POST.
