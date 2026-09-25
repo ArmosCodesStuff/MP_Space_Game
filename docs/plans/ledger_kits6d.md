@@ -204,3 +204,13 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
   LaneA6dPepperHostWatch/HostChecks + LaneA6dPepperGuestChecks; frame 76b_dart_pepperbox (LaneA6dPepperFrames).
   Rewritten: walls' weaponRows (+pepperbox), sweep witness roll -> pepperbox, Burst Feed on a Dart reads pepper_interval.
 - next: kits6d-J2 (Sprint + Rod).
+
+## Handover 2: the second agent stops after kits6d-J1 (context), at a job boundary
+- Harness conventions used: `Me`, `SetClass`, `HeldI(at, Enemies.Gunship)` (a held 1e9-hull raider), `Demo = true` then set
+  AimPoint / Trigger by hand, `LaneA6dOneDart(dt)` (one frame of trigger, returns the new dart), `DealtBy["<shot row id>"]`.
+  Solo calls go after `LaneA6cCurtainChecks(yonder)` (~13384); rung 5: host watch beside `reloadWatch` (~17003), host check
+  just before the host's RealTime on the guest's FREIGHTER (~17025, generous timeout: the guest runs anchor..curtain first),
+  guest check after `LaneA6cCurtainGuestChecks()`. Frames: after `LaneA6cPrismFrames()` in Shots.cs.txt (~437).
+- J2 pointers: PlayerShip LocalFlight `if (Pinned) { throttle = 1f; ... }` (~1566, add `|| Forced` there, rudder free),
+  Lifts()/Lift enum (~146, add Lift.Thrust read in Steer where SpeedMult lifts thrust), SpeedAdds (F1, first user = sprint_add),
+  Bores.Launch(s, row, rail, damage, weapon) for the rod (a BoreSpec with Shot = new `rod` row, Turn null, PriceCap rod_cap).
