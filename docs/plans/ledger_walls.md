@@ -159,3 +159,45 @@ BasePanel.cs:120-129, Raids.cs:53 ask Unlocks. Grep the harness for NeedsBoss an
   it was going (separate folders; nothing shared).
 - commit: (this commit) "Walls job 2 (F15): six chip slots, the kind caps, no starting chips".
 - next: job 4 (small, independent of 3), then job 3 for a fresh agent.
+
+## Job 4 PRE (done before job 3: independent and small, D13)
+- intent: Measure.Boss, Opens.Economy/Raids, rows {Boss,3,Economy,hauler_autosell} {Boss,1,Raids}, Unlocks.Boss(); delete
+  Economy.AutoSellBoss/Upgrade.NeedsBoss and Lanes.NeedsBoss; Yard/BasePanel/Raids ask Unlocks; WallChecks table + lane-clock check.
+- start: 9057fd1dff386461014549302815458b9951ccc7
+- files (hash-object at start):
+  - scripts/Unlocks.cs 01c5b300e4706e10f2677cb11c38630fe1dc46f9
+  - scripts/Economy.cs ad48e53beee3f329f4d66b3ecb0627f5efa23ef0
+  - scripts/Lanes.cs 0125e73ad6c5b2cb4f54c20446d154ef5727135e
+  - scripts/Raids.cs 042302daf0f32cfb712a1338d94a433098339871
+  - scripts/Yard.cs 399f4aeaa11c7587a439e659ad5a219f2b60958b
+  - scripts/BasePanel.cs 50f2f886daf0a3432e628e76378a87d046347105
+  - tools/smoketest/SmokeTest.cs.txt d36a9260194bbb8f6499ef57a46918d7287c5d84
+  - docs/CHANGES.md 4685f69782457cf61e729ba876f536ae1a51eb1d
+
+## Job 4 POST
+- verdict: typecheck 0 errors; `verify.ps1 -Quick` ALL CHECKS PASSED. Rung 3 owed.
+- files: Unlocks.cs (Measure.Boss, Opens.Economy/Raids, Unlock.Id, two rows, `Unlocks.Boss(what, id)`),
+  Economy.cs (AutoSellBoss and Upgrade.NeedsBoss deleted), Lanes.cs (NeedsBoss deleted), Raids.cs :53,
+  Yard.cs :263, BasePanel.cs :120, SmokeTest.cs.txt (WallChecks), CHANGES.md, this ledger.
+- rung 3 owed: WallChecks "the base's walls are rows of the same table" (3, 1, 0) and "the lanes' blockade
+  clock" x3 (bounty boss 0 waits at 5.0; 1 and 4 run to 4.5); the existing Auto-sell checks unchanged
+  (:2632-2660 LOCKED until boss 3; rung 5 :9380 the owner's record).
+- D13: job 4 was done before job 3 (independent, small; job 3 needs a fresh context).
+- next: job 3 (fresh agent). This agent stopped at the job boundary (context past ~150k).
+
+### Job 3 map (read by the job-2/4 agent; line numbers at the job-4 commit)
+- `AbilityDef` scripts/Abilities.cs:33 (lane A's file: add `public bool Weapon;` only, and the flag on the rows
+  Guns :82, FireMode :89, Pd :117, Reload :148, Attack :159, Recall :173, Deploy :203, Collect :219).
+  `SlotState` is Abilities.cs:31 {Line, Lit, Fail, Busy}: add `Locked`.
+- `Abilities.For(c)` (:376) = `ClassDef.Abilities` + six `Open` rows (Open = true): AbilityWall skips Open AND
+  Weapon rows. Class rows: Ships.cs :179 :204 :230 :270 :306 :343 :375 :407 :448 :479 :509 :543; today each has
+  exactly ONE walled row (Broadside, Bombers, Missile, Bubble, Overdrive, Shockwave, Railgun, Rush, Hunters,
+  Roll, Echo, Stealth) -> index 1 -> L1, so nothing real is refused yet (D5's `PEND walls`).
+- PlayerShip: `Peak` :376 (SetProgress :377), UseAbility :455 (Refuse -> Fail at :464), RequestAbility :470,
+  DoAbility :486, Fail :822, `Demo` :33 (reads Unlocks.Top for IGated).
+- AbilityBar.StateOf :30: keep FailNote first (a refused press flashes `LOCKED · L3`), then return the Locked
+  state before def.State.
+- Hints: Progression.AddExp :160-173 (`Hub.I?.Hints?.Meet("pilot")`), for `Unlocks.Crossed(from, to)` cards.
+- The Solo role's pilot flies at Peak 14 (D9); the third player (guest2) now claims peak 3 (job 2, D12): it
+  presses only F (broadside, ability 1) today; if lane A gives the battleship a 2nd/3rd walled row, its
+  presses stay legal at 3 only for abilities 1-2.

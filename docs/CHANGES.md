@@ -467,6 +467,20 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Level walls, job 4: Auto-sell and the lanes' blockades are rows of the unlock table (2026-09-25, lane C, `wt/walls`)
+
+**The base's two boss gates fold into `Unlocks.All`** as rows measured by the base owner's highest boss
+beaten (`Measure.Boss`): Auto-sell at boss 3 (`Opens.Economy`, `hauler_autosell`), blockades at boss 1
+(`Opens.Raids`), asked through `Unlocks.Boss(what, id)`. `Economy.Upgrade.NeedsBoss`,
+`Economy.AutoSellBoss` and `Lanes.NeedsBoss` are deleted; `Yard.TryBuy`, the base panel's LOCKED line and
+`Raids`' lane clock read the table. Behaviour is unchanged.
+
+**Checks:** `WallChecks` (new, rung 3): the two rows against the plan's literals (3, 1) and an unnamed row
+open (0); the lanes' clock waits with no bounty boss beaten and runs with 1 and 4 beaten. The existing
+Auto-sell checks (LOCKED until boss 3, the owner's record on a guest) now run through the table unchanged.
+
+**Known broken:** none known; compiles (rungs 1-2), rung 3 not yet run.
+
 ### Level walls, job 2 (F15): six chip slots on every hull, the kind caps, no starting chips (2026-09-25, lane C, `wt/walls`)
 
 **Every hull has six chip slots** (`Equipment.ChipSlots` 6), opened in order by the pilot's peak

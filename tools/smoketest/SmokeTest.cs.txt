@@ -2020,6 +2020,21 @@ public partial class _Test : Node
         var abOpen = new[] { 1, 2, 3, 5, 6 }.Select(l => Unlocks.Count(Opens.Ability, l)).ToArray();
         Check(chipsOpen.SequenceEqual(new[] { 0, 1, 2, 3, 6 }) && abOpen.SequenceEqual(new[] { 1, 1, 2, 2, 3 }),
               $"...so every hull has 0, 1, 2, 3 and 6 chip slots open at levels 1, 2, 4, 8 and 14, and 1, 1, 2, 2 and 3 abilities at 1, 2, 3, 5 and 6 ({string.Join(",", chipsOpen)}; {string.Join(",", abOpen)})");
+        // THE BASE'S ROWS, measured by the base owner's bosses beaten: Auto-sell at boss 3, the lanes'
+        // blockades at boss 1, and an Economy row no wall names open from the start
+        Check(Unlocks.Boss(Opens.Economy, "hauler_autosell") == 3 && Unlocks.Boss(Opens.Raids) == 1 && Unlocks.Boss(Opens.Economy, "miner_hold") == 0,
+              $"the base's walls are rows of the same table: Auto-sell once boss 3 is beaten, blockades once boss 1 is, the miners' hold never walled ({Unlocks.Boss(Opens.Economy, "hauler_autosell")}, {Unlocks.Boss(Opens.Raids)}, {Unlocks.Boss(Opens.Economy, "miner_hold")})");
+        // ...and the lanes' clock reads it: with no bounty boss beaten it never runs; from boss 1 it does
+        var laneIn = typeof(Raids).GetField("_laneIn", BindingFlags.NonPublic | BindingFlags.Instance);
+        foreach (var (beaten, runs) in new[] { (0, false), (1, true), (4, true) })
+        {
+            Character.NewBlank();
+            if (beaten > 0) Character.BossCleared["silver_lancer"] = Enumerable.Range(1, beaten).ToHashSet();
+            var lanes = new Raids(null); laneIn.SetValue(lanes, 5.0); lanes.Tick(0.5);
+            double left = (double)laneIn.GetValue(lanes);
+            Check(Missions.HighestBeaten(Missions.Bounty) == beaten && Math.Abs(left - (runs ? 4.5 : 5.0)) < 1e-9,
+                  $"with bounty boss {beaten} beaten the lanes' blockade clock {(runs ? "runs" : "waits for boss 1")}: 5 s -> {left:0.0} s in half a second");
+        }
 
         // THE PEAK (level_walls check 8, the pilot's half): a level up raises it, a refit never lowers
         // it, and it survives a save and a load. Three pilots: into ability 3, into chip slot 6, into ability 2.
