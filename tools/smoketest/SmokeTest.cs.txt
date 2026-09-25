@@ -196,6 +196,7 @@ public partial class _Test : Node
         readonly List<(string media, int index, string name)> _offerCands = new(), _answerCands = new();
         public bool OfferSealed, Pasted, ReplySealed, Applied;
         public ulong ReplyAt, AppliedAt, HostSawAt, GuestSawAt, HostLostAt, GuestLostAt;
+        public WebRtcPeerConnection.ConnectionState GuestAtApply;   // had the guest's side got through alone (P2)?
         public int Handlers, OffMain;                   // signal handlers run, and how many off the main thread
         public RtcPair(int id, long applyAfterMs = 0)
         {
@@ -235,7 +236,7 @@ public partial class _Test : Node
             if (Pasted && !ReplySealed && Link.Sealed(GuestConn)) { ReplySealed = true; ReplyAt = Now; }
             if (ReplySealed && !Applied && Now >= ReplyAt + (ulong)ApplyAfterMs)
             {
-                Applied = true; AppliedAt = Now;
+                Applied = true; AppliedAt = Now; GuestAtApply = GuestConn.GetConnectionState();
                 HostConn.SetRemoteDescription("answer", _answer);
                 foreach (var c in _answerCands) HostConn.AddIceCandidate(c.media, c.index, c.name);
             }
@@ -268,8 +269,41 @@ public partial class _Test : Node
         return seen;
     }
 
+    // THE REPLY WINDOW, MEASURED ONCE (§3.4; `run.ps1 -ReplyWindow` hands the solo role
+    // `replywindow`). The friend's agent starts its give-up clock at paste; on this path -- an
+    // in-process pair over the LAN host candidate, where the host answers the guest's early checks
+    // (P2) -- the guest's DTLS client may start before the host has the reply, and bound the window
+    // sooner. Seven pairs start together at the top of the run; each host takes its reply 5, 10, 15,
+    // 25, 35, 45 or 60 s after the guest made it; each is judged 5 s after that. About 65 s, in the
+    // background. The edit that sets Link.ReplyWindowS from it replaces this with the permanent check.
+    static readonly int[] ReplyDelaysS = { 5, 10, 15, 25, 35, 45, 60 };
+    Task<List<(int delay, long ms, WebRtcPeerConnection.ConnectionState guest)>> _replyWindow;
+    async Task<List<(int delay, long ms, WebRtcPeerConnection.ConnectionState guest)>> MeasureReplyWindow()
+    {
+        if (!Link.Available) return null;
+        var pairs = ReplyDelaysS.Select((d, i) => new RtcPair(2 + i, d * 1000L)).ToList();
+        bool Judged(RtcPair p) => p.Connected || (p.Applied && RtcPair.Now > p.AppliedAt + 5000);
+        await RtcUntil(() => pairs.All(Judged), (ReplyDelaysS.Max() + 20) * 1000, pairs.ToArray());
+        var seen = pairs.Select(p => ((int)(p.ApplyAfterMs / 1000),
+                                      p.Connected && p.Applied ? (long)Math.Max(p.HostSawAt, p.GuestSawAt) - (long)p.AppliedAt : -1L,
+                                      p.GuestAtApply)).ToList();
+        foreach (var p in pairs) p.Free();
+        return seen;
+    }
+
     async Task WebRtcPairs()
     {
+        if (_replyWindow != null && await _replyWindow is { } measured)
+        {
+            // the window is the longest delay up to which EVERY pair connected
+            int window = 0;
+            foreach (var m in measured) { if (m.ms < 0) break; window = m.delay; }
+            int proposed = Math.Min(window - 10, 30);
+            GD.Print($"  reply window: {string.Join(" · ", measured.Select(m => $"{m.delay} s {(m.ms >= 0 ? $"connected {m.ms} ms after" : "NOT connected")} (guest {m.guest} at the reply)"))}; "
+                     + $"every delay up to {window} s connected, so Link.ReplyWindowS = {proposed}");
+            Check(proposed >= 15,
+                  $"the reply window leaves a friend at least 15 s: Link.ReplyWindowS would be {proposed} (every delay up to {window} s connected; under 15 stops the batch, network_webrtc.md §3.4)");
+        }
         // THE PLUGIN LOADED, asked by the literal names the spike read (SPIKE Q1), so the row is
         // proved against them here and every other check reads the row.
         bool loaded = GDExtensionManager.GetLoadedExtensions().Contains("res://addons/webrtc_native/webrtc_native.gdextension");
@@ -394,6 +428,7 @@ public partial class _Test : Node
         var argv = OS.GetCmdlineUserArgs();
         string role = argv.FirstOrDefault() ?? "solo";
         SeedFrom(argv);
+        if (role == "solo" && argv.Contains("replywindow")) _replyWindow = MeasureReplyWindow();
         Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // six windows, nobody listening
         NoRouterNoInternet();
         await Wait(0.3);

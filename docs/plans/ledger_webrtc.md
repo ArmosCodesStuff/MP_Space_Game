@@ -82,3 +82,18 @@ Then: `tools\smoketest\run.ps1 -Solo` (rung 3), `-Solo -OneDll` once, `-ReplyWin
 - from: 39df356
 - hashes: Link.cs 073ecfe49c2afbaefed5c656d645e60c2391fe5b; SessionMenu.cs 78118dbfc110c28032abd5d191dd411839b3b793;
   SmokeTest.cs.txt 625c6d598822ce243f925a9292f9c5077e8c0b92
+
+#### J2 POST
+- verdict: done; rung 1 green, 0 warnings, UNUSED ANYWHERE 0. Untested at rung 3.
+- files: scripts/Link.cs (MissingText, PretendMissing), scripts/SessionMenu.cs (gate + PluginMissing label),
+  tools/smoketest/SmokeTest.cs.txt (gate check after "offline, there is no RECONNECT")
+- checkpoint: f70a5bb
+- next: J3
+
+#### J3 PRE
+- intent: the one-time reply-window measurement (§3.4): seven pairs started at the top of the solo
+  run when the role gets `replywindow`, host applying the reply 5/10/15/25/35/45/60 s after it was
+  made; judged before the leak check; prints `  reply window: ...` and checks the window >= 15 s.
+- files: tools/smoketest/SmokeTest.cs.txt
+- from: f70a5bb
+- hashes: SmokeTest.cs.txt ec361f2c82d3a52bda6472fb55eb2d6cf2249b82
