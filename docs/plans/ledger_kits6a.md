@@ -502,3 +502,17 @@ fittings sweep's witness table ~13755, fitRows ~13797.
 - Traps for the test phase: the grapnel's 5 s end reads Time or Host (frame order; both accepted with T = 5 +- 0.05);
   LaneA6aGrapnelRipChecks refits to the destroyer inside the boss / pylon / base blocks and refits back; the
   suppress host watch spawns a webifier at home for ~2-3 s.
+
+### kits6a-J11 · PRE · kits6a gate fix (the opus merge gate's four findings) -- tier opus (no COORDINATOR NOTE in the tail)
+- Intent: (1) the chevron stays up under steady fire: Afflict re-raises on a clock kept per (target, mark), at most one
+  raise every Remark, and the raise carries its life (the status's time left + Remark; a non-warning FxRaise with a
+  Time lives it instead of the row's Life), the clock released in _ExitTree; check: steady fire in LaneA6aSuppressChecks.
+  (2) HookWatch's no-rip ends checked: the dummy warped mid-swing (3 bearings) and a lone pylon killed mid-swing
+  (3 bearings) in LaneA6aGrapnelPullChecks. (3) LaneA6aGrapnelRipChecks: the pull's off-hull / time (+-0.05) / bow on
+  every real anchor, "no nearer" for a press inside the stop, the chunk's Size = 0.16 x its length; the dummy's time
+  tolerance to 0.05; a party of 2 at rung 5 (the host's grapnel on three siege pylons raised for two). (4) Ships.cs
+  :223 / :249 comments reworded (invariant C).
+- Files: scripts/PlayerShip.cs 7e4d3ffc5e02df0936b0109b0e5fcd0ce05d574d, scripts/Fx.cs 99c50a7af4fa8f31115415ce45513e820d941cce,
+  scripts/Hub.cs 179869a6113e7ec5c6b96f504b65a705362ce50a (a comment), scripts/Ships.cs c97b57464c49ea2c87060c6b1413a35a6fb034a7,
+  tools/smoketest/SmokeTest.cs.txt e86a68e5926e08b90638ccb70877dd1fb3ffdd58, docs/CHANGES.md edacdd3f47dd9237607d0a6ac89ba6d676e598e3,
+  docs/DESIGN.md 0a41fe9393c16075f03a67db2dc8b3aace936c2e. HEAD d7911b132acc7ffa2b71efddd0f9c827bf325528.
