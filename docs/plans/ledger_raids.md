@@ -132,3 +132,9 @@ entry and at commit, LabelDrop 35; "GANK: GUNSHIP + 3 WEBIFIER" in the burn, non
 RaidsGuestAddsWire (label "2", names seen). Frame new: 49c_squad_names_radar; 49b comment names the GANK line.
 CHANGES entry + Handoff, DESIGN (readability bullet, trap). engine-unproven: rungs owed (solo x2, six x2, screens).
 Not covered on the wire: the GANK line on a guest (the host's webs on the guest are lone raiders, no squad).
+## GF2 PRE -- tier opus -- gate 2 fix (2 check defects): (1) the GANK HUD line checked in a guest role: RaidsHostAddsWire
+forms a gank squad (Squads.Gank, Quarry the guest; GUNSHIP + 3 WEBIFIER) inside its commit range of the guest before the
+lone web, the guest's PD out of reach for the while; RaidsGuestAddsWire records SquadSight.GankLine on the frames a gank
+member is Locking (= "GANK: GUNSHIP + 3 WEBIFIER") and reads null once every member holds its line; (2) RaidsSightChecks'
+names + GANK block looped over 3 situations (still; crossing at 60 u/s; run from astern, off dead astern by a seeded angle),
+each a Vary bearing and range, same literals. HEAD cbf81d6. Files: SmokeTest 5f89a4b4, CHANGES 7792fbbd.
