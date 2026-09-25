@@ -1198,9 +1198,12 @@ Decisions are ledger_kits6b.md's D33-D42 (numbered on from slice 3's; slice 5 al
   ever passes a shield.
 - **A shockwave reaches `Targeting.Shaken`** (nothing in flight): the `Immovable` is HELD (Disabled), the rest thrown.
   A practice dummy is `IStatused` so a hold means the same on it (its launcher quiet).
-- **A gravity well is a host list** (6b-D39, `Wells.cs`): craft move in the world state already sent; every peer
-  draws the well from ONE raise that carries its life (`Fx.Raise(.., time)`: a non-warning effect may say how long
-  it lasts). What moves is `Targeting.Pullable`; a latched or towed craft is owned by its latch or its tow.
+- **A gravity well is a zone** (6b-D39, the gate fix): the row `well` of 6c's `Zones.All` -- laid at the cursor
+  (Near 0 / Far 900), Reach 280, Life 6, Prey `Targeting.Pullable` -- with a PULL (`ZoneDef.Light`/`Heavy`, stat ids
+  read at the lay): `Zones.Tick` drags each prey inside straight at the centre, never past it. Craft move in the
+  world state already sent; every peer draws the zone from its seed. A latched or towed craft is owned by its latch
+  or its tow. It was first built as its own host list and Fx row: a second zone system, which the merge gate caught
+  -- a thing a pilot lays, the host ticks and every peer draws IS a zone row.
 - **One heal door, every friendly hull** (6b-D37, D43): the Tender's lance and Repair field heal through slice 4's
   `Mend.Give`, never a second path; what it mends is an `IMendable` (a pilot, a sentry, a fleet ship), and
   `Mend.Friendlies` is every pilot in `Combat.Players` plus what a raid can reach, each once. A new friendly hull

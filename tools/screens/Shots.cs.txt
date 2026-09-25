@@ -1107,7 +1107,8 @@ public partial class _Shots : Node
     }
 
     // 79g: the bastion's gravity well 500 u ahead, three held lights and a held gunship inside its 280 u
-    // ring being drawn in, and one light outside it left where it is. The well's own draw (Fx.Well).
+    // ring being drawn in, and one light outside it left where it is. The well is a zone (Zones.All "well"):
+    // its disc with the pull's rings running in (ZoneNode._Draw).
     async Task LaneA6bWellFrame(Hub hub, Vector2 yard)
     {
         var bs = hub.GetNode<PlayerShip>("Ship_1"); bs.Position = yard; bs.Velocity = Vector2.Zero; bs.Rotation = 0f;
@@ -1119,7 +1120,7 @@ public partial class _Shots : Node
         foreach (var r in craft) { r.Hp = 1e9; r.ApplyStatus(Status.Disabled, 10); }
         bs.Sl("well").Cool = 0; bs.AimPoint = at; bs.UseAbility("well", 0);
         await W(0.6); await Snap("79g_gravity_well");
-        hub.Wells.Clear();
+        foreach (var z in hub.Laid.Where(z => z.Row == Zones.Well).ToList()) hub.Down(Spawns.Zone, z, burst: false, float.NaN);
         foreach (var r in craft) hub.RaiderDown(r);
         await W(0.3);
     }

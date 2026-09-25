@@ -40,14 +40,16 @@ history pick the work up from it alone. Update it in the same change as the code
 built. FREIGHTER (spotter paint on the wire, Time on target on F, the Bubble over every friendly hull on Q, Redeploy on
 E); TENDER (the Mending lance on Space, a Beam primary through slice 4's `Mend`, now on every friendly hull; the
 Overdrive field on F, the Repair field on Q, Resupply on E); BASTION (the siege mortar, a Lob primary; Bunker buster
-on F; Shockwave on Q, holding what it cannot throw; Gravity well on E, `Wells.cs`). version-l (slices 4, 5, 6c)
+on F; Shockwave on Q, holding what it cannot throw; Gravity well on E, a row of 6c's `Zones.All`). version-l (slices 4, 5, 6c)
 merged in. Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice
 (the LaneA6b* solo checks, LaneA6bBusterBossChecks in the boss fight, LaneA6bSiegeChecks in the siege, and every
 rewritten row, sweep and table check), rung 4 (frames 79c-79k), rung 5 `six,six` (LaneA6bPaintWireHost/Guest,
 LaneA6bTotHost/Guest, LaneA6bFieldsHost/Guest). Wire (appended, renumbered past 6c's on the merge): Shots.Spotter = 9,
-Shots.Buster = 10, Fx.Tot = 16, Fx.Well = 17, Beam.Tot = 10, Lines.Tot = 4, Missiles.Mortar = 2, FxShape.Vortex,
+Shots.Buster = 10, Fx.Tot = 16, Zones.Well = 2, Beam.Tot = 10, Lines.Tot = 4, Missiles.Mortar = 2,
 FieldLook.Lance; the lance and the fields ride the ability slots (no new RPC). Detail and decisions (6b's D33-D45;
-kits5 also used D33-D37): `docs/plans/ledger_kits6b.md`.
+kits5 also used D33-D37): `docs/plans/ledger_kits6b.md`. Merge gate 1 fixed (kits6b-J11): the well is a zone row
+(its own list and Fx row deleted), Redeploy's bow check off its knife edge, Time on target proved on a moving gunship
+(0/130/260 u/s), the Repair field proved to skip a wreck.
 
 **2026-09-25 (worktree `WarShips_wt_kits4`, branch `wt/kits4`): class kits lane A slice 4 -- F8 (the
 press's point, helm moves with the Grapnel's pull and swing, the host's mark and wards) and F10 (Mend)

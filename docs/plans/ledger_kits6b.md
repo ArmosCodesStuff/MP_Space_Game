@@ -413,3 +413,19 @@ Done: J2, J3, J4 (a3265f7, 43b0953, 19cfffa). Next is kits6b-J5; no PRE written.
 ### kits6b-J11 · PRE · kits6b gate fix (the opus merge gate's four findings) -- tier opus
 - Intent: (1) the gravity well becomes a Zones.All row 'well' (ZoneDef Light/Heavy pull stat ids, Zones.Tick drags Prey), Ab.Well Lays it; delete Wells.cs, Hub.Wells + tick, CastWell/WellPoint, Fx 'well' row + FxShape.Vortex + Fx.Raise's time; checks to H.Laid + the row. (2) LaneA6bRedeployChecks' bow knife edge (wrap to [-60,300)). (3) TOT on a moving target 0/130/260 u/s; the repair field skips a wreck. (4) Ships.cs:24 stale comment.
 - HEAD b6e3343. Files: scripts/Wells.cs c1b5ab6, scripts/Zones.cs 2a5475d, scripts/Hub.cs 523046c, scripts/PlayerShip.cs d07b9b2, scripts/Abilities.cs 5b3dd81, scripts/Fx.cs 40b761a, scripts/Ships.cs 775f5d1, scripts/Targeting.cs 7266a74, tools/smoketest/SmokeTest.cs.txt bc154a9, tools/screens/Shots.cs.txt deefe9e, docs/CHANGES.md fc49f8d, docs/DESIGN.md 86a6eab,
+### kits6b-J11 · POST (gate fix)
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- (1) The well is Zones.All row 2 `well` (Reach 280, Life 6, Prey Pullable, Near 0 / Far 900, Light/Heavy = well_light
+  / well_heavy read at the lay into ZoneNode.LightPull/HeavyPull); Zones.Tick(hub, delta) pulls (Zones.Pull: straight
+  at At, min(d, rate*dt), skips Latched/Towed); ZoneNode._Draw adds the pull's inward rings for a row with Light.
+  Ab.Well: Lays + Cooldown well_cooldown, Press Lay("well"). Deleted: Wells.cs, Hub.Wells + tick, CastWell/WellPoint,
+  Fx.Well row, FxShape.Vortex, Fx.Raise's time + FxNode.Life's Time branch (back to version-l's). DEFAULT TAKEN: the
+  stat rows well_range / well_radius / well_time deleted too (the row's literals replace them, as the curtain's are).
+- (2) LaneA6bRedeployChecks: bearings wrapped into [-60, 300) before the sort, each slot 120k +-2.
+- (3a) LaneA6bTotChecks: the gunship moved straight at {0,130,260} u/s for 0.25 s (clock-driven, on tSpot at the
+  press); asserts 40 a line and 40 x (k+1) on it. (3b) LaneA6bRepairFieldChecks: a destroyer mate wrecked
+  (Restore(0,false,60)) 150-450 u off in every run: hull 0, !Mendable, Mend.Give lands/credits 0, near sentry gains.
+- (4) Ships.cs:24 comment. Rewritten: LaneA6bWellChecks (row + H.Laid, drawn = ZoneNode), LaneA6bSiegeChecks' well run,
+  sweep witness 'well' (H.Laid, row Well), sweep's H.Wells.Clear dropped (Laid already cleared), Fx.All.Length 17 x2,
+  frame 79g's cleanup. Docs: CHANGES Handoff, DESIGN D39.
+- Test phase owes (unchanged chain): solo x2 for the above, screens for 79g (the well is now drawn by ZoneNode: read once).

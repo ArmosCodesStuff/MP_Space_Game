@@ -138,7 +138,7 @@ public class AbilityDef
     // A CHARGED ROW: it holds Charges (a stat id) presses; its slot's N counts those spent, and one comes back
     // every Recharge seconds (a stat id), one at a time (PlayerShip.Spend, and TickAbilities' Cool). The tether.
     public string Charges, Recharge;
-    // A ZONE IT LAYS (Zones.cs), at the stern or the cursor: a row of Zones.All (PlayerShip.Lay). The tether mine, the curtain.
+    // A ZONE IT LAYS (Zones.cs), at the stern or the cursor: a row of Zones.All (PlayerShip.Lay). The tether mine, the curtain, the well.
     public ZoneDef Lays;
     // A DECOY SALVO IT POPS round the hull (Decoys.cs): a row of Decoys.All (PlayerShip.Pop). The flares.
     public DecoyDef Pops;
@@ -444,7 +444,8 @@ public static class Ab
     {
         Id = "well", Name = "Gravity well", Short = "WELL", Default = Key.E,
         Blurb = "A well at the cursor that drags loose raiding craft into its centre -- the light ones twice as fast. Bosses, structures and anything latched stay put.",
-        Press = (s, _) => s.CastWell(),
+        Lays = Zones.All[Zones.Well], Cooldown = "well_cooldown",
+        Press = (s, _) => s.Lay("well"),
         Refuse = (s, _) => s.Sl("well").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => Timed(s, "well", "well_cooldown", "READY"),
     };

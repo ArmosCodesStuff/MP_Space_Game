@@ -947,23 +947,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                     Stats["buster_damage"], source: this, hitSource: "buster", size: 1.8f);
     }
 
-    // THE GRAVITY WELL (the Bastion's E, Wells.cs): down at the cursor, clamped to well_range on its bearing,
-    // pulling for well_time; every peer draws it from the one raise, for the same time.
-    public Vector2 WellPoint(Vector2 cursor)
-    {
-        var off = cursor - Position;
-        return off.Length() <= Stats["well_range"] ? cursor : Position + off.Normalized() * (float)Stats["well_range"];
-    }
-    public void CastWell()
-    {
-        if (Sl("well").Cool > 0 || MyHub is not { } h) return;
-        Sl("well").Cool = Cooling(Stats["well_cooldown"]);
-        var at = WellPoint(AimPoint);
-        h.Wells.Add(new Well { At = at, Radius = (float)Stats["well_radius"], Left = Stats["well_time"],
-                               Light = (float)Stats["well_light"], Heavy = (float)Stats["well_heavy"] });
-        Fx.Raise(Fx.Well, at, (float)Stats["well_radius"], Stats["well_time"]);
-    }
-
     // ── THE HEAVY FIGHTERS ──────────────────────────────────────────────
     // THE RAILGUN'S SHOT (its row's Loose, on the host, when a charge stroke is let go on a seated
     // round): the band the charge reached (Charges.Of: rail_tap at once, ramping to the whole at full)
@@ -1616,7 +1599,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         sl.Cool = Cooling(Stats[def.Cooldown]);
         return true;
     }
-    // A ZONE LAID (AbilityDef.Lays: the tether mine, the curtain), on the host: what the press spends, then the
+    // A ZONE LAID (AbilityDef.Lays: the tether mine, the curtain, the well), on the host: what the press spends, then the
     // row laid where it goes (Zones.Spot: the stern, or the cursor clamped with its bar across the aim), what the
     // host decides of it read from this sheet now (Zones.Lay).
     public void Lay(string id)

@@ -1327,8 +1327,6 @@ public partial class Hub : Node2D
     // flare pulling its landing mark aside (F14's NetDecoy) -- names it by that id.
     private readonly List<(Vector2 at, double left, int from, MissileSpec shot, int id)> _blasts = new();
     public int BlastsPending => _blasts.Count;
-    // THE GRAVITY WELLS DOWN (host; Wells.cs): each pulls loose craft into its centre until its time is up.
-    public readonly List<Well> Wells = new();
     // every blast in the air: its id, its side, where it will land and how long it has left
     public IEnumerable<(int id, int side, Vector2 at, double left)> Blasts
     { get { foreach (var b in _blasts) yield return (b.id, b.shot.Side, b.at, b.left); } }
@@ -1651,9 +1649,8 @@ public partial class Hub : Node2D
         if (Net.IsHost && Session.Places.Count > 0) ExpireHolds();
         if (Net.IsHost) _raids.Tick(delta);
         if (Net.IsHost) TickBlasts(delta);
-        if (Net.IsHost) global::Wells.Tick(Wells, Combat.Hostiles, delta);
         if (Net.IsHost) Decoys.Tick(this);
-        if (Net.IsHost) Zones.Tick(this);
+        if (Net.IsHost) Zones.Tick(this, delta);
         TickMission(delta);
         var me = MyShip;
         if (Music.I != null)

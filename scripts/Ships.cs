@@ -21,7 +21,7 @@ using System.Linq;
 public enum ShipClass
 {
     Battleship, Carrier, Destroyer,                     // line
-    FreightHauler, FreightTender, FreightBastion,       // freight -- they deploy their own turrets
+    FreightHauler, FreightTender, FreightBastion,       // freight -- the freighter throws sentries; the tender and the bastion carry fields and a siege kit
     HeavySniper, HeavyWarrior, HeavyWarden,             // heavy fighters
     LightDart, LightEcho, LightWraith,                  // lights
 }
@@ -374,9 +374,6 @@ public static class Classes
                 new() { Group = "Shockwave", Id = "wave_push",     Label = "Throws them",    Base = 1000, Unit = "u", Dec = 0 },
                 new() { Group = "Shockwave", Id = "wave_disable",  Label = "Holds a boss or structure", Base = 3, Unit = "s", Dec = 1 },
                 new() { Group = "Shockwave", Id = "wave_cooldown", Label = "Cooldown",       Base = 30, Unit = "s", Dec = 1, Inverse = true },
-                new() { Group = "Gravity well", Id = "well_range",    Label = "Cast up to",       Base = 900, Unit = "u", Dec = 0 },
-                new() { Group = "Gravity well", Id = "well_radius",   Label = "Radius",           Base = 280, Unit = "u", Dec = 0 },
-                new() { Group = "Gravity well", Id = "well_time",     Label = "Lasts",            Base = 6, Unit = "s", Dec = 1 },
                 new() { Group = "Gravity well", Id = "well_light",    Label = "Pulls a light",    Base = 200, Unit = "u/s", Dec = 0 },
                 new() { Group = "Gravity well", Id = "well_heavy",    Label = "Pulls a heavy",    Base = 100, Unit = "u/s", Dec = 0 },
                 new() { Group = "Gravity well", Id = "well_cooldown", Label = "Cooldown",         Base = 22, Unit = "s", Dec = 1, Inverse = true },
