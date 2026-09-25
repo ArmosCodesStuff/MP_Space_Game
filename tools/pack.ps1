@@ -85,8 +85,11 @@ Write-Host 'pack: exporting the game (a few minutes)'
 # at 0 CPU indefinitely. Waiting on that hangs the release with nothing to read and nothing to
 # diagnose. So: wait generously, then stop waiting and let the files decide. ($args is an
 # automatic variable in PowerShell and must not be used for this.)
-$exportArgs = @('--headless', '--path', $repo, '--export-release', 'Windows Desktop',
-                (Join-Path $game 'Warships.exe'))
+# QUOTED BY HAND. Windows PowerShell's Start-Process joins -ArgumentList with plain spaces and
+# quotes nothing, so the preset name "Windows Desktop" reached Godot as two arguments and the export
+# refused "Windows" as an unknown preset. Every element that can hold a space carries its quotes.
+$exportArgs = @('--headless', '--path', ('"{0}"' -f $repo), '--export-release', '"Windows Desktop"',
+                ('"{0}"' -f (Join-Path $game 'Warships.exe')))
 $proc = Start-Process -FilePath $godotExe -ArgumentList $exportArgs -PassThru -NoNewWindow
 if (-not $proc.WaitForExit($ExportWait * 1000)) {
     Write-Host ('pack: the export has not exited after {0} s -- judging it by what it wrote' -f $ExportWait)
