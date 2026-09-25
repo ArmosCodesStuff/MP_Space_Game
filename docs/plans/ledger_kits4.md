@@ -177,3 +177,14 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
 - Defaults taken: the host cuts the claim at the cap AFTER dropping repeats and BEFORE dropping the dead (the cap bounds
   what a press may claim); `Picked` is ship-wide, overwritten by the next press of a TakesTargets row.
 - Checkpoint: the commit after this entry. Slice 4 gate fix complete.
+
+### kits4-J6 · PRE · kits4 gate 2 fix (the targets[] RPC argument has no guest-role check) -- tier opus
+- Intent: the six-role arena pair carries a NON-EMPTY int[] from the guest: LaneA4GuestPointPress also lends
+  TakesTargets on Ab.Bubble and presses UseAbility("bubble", 0, picks); LaneA4HostPointLend lends TakesTargets (and the
+  freighter's ClassDef.Targets cap 1 -> 3, restored); LaneA4HostPointCheck asserts fg.Picked's NetIds equal the living
+  picks in the order sent, the unknown id dropped, then gives both back. Deviation from the gate's suggestion (recorded):
+  Combat.ById reads Combat.Hostiles only, so the host's hull and the guest's turrets would ALWAYS be dropped; the picks
+  are the home range's practice dummies 3 and 1 (Alive => true, NetIds.Dummy + n - 1 on every peer) around one unknown
+  literal (NetIds.Dummy + 900).
+- Files: tools/smoketest/SmokeTest.cs.txt, this ledger.
+- HEAD 02c2dcac5f9a9170d8d80d6074cf7f2e786940cc · SmokeTest.cs.txt 10abbacbc41417cb4c80fb1d2bc4067e53439211 · ledger f0b9494aefb14b6c7df45a3e2eb96b9564242251
