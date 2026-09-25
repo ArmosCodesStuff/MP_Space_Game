@@ -4958,6 +4958,14 @@ public partial class _Test : Node
     // and one 150-250 u off the line nothing; DealtBy["lunge"] grows 40 a body; a 100 blow inside the dash
     // lands for 50 and one after it for 100; the cooldown reads 7.0 and a second press inside it is
     // refused and goes nowhere.
+    // 2 THE SLIDE HELD THROUGH IT (kits_v31 §7, strafe vs the lunge): three more runs (VaryNear spot, VaryAngle
+    // heading), Shift + A or Shift + D (a seeded side) held 0.3-0.6 s before the press and through the dash: the
+    // hull already sliding (over 20 u/s across) goes 420 +- 5 u along its nose, under 5 u sideways, its heading kept,
+    // in 0.3 s +- 0.05 -- the carry replaces the helm, so the slide adds nothing.
+    // 3 THE WEB (kits_v31 §7, the Lunge is one of the nine's web answers): three more runs (VaryNear spot, VaryAngle
+    // heading, the webifier 250-400 u off at a VaryAngle bearing): Pinned by a latched webifier, E still carries the
+    // hull 420 +- 5 u along its nose (under 5 sideways) -- the carry runs before the pin's forced thrust -- and the
+    // pin is gone within 0.3 s of the dash's end (the latch left behind, its last 0.25 s hold spent).
     async Task LaneA6cLungeChecks(Vector2 yonder)
     {
         await SetClass(ShipClass.HeavyWarrior);
@@ -5027,6 +5035,65 @@ public partial class _Test : Node
             foreach (var f in foes) f.TakeDamage(1e12);
             w.Velocity = Vector2.Zero; w.Sl("lunge").Cool = 0;
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+
+        // 2 -- the slide held through it
+        w.AutopilotTo = null;
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Statuses.Clear(Status.Hardened);
+            w.Position = at; w.Velocity = Vector2.Zero; w.Rotation = rot;
+            var sideKey = Vary(0f, 1f) < 0.5f ? global::Godot.Key.D : global::Godot.Key.A;
+            KeyDown(global::Godot.Key.Shift); KeyDown(sideKey);
+            await Wait(Vary(0.3f, 0.6f));                                              // already sliding
+            float slid = Mathf.Abs(w.SpeedAcross);
+            var from = w.Position; rot = w.Rotation;                                    // re-taken after the wait
+            var nose = Vector2.Up.Rotated(rot); var side = new Vector2(-nose.Y, nose.X);
+            double cPress = w.Clock;
+            w.UseAbility("lunge", 0);
+            for (int i = 0; i < 60 && w.Sl("lunge").Left > 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var moved = w.Position - from; double took = w.Clock - cPress;
+            float along = moved.Dot(nose), across = Mathf.Abs(moved.Dot(side)), turned = Mathf.Abs(Mathf.AngleDifference(rot, w.Rotation));
+            KeyUp(sideKey); KeyUp(global::Godot.Key.Shift);
+            Check(slid > 20f && Math.Abs(along - 420f) < 5f && across < 5f && turned < 0.01f && Math.Abs(took - 0.3) < 0.05,
+                  $"the lunge with Shift + {(sideKey == global::Godot.Key.D ? "D" : "A")} held at heading {Mathf.RadToDeg(rot):0} deg, sliding {slid:0} u/s: {along:0.0} u along the nose (420), {across:0.0} u sideways (under 5), turned {Mathf.RadToDeg(turned):0.0} deg, over {took:0.00} s (0.3)");
+            w.Velocity = Vector2.Zero; w.Sl("lunge").Cool = 0;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+
+        // 3 -- the web
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Statuses.Clear(Status.Hardened);
+            w.Position = at; w.Velocity = Vector2.Zero; w.Rotation = rot;
+            var web = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f), Enemies.Webifier);
+            web.Hp = 1e9; web.Quarry = w;
+            for (int i = 0; i < 60 * 8 && !(w.Pinned && web.Latched); i++) { w.Position = at; w.Rotation = rot; w.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            bool took = w.Pinned && web.Latched;
+            var from = w.Position; rot = w.Rotation;                                    // re-taken after the wait
+            var nose = Vector2.Up.Rotated(rot); var side = new Vector2(-nose.Y, nose.X);
+            w.Velocity = Vector2.Zero;
+            w.UseAbility("lunge", 0);
+            double tFree = -1;
+            for (int i = 0; i < 60 && w.Sl("lunge").Left > 0; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                if (tFree < 0 && !w.Pinned) tFree = w.Clock;
+            }
+            var moved = w.Position - from; double tEnd = w.Clock;
+            float along = moved.Dot(nose), across = Mathf.Abs(moved.Dot(side));
+            for (int i = 0; i < 60 && tFree < 0 && w.Clock < tEnd + 0.6; i++)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                if (!w.Pinned) tFree = w.Clock;
+            }
+            Check(took && Math.Abs(along - 420f) < 5f && across < 5f && tFree >= 0 && tFree - tEnd <= 0.3,
+                  $"the lunge Pinned by a webifier {web.Position.DistanceTo(from):0} u off (latched {took}) at heading {Mathf.RadToDeg(rot):0} deg: {along:0.0} u along the nose (420), {across:0.0} u sideways; the pin gone {(tFree < 0 ? "never" : $"{tFree - tEnd:0.00} s")} from the dash's end (0.3 at most)");
+            web.TakeDamage(1e12);
+            for (int i = 0; i < 30 && w.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            w.Velocity = Vector2.Zero; w.Sl("lunge").Cool = 0;
         }
         w.Position = yonder; w.Velocity = Vector2.Zero;
     }
@@ -6267,6 +6334,145 @@ public partial class _Test : Node
             wd.Sl("taunt").Cool = 0;
             await Wait(0.2);
         }
+        wd.Demo = demo; wd.Position = yonder; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp;
+    }
+
+    // ── SLICE 6c: THE TAUNT PULLS A LATCHED WEBBER OFF, AND ITS SLOT (kits_v31 §7: the Taunt is the Warden's web answer;
+    // kits_v3 §3.5: "webbers let go and post on the Warden", "The slot reads TAUNT 4.2 s -33%"; kits_v2 Proves: a raider
+    // latched on an ally lets go within 0.25 s). Three varied runs (VaryNear spot; a sentry dropped 450-750 u off at a
+    // VaryAngle bearing, the webifier 200-350 u from it at another): the webifier LATCHED on the sentry (its Target, no
+    // call on it); Q -- the guard in 3 frames, Latched false within 0.25 s of the frame the guard shows, then CalledBy and
+    // Target the Warden; the slot lit and reading "TAUNT <Left>s  -33%" on the guard's frame and 0.3-0.6 s later.
+    async Task LaneA6cTauntLatchChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.HeavyWarden);
+        var wd = Me; bool demo = wd.Demo; wd.Demo = true; wd.AutopilotTo = null;
+        var qkey = Abilities.KeyFor(ShipClass.HeavyWarden, "taunt");
+        var taunt = Abilities.Find(ShipClass.HeavyWarden, "taunt");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.2);
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        bool Reads(SlotState st, double left) => st.Lit && st.Line == $"TAUNT {left:0.0}s  -33%";
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            wd.Position = at; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp; wd.Sl("taunt").Left = 0; wd.Sl("taunt").Cool = 0;
+            wd.Statuses.Clear(Status.Hardened);
+            await Frame();
+            at = wd.Position;                                                      // re-taken after the wait
+            var sentryAt = at + Vector2.Right.Rotated(VaryAngle()) * Vary(450f, 750f);
+            var sentry = H.Drop(wd, sentryAt, 1e9);
+            var web = H.SpawnRaider(sentryAt + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 350f), Enemies.Webifier);
+            web.Hp = 1e9; web.Quarry = sentry;
+            void Hold() { wd.Position = at; wd.Velocity = Vector2.Zero; }
+            for (int i = 0; i < 60 * 8 && !web.Latched; i++) { Hold(); await Frame(); }
+            bool latched = web.Latched && ReferenceEquals(web.Target, sentry) && web.CalledBy == null;
+            float off = web.Position.DistanceTo(at);
+            Key(qkey);
+            int frames = 0;
+            for (; frames < 6 && !wd.Statuses.Has(Status.Hardened); frames++) { Hold(); await Frame(); }
+            double tp = wd.Clock;                                                  // timed from the frame the guard shows
+            var st0 = taunt.State(wd, null); double left0 = wd.Sl("taunt").Left;
+            double letGo = -1;
+            for (int i = 0; i < 60; i++)
+            {
+                if (!web.Latched) { letGo = wd.Clock - tp; break; }
+                Hold(); await Frame();
+            }
+            for (int i = 0; i < 6; i++) { Hold(); await Frame(); }
+            bool called = ReferenceEquals(web.CalledBy, wd) && ReferenceEquals(web.Target, wd);
+            double tMid = tp + Vary(0.3f, 0.6f);
+            while (wd.Clock < tMid) { Hold(); await Frame(); }
+            var st1 = taunt.State(wd, null); double left1 = wd.Sl("taunt").Left;
+            Check(latched && frames <= 3 && letGo >= 0 && letGo <= 0.25 && called,
+                  $"taunt latch run {run}: a webifier latched on a sentry {sentryAt.DistanceTo(at):0} u off, itself {off:0} u off ({latched}); Q -- the guard in {frames} frame(s), the latch let go {(letGo < 0 ? "never" : $"{letGo:0.000} s")} after it (0.25 at most); called onto the Warden and its target ({called})");
+            Check(Reads(st0, left0) && Reads(st1, left1) && left1 < left0,
+                  $"taunt slot run {run}: '{st0.Line}' on the guard's frame ({left0:0.00} s up), '{st1.Line}' {tMid - tp:0.00} s on ({left1:0.00} s up): lit, TAUNT <time>s  -33%");
+            web.TakeDamage(1e12);
+            H.DeployedTaken(sentry);
+            wd.Sl("taunt").Left = 0; wd.Sl("taunt").Cool = 0; wd.Statuses.Clear(Status.Hardened);
+            await Wait(0.2);
+        }
+        wd.Demo = demo; wd.Position = yonder; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp;
+    }
+
+    // ── SLICE 6c: THE TAUNT DRAWS THE EMPLACEMENT GUNS (kits_v3 §3.5 card: "emplacement guns prefer the Warden"; kits_v2
+    // Beacon engine: the preference reused for emplacement choosers). A running row that Draws (the Taunt) makes its pilot
+    // the one an emplacement's gun takes first in its reach (Emplacement.Prefer). Three varied placements: a pirate base
+    // at a VaryNear spot, the Warden 1800-2600 u off it at a VaryAngle bearing, and a second pilot (another seat's ship, as
+    // this peer draws one) nearer, 700-1300 u off at a bearing 0.8-2.4 rad away. With no taunt the base's warning goes up
+    // for the nearer pilot; with the Taunt up its Prefer is the Warden and the warning goes up for it; the Taunt over, the
+    // nearer one again. Run 3 also stands the taunting Warden 4700-5200 u off (past the gun's 4500 u): no Prefer, and the
+    // warning goes to the nearer pilot.
+    async Task LaneA6cTauntEmplacementChecks(Vector2 yonder)
+    {
+        var gun = Emplacements.Of(Emplacements.RowOf(Emplacements.Base)).Gun.GetValueOrDefault();
+        Check(gun.Range == 4500f && Ab.Taunt.Draws && Classes.All.Sum(c => Abilities.For(c.Id).Count(d => d.Draws)) == 1,
+              $"the Taunt is the one row that Draws ({Ab.Taunt.Draws}); the base's gun reaches {gun.Range:0} u (4500)");
+        await SetClass(ShipClass.HeavyWarden);
+        var wd = Me; bool demo = wd.Demo; wd.Demo = true; wd.AutopilotTo = null;
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        var lf = BindingFlags.NonPublic | BindingFlags.Instance;
+        var cdF = typeof(Emplacement).GetField("_cd", lf); var markedF = typeof(Emplacement).GetField("_marked", lf);
+        var netPosF = typeof(PlayerShip).GetField("_netPos", lf); var netVelF = typeof(PlayerShip).GetField("_netVel", lf);
+        var mate = new PlayerShip { Name = "TauntMate" };
+        H.AddChild(mate);
+        mate.Init(2, yonder + new Vector2(0, 3000));
+        mate.SetIdentity("Mate", Colors.Gray, Colors.Gray, ShipClass.Carrier);
+        mate.Hp = mate.MaxHp;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int run = 0; run < 3; run++)
+        {
+            var baseAt = VaryNear(yonder, 300f);
+            var pbase = H.Spawn(Spawns.Emplacement, baseAt, Emplacements.RowOf(Emplacements.Base), 1e9, 1e9) as Emplacement;
+            float aW = VaryAngle(), aM = aW + Vary(0.8f, 2.4f);
+            var wAt = baseAt + Vector2.Right.Rotated(aW) * Vary(1800f, 2600f);
+            var mAt = baseAt + Vector2.Right.Rotated(aM) * Vary(700f, 1300f);
+            var farAt = baseAt + Vector2.Right.Rotated(aW) * Vary(4700f, 5200f);
+            var wNow = wAt;
+            void Hold()
+            {
+                wd.Position = wNow; wd.Velocity = Vector2.Zero;
+                mate.Position = mAt; netPosF.SetValue(mate, mAt); netVelF.SetValue(mate, Vector2.Zero);
+            }
+            // the warning the base raises next, and whom for: any one up dropped (no round follows it), its clock due
+            async Task<int> Mark()
+            {
+                markedF.SetValue(pbase, 0); cdF.SetValue(pbase, 0.0);
+                Hold(); await Frame();
+                int m = (int)markedF.GetValue(pbase);
+                markedF.SetValue(pbase, 0);
+                return m;
+            }
+            wd.Sl("taunt").Left = 0; wd.Sl("taunt").Cool = 0; wd.Statuses.Clear(Status.Hardened);
+            Hold(); await Frame(); Hold(); await Frame();
+            int plain = await Mark();
+            wd.UseAbility("taunt", 0);
+            for (int i = 0; i < 6 && !wd.Statuses.Has(Status.Hardened); i++) { Hold(); await Frame(); }
+            Hold();
+            var pref = pbase?.Prefer;
+            int drawn = await Mark();
+            IHittable farPref = null; int farMark = mate.NetId;
+            if (run == 2)
+            {
+                wNow = farAt; Hold(); await Frame();
+                farPref = pbase?.Prefer; farMark = await Mark();
+                wNow = wAt;
+            }
+            wd.Sl("taunt").Left = 0;                                               // the row over: it draws nothing
+            Hold(); await Frame();
+            var afterPref = pbase?.Prefer; int after = await Mark();
+            Check(pbase != null && plain == mate.NetId && ReferenceEquals(pref, wd) && drawn == wd.NetId
+                  && farPref == null && farMark == mate.NetId && afterPref == null && after == mate.NetId,
+                  $"taunt emplacement run {run}: the base's warning with no taunt goes to the pilot {mAt.DistanceTo(baseAt):0} u off ({(plain == mate.NetId ? "yes" : plain.ToString())}), not the Warden {wAt.DistanceTo(baseAt):0} u off; taunting, Prefer is the Warden ({ReferenceEquals(pref, wd)}) and the warning goes to it ({drawn == wd.NetId})"
+                  + (run == 2 ? $"; taunting {farAt.DistanceTo(baseAt):0} u off (past 4500) no Prefer ({farPref == null}), the warning to the nearer ({farMark == mate.NetId})" : "")
+                  + $"; the taunt over, the nearer again ({after == mate.NetId})");
+            if (pbase != null) H.Down(Spawns.Emplacement, pbase, false, 0f);
+            wd.Statuses.Clear(Status.Hardened); wd.Sl("taunt").Cool = 0;
+            await Frame();
+        }
+        mate.QueueFree();
+        await Frame();
         wd.Demo = demo; wd.Position = yonder; wd.Velocity = Vector2.Zero; wd.Hp = wd.MaxHp;
     }
 
@@ -12622,6 +12828,8 @@ public partial class _Test : Node
             await LaneA6cFlakChecks(yonder);
             await LaneA6cHunterPreyChecks(yonder);
             await LaneA6cTauntChecks(yonder);
+            await LaneA6cTauntLatchChecks(yonder);
+            await LaneA6cTauntEmplacementChecks(yonder);
             await LaneA6cCurtainChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);

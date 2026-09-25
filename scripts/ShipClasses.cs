@@ -69,6 +69,9 @@ public interface IRaidTarget : IStatused
     // (Hub.EscortThreat). That asked `quarry is Hauler h ? h.Payout : 0`, so a second kind of
     // target worth raiding meant a second arm on the type test.
     double Payout => 0;
+    // WHAT DRAWS THE HOSTILE GUNS: true while a row that Draws runs on it (AbilityDef.Draws: the Taunt), and an
+    // emplacement's gun then takes it before any other in its reach (Emplacement.Prefer). False for everything else.
+    bool Draws => false;
 }
 
 // ── Wing craft: ONE ROW PER CRAFT ────────────────────────────────────────────

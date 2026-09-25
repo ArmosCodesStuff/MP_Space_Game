@@ -618,11 +618,11 @@ every raider within 170 u 3 s, never a boss; 2 charges of 12 s, 2 out at most); 
 The Anchor keeps through the tether and the flares. **Warden** (hull 270): Space **proximity flak** (22.5 every 0.5 s,
 bursting 70 u off a hostile hull or at 700 u, x0.75 on a boss); F hunters (latched raiders first, then the nearest);
 Q **Taunt** (6 s: every raider within 1000 u, or hunting within it, comes for the Warden and takes x1.5 from all it
-deals; 33% less taken; 20 s); E **flak curtain** (500 x 80 u at the cursor, 150-700 u, across the aim, 6 s: 20 on
+deals; 33% less taken; an emplacement's gun takes the Warden first; the slot reads `TAUNT 5.9s  -33%`; 20 s); E **flak curtain** (500 x 80 u at the cursor, 150-700 u, across the aim, 6 s: 20 on
 touching, then 10 every 0.5 s; 18 s). New mechanisms: `Zones.cs` (laid zones: traps and fields), charged abilities,
 `ShotDef.Fuse`, `ClassDef.Shot`, `ICalled`.
-**Known broken:** engine-unproven (rungs 3-5 owed). The Taunt's "standoff heavies boost in, emplacements prefer the
-Warden" is not built (D57). The tether's 170 u and the curtain's size take no @area item (literal rows, D54 / D58).
+**Known broken:** engine-unproven (rungs 3-5 owed). The Taunt's "standoff heavies boost in" is not built (D57; the
+emplacements' preference is). The tether's 170 u and the curtain's size take no @area item (literal rows, D54 / D58).
 
 ### Class kits, lane A slice 5: melee, the prism, owned bodies, tow and hurl (2026-09-25, worktree wt/kits5)
 

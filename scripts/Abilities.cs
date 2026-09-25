@@ -99,6 +99,9 @@ public class AbilityDef
     // WHILE IT RUNS, THE TRIGGER'S WEAPON HOLDS (the whirlwind's spin, the prism stance): no swing and
     // no shot off the trigger. Read by PlayerShip.Stilled, never by the row's id.
     public bool Stills;
+    // WHILE IT RUNS, IT DRAWS THE HOSTILE GUNS: an emplacement's gun takes this pilot before any other in its reach
+    // (IRaidTarget.Draws, read by Emplacement.Prefer). Read by the flag, never by the row's id. The Taunt.
+    public bool Draws;
 
     // A FLAT TOP SPEED (F1's Add), on top of SpeedStat's multiplier, before the hold: the stat id
     // this row's ship sheet names for it (PlayerShip.SpeedAdds sums every running row's, added in
@@ -417,14 +420,19 @@ public static class Ab
     };
 
     // THE TAUNT (the Warden's Q, kits_v3 §3.5): for 6 s every raider standing within 1000 u, or hunting a target
-    // within it, comes for the Warden and takes x1.5 from all it deals; the Warden takes 33% less meanwhile.
+    // within it, comes for the Warden and takes x1.5 from all it deals; the Warden takes 33% less meanwhile, and an
+    // emplacement's gun with the Warden in reach takes it first (Draws).
     public static readonly AbilityDef Taunt = new()
     {
         Id = "taunt", Name = "Taunt", Short = "TAUNT", Default = Key.Q,
-        Blurb = "For 6 s every raider within 1000 u, or hunting anything within it, comes for you instead, and takes half again from everything you deal. You take 33% less meanwhile. Never a boss.",
+        Blurb = "For 6 s every raider within 1000 u, or hunting anything within it, comes for you instead, and takes half again from everything you deal. You take 33% less meanwhile, and an enemy emplacement with you in reach fires at you first. Never a boss.",
+        Draws = true,
         Press = (s, _) => s.Taunt(),
         Refuse = (s, _) => s.Sl("taunt").Left > 0 ? "TAUNTING" : s.Sl("taunt").Cool > 0 ? "COOLING" : null,
-        Show = (s, _) => Timed(s, "taunt", "taunt_cooldown", "TAUNT"),
+        // running, the slot reads its time and its guard (kits_v3 §3.5: "TAUNT 4.2s  -33%")
+        Show = (s, _) => s.Sl("taunt").Left > 0
+            ? new SlotState { Line = $"TAUNT {s.Sl("taunt").Left:0.0}s  -{(1 - s.Stats["taunt_guard"]) * 100:0}%", Lit = true }
+            : Timed(s, "taunt", "taunt_cooldown", "TAUNT"),
     };
 
     // THE FLAK CURTAIN (the Warden's E, kits_v2's card): 500 x 80 u at the cursor (150-700 u), across the aim, live

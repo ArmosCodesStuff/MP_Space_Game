@@ -1317,8 +1317,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         }
     }
 
-    // THE WHIRLWIND'S PRESS (host): its time up, its cooldown, its first blow at once; every web on
-    // the hull let go (the pin and the web's own ask), and none may take it until the spin is over.
     // WHAT A PRESS SPENDS, on the host: a CHARGED row (AbilityDef.Charges) one charge if one is left (its slot's N
     // counts the spent ones), the recharge started if none was running; a row with a Cooldown its cooldown, if it
     // is not cooling. False: nothing to spend, and the press does nothing.
@@ -1360,7 +1358,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // THE TAUNT (AbilityDef Taunt: the Warden's Q), on the host: for taunt_time every raider squad with a member
     // within taunt_reach, or hunting a target within it, is called onto this ship (Raider.Call: a boss, a missile
     // or a practice craft never -- Targeting.Raiding); the hull takes taunt_guard of every blow (Hardened); the
-    // reach flashes for every peer. The x taunt_mult is Outgoing's.
+    // reach flashes for every peer. The x taunt_mult is Outgoing's; the row Draws while it runs (Draws below).
     public void Taunt()
     {
         ref var sl = ref Sl("taunt");
@@ -1374,6 +1372,19 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                 r.Call(this, secs);
     }
 
+    // IT DRAWS THE HOSTILE GUNS (IRaidTarget.Draws) while any of its class's rows that Draws runs: the Taunt. Read by
+    // an emplacement's gun (Emplacement.Prefer), on the host, where the row's Left is the host's own.
+    public bool Draws
+    {
+        get
+        {
+            foreach (var def in Abilities.For(Class)) if (def.Draws && Sl(def.Id).Left > 0) return true;
+            return false;
+        }
+    }
+
+    // THE WHIRLWIND'S PRESS (host): its time up, its cooldown, its first blow at once; every web on
+    // the hull let go (the pin and the web's own ask), and none may take it until the spin is over.
     public void Whirl()
     {
         ref var sl = ref Sl("whirlwind");

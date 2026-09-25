@@ -1136,6 +1136,9 @@ The three heavies' rows and keys (ledger_kits6c.md D38-D58). What is durable:
   press and survives the tether and the flares; the prism drops at once and ends on any other press.
 - **The Taunt's x1.5 is the dealer's stat** (`taunt_mult`, 0 elsewhere) read in `Outgoing` through `ICalled`, never
   a class test; the call itself is the squad's (slice 5).
+- **The Taunt draws the emplacement guns by a row flag** (`AbilityDef.Draws`, read through `IRaidTarget.Draws`): an
+  emplacement's gun takes the nearest drawing pilot in its reach before the nearest of all (`Emplacement.Prefer`, read
+  where each warning goes up). Its mount is a main gun that follows `AimAt`, so `Turret.Preferred` never sees it.
 - **The active reload** is `ActiveReload.cs` (sniper_active_reload.md): one meaning per stroke, the host judges a
   guest's claimed share within its leeway, and the reload bar (`ReloadBar.cs`) draws only the owner's view.
 

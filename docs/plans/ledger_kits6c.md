@@ -609,3 +609,37 @@ break the bash tool; write the script with the Write tool), SmokeTest.cs.txt LF 
 - Merge risks: Spawns.Zone = 4, NetIds.Zone, Shots.Flak = 8, Zones rows, ICalled on Raider (one line in Raider.cs),
   AbilityDef.{Charges, Recharge, Lays, Pops, Cooldown, ReachStat}, StanceSpec.{Release, Keeps}, ClassDef.Shot, Hub (Laid,
   Zones.Tick, ReloadBar child), the ability sweep's witness table, Items @duration / @area lists.
+
+## kits6c-J15 · PRE (kits6c gate fix)
+- tier opus. Intent: the opus merge gate's six findings, exactly: (1) LaneA6cLungeChecks part 2, a lunge with Shift+A/D held
+  (3 runs, side varied): 420 +-5 along the nose, < 5 sideways; (2) part 3, the lunge as a web-breaker: Pinned by a latched
+  webifier, E carries 420 u and the pin is gone within 0.3 s of the dash's end; (3) NEW LaneA6cTauntLatchChecks: a webifier
+  LATCHED on a Drop'd sentry lets go within 0.25 s of the guard showing, then CalledBy == Target == the Warden, plus the slot
+  line on each press; (4) D57's emplacement half built: AbilityDef.Draws (a running row that draws the hostile guns; the
+  Taunt), IRaidTarget.Draws (false by default; PlayerShip: any running Draws row), Emplacement.Prefer (the nearest drawing
+  pilot in its gun's reach) read first by its gun's choice; NEW LaneA6cTauntEmplacementChecks (3 varied placements);
+  (5) the Taunt's slot reads "TAUNT 5.9s  -33%" while it runs; (6) the Whirlwind's press comment moved above Whirl().
+  Records: CHANGES.md Known broken + DESIGN.md slice 6c (D57 now only the heavies' boost-in).
+- HEAD 6d6ba0de6636040fe8f5647dca1ffeeeece70903
+- scripts/Abilities.cs b7e7297d6159d58d5a75aea9a1b1bb91ee63c149
+- scripts/PlayerShip.cs 2ce3bedabb02b678f8939493d47f74d3d04f15a8
+- scripts/Emplacements.cs 9e91e950912d5c59960179fa30d503a8e4500e2b
+- scripts/ShipClasses.cs bfd8d210c94136bc6b853ba91969d59064ecdd78
+- tools/smoketest/SmokeTest.cs.txt a6c160e309a198cd713857c33346ffb4349f4217
+- scripts/Turrets.cs 28741b6301656d9c9714467a9f255a3306b2737f
+- docs/DESIGN.md 9c1b4f899be9d263dc686b4d19cc57f89d0e644c
+- docs/CHANGES.md 420516338ad798c98ac17ae2b2a1b8074d60b45f
+## kits6c-J15 · POST (kits6c gate fix)
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: AbilityDef.Draws (Taunt true); IRaidTarget.Draws (default false; PlayerShip: any running Draws row of its class);
+  Emplacement.Prefer (nearest drawing pilot, Attackable, in its gun's Range), read first in its _Process prey choice;
+  the Taunt's slot "TAUNT {Left:0.0}s  -{(1-taunt_guard)*100:0}%" lit while it runs; blurb names the emplacements;
+  the Whirlwind's press comment above Whirl(); ITurretHost.Prefer's comment says why the emplacement's mount never reads it.
+- D57 narrowed: only "standoff heavies boost in" stays unbuilt (Raider.cs, another lane's file); CHANGES Known broken +
+  DESIGN slice 6c say so.
+- Checks: REWRITTEN LaneA6cLungeChecks (+ part 2: Shift+A/D held, 3 runs; + part 3: Pinned by a latched webifier, 3 runs),
+  NEW LaneA6cTauntLatchChecks (3 runs: latched webber lets go <= 0.25 s, called; the slot line x2 per run),
+  NEW LaneA6cTauntEmplacementChecks (3 placements, a seat-2 PlayerShip as the nearer pilot; run 3 out of reach).
+  The test phase owes them at rung 3 x2 (chain quick,solo,solo). No guest check (the choice is the host's; the warning
+  lane's wire is unchanged).
+- Next: none (lane's gate fix done).
