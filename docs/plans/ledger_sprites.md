@@ -512,3 +512,9 @@ uncommitted paths: J4's edits (no POST) and J5 started without a PRE.
   half-beams unchanged, the destroyer's mains on its keel"; rewritten the battleship hull + seats
   (mains' Y now asserted too) and the carrier sprite line.
 - Next: A3 merge version-l.
+
+### A3 merge version-l -- PRE
+- Tier opus. Intent: git merge version-l (47 commits: the net lane's WebRTC R1 -- Net.cs fingerprint,
+  Link/Rendezvous, SmokeTest, CLAUDE.md -- plus walls/unlocks; the kits lane is NOT merged there, so
+  ClassArt.PdRing stays). Resolve keeping both; every art table stays hashed by Net.Fingerprint.
+- Start: ff30f5df0a1d4bf2ab0c1e9c5fa0fa99c52434c4 · version-l 93b2c8c4135f7789999fa808fba8b738899bea2e
