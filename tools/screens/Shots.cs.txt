@@ -183,7 +183,7 @@ public partial class _Shots : Node
                 var armDock = Y.Arms[armIx].Dock;
                 Y.Release(miner);                                               // out of the line, its own arm handed on
                 Y.SetArm(miner, armIx); miner.State = Gatherer.St.Unloading; miner.Cargo = 1e6;
-                miner.Position = armDock.Berth(Gatherer.Length); miner.Rotation = armDock.Heading;
+                miner.Position = armDock.Berth(miner.Def.Length); miner.Rotation = armDock.Heading;
                 courier.Phase = 0f; courier.Clock = courier.Cycle - 0.2;       // just short of home: it docks while the frame settles
                 ship.Visible = false; ship.Velocity = Vector2.Zero; ship.Position = armDock.Pad + armDock.Row.Open * 50f;
                 zp.SetValue(H, 3.0f); await W(1.6);

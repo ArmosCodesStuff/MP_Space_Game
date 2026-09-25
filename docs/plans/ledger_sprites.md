@@ -113,6 +113,60 @@ in this lane; the main session owes rungs 3 and 4 (listed at the end).
   CAUTION: the kits lane (WarShips_wt_kits) edits ClassArt mounts (F7 arcs, F16 PD 2): touch only
   Texture/Length-art/marks/nozzle lines, and say in the POST which mount literals moved.
 
+### QUEUED (owner ruling via the coordinator, 2026-09-25): J3b boss red, right after J3
+- The bosses are RED AND BLACK: the owner's swatch, mean RGB 172, 7, 2 = tint (0.67, 0.03, 0.01),
+  R 160-180, "I like this and black probably". Replaces sprites.md Q5's boss tints (D9) on the Rusty
+  Bucket and the Drake. If a pure multiply leaves the hull unreadable on space (art L ~0.57 -> reds
+  ~0.38), keep hue and black and lift the value only as far as the frame needs; record the choice as a
+  decision; the swatch literal stays in the check asserting the tint row. Rewrite every harness check /
+  Shots frame asserting the old boss tints in the same commit. One commit, own PRE/POST; rung 4 owes
+  frames 38, 42, 62-66. Then J4, J5.
+
+### J3 fleet -- PRE
+- Intent: 6 `$Finished` rows (cargo_4 hauler, drone_mining miner, drone_salvager salvager,
+  drone_economy courier.png NEW, interceptor_a wing fighter, interceptor_b bomber); GathererDef,
+  LaneDef, WingDef derive from HullArt; the Hauler's const/sprite/inline nozzles become a HullArt
+  row; pods, PD seat, Extents, the gatherer emitter and the bomber's launch point re-measured onto
+  the art; couriers L 22 -> 30 (Q6); gatherer tints (Q5). Turrets and outposts keep their art
+  (sprites.md "Keep their current art"; the outpost is not in the mapping).
+- Start: 274b8c52cc1050ec777b0615a2a8e7e7d8939aea
+- Files: tools/make_ships.ps1 9016f81d1e1d · scripts/Hauler.cs bbc72c9e989c · scripts/Gatherer.cs
+  353cb0d9493c · scripts/Lanes.cs 0125e73ad6c5 · scripts/ShipClasses.cs cee7908cf855 · hauler.png
+  60afbc3808f5 · miner.png 021073f18ae9 · salvager.png d252d80d523a · wing_fighter.png 0f19fee70330 ·
+  wing_bomber.png d0dd0bc86114 · courier.png (new) · tools/smoketest/SmokeTest.cs.txt f41305f68b4a ·
+  tools/screens/Shots.cs.txt 21ca86be138b · docs/DESIGN.md 998180e8cf2c · docs/CHANGES.md 3dc0c6bc85c0
+
+### J3 fleet -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. Rungs 3/4 owed (below).
+- Files: make_ships.ps1 (6 rows; the preview crosses every non-turret mark), Hauler.cs (`Hauler.Art`
+  row, const Length gone, pods/PD/HalfWidth off the art, DrawPlumes, `_fit`), Gatherer.cs
+  (GathererDef : HullArt + Emitter + HalfWidth; const Length gone), Lanes.cs (LaneDef : HullArt,
+  courier.png, L 30, CourierBells), ShipClasses.cs (WingDef : HullArt + Launch; torpedo from the
+  pods, alternating), hauler/miner/salvager/wing_fighter/wing_bomber.png, courier.png (new),
+  SmokeTest (2 new checks, 3 rewritten readers, 1 message, 1 comment), Shots (16b reads the row),
+  DESIGN.md (fleet art; the stale Fighter/Bomber bullets gone), CHANGES.md.
+- Commit: the J3 commit (hash = J3b's Start).
+- **D10** No new courier frame: 16b/16c (added after sprites.md was written) show a courier at zoom 3.
+- **D11** Gatherer/courier bells are their three stern thruster blocks (the same drawing in all three
+  drones); the miner's legs reach aft of them, so the fleet check asserts "aft of centre", not the
+  raiders' "aft of 0.4 L". Fighter 5 bells (sprites.md allowed 1; counted off the art, D5).
+- **D12** Hauler PD seated on the bow dome (0, -85.94): the only round turret-like seat on cargo_4;
+  its Extent half-width is the cargo frames' outer rails (40.94), not the engine wings (46.3).
+- **D13** Bomber `Launch` is the port pod's front (-5.30, -4.39); rounds alternate pods by Ammo parity.
+- **D14** Gatherer emitters: miner between its two scoops (0, -17.14), salvager in its claws' mouth
+  (0, -13.36); the unloading load leaves from the same point.
+- Lane overlap: ShipClasses.cs is lane E's (wings) -- touched: the WingDef header (derives from
+  HullArt, +Launch), the two rows (+Nozzles, +Launch lines, the comment), `Sprites.Fit(Def)` in Init,
+  the torpedo launch (2 lines), `_Draw`'s plume (1 line, `len` local gone). No seat of a class moved.
+- Rung 3 owed: new "the fleet wears the pack ..." and "a torpedo leaves from a pod's front ..."
+  (two seeds each); rewritten "two craft may share one pad" (Def.Length; the miner's Extent 12 ->
+  14.2 must stay under the courier's 16.9 u along the face), "salvager's beam is a narrow scan"
+  (Emitter), "turning on the way down, it clears the station" (Art.Length), "fighters 17 u, bombers
+  28.1 u", "a parked bomber sits at 65% on the white deck" (12 u now, was 18).
+- Rung 4 owed: 7, 8, 12-16, 16b, 16c, 27, 28-28e, 46, 59, 59b -- pods on the frames, PD on the bow
+  dome, flames on the bells (hauler 2, drones 3, fighter 5, bomber 2), gatherer tints, courier size.
+- Next: J3b boss red.
+
 ### OWED to the main session (nothing here has run above rung 2)
 - Rung 3 (`tools\smoketest\run.ps1 -Solo`, two seeds for the new checks):
   - new "the title screen's foes wear their raider rows' tints, the Web on its own art"

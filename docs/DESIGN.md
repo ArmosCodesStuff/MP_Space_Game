@@ -754,14 +754,18 @@ under the base. A route or a range that moves must keep the 500.
   `frigate_a`, the Drake Bastion `flagship`, each in a tint -- the average colour of the art it
   replaced, since the pack is grey -- with their painted guns (a boss has no moving turret) and their
   bells listed on the row (2 and 5; a boss draws no flame). HalfWidth 70 and 90 did not move, so the
-  Drake's 310 u throw literal stands.
+  Drake's 310 u throw literal stands. **The fleet** (the pack): the hauler `cargo_4` (`Hauler.Art`; its
+  six painted cargo frames are the six pods, its point defence on the bow dome), the miner
+  `drone_mining` and the salvager `drone_salvager` (each tinted the average colour of the art it
+  replaced; the beam and the unloading load leave from the row's `Emitter`, between the scoops and in
+  the claws), the lanes' couriers `drone_economy` (a file of their own, `courier.png`, 30 u, in the
+  stations' livery), the wing's fighter `interceptor_a` (5 bells) and bomber `interceptor_b` (its
+  torpedoes leave from the front of its pods, one pod then the other: `WingDef.Launch`). The hauler's
+  and the gatherers' `Extent` -- what a raider holds off, not a hit size -- is measured off the art.
 - **Turrets**: the owner's twin-barrelled turret is every main turret (`turret_main.png`, lifted out
   of its drawing by an outline, barrels up, the housing's centre the pivot); point defence is a
   smaller, round, single-barrelled turret in the same style, drawn by the tool (`turret_pd.png`). Each
   class mounts them at its own scale (`ClassArt.TurretTexScale`).
-- **Fighter** (`wing_fighter.png`) is the developer's black-and-purple fighter recoloured white:
-  brightness remapped so shading keeps its direction, the outer outline kept dark against space, and
-  the purple (the saturated pixels) taken to neutral with a faint cool cast on the canopy.
 - **Unused art** (21 carried-over sprites nothing references) lives in `art_unused/`, which has a
   `.gdignore` so Godot never imports it. Kept deliberately, at the developer's request, and so is
   `art_unused/art_4x/`: five hulls at twice and the two turrets at four times the resolution the
@@ -772,8 +776,6 @@ under the base. A route or a range that moves must keep the 500.
   reason.
 - **Background** (`stars.png`): 1024 px, seamless (stars near an edge wrap), on a screen-space layer
   at −100. Client-side only.
-- **Bomber** (`wing_bomber.png`): the developer's small airframe, doubled in resolution, wings swept
-  forward by a smooth warp (the tail booms stretch to follow), radiation trefoil on the nose.
 - **Mount offsets are measured, not placed by eye**: the tool carries each mount through every step
   and prints it as `(pixel − size/2) × world-per-pixel`. They live in `PlayerShip.Art` with each
   turret's texture scale, barrel length (where shots start) and ring radius (where the PD arc sits).

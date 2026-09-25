@@ -467,6 +467,39 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### The base's fleet and the carrier's wing wear the owner's new sprites (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+The hauler is the pack's `cargo_4`, the miner `drone_mining`, the salvager `drone_salvager`, the lanes'
+couriers `drone_economy` (a new file, `courier.png`: they borrowed the miner's and salvager's art
+before), the wing's fighter `interceptor_a` and bomber `interceptor_b`. Each row derives from
+`HullArt` (`GathererDef`, `LaneDef`, `WingDef`, and the Hauler's own `Hauler.Art`) and flies on the
+bells its art has: hauler 2, miner / salvager / courier 3, fighter 5, bomber 2. The rest, off the art
+(`tools/make_ships.ps1` prints every mark):
+- **Hauler**: the six pods are the six painted cargo frames (smaller and further aft than the old
+  pods); its point defence moved from the spine to the bow dome. Its three inline flames and its two
+  copies of `Length / GetHeight` are gone.
+- **Gatherers**: tinted the old art's average colour (sprites.md Q5): miner (0.63, 0.46, 0.31),
+  salvager (0.61, 0.35, 0.11). The beam and the unloading load leave from the row's `Emitter`
+  (between the miner's scoops, in the salvager's claws), not 0.45 L ahead. `Gatherer.Length` is the
+  row's `Length`.
+- **Extent** (the ellipse a raider holds station off and measures its reach to; the fleet has no hit
+  shape) is measured off the art (sprites.md): hauler 40.9 u at its frames' rails (was 24), miner 14.2
+  and salvager 11.2 at their drawn span (both were 12).
+- **Couriers**: 22 -> 30 u (sprites.md Q6: at 22 the new art is 8.6 u wide).
+- **Bomber**: its torpedoes leave from the front of its pods, one pod then the other (`WingDef.Launch`),
+  not 0.45 L ahead on the keel. Parked at 65% it is 12 u across (was 18): still inside the white.
+
+**Checks:** new "the fleet wears the pack" (all six rows trimmed, bell counts, couriers 30 u in the
+livery, gatherer tints, emitters, Extent = drawn span); new "a torpedo leaves from a pod's front, not
+the nose" (every round in half a second, 4.0-6.6 u off its launcher's keel); the courier-sharing,
+salvager-scan and hauler-clears-the-station checks read the rows (`Def.Length`, `Def.Emitter`,
+`Hauler.Art.Length`); the bomber-size message and the parked-bomber comment lost the old art's words.
+
+**Known broken (J3):** UNPROVEN at rung 3 (the two new checks and the three rewritten) and rung 4
+(frames 7, 8, 12-16, 16b, 16c, 27, 28-28e, 46, 59, 59b by eye). No new courier frame: 16b and 16c
+(zoom 3) already show one close. The hauler's wider Extent lets a raider reach it from about 17 u
+further off its keel; the gatherers' moved by +2.2 / -0.8 u.
+
 ### The bosses wear the owner's new sprites, each in a tint (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
 
 The Rusty Bucket is the pack's `frigate_a` and the Drake Bastion its `flagship`, at their lengths (360,

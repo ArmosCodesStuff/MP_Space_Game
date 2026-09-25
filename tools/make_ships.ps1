@@ -576,6 +576,30 @@ $Finished = @(
        Nozzles = @(@(115, 610, 66), @(218.5, 610, 65)) }
     @{ Src = 'flagship.png'; Nose = 'Right'; Out = 'boss_drake.png'; Length = 420
        Nozzles = @(@(184.5, 1358, 67), @(266, 1356, 66), @(346.5, 1300, 51), @(422, 1355, 64), @(520, 1355, 72)) }
+    # the base's fleet. The hauler (Hauler.Art): its six cargo frames are the pods (pod0-2 the port
+    # bays inside their rails, bow to stern; podcorner the first bay's fore-port corner), its point
+    # defence on the bow dome (pd), its span at the frames' outer rails (side)
+    @{ Src = 'cargo_4.png'; Nose = 'Left'; Out = 'hauler.png'; Length = 200
+       Marks = [ordered]@{ pod0 = @(61, 245.5); pod1 = @(61, 340.5); pod2 = @(61, 434.5); podcorner = @(29, 210); pd = @(153.5, 51); side = @(22, 245.5) }
+       Nozzles = @(@(89, 643, 50), @(216.5, 644, 51)) }
+    # the gatherers (Gathering.All): the beam and the load leave from the emitter (between the
+    # miner's scoops, in the salvager's claws); side is the span the raiders hold off
+    @{ Src = 'drone_mining.png'; Nose = 'Left'; Out = 'miner.png'; Length = 40
+       Marks = [ordered]@{ emitter = @(166, 38); side = @(7, 340) }
+       Nozzles = @(@(126.5, 387, 37), @(166, 396, 42), @(205.5, 387, 39)) }
+    @{ Src = 'drone_salvager.png'; Nose = 'Right'; Out = 'salvager.png'; Length = 40
+       Marks = [ordered]@{ emitter = @(165, 100); side = @(7, 120) }
+       Nozzles = @(@(111.5, 557, 50), @(166, 570, 62), @(222, 558, 52)) }
+    # the lanes' couriers (Lanes.All, all four rows)
+    @{ Src = 'drone_economy.png'; Nose = 'Left'; Out = 'courier.png'; Length = 30
+       Nozzles = @(@(92.5, 682, 46), @(140, 685, 48), @(187.5, 682, 46)) }
+    # the carrier's wing (Wings.All): the bomber's torpedoes leave from its pods' front (launch, the
+    # port pod; the starboard is its mirror)
+    @{ Src = 'interceptor_a.png'; Nose = 'Left'; Out = 'wing_fighter.png'; Length = 17
+       Nozzles = @(@(99.5, 536, 37), @(142, 536, 36), @(183, 501, 34), @(223.5, 536, 37), @(264, 536, 36)) }
+    @{ Src = 'interceptor_b.png'; Nose = 'Left'; Out = 'wing_bomber.png'; Length = 28.125
+       Marks = [ordered]@{ launch = @(80.5, 182) }
+       Nozzles = @(@(135, 515, 36), @(219, 515, 36)) }
 )
 $Turns = @{ Up = 0; Right = 1; Down = 2; Left = 3 }
 $Made = @()
@@ -710,13 +734,20 @@ if ($Preview) {
         }
         if ($s.Count -gt 2) {
             # a finished row: a main turret on each 'turret' mark, as wide as its 'housing' mark says;
-            # each nozzle a red bar the bell's width on its aft rim
+            # every other mark a cyan cross; each nozzle a red bar the bell's width on its aft rim
             $row = $s[2]; $names = @(); if ($row.Marks) { $names = @($row.Marks.Keys) }
+            $cyan = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 60, 220, 255)), 1
             for ($i = 0; $i -lt $names.Count; $i++) {
-                if ($names[$i] -ne 'turret') { continue }
-                $q = At $i; $hw = 2 * [Math]::Abs($sh.Marks[$names.IndexOf('housing')].X - $sh.Marks[$i].X) * $u
+                $q = At $i
+                if ($names[$i] -eq 'housing') { continue }
+                if ($names[$i] -ne 'turret') {
+                    $g.DrawLine($cyan, [float]($q[0] - 3), [float]$q[1], [float]($q[0] + 3), [float]$q[1])
+                    $g.DrawLine($cyan, [float]$q[0], [float]($q[1] - 3), [float]$q[0], [float]($q[1] + 3)); continue
+                }
+                $hw = 2 * [Math]::Abs($sh.Marks[$names.IndexOf('housing')].X - $sh.Marks[$i].X) * $u
                 Place $tm $q[0] $q[1] $hw ($hw * $t.H / $t.W) 0
             }
+            $cyan.Dispose()
             $red = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 255, 70, 50)), 2
             for ($j = 0; $j -lt $row.Nozzles.Count; $j++) {
                 $q = At ($names.Count + $j); $bw = $row.Nozzles[$j][2] * $u / 2
