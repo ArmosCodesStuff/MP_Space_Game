@@ -8,7 +8,7 @@ cross-checks every `task <id>` below against its output file. Facts go to README
 - test-phase / task wbbiuayve (wf_8c62491c-3b2): review fixes per scope -> rounds (5 chains, triage, pooled fixes) -> seed sweep ->
   extras -> bar -> release. lands: 3 lines to the owner + the frames (framesForOwner, netOwed); a stop -> docs/plans/ledger_test.md
   and the journal, fix, relaunch: Workflow({scriptPath: <scripts>\test-phase.js, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 2, review: []}}).
-- watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout): re-arm at each expiry while the test phase runs.
+  Watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout) re-armed at each expiry while it runs.
 
 ## Landed (verdict first; delete the row once its action is done)
 - (none)
@@ -17,14 +17,11 @@ cross-checks every `task <id>` below against its output file. Facts go to README
 1. Bash waiter b9uzzs90h fires when "Merge Fable review fixes (lt)" lands (or tp1ar1_0 appears): TaskStop wbbiuayve, then relaunch
    as in the Running row (the script now groups fixes per kind of work, fixes the fix-merge branch name and the asserted gate).
    Else wait for task wbbiuayve; take its return (under 20 lines) as above.
-2. After the release: the two-machine test (NOTES.txt script) as a ledger row; docs/process/fable_report_1.md + _2.md "after the release"
-   lists (harness split, enums, CHANGES fold, scenarios lane, PlayerShip/Hub split), each as a lane with a retrospective after.
+2. After the release: the two-machine test (NOTES.txt) as a ledger row; the fable_report_1/2 "after the release" lists, each a lane + retrospective.
 
 ## Owner questions (one line each, with its default)
 - none open (today's rulings: README, Agents).
 
 ## Notes (merge risks, promised follow-ups; nothing done, nothing historical)
-- Slots proof tpslots_0/1 at ae8ae99: tooling works; solo 42/44 reds, 32 shared, 7+9 seed-only (the old summary capped at 12 lines).
-- review_tasks.json: 37 kept findings (severity >= 2) applied per scope before round 1; 9 dropped (severity 1). Cards' OPEN lines for
-  triage: BB fire-mode key (spec R, built G); Tender numbers have no spec file; DD `longlance`; no grapnel_rip sound.
+- Cards' OPEN lines for triage: BB fire-mode key (spec R, built G); Tender numbers have no spec file; DD `longlance`; no grapnel_rip sound.
 - Unverified work: origin/backup/unverified; version-l/main move only on a green bar. Lane defaults for the release notes: each lane ledger.
