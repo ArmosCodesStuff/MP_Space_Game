@@ -46,9 +46,14 @@ parallel; jobs inside a lane run in order. Take results as they land; stop strag
 
 The cost is the context re-read on every turn and by every agent, not the output.
 
-1. **Every agent runs Opus 5.5 (`model: 'opus'`), `effort` set on every call** (owner, 2026-09-25, "just to
-   be safe"; it replaces "lowest tier"). Effort: low for git-only steps (a merge, a grep), medium for builds
-   and sweeps, high for a merge gate, a diagnosis or a second attempt after a red (the one escalation).
+1. **The model fits the task; `model` and `effort` on every call** (owner, 2026-09-25: the coordinator picks).
+   Opus: anything that evaluates or needs the project as a whole (a feature and its checks, a gate, a
+   diagnosis, triage, a fix found by reading). Sonnet (high) or Haiku: a few steps with a recipe (git-only
+   steps, a merge, running a chain and reading its summary, a fix whose exact text a gate gave, a push, a
+   pack). Effort: low for git-only, medium for builds and sweeps, high for gates, diagnoses and the one
+   escalation after a red, which also goes to Opus. **Every Sonnet/Haiku agent is checked every 30 minutes**
+   (`toolsgents.ps1 -Loop`, in the background while any runs): one past 30 minutes is looked at, and stopped
+   and redone on Opus if it is wasting time or tokens.
 2. **Prompts** give paths, the job, the chain, the return schema, and only the rules that bite here, plus one
    line: an owner message that reaches the agent mid-run is for the coordinator; never stop or wait for it.
    **Returns** are a verdict and a pointer: `status` (done / stopped_context / red / blocked), `head`,
@@ -225,6 +230,7 @@ your own work. WHY gets one sentence; detail when asked.
 ```
 typecheck\typecheck.ps1 · dotnet build · tools\analyse\run.ps1 · python tools\analyse\xref.py
 tools\lanes.ps1                                          # state in one call: lanes, chains, ledger_main
+toolsgents.ps1 [-Loop]                                 # Sonnet/Haiku agents running 30+ min (the watchdog)
 tools\rungs.ps1 -Tree <checkout> -Tag <t> -Steps <chain> [-Slot n] [-Slots n]   # every engine run; lanes run side by side
 tools\smoketest\run.ps1 · tools\screens\run.ps1   # only through rungs.ps1; trust LINT: 0 for layout,
                                                   # read a frame only for new art

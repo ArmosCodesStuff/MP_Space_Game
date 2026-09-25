@@ -28,6 +28,8 @@ Done: SLICE 4 3450da4 (gate 3 passed; wt_kits4 removed). 10:55: 6a at J7, 6b in 
 - none open (owner: slices side by side, items alongside slice 6 with a reconcile pass, never skip a review)
 
 ## Notes
+- WATCHDOG: while any Sonnet/Haiku agent runs, keep `powershell -File tools/agents.ps1 -Loop` running in the background (Bash
+  run_in_background); when it exits it prints the flagged agents: look, stop/redo on Opus if wasteful, re-arm it.
 - Owner 2026-09-25 "push soon, you have a lot": unverified work is backed up to origin/backup/unverified (never version-l/main before a green bar).
 - A wait agent cannot wait long (the harness forces an early answer): express waits as promises inside ONE workflow.
 - Items defaults to report: D-J8a web hold round 2 s (Web Breaker cuts each round's hold); raids' adds scaling HullShare/DamageShare.
