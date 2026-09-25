@@ -1364,19 +1364,22 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   static constructor. The same class of fault: `Character.Bought`, the pilot's purchases, was a
   readonly int[] and so hashed live; it is a property over a mutable field. A value that is state, not
   build, is never a readonly static of a Plain type; the solo run's `BuildChecks` hold both.
-- **A struct row was invisible to the fingerprint three ways.** `Net.Plain` took records and table
+- **A struct row was invisible to the fingerprint four ways.** `Net.Plain` took records and table
   classes, not structs, so an array of `Post` (the pirate base's site) was never hashed and two builds
   that placed its pylons differently met. The first fix (`StructRow`) demanded `IsReadOnlyAttribute`
-  and the game's own assembly, which left two more kinds of constant table through the gate: a MUTABLE
+  and the game's own assembly, which left three more kinds of constant table through the gate: a MUTABLE
   struct row (`StatusSet.Guards`: `StatusGuard[]`, no `readonly`; `EmplacementDef.Gun`: `TurretSpec?`,
-  the pirate base's cruise missile) printed as its bare type name, its numbers invisible; and a
+  the pirate base's cruise missile) printed as its bare type name, its numbers invisible; a
   `System.ValueTuple`N` row (`Hub.PracticeTargets`, `Hub.Outposts`'s names) was skipped whole, being a
-  different assembly than the game's own. Neither is less fixed for it: a value in a static readonly
-  field or a table row is as constant as what holds it, and the harness's own checks that move a row
-  and put it back (`BuildChecks`) prove the array element changes either way. `StructRow` now takes any
-  value type of the game's assembly, or any `System.ValueTuple`N`, whose public instance fields are all
-  Plain, readonly or not; one whose field is code (`WaveCrew.Count`) stays out, as its text compares
-  nothing.
+  different assembly than the game's own; and a row with a DELEGATE FIELD (`WaveCrew.Count`, a `Func`
+  saying how many of a kind a wave brings; `Waves.Patrol`, `Waves.HuntPin`) was rejected outright by the
+  all-Plain test, so neither `Waves.Patrol` nor `Waves.HuntPin` ever entered the fingerprint, and
+  `WaveDef.Crew` printed as bare `[WaveCrew,...]`. Neither is less fixed for it: a value in a static
+  readonly field or a table row is as constant as what holds it, and the harness's own checks that move
+  a row and put it back (`BuildChecks`) prove the array element changes either way. `StructRow` now takes
+  any value type of the game's assembly, or any `System.ValueTuple`N`, whose public instance fields are
+  all Plain OR A DELEGATE, readonly or not; `Show` prints a delegate field as its type name (what code is
+  assigned there is part of the build even though its behaviour is not compared), null as `null`.
 - **"No Character part" was the wrong bar for "nothing about the pilot."** `Character` carries its own
   `const` bounds (`Dir`, `MaxBonus`, `MaxStock`, `PaidKept`, `SaveDelay`) -- the same for every peer on
   this build whichever pilot is loaded, so they belong in the fingerprint and always were part of it.

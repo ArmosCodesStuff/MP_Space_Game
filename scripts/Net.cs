@@ -233,20 +233,24 @@ public partial class Net : Node
         || (t.IsArray && Plain(t.GetElementType()))
         || (t.GetMethod("<Clone>$") != null && !typeof(GodotObject).IsAssignableFrom(t))
         || Table(t) || StructRow(t);
-    // A STRUCT ROW: a value type of the game's own assembly whose public fields are all Plain (a
-    // site's post, a target filter, a status guard, a turret's spec), or a `System.ValueTuple`N`
-    // whose fields are all Plain (a table row of names, positions and flags -- Hub.Outposts,
-    // Hub.PracticeTargets). As fixed as a table row, and written out the same way; before this, an
-    // array of them was not hashed at all. READONLY OR NOT: a value in a static readonly field or a
-    // table row is as fixed as what holds it -- a mutable struct (StatusSet.Guards' StatusGuard,
-    // EmplacementDef.Gun's TurretSpec) is no less part of the build for having settable fields, and
-    // `IsReadOnlyAttribute` only ever told us the struct itself, never the array holding it, could
-    // not be reassigned in place. One with a field that is code (WaveCrew's Count) stays out: its
-    // text would say nothing the other build could compare.
+    // A STRUCT ROW: a value type of the game's own assembly whose public fields are all Plain OR A
+    // DELEGATE (a site's post, a target filter, a status guard, a turret's spec, a wave's crew row
+    // whose Count is a Func), or a `System.ValueTuple`N` whose fields are all Plain (a table row of
+    // names, positions and flags -- Hub.Outposts, Hub.PracticeTargets). As fixed as a table row, and
+    // written out the same way; before this, an array of them was not hashed at all. READONLY OR NOT:
+    // a value in a static readonly field or a table row is as fixed as what holds it -- a mutable
+    // struct (StatusSet.Guards' StatusGuard, EmplacementDef.Gun's TurretSpec) is no less part of the
+    // build for having settable fields, and `IsReadOnlyAttribute` only ever told us the struct itself,
+    // never the array holding it, could not be reassigned in place. A DELEGATE FIELD (WaveCrew.Count)
+    // is part of the row too: two builds with different rules for how many of a kind a wave brings
+    // are different builds, even though the delegate's own text is only its type name (`Show`), never
+    // the code inside it -- what moves the fingerprint is which named method or lambda class is
+    // assigned, not what that code computes.
     private static bool StructRow(Type t) =>
         t.IsValueType && !t.IsPrimitive && !t.IsEnum
         && (t.Assembly == typeof(Net).Assembly || (t.Namespace == "System" && t.Name.StartsWith("ValueTuple`", StringComparison.Ordinal)))
-        && t.GetFields(BindingFlags.Public | BindingFlags.Instance) is { Length: > 0 } fields && fields.All(f => Plain(f.FieldType));
+        && t.GetFields(BindingFlags.Public | BindingFlags.Instance) is { Length: > 0 } fields
+        && fields.All(f => Plain(f.FieldType) || typeof(Delegate).IsAssignableFrom(f.FieldType));
     // A TABLE ROW: one of the game's own data classes (a gear part, an upgrade, a boss type). Held in
     // a readonly field it is as fixed as a constant -- but a class, so it has no text of its own:
     // its public fields are written out, dictionaries sorted by key.
@@ -257,6 +261,7 @@ public partial class Net : Node
     private static string Show(object v, int depth) => v switch
     {
         null => "null",
+        Delegate del => del.GetType().Name,
         IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
         GodotObject g => g.GetType().Name,
         Array a => "[" + string.Join(",", a.Cast<object>().Select(x => Show(x, depth))) + "]",

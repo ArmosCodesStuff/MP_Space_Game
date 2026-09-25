@@ -2250,9 +2250,10 @@ public partial class _Test : Node
         int now = FingerprintNow();
         Check(typeof(Net).GetField(nameof(Net.Protocol), BindingFlags.Public | BindingFlags.Static) == null && selfParts.Count == 0 && _hashAtStart == Net.Protocol && now == Net.Protocol,
               $"the build's fingerprint never hashes itself and is whole when it is taken: at the harness's start and now it is the build's ({_hashAtStart:x8} at the start, {now:x8} now, the build's {Net.Protocol:x8}{(selfParts.Count == 0 ? "" : "; " + string.Join(" | ", selfParts))})");
-        // A STRUCT ROW IS HASHED: a readonly struct whose public fields are all Plain (a site's post) is
-        // written out field by field -- an array of them was not hashed at all -- so one field of one row,
-        // moved, moves the fingerprint, and put back it is the build's again
+        // A STRUCT ROW IS HASHED: any game value type or System.ValueTuple`N whose public fields are
+        // Plain or delegates, readonly or not (a site's post) is written out field by field -- an array
+        // of them was not hashed at all -- so one field of one row, moved, moves the fingerprint, and
+        // put back it is the build's again
         var posts = Emplacements.PirateBase;
         int at = Rng.RandiRange(0, posts.Length - 1);
         var post = posts[at];
@@ -2295,6 +2296,25 @@ public partial class _Test : Node
         string targetPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("Hub.PracticeTargets=", StringComparison.Ordinal)) ?? "none";
         Check(targetShifted != Net.Protocol && FingerprintNow() == Net.Protocol && targetPart != "none",
               $"a value-tuple row is part of the build's fingerprint: one practice target moved moves it, put back it is the build's again (target {pi}: {targetShifted:x8}, the build's {Net.Protocol:x8}; {targetPart[..Math.Min(90, targetPart.Length)]})");
+        // A ROW WITH A DELEGATE FIELD IS HASHED TOO: WaveCrew.Count is a Func<WaveBrief,int> --
+        // StructRow used to demand every field Plain, so a WaveCrew[] printed as its bare type name
+        // ("WaveCrew"), and the private static readonly rows built from it (Waves.Patrol, Waves.HuntPin)
+        // never entered the fingerprint at all. One crew's Step moved, moves it; put back it is the
+        // build's again, and the printed row shows the struct written out, not a bare type name.
+        var w = Waves.All.First(x => x.Id == "raid");
+        int ci = Rng.RandiRange(0, w.Crew.Length - 1);
+        var c = w.Crew[ci];
+        w.Crew[ci] = new WaveCrew(c.Kind, c.Way, c.Nth, c.Count, c.At, c.Step + Vector2.Right.Rotated(VaryAngle()) * Vary(1f, 50f));
+        int crewShifted = FingerprintNow();
+        string crewPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("Waves.All=", StringComparison.Ordinal)) ?? "none";
+        try
+        {
+            Check(crewShifted != Net.Protocol && crewPart.Contains("WaveCrew{", StringComparison.Ordinal),
+                  $"a row with a delegate field is part of the build's fingerprint: one wave crew's step moved moves it, and it is written out, not bare ({crewShifted:x8}, the build's {Net.Protocol:x8}; {crewPart[..Math.Min(90, crewPart.Length)]})");
+        }
+        finally { w.Crew[ci] = c; }
+        Check(FingerprintNow() == Net.Protocol,
+              $"a wave crew row put back is the build's fingerprint again ({FingerprintNow():x8}, the build's {Net.Protocol:x8})");
         // Net.Fingerprint() folds in every static field of every null-namespace type that is
         // IsLiteral or IsInitOnly with a Plain field type -- and string is Plain. A
         // `public static readonly string Build` would therefore enter the hash two peers are

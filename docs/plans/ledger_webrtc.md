@@ -617,3 +617,20 @@ Owed on the R1 records commit (it carries J10 and J9c):
 - hashes (pre-merge): Net.cs cedcd5086de1baca30525bd70ad1bc88ad4f403a; SmokeTest.cs.txt
   016aef3225e0914b4fdfde01215783003e2559be; DESIGN.md 0fb7242345053d4db8a5e4c664de98646c4475f0;
   ledger ce2d58d4728ece7025ce438590e73cd69865a63b; CHANGES.md b029fd808f0ec7e0000563353199ae0fa335e4e2
+
+### R1R POST
+- verdict: done. Step 0's merge (`fea3466`): walls lane's Character.Peak kept beside net's Bought
+  property; CHANGES.md/DESIGN.md keep both lanes' entries, the stale pre-walls-merge multi-lane status
+  block dropped. `Unlocks.All` needed no fingerprint fix of its own: it is already a record class
+  (`<Clone>$`), so it already reaches `Net.Plain` through the Table/record path, not `StructRow`.
+  Job R1R: `StructRow` now accepts a field that is Plain OR a delegate; `Show` prints a delegate as its
+  type name. New `BuildChecks` row after the value-tuple check moves `Waves.All["raid"]`'s crew step,
+  asserts the fingerprint moves and `Waves.All=` contains `WaveCrew{` (not bare), restores and asserts
+  the fingerprint is the build's again. Net.cs's own comment (~236-245) was already written to the new
+  rule when it was authored; DESIGN.md's trap (~1367-1380) and SmokeTest's Post-check comment
+  (~2253-2256) rewritten to match. `typecheck` and `verify.ps1 -Quick` both ALL CHECKS PASSED.
+- files: scripts/Net.cs (`StructRow`, `Show`), tools/smoketest/SmokeTest.cs.txt (Post check comment,
+  new delegate-row `BuildChecks`), docs/DESIGN.md (struct-row trap, four kinds now)
+- checkpoint: (this commit, code + records together)
+- next: the chain `quick,solo,solo,six` once through `rungs.ps1`, tag `net_r1r`; fix a red at the
+  lowest rung, re-run once; then done.
