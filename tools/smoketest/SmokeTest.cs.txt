@@ -517,6 +517,152 @@ public partial class _Test : Node
               $"Rendezvous.Clipboard is mutable and outside the build's fingerprint (swapped: {swapped:x8}, the build's {Net.Protocol:x8})");
     }
 
+    // ── WEBRTC, R1: THE STUN ROWS AND THE WALK (§5, §10.4 R1) ───────────────────────────────────────
+    // THE BOX (tools/smoketest/wan.py): the network between players, which run.ps1 starts for every run.
+    const int BoxHttp = 19480;
+    static System.Text.Json.JsonElement Box(string method, string path)
+    {
+        using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+        using var ask = new System.Net.Http.HttpRequestMessage(new System.Net.Http.HttpMethod(method), $"http://127.0.0.1:{BoxHttp}{path}");
+        string body;
+        try { using var got = http.Send(ask); body = got.Content.ReadAsStringAsync().GetAwaiter().GetResult(); }
+        catch (Exception e) { body = System.Text.Json.JsonSerializer.Serialize(new { error = "the box did not answer: " + e.Message }); }
+        using var doc = System.Text.Json.JsonDocument.Parse(body);
+        return doc.RootElement.Clone();
+    }
+    static readonly Link.StunRow[] _servers = Link.Servers;          // the game's own rows, put back after
+    // the box's rows: two ports that never answer, and its STUN responder
+    static readonly Link.StunRow SilentA = new("stun:127.0.0.1:19482"), SilentB = new("stun:127.0.0.1:19483"), BoxStun = new("stun:127.0.41.1:3478");
+    // LIBJUICE GATHERS A LOOPBACK-MAPPED SERVER-REFLEXIVE CANDIDATE: the box's responder maps every
+    // request to 127.0.0.1. If a run shows libjuice drops it, this goes false and DESIGN.md says so; the
+    // answering-row walk and the sealing rule then hold the timing and the host candidates only (§10.4 R1).
+    static readonly bool LoopbackSrflx = true;
+
+    // Steps walks once a frame, each after its peer's poll, until all are sealed or `ms` pass.
+    async Task Walk(int ms, params Link.Gather[] gs)
+    {
+        ulong end = RtcPair.Now + (ulong)ms;
+        while (gs.Any(g => !g.Done) && RtcPair.Now < end)
+        {
+            foreach (var mp in gs.Select(g => g.Mp).Distinct()) mp.Poll();
+            foreach (var g in gs) g.Step();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+    }
+    static string Walked(Link.Gather g) =>
+        $"row {g.Row}, done {g.Done} in {(g.Done ? (long)(g.DoneAt - g.Began) : -1)} ms, no STUN {g.NoStun}, re-added {g.Added}, seals "
+        + string.Join(" ", g.Seals.Select(s => $"[{(s.complete ? "complete" : "clock")} at {(long)(s.at - g.Began)} ms, due {(long)(s.deadline - g.Began)}, step before {(long)(s.before - g.Began)}]"))
+        + $", {g.Lines.Length} candidates: {string.Join(" | ", g.Lines)}";
+
+    async Task Walks()
+    {
+        // THE TABLE, against the ruling's rows (§5.1) and the plan's timings (§3.3, §5.2)
+        var row0 = Link.Config(0)["iceServers"].AsGodotArray();
+        string url0 = row0.Count == 1 ? row0[0].AsGodotDictionary()["urls"].AsGodotArray()[0].AsString() : $"{row0.Count} rows";
+        Check(_servers.Select(s => s.Url).SequenceEqual(new[] { "stun:stun.l.google.com:19302", "stun:stun.cloudflare.com:3478" })
+              && url0 == "stun:stun.l.google.com:19302" && Link.Config(-1)["iceServers"].AsGodotArray().Count == 0 && Link.Config(2)["iceServers"].AsGodotArray().Count == 0
+              && Link.GatherMs == 2000 && Link.LinkMs == 12000 && Link.InviteLifeS == 900,
+              $"the STUN rows are Google's then Cloudflare's and nothing else, one to a connection (row 0 configures {url0}); a row is passed over after 2,000 ms, a reply has 12,000 ms, an invite 900 s");
+        // THE SEAMS ARE MUTABLE, so they stay out of the build's fingerprint: swapped, it is the same
+        var fingerprint = typeof(Net).GetMethod("Fingerprint", BindingFlags.NonPublic | BindingFlags.Static, Type.EmptyTypes);
+        var serversField = typeof(Link).GetField(nameof(Link.Servers), BindingFlags.Public | BindingFlags.Static);
+        Link.Servers = new[] { SilentA, SilentB, BoxStun };
+        int swapped = (int)fingerprint.Invoke(null, null);
+        Link.Servers = _servers;
+        Check(serversField != null && !serversField.IsInitOnly && !serversField.IsLiteral && swapped == Net.Protocol,
+              $"Link.Servers is mutable and outside the build's fingerprint (with the box's three rows: {swapped:x8}, the build's {Net.Protocol:x8})");
+
+        var box = Box("GET", "/box/stats");
+        bool boxUp = box.TryGetProperty("stun", out var stunStats) && stunStats.GetProperty("bound").GetBoolean()
+                     && box.GetProperty("silent_udp").EnumerateObject().Count() == 2 && box.GetProperty("silent_tcp").GetProperty("bound").GetBoolean();
+        Check(boxUp, $"the box is up: its STUN responder on 127.0.41.1:3478, the silent UDP ports 19482 and 19483, the silent TCP port 19481 ({box})");
+        if (!boxUp) return;
+
+        var hostMp = new WebRtcMultiplayerPeer();
+        hostMp.CreateServer(Link.Channels());
+        var guestMps = new List<WebRtcMultiplayerPeer>();
+        var walks = new List<Link.Gather>();
+        Link.Gather HostWalk(bool stun) { var g = new Link.Gather(hostMp, Rng.RandiRange(2, int.MaxValue), stun, c => c.CreateOffer()); walks.Add(g); return g; }
+        // A GUEST'S PEER 1, answering an invite: the spike's offer, with none of its candidates (a guest
+        // adds the host's only after its walk, Link.Gather)
+        Link.Gather GuestWalk()
+        {
+            var mp = new WebRtcMultiplayerPeer();
+            mp.CreateClient(Rng.RandiRange(2, int.MaxValue), Link.Channels());
+            guestMps.Add(mp);
+            var g = new Link.Gather(mp, 1, true, c => c.SetRemoteDescription("offer", SpikeOffer));
+            walks.Add(g);
+            return g;
+        }
+        try
+        {
+            // TWO ROWS THAT NEVER ANSWER: each is given up at GatherMs and the connection made again on the
+            // next with the same id; the bundle is sealed at 4,000 ms with this PC's own addresses and the
+            // flag set, each seal on the first frame after its deadline
+            Link.Servers = new[] { SilentA, SilentB }; Link.StunFirst = 0;
+            var silent = new[] { HostWalk(true), GuestWalk() };
+            await Walk(8000, silent);
+            string Late(Link.Gather g)
+            {
+                // on time: the step before each seal came before its deadline, so the seal is on the first
+                // frame after it (the rebuild between the two rows is not a frame, and is not counted)
+                var timed = g.Seals.Where(s => !s.complete).ToList();
+                long took = g.Done ? (long)(g.DoneAt - g.Began) : -1;
+                bool ok = g.Done && g.NoStun && g.Row == 1 && g.Added == Error.Ok && g.Lines.Length > 0 && g.Lines.All(l => l.EndsWith(" typ host", StringComparison.Ordinal))
+                          && g.Seals.Count == 2 && timed.Count == 2 && timed.All(s => s.before < s.deadline && s.deadline <= s.at) && took >= 4000;
+                return ok ? "" : Walked(g);
+            }
+            string hostLate = Late(silent[0]), guestLate = Late(silent[1]);
+            Check(hostLate == "" && guestLate == "" && Link.StunFirst == 2,
+                  $"with two rows that never answer, a host's and a guest's bundle are sealed at 4,000 ms with host candidates only and the flag set, each row given up on the first frame after its 2,000 ms, the id taken back at once (host: {(hostLate == "" ? Walked(silent[0]) : hostLate)}; guest: {(guestLate == "" ? $"{(long)(silent[1].DoneAt - silent[1].Began)} ms" : guestLate)}; StunFirst {Link.StunFirst})");
+            // THE MEMORY: the next gather in the process skips the rows that did not answer
+            var memory = HostWalk(true);
+            await Walk(3000, memory);
+            long memoryMs = memory.Done ? (long)(memory.DoneAt - memory.Began) : -1;
+            Check(memory.Done && memory.Row == -1 && memory.NoStun && memoryMs >= 0 && memoryMs < 100,
+                  $"after no row answered, the next gather asks none and is sealed in under 100 ms ({memoryMs} ms; {Walked(memory)})");
+
+            // ROW 2 ANSWERS: the walk passes row 1 at 2,000 ms, stops at row 2 with a server-reflexive
+            // candidate, and remembers it
+            Link.Servers = new[] { SilentA, BoxStun }; Link.StunFirst = 0;
+            var second = new[] { HostWalk(true), GuestWalk() };
+            await Walk(8000, second);
+            string Answered(Link.Gather g)
+            {
+                bool srflx = g.Lines.Any(l => l.Contains(" typ srflx", StringComparison.Ordinal));
+                bool ok = g.Done && g.Row == 1 && g.Added == Error.Ok && g.Seals.Count == 2 && !g.Seals[0].complete
+                          && (LoopbackSrflx ? srflx && !g.NoStun && g.Seals[1].complete : g.NoStun);
+                return ok ? "" : Walked(g);
+            }
+            string hostSecond = Answered(second[0]), guestSecond = Answered(second[1]);
+            Check(hostSecond == "" && guestSecond == "" && Link.StunFirst == (LoopbackSrflx ? 1 : 2),
+                  $"with row 1 silent and row 2 the box's STUN responder, a host's and a guest's walk stop at row 2 with a server-reflexive candidate, and StunFirst is 1 (host: {(hostSecond == "" ? Walked(second[0]) : hostSecond)}; guest: {(guestSecond == "" ? "row 2" : guestSecond)}; StunFirst {Link.StunFirst})");
+
+            // THE SEALING RULE (v1 §2.6 S2): 20 gathers against the box's responder, each sealed by
+            // Link.Sealed with its server-reflexive candidate in it...
+            Link.Servers = new[] { BoxStun }; Link.StunFirst = 0;
+            var answered = Enumerable.Range(0, 20).Select(_ => HostWalk(true)).ToArray();
+            await Walk(5000, answered);
+            var unsealed = answered.Where(g => !(g.Done && g.Seals.Count == 1 && g.Seals[0].complete
+                                                 && g.Lines.Any(l => l.Contains(" typ srflx", StringComparison.Ordinal)) == LoopbackSrflx)).ToList();
+            Check(unsealed.Count == 0, $"20 gathers against a STUN server that answers are each sealed by Link.Sealed, the server-reflexive candidate inside ({20 - unsealed.Count} of 20{(unsealed.Count == 0 ? "" : "; " + Walked(unsealed[0]))})");
+            // ...and 20 with no STUN, each holding every host candidate that arrives in the second after
+            var own = Enumerable.Range(0, 20).Select(_ => HostWalk(false)).ToArray();
+            await Walk(3000, own);
+            ulong settle = RtcPair.Now + 1000;
+            while (RtcPair.Now < settle) { hostMp.Poll(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            var missed = own.Where(g => !(g.Done && g.Seals.Count == 1 && g.Seals[0].complete && g.Arrived.All(l => g.Lines.Contains(l)))).ToList();
+            Check(missed.Count == 0,
+                  $"20 gathers with no STUN, each sealed one poll after Complete, hold every host candidate a second later holds ({20 - missed.Count} of 20{(missed.Count == 0 ? "" : $"; {Walked(missed[0])}, then {string.Join(" | ", missed[0].Arrived)}")})");
+        }
+        finally
+        {
+            foreach (var g in walks) g.Close();
+            hostMp.Close(); hostMp.Dispose();
+            foreach (var mp in guestMps) { mp.Close(); mp.Dispose(); }
+        }
+    }
+
     async Task WebRtcPairs()
     {
         // the number every friend's countdown shows, proved against the measured literal here; the
@@ -582,6 +728,22 @@ public partial class _Test : Node
         }
         Check(got.SequenceEqual(new[] { "1@12:ok", $"{a.Id}@12:ok" }),
               $"a packet on the highest row (12) arrives on it, host to guest and guest to host ({string.Join("; ", got)})");
+        // WHICH ROW AN RPC RIDES, by name (§3.2's rows: Ships 2, Raiders 5, Boss 10; the harness's stream 12)
+        int[] rode = { Link.ChannelOf("NetShipState"), Link.ChannelOf("NetRaiders"), Link.ChannelOf("NetBoss"), Link.ChannelOf(nameof(NetStream)), Link.ChannelOf("NoSuchRpc") };
+        Check(rode.SequenceEqual(new[] { 2, 5, 10, 12, -1 }), $"Link.ChannelOf names the row an RPC rides: ships 2, raiders 5, boss 10, the harness's stream 12, none -1 ({string.Join(", ", rode)})");
+        // THE BACKLOG (§3.8): a burst bigger than SCTP lets out at once waits on its row's data channel,
+        // where Link.Backlog reads it, and drains to nothing once the far side has taken it all
+        a.Host.TransferChannel = StreamChannel; a.Host.TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered; a.Host.SetTargetPeer(a.Id);
+        var burst = new byte[200000];
+        for (int i = 0; i < 5; i++) a.Host.PutPacket(burst);
+        int waiting = Link.Backlog(a.Host, a.Id, StreamChannel), taken = 0;
+        bool drained = await RtcUntil(() =>
+        {
+            for (; a.Guest.GetAvailablePacketCount() > 0; taken++) a.Guest.GetPacket();
+            return taken == 5 && Link.Backlog(a.Host, a.Id, StreamChannel) == 0;
+        }, 5000, a);
+        Check(waiting > 0 && drained && Link.Backlog(a.Host, a.Id, NetChannels.Ships) == 0 && Link.Backlog(a.Host, Rng.RandiRange(2, int.MaxValue), StreamChannel) == 0,
+              $"Link.Backlog reads a 1 MB burst waiting on row 12 ({waiting} B), and nothing once the guest has taken all 5 ({(drained ? "drained" : $"{taken} taken, {Link.Backlog(a.Host, a.Id, StreamChannel)} B still waiting")}); an idle row and an unknown peer read 0");
         // a guest's Close() is seen by the host within 1 s
         a.Guest.Close(); t0 = RtcPair.Now;
         await RtcUntil(() => a.HostLostAt > 0, 3000, a);
@@ -615,6 +777,10 @@ public partial class _Test : Node
         Check(all.Sum(p => p.Handlers) >= 12 && all.Sum(p => p.OffMain) == 0,
               $"every WebRTC signal handler runs on the main thread ({all.Sum(p => p.Handlers)} handlers, {all.Sum(p => p.OffMain)} off it)");
         foreach (var p in all) p.Free();
+
+        try { await Walks(); }
+        catch (Exception ex) { Check(false, $"the STUN walk checks threw: {ex.GetType().Name}: {ex.Message}"); GD.Print(ex.StackTrace); }
+        finally { Link.Servers = _servers; Link.StunFirst = 0; }
 
         // NOTHING LEAKS: three connect-and-close cycles, the first to warm up, the count after it
         // against the count after the other two. A leaked pair is 34 objects (two peers, two

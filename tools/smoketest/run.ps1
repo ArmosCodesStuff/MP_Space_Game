@@ -110,6 +110,16 @@ if (Test-Path $ud) { Remove-Item $ud -Recurse -Force }
 <configuration><packageSources><clear /><add key="godot" value="$nupkgs" /></packageSources></configuration>
 "@ | Set-Content (Join-Path $W 'nuget.config') -Encoding UTF8
 
+# Stops the box (below) through its control port, so it prints what it carried; killed if it does not
+# go. Safe to call twice, and from the finally: a box left running holds its ports, and the next run's
+# box could not bind them.
+$script:box = $null
+function Stop-Box {
+  if (-not $script:box -or $script:box.HasExited) { return }
+  try { Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:19480/box/quit' -TimeoutSec 3 | Out-Null } catch {}
+  if (-not $script:box.WaitForExit(5000)) { try { $script:box.Kill() } catch {} }
+}
+
 Push-Location $W
 try {
   # a test that does not compile tests nothing: stop here, loudly
@@ -172,6 +182,24 @@ try {
   & (Join-Path $PSScriptRoot '..\import.ps1') -Godot $Godot -Path $W -Log (Join-Path $W 'import.log') -Require $plugin
   if ($LASTEXITCODE -ne 0) { Write-Host "SMOKE TEST FAILED (the import)"; exit 2 }
 
+  # THE BOX (tools\smoketest\wan.py, network_webrtc.md section 10.1): the network between players,
+  # up for every run -- a STUN responder, silent ports, the pair proxy, and under -Wan the relays the
+  # guests join through, each 1000 above the session port it fronts. Stopped through its control port
+  # at the end, so it prints what it carried.
+  $boxArgs = @((Join-Path $PSScriptRoot 'wan.py'), '--http', 19480, '--life', 1300)
+  $gx = @()
+  if ($Wan) {
+    # one-way ms, jitter ms, loss %: WARSHIPS_WAN="150,40,5" for a worse day
+    $path = if ($env:WARSHIPS_WAN) { $env:WARSHIPS_WAN -split ',' } else { @(90, 25, 2) }
+    Write-Host ("internet: {0} ms each way, +/- {1} ms, {2}% lost" -f $path[0], $path[1], $path[2])
+    $boxArgs += @('--path', ($path -join ','))
+    foreach ($port in 27115, 27125) { $boxArgs += @('--relay', "$($port + 1000):$port") }
+    $gx = @('wan')
+  }
+  $script:box = Start-Process -FilePath python -ArgumentList $boxArgs -NoNewWindow -PassThru `
+         -RedirectStandardOutput (Join-Path $W 'box.out') -RedirectStandardError (Join-Path $W 'box.err')
+  Start-Sleep -Milliseconds 500
+
   $all = @()
   $want = 0
   if ($Fly) {
@@ -191,23 +219,6 @@ try {
     $want = 1
   }
 
-  # The internet, for -Wan: one relay per session port, each 1000 above the port it fronts. The
-  # guests are told "wan" and join the relay instead of the host.
-  $relays = @()
-  $gx = @()
-  if ($Wan) {
-    $wanPy = Join-Path $PSScriptRoot 'wan.py'
-    # one-way ms, jitter ms, loss %: WARSHIPS_WAN="150,40,5" for a worse day
-    $path = if ($env:WARSHIPS_WAN) { $env:WARSHIPS_WAN -split ',' } else { @(90, 25, 2) }
-    Write-Host ("internet: {0} ms each way, +/- {1} ms, {2}% lost" -f $path[0], $path[1], $path[2])
-    foreach ($port in 27115, 27125) {
-      $relays += Start-Process -FilePath python -ArgumentList (@($wanPy, ($port + 1000), $port) + $path + 200) `
-                 -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W "wan$port.out") -RedirectStandardError (Join-Path $W "wan$port.err")
-    }
-    $gx = @('wan')
-    Start-Sleep -Milliseconds 300
-  }
-
   if (-not $Solo -and -not $Fly) {
     $host1 = Start-Run (@('--headless','--path',$W,'--','host') + $seedArg)   'host'   120
     Start-Sleep -Milliseconds 500
@@ -225,11 +236,10 @@ try {
     $all += Complete-Run $ah '[ahost] '
     $want += 5
   }
-  foreach ($r in $relays) { if (-not $r.HasExited) { try { $r.Kill() } catch {} } }
-  foreach ($port in 27115, 27125) {
-    $f = Join-Path $W "wan$port.out"
-    if ($Wan -and (Test-Path $f)) { Get-Content $f | ForEach-Object { Write-Host "  $_" } }
-  }
+  Stop-Box
+  # what the box carried: the relays' lines under -Wan, and anything it could not bind, always
+  $boxOut = @(Get-Content (Join-Path $W 'box.out') -ErrorAction SilentlyContinue)
+  $boxOut | Where-Object { ($Wan -and $_ -match '^wan ') -or $_ -match 'could not bind' } | ForEach-Object { Write-Host "  $_" }
 
   $all | ForEach-Object { Write-Host $_ }
   $bad = @($all | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' }).Count
@@ -242,4 +252,4 @@ try {
     Write-Host "$what FAILED ($bad problems, $done/$want runs finished)"; exit 1
   }
   Write-Host "$what PASSED"
-} finally { Pop-Location }
+} finally { Stop-Box; Pop-Location }

@@ -224,5 +224,51 @@ third-party infrastructure but the Google and Cloudflare STUN rows.
   - D12 · **A damaged code is claimed by no row** (`HoldsCode`: a prefix and 64+ code characters, more
     than any host-name label holds), so R3's JOIN box can say "damaged" instead of looking it up as a
     host name.
-- checkpoint: the J8 commit
+- checkpoint: dba1847
 - next: J9
+
+#### J9 PRE
+- intent: the rest of `Link.cs` (§5, §7): `StunRow` and `Servers` (the Google and Cloudflare rows,
+  mutable), `StunFirst`, `Config(row)` (one STUN row or none), `Gather` (the walk: seal by `Sealed`
+  or `GatherMs`, next row with the same id, `StunFirst` remembered, the guest adding the invite's
+  candidates only after its walk), `GatherMs`/`LinkMs`/`InviteLifeS`, `ChannelOf`, `Backlog`. The box:
+  `wan.py` rewritten (STUN responder 127.0.41.1:3478, silent UDP 19482/19483, silent TCP 19481, the
+  pair proxy on 127.0.42.1, blackhole, stats on HTTP 19480, the ENet relays for `-Wan` kept as
+  `--relay` until R2); run.ps1 starts it for every run. Checks: the table's literals, the walk on a
+  host's and a guest's peer (silent rows: 4,000 ms, host candidates only, flag; the memory under
+  100 ms; the answering row 2 with `StunFirst == 1`), the sealing rule x20 both ways, `ChannelOf`,
+  `Backlog`, `Link.Servers` mutable.
+- files: scripts/Link.cs, tools/smoketest/SmokeTest.cs.txt, tools/smoketest/wan.py,
+  tools/smoketest/run.ps1, docs/plans/ledger_webrtc.md
+- from: dba184745e2c4a68accdd95689853a5ca28f3e4f
+- hashes: Link.cs 03adbb3c947d4f2a9ddc7a0a7c1e8080a4bfe278; SmokeTest.cs.txt
+  6bdace8c4ea55b0f433cb2027c76e8a55ee01fb5; wan.py 8074569012982663452a023d1521dc638d385c2c;
+  run.ps1 aef2608da377c95c7771e1917f934beaa45e48af
+
+#### J9 POST
+- verdict: done; `verify.ps1 -Quick` ALL CHECKS PASSED (0 warnings, 0 analyser findings, xref 0).
+  The box self-tested with Python alone (no engine): 127.0.41.1 and 127.0.42.1 bind on this PC, the
+  responder maps a request to its source, the proxy carries both ways from the right ports, the
+  blackhole counts, the silent TCP port accepts and says nothing, a relay carries. Untested at rung 3.
+- files: scripts/Link.cs (`Rpcs`, `ChannelOf`, `Backlog`, `StunRow`, `Servers`, `StunFirst`,
+  `GatherMs`/`LinkMs`/`InviteLifeS`, `Config`, `Gather`); tools/smoketest/wan.py (the box);
+  tools/smoketest/run.ps1 (the box for every run, `Stop-Box` in the finally, the relays as
+  `--relay`); tools/smoketest/SmokeTest.cs.txt (`Box`, the box's rows, `LoopbackSrflx`, `Walk`,
+  `Walked`, `Walks()` after the pair frees; `ChannelOf` and `Backlog` on pair `a`)
+- decisions:
+  - D13 · **`QuietMs` and `BeatMs` land in R2 with the beat**, not here: S1's `Net.QuietMs` is the
+    one 8,000 until R2 moves it ("one constant, not two", §7). R1 adds the timings R1's code or R2's
+    Pending needs: `GatherMs`, `LinkMs`, `InviteLifeS`.
+  - D14 · **The box**: control on 127.0.0.1:19480; path `0,0,0` in plain runs (delay and loss only
+    under `-Wan`); stopped by `POST /box/quit` so it prints its stats; it carries the ENet relays for
+    `-Wan` (`--relay 28115:27115`, `28125:27125`) until R2 moves `-Wan` onto the pair proxy. run.sh
+    (Linux) does not start it: the Linux runners have no plugin (R0 Known broken).
+  - D15 · **A guest adds the invite's candidates only after its walk** (`Link.Gather`'s header): a
+    guest that can reach the host starts DTLS before the host has the reply (P2), and a walk that
+    remakes that connection would free it mid-handshake (two plugin ERROR lines). This orders §3.3 A
+    guest steps 3-4; R2's `Join` must follow it.
+  - D16 · **`LoopbackSrflx` (harness, true)**: the plan's fallback as a switch. If rung 3 shows libjuice
+    drops the box's loopback-mapped server-reflexive candidate, set it false and write it in DESIGN.md;
+    the answering-row walk and the sealing rule then hold the timing and host candidates only.
+- checkpoint: the J9 commit
+- next: J10
