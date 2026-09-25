@@ -319,3 +319,24 @@ HARNESS CALLERS TO REWRITE (the old F-press + `Sl("railgun").Left = 0.001` idiom
 rung 5 ~15207-15217 (railgun heard on a guest), Shots.cs.txt ~819-827 (73b). Suggested helper in SmokeTest: RailFire(sn,
 hold) = seat the chamber (N = Seated, Left 0, ReloadView = default), KeyDown(Space) for Cadence(rail_charge) + 0.05 s (or
 `hold`), KeyUp, two frames. Checks owed: S1-S9 (LaneA6cReloadChecks), G1-G5 rung 5, then J7 ReloadBar + frame 73c.
+
+## kits6c-J6 · PRE (agent 4)
+- tier opus. Intent: the Sniper row (hull 240, Fit.None, rail rows per sniper_active_reload §2.1, rail_cooldown deleted,
+  Damage rail_damage 6.0, Cycle rail_charge + rail_reload, Dps.Railgun 47.4) and the railgun as its Space Hold Weapon row
+  (Reload = ActiveReload.Rail, Elapsed = Seat, Loose = FireRail(share): ramp rail_tap, x Take, Spent); cannon / FireMode /
+  F railgun / ChargeRail deleted; Beam + Fx + Lines row rail_enhanced appended; the muzzle glint; Hint + Hints row
+  `reload` (met on the owner's first reload). Harness callers of the F railgun rewritten. Checks S1-S9
+  (LaneA6cReloadChecks), rung 5 G1-G5 (LaneA6cReloadHost/Guest/Guest2Checks). HEAD c0d051db8744cba08a8829ab8e2a47f383ded2e3
+- scripts/Ships.cs 0510a149e03af43c878eff55a2ba28e417b6e3b3
+- scripts/Abilities.cs 32460bcef764e4a309f203933b0d12aad969c13e
+- scripts/PlayerShip.cs 58a6da69a45d034522052ccec92f048a92e6c1dd
+- scripts/Stats.cs 5647b134ceba80f1fb0a9cd9821010c13a5cc29b
+- scripts/Charge.cs 0eba90b277df9e1b68c1349bf22e8ced73472bb4
+- scripts/Lines.cs d418369851aa9d783b38e31e27381821f2ca85a4
+- scripts/Beam.cs 459b969f5aa0cefc8946923d8a3725f5c4b1e419
+- scripts/Fx.cs b6c50ea9d12f7134e88a076ec9ecca75faa454fd
+- scripts/Hints.cs 0686f81650d6a21218070dcfa6a69b57d830f3f9
+- scripts/Hub.cs b4599a2553c187d788643c167852b1d03880c050
+- scripts/Items.cs 522b3d7d042dc710397a399afbee4d5c634b8353
+- tools/smoketest/SmokeTest.cs.txt dbbd1d8beb26ae1800ea0c2cd7297fa6d8f38152
+- tools/screens/Shots.cs.txt e04412b7a33f00ff8d28725a841c7dfa219312ce
