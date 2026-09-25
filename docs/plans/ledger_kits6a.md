@@ -450,3 +450,35 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   tools/screens/Shots.cs.txt.
 - HEAD 9b51d2bfa10c98a65c03981f2ed69f78cf9d0c92 · Abilities.cs e3efa812 · Ships.cs e1b793bc · PlayerShip.cs 31293784 ·
   HelmMoves.cs 82d013f9 · Items.cs 4120eab8 · SmokeTest.cs.txt fe379bd1 · Shots.cs.txt 026ef3b1
+### kits6a-J9 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase.
+- Built: HookSpec + AbilityDef.Hook (Abilities.cs); Ab.Grapnel (E; Press Hook, Expire CastOffHook rip, Refuse
+  HookRefusal, Show "HOOKED n s"); PlayerShip: HookNums, HookRefusal / HookWhy (NO TARGET / NO HOLD / OUT OF RANGE /
+  WEBBED on an anchor only / COOLING; nothing refused while the line holds), HookOwner (UseAbility calls it for a Hook
+  row after Refuse: a second press CastOff()s the owner's move, an anchor BeginHelm()s it), Hook (host: second press
+  casts off; anchor -> HelmMoves.Confirm + slot At; ITowable -> Towing.Tow, slot Left = the row's Haul, N = craft),
+  CastOffHook (hurl a held craft / rip a live anchor / Release / cooldown 16 from now), HookWatch (every host frame:
+  target gone or DD wrecked -> no rip; anchor stepped past Drives.SnapAt -> no rip; Pinned / Disabled / Charging -> rip),
+  RipOf / Rip (Fx.Tear first, then Dealt.Deal credited "grapnel"). DD rows grapnel_* (10); DD Abilities Guns, Lance,
+  Suppress, Grapnel.
+- Decisions: A6a-13 the rip on a practice dummy is the flat 10 (a dummy has no maximum hull: IQuarry is the contract that
+  has one). A6a-14 the `grapnel_rip` tearing sound (kits_v3 row) is NOT built: it is a make_sounds.py asset; the rip is
+  silent (owed, lane D / sounds). A6a-15 the host allows 60 u (HookSlack) past the reach on a press it takes, for a
+  guest's packet lag. A6a-16 a second E on a TOW hurls it at once (the cast-off of a tow).
+- Checks NEW: LaneA6aGrapnelPullChecks (rows; refusals OUT OF RANGE / WEBBED / NO TARGET / NO HOLD; 3 runs on the dummy
+  from 380-420 / 560-620 / 680-699 u: marked, 250 +- 10 off the hull at 0.15 + (d - stop)/450 +- 0.1 s, bow 5 deg, A/D
+  swing on the line 15 u; cast off by E / 5 s / web -> ONE chunk, the dummy 10, "grapnel" 10, cooling 16, COOLING),
+  LaneA6aGrapnelRipChecks(anchor, what) run from the boss fight, a pylon and the pirate base (3 runs: E / 5 s / own
+  warp; the hull drops exactly 0.01 x MaxHp + 10, credited, one chunk, 16 s), LaneA6aGrapnelTowChecks (webifier / talon
+  / gunship: 160 +- 10 off the bow at 0.6 s, laser flat, E hurls into a gunship down the bow -- 60 / 120 each, "hurl"
+  2x, no chunk, cooling; a latched webifier hooked: Pinned gone within 0.35 s), frame LaneA6aGrapnelFrames
+  (85e_dd_grapnel_rip), rung 5 LaneA6aGrapnelGuestChecks (a guest's pull marked by the host, E again: the host's chunk
+  drawn on the guest, cut within 20 u of the hull, cooling, COOLING); the sweep's witness "grapnel" (it TOWS the sweep's
+  raider mark) and its second-press rule for a hook row (cast off: Left 0, Cool = the cooldown).
+- Checks REWRITTEN (6.3): the DD bar list (guns, lance, suppress, grapnel, warp; E).
+- NOT covered by a check (owed): "no rip when the anchor dies / warps" (HookWatch) -- no solo anchor can be killed or
+  warped without breaking the fights that follow; "a swing drawn on the host within 60 u" and "the chevron on the OTHER
+  guest" (the third player) -- the guest-side draw is what the rung-5 checks prove.
+- Owed: rung 3 the pull / tow / sweep checks and the three rip call sites; rung 4 frame 85e; rung 5 the grapnel guest.
+- Next: kits6a-J10 (Record).

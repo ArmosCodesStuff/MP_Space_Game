@@ -575,6 +575,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // The host checks again inside Press: this is a courtesy, never the guard.
         if (PressHeld(def)) { Fail(id, "DISABLED"); return; }
         if (def.Refuse?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null) is { } why) { Fail(id, why); return; }
+        // A HOOK's own half, here on the owner: it flies the helm move itself (HookOwner) before the host is asked
+        if (def.Hook != null && HookOwner(def, targetId != 0 ? Combat.ById(targetId) : null) is { } no) { Fail(id, no); return; }
         var point = def.TakesPoint ? AimPoint : Vector2.Zero;
         var ids = def.TakesTargets && picks != null ? picks : System.Array.Empty<int>();
         if (Net.Sim) DoAbility(id, targetId, point, ids);
@@ -951,6 +953,101 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public string BeginHelm(HelmMove m, IHittable anchor, HelmNums n) =>
         Mine ? HelmMoves.Begin(this, _helm, m, anchor, n) : "NOT THE OWNER";
     public void CastOff() => HelmMoves.End(this, _helm, HelmEnd.Pressed);
+
+    // ── A HOOK (AbilityDef.Hook: the Grapnel) ───────────────────────────────
+    // A hook row's slot: Left while the line holds (the swing's Time, or a tow's haul), N the anchor's or the craft's
+    // NetId, At where the anchor was last frame (a step past Drives.SnapAt is its warp); Cool from the cast-off.
+    public const float HookSlack = 60f;              // the host's give on a guest's reach: it measured a packet ago
+    public HelmNums HookNums(AbilityDef def)
+    {
+        var h = def.Hook;
+        return new HelmNums { Slot = def.Id, Bite = (float)Stats[h.Bite], Pull = (float)Stats[h.Pull], Stop = (float)Stats[h.Stop],
+                              Clear = (float)Stats[h.Clear], Reach = (float)Stats[h.Reach], Reel = (float)Stats[h.Reel], Time = Stats[h.Time] };
+    }
+    private bool Hooked(string id) => Sl(id).Left > 0 || (_helm.On && _helm.N.Slot == id);
+    // WHAT THE LINE WOULD TAKE, or why not: an anchor (Targeting.Immovable), a craft to tow (ITowable, Throwable), or
+    // NO HOLD (a missile, a hulled body). Pressed while the line holds, nothing is refused: the press casts off.
+    public string HookRefusal(string id, IHittable t) => HookWhy(id, t, 0f);
+    private string HookWhy(string id, IHittable t, float slack)
+    {
+        var h = Abilities.Find(Class, id)?.Hook;
+        if (h == null) return "NO HOLD";
+        if (Hooked(id)) return null;
+        if (Sl(id).Cool > 0) return "COOLING";
+        if (t == null || !t.Alive) return "NO TARGET";
+        bool anchor = Targeting.Immovable.Hits(t);
+        if (!anchor && !(t is ITowable && Targeting.Throwable.Hits(t))) return "NO HOLD";
+        if (Position.DistanceTo(t.Position) > Stats[h.Reach] + slack) return "OUT OF RANGE";
+        if (anchor && Pinned) return "WEBBED";                 // the swing only: a craft is towed webbed or not
+        return null;
+    }
+    // THE OWNER'S HALF of the press: a second press casts its own move off at once; an anchor begins the move here
+    // (the host marks it, or the owner casts it off unmarked: HelmMoves.ConfirmWithin). A craft is the host's alone.
+    private string HookOwner(AbilityDef def, IHittable t)
+    {
+        if (_helm.On && _helm.N.Slot == def.Id) { CastOff(); return null; }
+        if (Sl(def.Id).Left > 0 || !Targeting.Immovable.Hits(t)) return null;
+        return BeginHelm(def.Hook.Move, t, HookNums(def));
+    }
+    // THE PRESS, on the host: a second press casts off; else the anchor's move is marked, or the craft towed.
+    public void Hook(string id, IHittable t)
+    {
+        var def = Abilities.Find(Class, id);
+        if (!Net.Sim || def?.Hook is not { } h) return;
+        ref var sl = ref Sl(id);
+        if (sl.Left > 0) { CastOffHook(id, rip: true); return; }
+        if (HookWhy(id, t, HookSlack) != null) return;
+        if (Targeting.Immovable.Hits(t))
+        {
+            HelmMoves.Confirm(this, t, HookNums(def), Stats[h.Time]);
+            Sl(id).At = t.Position;
+        }
+        else if (t is ITowable craft && Towing.Tow(craft, this, this, h.Tow))
+        {
+            sl.Left = Towing.Of(h.Tow).Haul; sl.N = t.NetId;
+        }
+    }
+    // CAST OFF, on the host: a craft still held is hurled; an anchor still there (neither dead nor warped: `rip`) is
+    // RIPPED; the line is released and the cooldown starts. Run by the second press, the slot's Expire, and HookWatch.
+    public void CastOffHook(string id, bool rip)
+    {
+        var h = Abilities.Find(Class, id)?.Hook;
+        if (!Net.Sim || h == null) return;
+        ref var sl = ref Sl(id);
+        var t = sl.N != 0 ? Combat.ById(sl.N) : null;
+        if (t is ITowable { Towed: { Flung: false } tow } craft && tow.By == this) Towing.Hurl(craft);
+        else if (rip && t != null && t.Alive && Targeting.Immovable.Hits(t)) Rip(id, h, t);
+        HelmMoves.Release(this, id);
+        sl.Cool = Cooling(Stats[h.Cooldown]);
+    }
+    // THE HOST'S WATCH on a line that holds, every frame: the anchor or the craft gone, or the anchor warped, ends it with
+    // no rip; a web, a disable or this ship's own warp charge ends a swing WITH one (its owner has cast off already).
+    private void HookWatch()
+    {
+        foreach (var def in Abilities.For(Class))
+        {
+            if (def.Hook == null) continue;
+            ref var sl = ref Sl(def.Id);
+            if (sl.Left <= 0 || sl.N == 0) continue;
+            var t = Combat.ById(sl.N);
+            if (t == null || !t.Alive || !Alive) { CastOffHook(def.Id, rip: false); continue; }
+            if (!Targeting.Immovable.Hits(t)) continue;                       // a tow runs by Towing.Step
+            if (t.Position.DistanceTo(sl.At) > Drives.SnapAt) { CastOffHook(def.Id, rip: false); continue; }
+            sl.At = t.Position;
+            if (Pinned || Disabled || Charging) CastOffHook(def.Id, rip: true);
+        }
+    }
+    // THE RIP: the chunk's look raised FIRST (Fx.Tear finds the anchor among the living), then the hit through the
+    // damage door, credited to the row's id -- the row's share of the anchor's own maximum hull (IQuarry; a dummy has
+    // none) plus the flat.
+    public double RipOf(HookSpec h, IHittable t) => Stats[h.RipShare] * ((t as IQuarry)?.MaxHp ?? 0) + Stats[h.RipFlat];
+    private void Rip(string id, HookSpec h, IHittable t)
+    {
+        var dir = Position - t.Position;
+        var hook = t.Position + (dir.LengthSquared() > 1e-6f ? dir.Normalized() : Vector2.Up) * t.HitRadius * 0.8f;
+        Fx.Tear(t, hook, Position);
+        Dealt.Deal(t, RipOf(h, t), this, id);
+    }
     // THE TOP A GUEST'S REPORT MAY CLAIM, on the host: its hull's, or a marked move's ward (F8).
     public float ReportTop => Math.Max(TopNow, HelmMoves.Ward(this));
     // A DRIVER'S HOLD OF V -- the title screen's ship, or a check -- read with the pilot's own key.
@@ -1232,6 +1329,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // A WRECK ENDS ITS HELM MOVE (F8): the owner's flight stops at the wreck (LocalFlight), so the
         // run's own end rules never see it -- left on, it would fly the re-boarded hull from where it lay.
         if (!Alive) HelmMoves.End(this, _helm, HelmEnd.Wrecked);
+        if (Net.Sim) HookWatch();
         _afterDrive = Math.Max(0, _afterDrive - delta);
         foreach (var def in Abilities.For(Class))
         {

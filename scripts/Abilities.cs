@@ -162,6 +162,9 @@ public class AbilityDef
     // A BOW SHOT (BowShot below, PlayerShip.FireAlong): pressed, one round of a Shots.All row leaves the nose straight
     // along the heading, and its Cooldown starts from the press. The Long Lance.
     public BowShot Bow;
+    // A HOOK (HookSpec below, PlayerShip.Hook): a line to the selected hostile -- flown round what cannot move, towing
+    // what can -- cast off by a second press, and its Cooldown from the cast-off. The Grapnel.
+    public HookSpec Hook;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
@@ -207,6 +210,21 @@ public class BowShot
 {
     public int Kind;
     public string Damage, Speed, Range;   // per round, u/s, u
+}
+
+// A HOOK: a line to the selected hostile within Reach (PlayerShip.Hook). Round what cannot move (Targeting.Immovable:
+// a boss, a structure, a dummy) the OWNER flies the helm Move (HelmMoves: the bite, the pull to Stop off its hull,
+// the swing on A/D and W/S between Clear and Reach, for Time) and the host marks it; casting off -- a second press,
+// the Time, a web, a disable, the ship's own warp charge -- tears a chunk away (the RIP: RipShare of the anchor's
+// maximum hull plus RipFlat, through the damage door; none when the anchor died or warped). What can be thrown
+// (an ITowable that Targeting.Throwable passes) is towed off the bow on the Towing.All row Tow and hurled. The
+// Cooldown starts at the cast-off. A row names stat ids, never numbers:
+public class HookSpec
+{
+    public HelmMove Move;
+    public int Tow;
+    public string Reach, Bite, Pull, Stop, Clear, Reel, Time, Cooldown;   // u, s, u/s, u off the hull, u off the hull, u/s, s, s
+    public string RipShare, RipFlat;                                        // x the anchor's maximum hull, + hull
 }
 
 // A STANCE: a Status held for Time (PlayerShip.Stance), dropped by a second press or by any other of the
@@ -291,6 +309,23 @@ public static class Ab
         Press = (s, _) => s.RunFor("suppress"),
         Refuse = (s, _) => s.Sl("suppress").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => Timed(s, "suppress", "suppress_cooldown", "SUPPRESS"),
+    };
+
+    // THE GRAPNEL (the Destroyer's E, kits_v2 / v3 3.2 / v31 3.3): the selected hostile within 700 u. A boss, a structure
+    // or a dummy: a 0.15 s bite, the winch hauls the hull in at 450 u/s to 250 u off its hull, then it swings bow-on for
+    // the rest of 5 s from the press (A/D round it, W/S reel at 100 u/s, 150-700 u); casting off rips 1% of its maximum
+    // hull + 10. A raider: towed 160 u off the bow and hurled (Towing.All "hurl"). 16 s from the cast-off. A hook row.
+    public static readonly AbilityDef Grapnel = new()
+    {
+        Id = "grapnel", Name = "Grapnel", Short = "GRAPNEL", Default = Key.E,
+        Blurb = "Hooks the selected hostile within 700 u. A boss, station or dummy: the winch hauls you in and you swing round it bow-on for up to 5 s, and casting off tears 1% of its hull away. A raider: towed off your bow, then hurled. E again casts off.",
+        Hook = new HookSpec { Move = HelmMoves.Tether, Tow = Towing.Grapnel, Reach = "grapnel_reach", Bite = "grapnel_bite", Pull = "grapnel_pull",
+                              Stop = "grapnel_stop", Clear = "grapnel_clear", Reel = "grapnel_reel", Time = "grapnel_swing",
+                              Cooldown = "grapnel_cooldown", RipShare = "grapnel_rip_share", RipFlat = "grapnel_rip_flat" },
+        Press = (s, t) => s.Hook("grapnel", t),
+        Expire = s => s.CastOffHook("grapnel", rip: true),
+        Refuse = (s, t) => s.HookRefusal("grapnel", t),
+        Show = (s, _) => Timed(s, "grapnel", "grapnel_cooldown", "HOOKED"),
     };
 
     public static readonly AbilityDef Attack = new()

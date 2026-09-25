@@ -264,6 +264,16 @@ public static class Classes
                 new() { Group = "Suppressing fire", Id = "suppress_window",   Label = "Lasts",                 Base = 6,  Unit = "s", Dec = 1 },
                 new() { Group = "Suppressing fire", Id = "suppress_time",     Label = "Holds after a hit",     Base = 3,  Unit = "s", Dec = 1 },
                 new() { Group = "Suppressing fire", Id = "suppress_cooldown", Label = "Cooldown",              Base = 20, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Grapnel", Id = "grapnel_reach",     Label = "Reach",                    Base = 700,  Unit = "u",   Dec = 0 },
+                new() { Group = "Grapnel", Id = "grapnel_bite",      Label = "Bite",                     Base = 0.15, Unit = "s",   Dec = 2 },
+                new() { Group = "Grapnel", Id = "grapnel_pull",      Label = "Winch",                    Base = 450,  Unit = "u/s", Dec = 0 },
+                new() { Group = "Grapnel", Id = "grapnel_stop",      Label = "Hauled to (off the hull)", Base = 250,  Unit = "u",   Dec = 0 },
+                new() { Group = "Grapnel", Id = "grapnel_clear",     Label = "Shortest line (off the hull)", Base = 150, Unit = "u", Dec = 0 },
+                new() { Group = "Grapnel", Id = "grapnel_reel",      Label = "Reel",                     Base = 100,  Unit = "u/s", Dec = 0 },
+                new() { Group = "Grapnel", Id = "grapnel_swing",     Label = "Swing",                    Base = 5,    Unit = "s",   Dec = 1 },
+                new() { Group = "Grapnel", Id = "grapnel_cooldown",  Label = "Cooldown (from cast-off)", Base = 16,   Unit = "s",   Dec = 1, Inverse = true },
+                new() { Group = "Grapnel", Id = "grapnel_rip_share", Label = "Rip (x its hull)",         Base = 0.01, Unit = "x",   Dec = 2 },
+                new() { Group = "Grapnel", Id = "grapnel_rip_flat",  Label = "Rip (+ hull)",             Base = 10,   Unit = "",    Dec = 0 },
             },
             Art = new ClassArt {
                 // destroyer_dd22 (the pack, J5): both mains on the keel gun cluster near the bow,
@@ -272,7 +282,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0.20f, -14.20f), new(0.20f, 17.81f) },
                 Pds   = new Vector2[] { new(-30.81f, 5.82f), new(30.81f, 5.82f) },
                 TurretTexScale = 1.3085f / 5.5f, MainBarrel = 16.03f, PdBarrel = 7.2f },
-            Abilities = new[] { Ab.Guns, Ab.Lance, Ab.Suppress } },
+            Abilities = new[] { Ab.Guns, Ab.Lance, Ab.Suppress, Ab.Grapnel } },
 
         // -- page 2: freight, which carries its own defences -------------------
         new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
