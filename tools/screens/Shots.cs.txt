@@ -1016,7 +1016,7 @@ public partial class _Shots : Node
         cam.Zoom = z0;
     }
 
-    // SLICE 6c: the Warrior's blade held -- its 160 u, ±55° wedge off the nose and the sweep across it.
+    // SLICE 6c: the Warrior's blade held (its 160 u, ±55° wedge and the sweep across it), then its whirlwind (the 210 u ring).
     async Task LaneA6cBladeFrames()
     {
         var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
@@ -1029,6 +1029,9 @@ public partial class _Shots : Node
         Input.ParseInputEvent(new InputEventKey { Keycode = space, PhysicalKeycode = space, Pressed = true });
         await W(0.5); await Snap("74b_warrior_blade_swing");
         Input.ParseInputEvent(new InputEventKey { Keycode = space, PhysicalKeycode = space, Pressed = false });
+        ws.Sl("whirlwind").Cool = 0; ws.UseAbility("whirlwind", 0);                  // the spin: the whole 210 u ring
+        await W(0.6); await Snap("74c_warrior_whirlwind");
+        await W(1.6);
         Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
         cam.Zoom = z0;
     }

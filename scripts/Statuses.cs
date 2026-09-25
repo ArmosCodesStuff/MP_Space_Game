@@ -26,6 +26,7 @@ public enum Status
     Suppressed = 64,     // its guns weakened, its throws held (StatusSet.OutGuards; host-only)
     Dazzled = 128,       // blinded: its throws held (StatusSet.OutGuards; host-only; never on a boss)
     Jammed = 256,        // its guns silenced, its throws held (StatusSet.OutGuards; host-only; never on a boss)
+    Unwebbed = 512,      // no web can take it: a pin asked of it is refused (the whirlwind; PlayerShip.ApplyStatus; host-only)
 }
 
 // WHICH OF A HOSTILE'S BLOWS the outgoing door is scaling (StatusSet.Out): a gun of a craft or a
@@ -82,7 +83,7 @@ public struct StatusSet
         new() { Status = Status.Jammed,     Gun = 0.0, Move = 1.0, Super = 1.0, HoldsThrow = true, BlocksLatch = true, DropsLatch = true, Spares = Tag.Boss },
     };
     // never on the wire: the host resolves them, and a guest has nothing that reads them
-    public const Status HostOnly = Status.Suppressed | Status.Dazzled | Status.Jammed;
+    public const Status HostOnly = Status.Suppressed | Status.Dazzled | Status.Jammed | Status.Unwebbed;
 
     // WHETHER A STATUS CAN BE PUT ON A THING OF THESE TAGS at all: no OutGuards row spares it
     public static bool Reaches(Status s, Tag on)

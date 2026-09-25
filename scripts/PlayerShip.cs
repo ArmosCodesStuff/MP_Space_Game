@@ -884,6 +884,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public void ApplyStatus(Status s, double seconds, double share = double.NaN)
     {
         if (!Net.Sim) return;
+        if (s == Status.Pinned && _status.Has(Status.Unwebbed)) return;   // no web takes it (the whirlwind)
         if (s == Status.Pinned && WebCut > 0)
         {   // Web Breaker: the web's ask is kept whole, and the pin's own clock holds it shorter
             _webAsked = Math.Max(_webAsked, seconds);
@@ -1248,6 +1249,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
                 sl.Own += Cadence(row.Every);
             }
         }
+    }
+
+    // THE WHIRLWIND'S PRESS (host): its time up, its cooldown, its first blow at once; every web on
+    // the hull let go (the pin and the web's own ask), and none may take it until the spin is over.
+    public void Whirl()
+    {
+        ref var sl = ref Sl("whirlwind");
+        if (sl.Left > 0 || sl.Cool > 0) return;
+        sl.Left = Stats["whirl_time"]; sl.Cool = Cooling(Stats["whirl_cooldown"]); sl.Own = 0;
+        _webAsked = 0; _webPhase = 0; _status.Clear(Status.Pinned);
+        _status.Apply(Status.Unwebbed, sl.Left);
     }
 
     // ── a dash (AbilityDef.Dash: the lunge) ─────────────────────────────────

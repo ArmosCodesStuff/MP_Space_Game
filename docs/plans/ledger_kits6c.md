@@ -189,3 +189,26 @@ with [IO.File]::WriteAllText (PowerShell's utf8 adds a BOM to the subject).
   LaneA6cLungeHostChecks / LaneA6cLungeGuestChecks (new); rewritten: EveryDamageStat (+lunge_damage, nine), sweep witness
   ["lunge"].
 - Next: kits6c-J3 Whirlwind.
+
+## kits6c-J3 · PRE
+- tier opus. Intent: Whirlwind (Q, ability 2): Melee.Whirl row (210 u, all round, 10 every 0.25 s = 40 DPS, 2 s), Stills the blade, the press drops the web and Status.Unwebbed (512, host-only, appended) refuses a new pin for the 2 s; cooldown 14 s (D47). HEAD b4aeea25233ee4e5545c489aa4b05410a053c323
+- scripts/Abilities.cs a385a4d979d99295db8ccdb1f86f0f93c875c0b0
+- scripts/PlayerShip.cs 00f6a41114b1f12dac792b1eb3ca6ead40366b61
+- scripts/Ships.cs 0a43f48530a2d1bc71aa4cacce71f97cc926aa2e
+- scripts/Items.cs 607be96fb1f8c636aaea157834c32a0bfadbe265
+- scripts/Melee.cs bb15cebc11cd4e8f9810b6882f0816768836f2d6
+- scripts/Statuses.cs dd5ed0fbe603d3b0f0baedd7841c804419a35dc8
+- tools/smoketest/SmokeTest.cs.txt 531bc4e18ff6d66f6f0e353726ef3c873e69198f
+- tools/screens/Shots.cs.txt 8e3eeecbdd9de6ace7a1d3558359212547185923
+## kits6c-J3 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- Built: Melee.Whirl (whirl_reach 210, 180 deg, whirl_damage 10 / whirl_interval 0.25), Ab.Whirlwind (Q, Swing + Stills),
+  PlayerShip.Whirl (host press: Left whirl_time 2, cooldown whirl_cooldown 14, the web's pin and ask dropped,
+  Status.Unwebbed 512 appended (host-only) for the spin; ApplyStatus refuses a pin while it runs). Melee.Running: a
+  Press row runs while Left > 1e-6 (no ninth blow off a rounding hair). Items: whirl_damage @output, whirl_reach @area,
+  whirl_time @duration; Damage whirl_damage 0.5. Warrior Abilities {Blade, Lunge, Whirlwind}.
+- Checks: LaneA6cWhirlChecks (new: rows; 3 runs: 4 bodies all round lose 80, 280-340 u 0, cooldown 14, SPINNING;
+  a latched webifier freed in 1-2 frames, free for the spin, re-takes after 2 s; the blade held through the spin
+  swings 0, then swings); frame 74c_warrior_whirlwind (LaneA6cBladeFrames); rewritten: EveryDamageStat (+whirl, ten),
+  sweep witness ["whirlwind"].
+- Next: kits6c-J4 Prism stance.

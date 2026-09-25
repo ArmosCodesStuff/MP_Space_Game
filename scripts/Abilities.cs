@@ -345,6 +345,18 @@ public static class Ab
         Show = (s, _) => Timed(s, "lunge", "lunge_cooldown", "LUNGE"),
     };
 
+    // THE WHIRLWIND (the Warrior's Q): 2 s spinning, 10 every 0.25 s to everything within 210 u. The
+    // press drops every web on the hull and none can take it while it spins; the blade holds meanwhile.
+    public static readonly AbilityDef Whirlwind = new()
+    {
+        Id = "whirlwind", Name = "Whirlwind", Short = "SPIN", Default = Key.Q,
+        Blurb = "Spin for 2 s: 40 DPS to everything within 210 u. It throws off every web, and none can take you while you spin.",
+        Swing = Melee.Whirl, Stills = true,
+        Press = (s, _) => s.Whirl(),
+        Refuse = (s, _) => s.Sl("whirlwind").Left > 0 ? "SPINNING" : s.Sl("whirlwind").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "whirlwind", "whirl_cooldown", "SPIN"),
+    };
+
     public static readonly AbilityDef Hunters = new()
     {
         Id = "hunters", Name = "Hunter-seekers", Short = "HUNTERS", Default = Key.F,

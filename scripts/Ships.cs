@@ -407,8 +407,8 @@ public static class Classes
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
             },
-                // 1.3 = 5% of the blade's 26, 2 of the lunge's 40
-            Damage = new() { ["blade_damage"] = 1.3, ["lunge_damage"] = 2 },
+                // 1.3 = 5% of the blade's 26, 2 of the lunge's 40, 0.5 of the whirlwind's 10
+            Damage = new() { ["blade_damage"] = 1.3, ["lunge_damage"] = 2, ["whirl_damage"] = 0.5 },
             Reach = new() { ["blade_reach"] = 1 },
             Cycle = new() { ["blade_interval"] = 1 },
             Weapons = new[] { Dps.Blade },
@@ -427,12 +427,18 @@ public static class Classes
                 new() { Group = "Lunge", Id = "lunge_damage",   Label = "Damage (each body)", Base = 40, Dec = 0 },
                 new() { Group = "Lunge", Id = "lunge_guard",    Label = "Damage taken",       Base = 0.5, Unit = "x", Dec = 2 },
                 new() { Group = "Lunge", Id = "lunge_cooldown", Label = "Cooldown",           Base = 7, Unit = "s", Dec = 1, Inverse = true },
+                // the whirlwind (kits_v2 card): 2 s, 210 u all round (Melee.Whirl), 10 every 0.25 s = 40 DPS, 14 s
+                new() { Group = "Whirlwind", Id = "whirl_damage",   Label = "Damage (each body)", Base = 10, Dec = 0 },
+                new() { Group = "Whirlwind", Id = "whirl_interval", Label = "Between blows",      Base = 0.25, Unit = "s", Dec = 2, Inverse = true },
+                new() { Group = "Whirlwind", Id = "whirl_reach",    Label = "Reach (all round)",  Base = 210, Unit = "u", Dec = 0 },
+                new() { Group = "Whirlwind", Id = "whirl_time",     Label = "Spin",               Base = 2, Unit = "s", Dec = 1 },
+                new() { Group = "Whirlwind", Id = "whirl_cooldown", Label = "Cooldown",           Base = 14, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://heavy_warrior_hull.png", Length = 120f, HalfWidth = 31.54f,
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
             // the weapon row, then the three it learns in this order (the walls read it: kits_v31 §3.6)
-            Abilities = new[] { Ab.Blade, Ab.Lunge } },
+            Abilities = new[] { Ab.Blade, Ab.Lunge, Ab.Whirlwind } },
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd,
             Blurb = "Fast. Point defence that hits ten times as hard as a warship's, a modest main gun, and hunter-seekers that each take a target of their own.",
             Hint = "WARDEN  ·  mouse aims the main gun",

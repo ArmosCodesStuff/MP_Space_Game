@@ -39,6 +39,9 @@ public static class Melee
     // THE ROWS. The blade: the Warrior's primary (kits_v2 Warrior card: 160 u, ±55°, 26 every 0.40 s).
     public static readonly MeleeDef Blade = new() { Id = "blade", Reach = "blade_reach", Arc = 55f, Stops = 0,
                                                     Damage = "blade_damage", Every = "blade_interval" };
+    // The whirlwind: all the way round (kits_v2 Warrior card: 2 s, 210 u, 40 DPS as 10 every 0.25 s).
+    public static readonly MeleeDef Whirl = new() { Id = "whirl", Reach = "whirl_reach", Arc = 180f, Stops = 0,
+                                                    Damage = "whirl_damage", Every = "whirl_interval" };
 
     // WHAT AN ARC FROM `from`, facing `facing` (radians, Aim's world angle), `reach` long and
     // `halfArc` (radians) either side, strikes, nearest first: every body in `pool` whose centre is
@@ -95,8 +98,11 @@ public static class Melee
 
     // WHETHER A SWING ROW IS SWINGING NOW: a Hold row while the trigger holds and nothing stills it, a
     // Press row while its Left runs. The one rule PlayerShip.Swings (host) and Draw (every peer) read.
+    // A Press row's last blow lands strictly inside its time: its clock and its Left reach zero on the
+    // same frame when the time is a whole number of blows (2 s of 0.25 s), and a hair of Left left by
+    // the rounding must not buy a ninth.
     public static bool Running(PlayerShip s, AbilityDef def) =>
-        def.Kind == AbilityKind.Hold ? s.Trigger && !s.Stilled : s.Sl(def.Id).Left > 0;
+        def.Kind == AbilityKind.Hold ? s.Trigger && !s.Stilled : s.Sl(def.Id).Left > 1e-6;
 
     // THE HOST LANDS ONE: the row's arc off `by`'s nose, its reach off `by`'s sheet, `damage` to each
     // hostile it strikes through the door (credited to `by` under the row's Id). Returns what it struck.

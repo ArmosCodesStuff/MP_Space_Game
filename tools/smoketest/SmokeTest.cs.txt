@@ -5037,6 +5037,94 @@ public partial class _Test : Node
         w.Position = yonder; w.Velocity = Vector2.Zero;
     }
 
+    // ── SLICE 6c: THE WARRIOR'S WHIRLWIND (kits_v2 card: 2 s, 210 u all round, 40 DPS, clears and blocks
+    // webs, cooldown 14 s). Three varied runs (VaryNear spot, VaryAngle heading, the bodies' bearings and
+    // reaches varied): 1 four gunships all round inside 210 u (front, behind, both beams) each lose exactly
+    // 8 x 10 = 80 over the spin, one 280-340 u out nothing; the cooldown reads 14.0 and a second press is
+    // refused. 2 the web: a webifier latched on the hull (Pinned) -- the press frees it within two frames,
+    // it stays free for the whole spin while the latch still asks, and the web takes it again after.
+    // 3 the blade held all through the spin swings nothing (DealtBy["blade"] still) and swings again
+    // once the spin is over.
+    async Task LaneA6cWhirlChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.HeavyWarrior);
+        var w = Me;
+        var sh = new ShipStats(ShipClass.HeavyWarrior);
+        Check(sh["whirl_damage"] == 10 && Math.Abs(sh["whirl_interval"] - 0.25) < 1e-9 && sh["whirl_reach"] == 210 && sh["whirl_time"] == 2
+              && sh["whirl_cooldown"] == 14 && Melee.Whirl.Arc == 180f && Unlocks.Nth(ShipClass.HeavyWarrior, 2) == Ab.Whirlwind
+              && Ab.Whirlwind.Default == global::Godot.Key.Q && Ab.Whirlwind.Stills,
+              $"the whirlwind's rows: {sh["whirl_damage"]:0} every {sh["whirl_interval"]:0.00} s ({sh["whirl_damage"] / sh["whirl_interval"]:0} DPS) inside {sh["whirl_reach"]:0} u all round for {sh["whirl_time"]:0} s, {sh["whirl_cooldown"]:0} s; the Warrior's ability 2, on Q");
+        var bladeKey = Abilities.KeyFor(ShipClass.HeavyWarrior, "blade");
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            w.Sl("whirlwind").Left = 0; w.Sl("whirlwind").Cool = 0;
+            w.Position = at; w.Rotation = rot; w.Velocity = Vector2.Zero;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            at = w.Position; rot = w.Rotation;                                            // re-taken after the wait
+            // 1 -- all round
+            var bearings = new[] { 0f, 90f, 180f, 270f }.Select(b => rot + Mathf.DegToRad(b + Vary(-30f, 30f))).ToArray();
+            var spots = bearings.Select(b => at + Vector2.Up.Rotated(b) * Vary(70f, 150f))
+                                .Append(at + Vector2.Up.Rotated(VaryAngle()) * Vary(280f, 340f)).ToArray();
+            var foes = spots.Select(p => { var f = H.SpawnRaider(p, Enemies.Gunship); f.Hp = 1e9; return f; }).ToArray();
+            void Pose() { w.Position = at; w.Velocity = Vector2.Zero; w.Rotation = rot; for (int k = 0; k < foes.Length; k++) foes[k].Position = spots[k]; }
+            Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); Pose();
+            var hp0 = foes.Select(f => f.Hp).ToArray();
+            w.UseAbility("whirlwind", 0);
+            double cool0 = w.Sl("whirlwind").Cool;
+            string again = Abilities.Find(w.Class, "whirlwind").Refuse?.Invoke(w, null);
+            for (int i = 0; i < 60 * 3 && w.Sl("whirlwind").Left > 0; i++) { Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            for (int i = 0; i < 20; i++) { Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            var lost = Enumerable.Range(0, foes.Length).Select(k => hp0[k] - foes[k].Hp).ToArray();
+            Check(lost.Take(4).All(l => Math.Abs(l - 80) < 1e-6) && lost[4] == 0 && Math.Abs(cool0 - 14.0) < 0.05 && again == "SPINNING",
+                  $"the whirlwind at heading {Mathf.RadToDeg(rot):0} deg: the four all round lose {string.Join(" / ", lost.Take(4).Select(l => l.ToString("0.##")))} (8 x 10 = 80 each, 40 DPS for 2 s), the one {spots[4].DistanceTo(at):0} u out {lost[4]:0.##}; cooldown {cool0:0.00} s (14); pressed again: {again ?? "nothing"}");
+            foreach (var f in foes) f.TakeDamage(1e12);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
+            // 2 -- the web
+            w.Sl("whirlwind").Cool = 0;
+            var web = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f), Enemies.Webifier);
+            web.Hp = 1e9; web.Quarry = w;
+            for (int i = 0; i < 60 * 8 && !w.Pinned; i++) { w.Position = at; w.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            bool took = w.Pinned;
+            w.UseAbility("whirlwind", 0);
+            int freeIn = -1; bool heldFree = true, stillLatched = true; double t = 0;
+            for (int i = 0; i < 60 * 3 && t < 1.9; i++)
+            {
+                w.Position = at; w.Velocity = Vector2.Zero;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                t += GetProcessDeltaTime();
+                if (freeIn < 0 && !w.Pinned) freeIn = i + 1;
+                if (freeIn >= 0 && w.Pinned) heldFree = false;
+                if (t > 0.5) stillLatched &= web.Latched;
+            }
+            for (int i = 0; i < 60 * 2 && !w.Pinned; i++) { w.Position = at; w.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); t += GetProcessDeltaTime(); }
+            Check(took && freeIn >= 1 && freeIn <= 2 && heldFree && stillLatched && w.Pinned && t >= 1.95,
+                  $"a webifier latched {web.Position.DistanceTo(at):0} u off: the whirlwind frees the hull in {freeIn} frame(s) (1-2), no web takes it for the spin (free throughout {heldFree}, the latch still asking {stillLatched}), and the web takes it again {t:0.00} s after the press (after 2)");
+            web.TakeDamage(1e12);
+            for (int i = 0; i < 30 && w.Pinned; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
+            // 3 -- the blade holds while it spins
+            w.Sl("whirlwind").Cool = 0;
+            var mark = H.SpawnRaider(at + Vector2.Up.Rotated(rot + Mathf.DegToRad(Vary(-30f, 30f))) * Vary(70f, 130f), Enemies.Gunship);
+            mark.Hp = 1e9; var markAt = mark.Position;
+            w.UseAbility("whirlwind", 0);
+            double blade0 = w.DealtBy.TryGetValue("blade", out var bv0) ? bv0 : 0;
+            KeyDown(bladeKey);
+            for (int i = 0; i < 60 * 3 && w.Sl("whirlwind").Left > 0; i++) { w.Position = at; w.Rotation = rot; w.Velocity = Vector2.Zero; mark.Position = markAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double bladeSpin = (w.DealtBy.TryGetValue("blade", out var bv1) ? bv1 : 0) - blade0;
+            for (int i = 0; i < 40; i++) { w.Position = at; w.Rotation = rot; w.Velocity = Vector2.Zero; mark.Position = markAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            KeyUp(bladeKey);
+            double bladeAfter = (w.DealtBy.TryGetValue("blade", out var bv2) ? bv2 : 0) - blade0 - bladeSpin;
+            Check(bladeSpin == 0 && bladeAfter >= 26,
+                  $"the blade held through the spin swings {bladeSpin:0} (0) and, the spin over, {bladeAfter:0} (26 or more)");
+            mark.TakeDamage(1e12);
+            w.Sl("whirlwind").Cool = 0;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        w.Position = yonder; w.Velocity = Vector2.Zero;
+    }
+
     // ── SLICE 6c, RUNG 5: A GUEST'S LUNGE. The guest (LaneA6cLungeGuestChecks, after lane B's drives and
     // before its freighter) flies a WARRIOR, turns to a varied heading at rest and presses E: its own hull
     // goes 420 +- 5 u along the nose, it reads the host's HARDENED bit and the host's 7 s cooldown on its
@@ -10978,10 +11066,10 @@ public partial class _Test : Node
                           $"and the three original hulls take it where they always did -- 6% of the gun or the torpedoes (+{Rise(ShipClass.Battleship, "main_damage"):0.0} on the battleship) -- and nothing at all on the fighters, the missiles or the point defence, whose rows are declared at zero and stay there");
                     // the gear that lifts "every weapon" reaches the same list, and nothing else
                     Check(string.Join(",", Classes.EveryDamageStat())
-                          == "blade_damage,deploy_damage,fighter_damage,hunter_damage,lunge_damage,main_damage,missile_damage,rail_damage,torpedo_damage"
+                          == "blade_damage,deploy_damage,fighter_damage,hunter_damage,lunge_damage,main_damage,missile_damage,rail_damage,torpedo_damage,whirl_damage"
                           && Classes.All.Where(c => c.Ready).All(c => c.Damage.Count > 0)
                           && Classes.All.Where(c => c.Ready).All(c => c.Damage.Keys.All(k => new ShipStats(c.Id)[k] > 0)),
-                          $"nine weapon stats in the whole game, every flyable class names at least one, and every one it names is a row on its own sheet");
+                          $"ten weapon stats in the whole game, every flyable class names at least one, and every one it names is a row on its own sheet");
 
                     // ── AND THE K WINDOW'S DAMAGE BLOCK IS A ROW PER SYSTEM (ClassDef.Weapons) ──
                     // Its total added four named figures -- main, missile, broadside, point defence
@@ -11257,6 +11345,7 @@ public partial class _Test : Node
             // ── WARRIOR: the blade (slice 6c) ──
             await LaneA6cBladeChecks(yonder);
             await LaneA6cLungeChecks(yonder);
+            await LaneA6cWhirlChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -11643,6 +11732,7 @@ public partial class _Test : Node
                     ["blade"]     = sp => sp.Trigger && Abilities.Find(sp.Class, "blade").State(sp, null).Lit,
                     ["lunge"]     = sp => sp.Sl("lunge").Left > sp.Stats["lunge_time"] - 0.1 && sp.Statuses.Has(Status.Hardened)
                                           && sp.Sl("lunge").Cool > sp.Stats["lunge_cooldown"] - 0.1,
+                    ["whirlwind"] = sp => sp.Sl("whirlwind").Left > sp.Stats["whirl_time"] - 0.1 && sp.Stilled && sp.Statuses.Has(Status.Unwebbed),
                     ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && InFlight().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
                     ["roll"]      = sp => sp.Statuses.Has(Status.Evading) && sp.Sl("roll").Left > sp.Stats["roll_time"] + sp.Stats["boost_time"] - 0.1,
                     ["echo"]      = sp => sp.Sl("echo").Left > sp.Stats["echo_time"] - 0.1,
