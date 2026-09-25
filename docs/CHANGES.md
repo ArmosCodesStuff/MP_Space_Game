@@ -36,6 +36,13 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_items`, branch `wt/items`): lane I, items by hull category, built
+J1-J6; compiles, rung 2 green. engine-unproven: rungs owed in the final test phase** (solo x2, six x2,
+screens). 48 lines x 10 tiers (`Items.cs`), rarity deleted, Loot on tiers, conditional doors, save format
+4 with no migrations. EXPECTED RED at rung 3 until the kits reconcile: `ItemsTableChecks` "every stat a part
+names is on every hull it fits" (`flare_count`, `@area` / `@duration` rows the kits add). Detail and the
+kit assumptions the reconcile job checks: `docs/plans/ledger_items.md` (J7 POST).
+
 **2026-09-25 (worktree `WarShips_wt_drives`, branch `wt/drives`): kits lane B -- drives, helm,
 strafe (F21, F22, F24) -- built J1-J6; compiles, rung 2 green. engine-unproven: rungs owed in the final
 test phase** (solo x2, six x2, screens); J7 fixed the merge gate's five findings. V is the class's drive (`Drives.cs`): a held warp on the
@@ -539,6 +546,35 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Items by hull category, lane I (2026-09-25, worktree wt/items)
+
+**The law (`Items.cs`, replacing the 62 rarity lines, `Rarity` and `Equipment.Migrated`).** A part is a
+LINE of one hull category -- capital 11, freighter 10, heavy 11, light 10 -- or one of 6 chips for every
+hull, at ten tiers (`{stem}_t{n}`): its ups x1.10 a tier from the T1 lean (+25% power, +20% a
+multiplier, 18% reach, 22% top, 8% a chip, 12.5% an unpriced unconditional line), its price fixed. A
+rider adds +1 to a count (+2 from T6 on a count of 6, T9 on 4). Lines lift ROLES (`@primary`, `@output`,
+`@area`, ...) that expand onto the rows the hull has. Fit: slot, then category. Scrap 100 x 1.25^(t-1);
+`Ui.TierColor` colours a part by tier. **Loot**: base tier 1 + (L-1)/4, rolled 20 / 70 / 10 around it,
+70% from the pilot's own category. **Save format 4**: older files are greyed out; nothing migrated,
+nothing refunded.
+
+**Conditional lines** lift a sheet row at x1, read at one door: Escort Hunter / Hunter Chip (craft),
+Executioner (target under 35%), Redline (own hull under 50%), Spin-up Feed (+5% a second on one target to
++25%), Burst Feed (primary rate for 4 s after the boost), Reset Core (a kill cuts every cooldown left),
+Ablative Skin (hits under 10% of the hull, ceiling 40%), Web Breaker (a web shorter and weaker, ceiling
+60%). Escort Hunter's tracking lifts point defence only: the main guns follow the cursor.
+
+**Checks:** new `ItemsLawChecks`, `ItemsTableChecks`, `ItemsLineChecks`, `ItemsLootChecks`,
+`ItemsParRowsChecks`, `ItemsDoorChecks` (rung 3), `ItemsGuestChecks` (rung 5), frame
+`6d_k_stats_conditions`; about 20 rewritten onto the new ids (the save round trip at version 4, the
+old ids read as nothing, recycler, gear levels, chips, the guest carrier's Magazine Core T9), frames 6b,
+58, 58b, 81c, 10b. **Rungs:** 1 and 2 in the worktree; none of it has run on the engine.
+
+**Known broken:** `ItemsTableChecks` "every stat a part names is on every hull it fits" is red until the
+kits reconcile (`flare_count`; `@area` / `@duration` rows of abilities the kits have not built). A
+capital that pays top speed in four slots and three Combat chips reaches -108%, which the x0.1 floor
+holds (a design flag for the owner: §3 prices each line alone, never the stack).
 
 ### Class kits, lane B: drives, helm and strafe -- F21, F22, F24 (2026-09-25, worktree wt/drives)
 

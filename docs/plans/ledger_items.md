@@ -194,3 +194,22 @@ Frames written (engine-unproven: rung 4 owed, read by eye once): NEW 6d_k_stats_
 Reset Core T5, Ablative Skin T9: the K stats Conditions group). J1's 81c (recycler by tier), 58/58b (the hold) and
 62 (crates in Ui.TierColor) are the rest of the item UI.
 Next: J7 docs + final POST.
+
+## J7 PRE -- tier opus
+Intent: docs (CHANGES Handoff + Unreleased + Known broken, DESIGN's gear section onto the item law and the
+save format 4), the final POST. HEAD 53828a0. Hashes:
+  docs/CHANGES.md 13321414a9d735c49becdb3275e710560358186f
+  docs/DESIGN.md 98cc510a1f0aa501c03ee2ecad22b382d6fc766e
+## J7 POST -- the lane's final
+Verdict: done. verify -Quick ALL CHECKS PASSED at the lane's HEAD (0 warnings, 0 findings, UNUSED 0). Own diff read.
+Files: docs/CHANGES.md (Handoff line, Unreleased "Items by hull category, lane I", Known broken), docs/DESIGN.md (save
+format 4 with no migrations; the line / tier / role / condition law replaces the rarity bullet; "right category").
+THE TEST PHASE OWES (engine-unproven, nothing in this lane has run on the engine):
+- rung 3 (solo) x2 seeds: ItemsLawChecks, ItemsTableChecks, ItemsLineChecks, ItemsLootChecks, ItemsParRowsChecks,
+  ItemsDoorChecks, SaveCoverage, ItemsNoMigrationChecks, RecyclerChecks, GearLevelChecks, ChipChecks and the other
+  J1 rewrites. EXPECTED RED: ItemsTableChecks "every stat a part names is on every hull it fits" until the kits
+  reconcile (flare_count; @area / @duration rows of abilities not yet built).
+- rung 4 (screens): 6b, 6d_k_stats_conditions, 58, 58b, 81c, 10b, 62 by eye once.
+- rung 5 (six) x2: ItemsGuestChecks (both ends), the guest carrier's Magazine Core T9, the guest's levelled Helm Drive.
+Open for the reconcile job: ITEM ASSUMPTIONS A1-A11 above; Items.Roles and Items.PrimaryShots are the two tables
+it edits.
