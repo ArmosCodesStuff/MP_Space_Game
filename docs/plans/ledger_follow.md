@@ -50,3 +50,19 @@ is NOT gated on Ready -- only the heavy was asked; a lane gun switching prey may
 Checks: FollowLeadRetargetChecks (pure), FollowHeavyRetargetLeadChecks (solo, after LaneAHeavyRowsChecks).
 The existing "pinned ... flight is 10 s" check: its hvM now throws one frame later (Ready), aim unchanged (pilot held).
 engine-unproven: rungs owed in the final test phase. Next: follow-J3.
+
+## follow-J3 PRE -- tier opus
+Intent: Drives.Warranted(cool) + CoolGrace; Priced prices a jump inside the host's cooldown as an unwarranted snap (the whole distance over) and restarts the cooldown; checks solo + host role; CHANGES.md (last job). HEAD 74223bb.
+Files+hashes: Drives.cs e56ce9d6, SmokeTest.cs.txt 0cea9843, CHANGES.md 71766626,
+## follow-J3 POST -- done (typecheck 0 errors; verify -Quick ALL CHECKS PASSED; own diff read)
+Drives.CoolGrace 0.5 s + Drives.Warranted(cool); Priced: a jump seen with the host's slot Cool > CoolGrace is priced with
+safe = 0 (DisabledFor(jump), capped 6 s), the cooldown restarts either way. Default taken (spec silent): "refused" =
+priced as an unwarranted snap, the move itself is not undone (no host relocation). The existing guest check "3300 u
+snap, no bit, 6 s" now lands inside the first jump's cooldown: still 6 s (cap). Checks: FollowWarpCooldownRuleChecks
+(solo, after LaneBWarpChecks), FollowWarpCooldownHostChecks (arena host, after LaneBWorldEntryChecks).
+CHANGES.md Handoff + Unreleased (and the stale Known-broken line removed); DESIGN.md trap ([Live]).
+FINAL TEST PHASE OWES: rung 3 `quick,solo,solo` -- FollowFingerprintCollectionChecks, FollowLeadRetargetChecks,
+FollowHeavyRetargetLeadChecks, FollowWarpCooldownRuleChecks, plus the existing BuildChecks fingerprint pair, the
+LaneAHeavyRowsChecks missile sub-test (throws a frame later now) and LaneAChargeTableHashedChecks; rung 5 `six,six` --
+FollowWarpCooldownHostChecks and the LaneBHostDrives/LaneBGuestDrives pair (6 s snap now inside cooldown). No frames (rung 4 not needed).
+engine-unproven: rungs owed in the final test phase. Next: none (lane ready for its code gate).

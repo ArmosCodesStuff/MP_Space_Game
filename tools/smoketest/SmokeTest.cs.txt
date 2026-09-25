@@ -3636,6 +3636,7 @@ public partial class _Test : Node
         Check(arrived && !relocDisabled && g.Sl("warp").Cool <= 0,
               $"arena host (lane B): the guest's destroyer put back 3000 u away by the host (a returning pilot's place) is never priced as a jump -- arrived {arrived}, disabled {relocDisabled}, warp cooling {g.Sl("warp").Cool:0.0} s");
         LaneBWorldEntryChecks(g);                                           // snaps priced (this window); one frame, no real report between
+        FollowWarpCooldownHostChecks(g);                                    // the same: a warp inside the host's cooldown is priced
         // THE REST OF THE GUEST'S DRIVES, watched every frame until it becomes a freighter
         double firstOff = -1, secondOff = -1; bool was = false, sawBoost = false;
         float fastest = 0, widest = 0, restOff = -1; int clamps0 = -1, clampsDart = 0;
@@ -3718,6 +3719,99 @@ public partial class _Test : Node
             if (priced) { g.Statuses.Clear(Status.Disabled); g.Sl("warp").Cool = 0; }
             run.From = null; Report(pos, false);                            // back on its real reports
             g.Hp = hp;
+        }
+    }
+
+    // ── A WARP INSIDE THE DRIVE'S COOLDOWN IS PRICED (follow-J3) ─────────────────────────────────
+    // The host priced a guest's warp DISTANCE but not its cooldown, so a modified client could chain jumps.
+    // The rule (Drives.Warranted): a jump the host sees while its own copy of the slot still reads more
+    // than CoolGrace (0.5 s) is unwarranted. From 3 varied situations each: INSIDE the cooldown (1-19 s
+    // left), AT THE EDGE (0.5 s + and - a varied 0.05-0.2 s margin) and AFTER it (0). Then on Priced
+    // itself, on this warp hull with a fresh host record: a varied 700 u to (safe - 200) u snap -- inside
+    // the safe range, so a warranted one costs no disable -- is DISABLED for the whole distance
+    // (Drives.DisabledFor(jump), no safe range) when the slot still cools past the edge, and not at all at
+    // the lower edge or after; the cooldown starts again in every case.
+    void FollowWarpCooldownRuleChecks(PlayerShip me)
+    {
+        for (int run = 0; run < 3; run++)
+        {
+            double inside = Vary(1f, 19f), margin = Vary(0.05f, 0.2f);
+            Check(!Drives.Warranted(inside) && !Drives.Warranted(Drives.CoolGrace + margin) && Drives.Warranted(Drives.CoolGrace - margin) && Drives.Warranted(0),
+                  $"a warp with {inside:0.0} s of cooldown left is unwarranted, so is one {margin:0.00} s past the 0.5 s edge; {margin:0.00} s inside the edge and after the cooldown it is warranted");
+        }
+        bool snaps = Drives.PriceSnaps;
+        Drives.PriceSnaps = true;
+        try
+        {
+            float safe = (float)me.Stats["warp_safe"], flight = 100f, age = 0.05f;
+            double full = me.Cooling(me.Stats["warp_cooldown"]);
+            for (int run = 0; run < 3; run++)
+            {
+                float d = Vary(Drives.SnapAt + 100f, safe - 200f);
+                float jump = d - flight * age;
+                var from = me.Position;
+                var to = from + Vector2.Right.Rotated(VaryAngle()) * d;
+                double margin = Vary(0.05f, 0.2f);
+                var cases = new[] { ("inside", (double)Vary(2f, 15f), true), ("past the edge", Drives.CoolGrace + margin, true),
+                                    ("inside the edge", Drives.CoolGrace - margin, false), ("after", 0.0, false) };
+                foreach (var (name, cool, refused) in cases)
+                {
+                    me.Statuses.Clear(Status.Disabled);
+                    me.Sl("warp").Cool = cool;
+                    var r = new DriveRun();
+                    Drives.Priced(me, r, from, false, age, flight);                  // the report before: where it was
+                    Drives.Priced(me, r, to, false, age, flight);                    // the jump
+                    double off = me.Statuses.Has(Status.Disabled) ? me.Statuses.Left(Status.Disabled) : 0;
+                    double want = refused ? Drives.DisabledFor(jump) : 0;
+                    double cooled = me.Sl("warp").Cool;
+                    Check(Math.Abs(off - want) < 0.05 && Math.Abs(cooled - full) < 1e-6,
+                          $"a {d:0} u warp {name} of the cooldown ({cool:0.00} s left) is {(refused ? "unwarranted" : "warranted")}: DISABLED {off:0.00} s (want {want:0.00}), the cooldown started again ({cooled:0.0} s, want {full:0.0})");
+                }
+            }
+        }
+        finally
+        {
+            Drives.PriceSnaps = snaps;
+            me.Statuses.Clear(Status.Disabled); me.Sl("warp").Cool = 0;
+        }
+    }
+
+    // THE HOST REFUSES A GUEST'S SECOND WARP INSIDE THE COOLDOWN (follow-J3, rung 5, the host role). Fed
+    // straight to the host's copy of the guest's warp hull inside ONE frame (as LaneBWorldEntryChecks is),
+    // with bit-less snaps priced, from 3 varied bearings and distances (700 u to the safe range less
+    // 200): with the host's slot still cooling (a first jump's 3-15 s left) the next warp is DISABLED for
+    // its whole distance; with the cooldown run out, the same kind of warp costs no disable. The cooldown
+    // starts again after either. The hull's real report is restored after each.
+    void FollowWarpCooldownHostChecks(PlayerShip g)
+    {
+        var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+        var pos = (Vector2)typeof(PlayerShip).GetField("_netPos", nf).GetValue(g);
+        var vel = (Vector2)typeof(PlayerShip).GetField("_netVel", nf).GetValue(g);
+        float rot = (float)typeof(PlayerShip).GetField("_netRot", nf).GetValue(g);
+        var run = (DriveRun)typeof(PlayerShip).GetField("_drive", nf).GetValue(g);
+        void Report(Vector2 at) => g.ApplyState(at.X, at.Y, vel.X, vel.Y, rot, g.AimPoint.X, g.AimPoint.Y, g.Trigger, g.Staggered, at.X, at.Y, rot, false);
+        void Rebase() { g.Statuses.Clear(Status.Disabled); run.From = null; Report(pos); }
+        float safe = (float)g.Stats["warp_safe"];
+        double full = g.Cooling(g.Stats["warp_cooldown"]);
+        bool clean = Session.SectorOf(g.OwnerId) == Hub.Sector && Drives.PriceSnaps && g.Alive && !g.Statuses.Has(Status.Disabled);
+        for (int k = 0; k < 3; k++)
+        {
+            float d = Vary(Drives.SnapAt + 100f, safe - 200f);
+            double cooling = Vary(3f, 15f);
+            Rebase();
+            g.Sl("warp").Cool = cooling;                                    // a first jump's cooldown, still running
+            Report(pos + Vector2.Right.Rotated(VaryAngle()) * d);           // the second warp
+            double inside = g.Statuses.Has(Status.Disabled) ? g.Statuses.Left(Status.Disabled) : 0;
+            double insideCool = g.Sl("warp").Cool;
+            Rebase();
+            g.Sl("warp").Cool = 0;                                          // the cooldown has run out
+            Report(pos + Vector2.Right.Rotated(VaryAngle()) * d);           // a warp after it
+            bool afterFree = !g.Statuses.Has(Status.Disabled);
+            double afterCool = g.Sl("warp").Cool;
+            Check(clean && inside >= Drives.DisabledFor(d - 50f) - 0.05 && Math.Abs(insideCool - full) < 1e-6 && afterFree && Math.Abs(afterCool - full) < 1e-6,
+                  $"arena host (follow): a guest's second warp ({d:0} u, inside its {safe:0} u safe range) with {cooling:0.0} s of the host's cooldown left is refused -- DISABLED {inside:0.00} s (want {Drives.DisabledFor(d):0.00}, the whole distance) -- and one after the cooldown passes (disabled {!afterFree}); the cooldown starts again ({insideCool:0.0} / {afterCool:0.0} s, want {full:0.0}; counted in this world, snaps priced {clean})");
+            g.Sl("warp").Cool = 0;
+            Rebase();
         }
     }
 
@@ -15959,6 +16053,8 @@ public partial class _Test : Node
             var me = Me; var warpHome = me.Position; var d2w = H.GetNode<TargetDummy>("TargetDummy3");
             void Ready() { me.Sl("warp").Cool = 0; me.Statuses.Clear(Status.Disabled); me.Velocity = Vector2.Zero; me.Rotation = 0f; }
             await LaneBWarpChecks(me, d2w);
+            Ready();
+            FollowWarpCooldownRuleChecks(me);
             Ready();
             // the radar: click a marker to select it -- an enemy as the target, a landmark as a waypoint
             // beside the base: every landmark it clicks below is within the radar's 3600 u reach from here
