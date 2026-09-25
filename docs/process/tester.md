@@ -95,8 +95,16 @@ shared by two seeds, 16 not): two seeds do not prove a rewritten check.
   ability, foe, geometry, expected literal) reached by `scenario=<id>` through `run.ps1`, and
   `tools/scenarios.py` generating rows from the cards and reading a `.fails.txt` into a table; the
   interactions matrix (heavies x bosses x lights per weapon and platform) is rows of that table.
+  Conversion (owner, 2026-09-25): one method at a time, each row proved against the method it replaces
+  (both run on the same seed and agree three times) before that method is deleted; a red on a row is
+  then a row to read, never a method. The `PlayerShip`/`Hub` split follows and is proved by the rows.
 - Engine slots: at most 4; the PC is not the limit, shared folders and ports were.
 - A tool call that is moved to the background (past its timeout) kills its child processes when it ends: the call that
   starts `rungs.ps1` with Start-Process returns at once (PID only); every wait is a separate call under 10 minutes.
   Two round-1 `six` chains died this way on 2026-09-25 with no verdict and no fails file.
 - Prompts point at this file and carry at most 1,500 characters; the rules above are not re-pasted.
+- Until the bar every step is red on other lanes and `rungs.ps1` stops at the first red, so a fix's chain is never green:
+  a fix is proved when every check its task names is PASS in the rung step's `.fails.txt` at its seed and at one fresh
+  seed of the base rung, with the step's FAIL count not above the round's; it returns done with the other reds in `open`
+  as `seen:`. A coordinator never messages a workflow agent: the message resumes it as a session agent and the workflow
+  never receives its result (2026-09-25, the a1-arena-stall fix; recovered through `args.premerged`).
