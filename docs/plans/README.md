@@ -137,6 +137,8 @@ Agents (owner, 2026-09-25)
 - (2026-09-25, later; replaces "every agent runs Opus 5.5") The coordinator picks the model again: Opus for anything that evaluates or needs
   the whole project; Sonnet (high) or Haiku for a few steps with a recipe. Every lower-model agent is checked every 30 minutes so it cannot
   waste time or tokens (CLAUDE.md 4.1, tools/agents.ps1).
+- (2026-09-25, later) One agent per kind of work, never one agent per problem: 30 problems whose fix is writing to disk go to one
+  agent (CLAUDE.md Models "Grain"; tester.md step 3; `groupTasks` / `fixGroup` in the test-phase script).
 - Run several engine and game instances at once: "my PC can handle it no prob" (Ryzen 7 7700, 16 threads, 47 GB). Engine slots
   (tools/rungs.ps1 -Slots) make it safe; the limit was shared folders and ports, never the PC.
 

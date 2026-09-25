@@ -14,7 +14,9 @@ cross-checks every `task <id>` below against its output file. Facts go to README
 - (none)
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. Wait for task wbbiuayve; take its return (under 20 lines) as above.
+1. Bash waiter b9uzzs90h fires when "Merge Fable review fixes (lt)" lands (or tp1ar1_0 appears): TaskStop wbbiuayve, then relaunch
+   as in the Running row (the script now groups fixes per kind of work, fixes the fix-merge branch name and the asserted gate).
+   Else wait for task wbbiuayve; take its return (under 20 lines) as above.
 2. After the release: the two-machine test (NOTES.txt script) as a ledger row; docs/process/fable_report_1.md + _2.md "after the release"
    lists (harness split, enums, CHANGES fold, scenarios lane, PlayerShip/Hub split), each as a lane with a retrospective after.
 

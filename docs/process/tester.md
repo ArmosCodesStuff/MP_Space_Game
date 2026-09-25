@@ -58,7 +58,9 @@ shared by two seeds, 16 not): two seeds do not prove a rewritten check.
    high, ONE agent) reads the five `.fails.txt` files (and `ledger_test.md`: a check listed there that
    fails again is a regression task, kind code) and returns at most 8 tasks. A FAIL LANE task is fixed
    first; tasks with a non-empty `after` are deferred to the next round (a thrown lane leaves the world
-   broken for the lanes after it). Fixes: at most 4 in flight in the pooled worktrees `wt_fix0..3`
+   broken for the lanes after it). Fixes, grouped (a round's wrong checks to ONE Sonnet agent, code tasks by
+   lane to ONE Opus agent, at most 4 tasks each; never one agent per problem): at most 4 groups in flight
+   in the pooled worktrees `wt_fix0..3`
    (`git checkout -B wt/<key> version-l` + `clean -fdq`, never `-x`: a cold tree costs 100 s of import
    per `quick`), Opus for code, Sonnet for a wrong check (the rewrite asserts `expect`; never loosened),
    each reproduced at the lowest rung, proved per the chain table, then merged (Haiku). A `stopped_context`
