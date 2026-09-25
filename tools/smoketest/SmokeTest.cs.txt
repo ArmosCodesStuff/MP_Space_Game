@@ -4064,7 +4064,7 @@ public partial class _Test : Node
     }
 
     // ── THE BANDS AND THE LINES ARE IN THE BUILD'S FINGERPRINT (lane A slice 3, gate fix J12) ───────
-    // The bug: Charges.All was a dictionary, which Net.Fingerprint does not hash, so two builds whose
+    // The bug: Charges.All was a dictionary, which Net.Fingerprint did not then hash, so two builds whose
     // railgun bands differed admitted each other. Now the fingerprint's parts write Charges.All and
     // Lines.All out row by row, and at 3 varied railgun multipliers the fingerprint moves (the band is
     // put back after each, and the build's own fingerprint returns).
@@ -4088,6 +4088,96 @@ public partial class _Test : Node
             Check(moved != build && back == build,
                   $"a build whose railgun band fires x{m:0.00} has another fingerprint ({moved:x8} against the build's {build:x8}), and with the band put back the build's again ({back:x8})");
         }
+    }
+
+    // ── THE FINGERPRINT HASHES CONSTANT COLLECTIONS (follow-J1) ─────────────────────────────────
+    // The bug: Net.Fingerprint hashed a constant table only as an array or a row, so NetIds.Widths,
+    // Spawns.All (the wire kind index), Hints.All, Sfx._gap and Abilities.Reserved -- a List, three
+    // Dictionaries and a HashSet -- could differ between two builds that admitted each other. Now every
+    // System.Collections.Generic collection of Plain things is hashed (a list in order, a dictionary and
+    // a set in key order) unless it is marked [Live] (what a run fills in). From 3 varied entries of each
+    // table: one moved moves the fingerprint off Net.Protocol, and put back (in finally) it is the build's
+    // again; a dictionary and a set rebuilt in reverse order hash the same; and every static readonly
+    // collection is either hashed or [Live], never neither, never both.
+    void FollowFingerprintCollectionChecks()
+    {
+        const BindingFlags st = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+        var widths = (Dictionary<int, int>)typeof(NetIds).GetField("Widths", st).GetValue(null);
+        var gap = (Dictionary<string, double>)typeof(Sfx).GetField("_gap", st).GetValue(null);
+        int build = Net.Protocol;
+        int Moved(Action move, Action back)
+        {
+            int m;
+            try { move(); m = FingerprintNow(); }
+            finally { back(); }
+            return m;
+        }
+        void Pair(string what, int moved)
+        {
+            int back = FingerprintNow();
+            Check(moved != build && back == build,
+                  $"the build's fingerprint reads {what}: moved, {moved:x8} against the build's {build:x8}; put back, {back:x8}");
+        }
+        var parts = FingerprintParts();
+        var named = new[] { "NetIds.Widths=", "Spawns.All=", "Hints.All=", "Sfx._gap=", "Abilities.Reserved=" };
+        var missing = named.Where(n => !parts.Any(p => p.StartsWith(n, StringComparison.Ordinal))).ToList();
+        Check(missing.Count == 0, $"the build's fingerprint has a part for each collection table ({(missing.Count == 0 ? "all five" : "missing " + string.Join(", ", missing))})");
+        for (int run = 0; run < 3; run++)
+        {
+            // a Dictionary<int, int>: one space's width
+            var wk = widths.Keys.ElementAt(Rng.RandiRange(0, widths.Count - 1));
+            int wv = widths[wk];
+            Pair($"NetIds.Widths (space {wk} {wv} -> {wv + run + 1})", Moved(() => widths[wk] = wv + run + 1, () => widths[wk] = wv));
+            // a Dictionary<string, double>: one sound's gap
+            var gk = gap.Keys.ElementAt(Rng.RandiRange(0, gap.Count - 1));
+            double gv = gap[gk], gTo = gv * Vary(1.5f, 3f);
+            Pair($"Sfx._gap ({gk} {gv:0.000} -> {gTo:0.000} s)", Moved(() => gap[gk] = gTo, () => gap[gk] = gv));
+            // a Dictionary<string, (string, string)>: one hint's title
+            var hk = Hints.All.Keys.ElementAt(Rng.RandiRange(0, Hints.All.Count - 1));
+            var hv = Hints.All[hk];
+            Pair($"Hints.All ({hk}'s title)", Moved(() => Hints.All[hk] = (hv.Title + " " + run, hv.Body), () => Hints.All[hk] = hv));
+            // a List<SpawnKind>: one kind's burst, and the ORDER (the index is the kind on the wire)
+            int si = Rng.RandiRange(0, Spawns.All.Count - 1);
+            var sk = Spawns.All[si];
+            float sb = sk.Burst, sTo = sb + Vary(1f, 20f);
+            Pair($"Spawns.All ({sk.Id}'s burst {sb:0} -> {sTo:0})", Moved(() => sk.Burst = sTo, () => sk.Burst = sb));
+            int sj = (si + 1 + Rng.RandiRange(0, Spawns.All.Count - 2)) % Spawns.All.Count;
+            var sOther = Spawns.All[sj];
+            Pair($"Spawns.All (kinds {si} and {sj} swapped)",
+                 Moved(() => { Spawns.All[si] = sOther; Spawns.All[sj] = sk; }, () => { Spawns.All[si] = sk; Spawns.All[sj] = sOther; }));
+            // a HashSet<Key>: one more reserved key
+            var free = Enumerable.Range(0, 10).Select(i => global::Godot.Key.F1 + i).Where(k => !Abilities.Reserved.Contains(k)).ToArray();
+            var rk = free[Rng.RandiRange(0, free.Length - 1)];
+            Pair($"Abilities.Reserved (+{rk})", Moved(() => Abilities.Reserved.Add(rk), () => Abilities.Reserved.Remove(rk)));
+        }
+        // KEY ORDER, NOT INSERTION ORDER: a dictionary and a set rebuilt in reverse hash the same
+        var gapWas = gap.ToList(); var resWas = Abilities.Reserved.ToList();
+        int reversed;
+        try
+        {
+            gap.Clear(); foreach (var kv in Enumerable.Reverse(gapWas)) gap[kv.Key] = kv.Value;
+            Abilities.Reserved.Clear(); foreach (var k in Enumerable.Reverse(resWas)) Abilities.Reserved.Add(k);
+            reversed = FingerprintNow();
+        }
+        finally
+        {
+            gap.Clear(); foreach (var kv in gapWas) gap[kv.Key] = kv.Value;
+            Abilities.Reserved.Clear(); foreach (var k in resWas) Abilities.Reserved.Add(k);
+        }
+        Check(reversed == build, $"a dictionary and a set filled in the reverse order hash the same ({reversed:x8}, the build's {build:x8})");
+        // THE GUARD: every static readonly System.Collections.Generic field is hashed or [Live] -- a new
+        // table cannot go unhashed, and nothing a run fills in is ever part of the build
+        var neither = new List<string>(); var both = new List<string>();
+        foreach (var t in typeof(Net).Assembly.GetTypes().Where(t => t.Namespace == null && !t.Name.StartsWith("_") && !t.ContainsGenericParameters))
+            foreach (var f in t.GetFields(st | BindingFlags.DeclaredOnly).Where(f => f.IsInitOnly && f.FieldType.IsGenericType && f.FieldType.Namespace == "System.Collections.Generic"))
+            {
+                bool live = f.GetCustomAttribute<LiveAttribute>() != null;
+                bool hashed = parts.Any(p => p.StartsWith($"{t.Name}.{f.Name}=", StringComparison.Ordinal));
+                if (!live && !hashed) neither.Add($"{t.Name}.{f.Name}");
+                if (live && hashed) both.Add($"{t.Name}.{f.Name}");
+            }
+        Check(neither.Count == 0 && both.Count == 0,
+              $"every static readonly collection is a hashed table or [Live] (neither: {(neither.Count == 0 ? "none" : string.Join(", ", neither))}; both: {(both.Count == 0 ? "none" : string.Join(", ", both))})");
     }
 
     // ── F11 · THE PRISM (lane A slice 5, kits5-J2) ────────────────────────────────────────────
@@ -18147,6 +18237,7 @@ public partial class _Test : Node
             await LaneAMissileIdsChecks(yonder);
             LaneAChargeBandChecks();
             LaneAChargeTableHashedChecks();
+            FollowFingerprintCollectionChecks();
             LaneAMeleeArcChecks();
             await LaneAMeleeStrikeChecks(yonder);
             LaneAPrismBandChecks();

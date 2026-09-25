@@ -40,7 +40,7 @@ public static class Settings
 
     // Ability key bindings, "Class.abilityId" -> Key. Only changed keys are stored;
     // anything absent uses the ability's default (see Abilities).
-    public static readonly System.Collections.Generic.Dictionary<string, int> Keys = new();
+    [Live] public static readonly System.Collections.Generic.Dictionary<string, int> Keys = new();
     private static bool _loaded;
 
     public static void Save()

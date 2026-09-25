@@ -232,7 +232,7 @@ public static class Fx
     // EVERY NODE UP RIGHT NOW. A node puts itself in as it enters the tree and takes itself out
     // as it leaves, so a world that goes away empties this by itself: there is no list to clear
     // and nothing to leak.
-    private static readonly System.Collections.Generic.List<FxNode> LiveNodes = new();
+    [Live] private static readonly System.Collections.Generic.List<FxNode> LiveNodes = new();
     internal static void Entered(FxNode n) { if (!LiveNodes.Contains(n)) LiveNodes.Add(n); }
     internal static void Left(FxNode n) => LiveNodes.Remove(n);
     // The warnings still standing, for the peer that has to be told about them (Boss.CatchUp).

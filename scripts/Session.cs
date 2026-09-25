@@ -49,9 +49,9 @@ public static class Session
     public const double HoldFor = 90;
     public const ulong OwedWindowMs = 12000;
 
-    public static readonly Dictionary<int, Hub.SectorKind> Sectors = new();
-    public static readonly Dictionary<string, Held> Places = new();
-    public static readonly List<Kill> Kills = new();
+    [Live] public static readonly Dictionary<int, Hub.SectorKind> Sectors = new();
+    [Live] public static readonly Dictionary<string, Held> Places = new();
+    [Live] public static readonly List<Kill> Kills = new();
 
     private static long _serial = DateTime.UtcNow.Ticks;
     private static int _worlds;
@@ -70,7 +70,7 @@ public static class Session
     // the pilot keeps it (Rejoin: never forgotten by End, since a drop ends the guest's session) and
     // sends it with its identity. Once a token is issued for an id, that id's place is the token's.
     // It is carried after connection, never in an invite code (network_webrtc.md §3.9).
-    public static readonly Dictionary<string, string> Tokens = new();
+    [Live] public static readonly Dictionary<string, string> Tokens = new();
     public static string Rejoin = "";
     public static string TokenFor(string id)
     {
