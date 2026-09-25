@@ -387,3 +387,25 @@ Done: J2, J3, J4 (a3265f7, 43b0953, 19cfffa). Next is kits6b-J5; no PRE written.
   not by where the sentry stands); field_radius / repair_* / resupply_* join no item role (Items.Roles), as TOT and
   the Buster did not -- the items lane's call.
 - Next: kits6b-J10 (the record).
+
+### kits6b-J10 · PRE · the record (CHANGES Handoff + Unreleased + keys table, DESIGN) -- tier opus
+- Files: docs/CHANGES.md fc06a3f, docs/DESIGN.md a930d77. HEAD a361347.
+### kits6b-J10 · POST (the slice's last job)
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED at HEAD. engine-unproven: rungs owed in the final
+  test phase. CHANGES: Handoff (all three built, the merge, the renumbered wire ids), the default-keys Tender row,
+  Unreleased (the Tender's card; Known broken refreshed; slice 5's stale "guest sentries do not see the paint"
+  closed). DESIGN: the 6b section (D43 IMendable / Friendlies, D44 a held beam is a slot, D38 Aura + Tick, D45 the
+  cut is CoolBy), the class table's three freighter rows.
+- Lane state: J1-J8 + J10 built; the slice is whole (Freighter, Tender, Bastion). Gate not yet run.
+- WHAT THE FINAL TEST PHASE OWES (chain `quick,solo,solo,six,six,screens`):
+  - rung 3 x2 (solo): LaneA6bSpotterChecks, LaneA6bTotChecks, LaneA6bBubbleCoverChecks, LaneA6bRedeployChecks,
+    LaneA6bMortarChecks, LaneA6bBusterChecks, LaneA6bWellChecks, LaneA6bLanceChecks (+ LaneA6bLanceTriggerChecks),
+    LaneA6bOverdriveFieldChecks, LaneA6bRepairFieldChecks, LaneA6bResupplyChecks; LaneA6bBusterBossChecks (boss
+    fight); LaneA6bSiegeChecks (siege); the rewritten: the TENDER overdrive cadence block, the rate-lift literal
+    check, the ability sweep (fitRows guns|lance, witnesses lance/overdrive/repair/resupply/buster/well/tot/redeploy,
+    sweepCut), sweep B's Lob and Beam main_range arms, the DPS/table checks (Shots 11, Fx 18), the freighter DPS 57,
+    S2's dummy check, LaneA4HostPointCheck's messages.
+  - rung 5 x2 (six): LaneA6bPaintWireHost/Guest, LaneA6bTotHost/Guest, LaneA6bFieldsHost/Guest, and the guest's
+    bubble press now LaneA4GuestPointPress on Q.
+  - rung 4 (screens): 79c_tot_lines, 79d_redeploy_marks, 79e_redeploy_ring, 79f_mortar_circle, 79g_gravity_well,
+    79h_lance_burn, 79i_lance_mend, 79j_overdrive_field, 79k_repair_field (79h-79k new art: read by eye once).
