@@ -27,8 +27,7 @@ temporary "scratchpad" folder refer to the originals of these same files.
 **Reconciled 2026-09-25** (`numbers_curve_raids_items.md` §8): that file owns every curve, boss, raid,
 chip and item number; `kits_v31.md` owns what each class does. L1 Lancer 3222 / Drake 2968 (the fleet's
 walled L1 median); every non-super move Lancer ×0.744 / Drake ×0.787; no starting chips; the Dart at 72
-(every speed lift prices it); the boss hull is NOT trimmed for adds (the one owner-taste row; default
-stands). Still true: a par Echo solo still dies to the Rusty Bucket before the fight ends.
+(every speed lift prices it); the boss hull is NOT trimmed for adds (owner ruled 2026-09-24). Still true: a par Echo solo still dies to the Rusty Bucket before the fight ends.
 
 ## The owner's rulings (binding; newest win)
 
@@ -55,6 +54,8 @@ Kits and classes
   over) is CAPITAL-ONLY (BB, CV, DD). Capitals are slower overall and rely on it. The other nine
   have no warp; their V is a speed + strafe boost: +50% top speed and strafe for 3 s, 15 s cooldown.
 - Rate buffs ADD (two x2 = x3). Point defence passive, 1 DPS per mount, 2 on every capital.
+- Echo Q = REWIND goes back 8 s: position, heading and velocity return to where the Echo was 8 s
+  ago (built with the class batch; kits_v31 §3).
 - Supers unchanged: burn 250, rock 250. The Drake stays silent during its throw.
 - Enemy heavies: twin laser, each barrel 1.25x the light mean = 2.58 DPS per heavy; heavies never
   own CC (their webifier lights do); heavy missile 35 in 10 s, only at a pinned target.
@@ -75,6 +76,8 @@ Raids and bosses
   fixed per slot. ANY add's web may start the Rusty's beam; the escape window is never less than
   0.6 s before the first hit; beam damage and rate unchanged. A wiped squad returns after 30 s with
   the same kinds; refills pay no EXP.
+- The boss's hull is NOT trimmed for its adds: the scaling is the boss alone against the pilot, and
+  a fight with adds may run past 60 s (2026-09-24).
 - Curve: a reference-pilot table instead of x1.025 a level; salvage 500 x 1.10 a level, capped at
   the highest boss cleared + 1; salvage levels live on the SLOT, per pilot; siege guns cut (built as
   the cruise missile); level skipping up to +2.
