@@ -9,9 +9,10 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 ## Landed (verdict first; delete the row once its action is done): none (code-read 17b94df: do not rewrite; round>=2 triage reads it)
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. Wait for task wb7z3o3to (round 1: check group re-running in wt_fix0, arena-stall c2790d9 merging; then round 2). A stop -> relaunch
-   Workflow({scriptPath, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 4, review: [], premerged: {...}, done: [<every task merged
-   into version-l per ledger_test.md>]}}): the cache replays only the unchanged PREFIX of agent calls, so name every merged task in done.
+1. When the check group's merge lands (Monitor b70843jn5 prints "merged":true): TaskStop wb7z3o3to, kill orphans, relaunch
+   Workflow({scriptPath, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 4, review: [], premerged: {"a1-arena-stall": {key:
+   "fixa1a1arenastall", tree: "fix1"}}, done: ["a1-items-tables"], preTasks: <docs/plans/round2_tasks.json>}}) (owner 19:05: skip round 2's
+   chains + triage; 17 tasks from the code read; merges start at Sonnet). The cache replays only the unchanged PREFIX of agent calls.
 2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
 
 ## Owner questions (one line each, with its default): none open (today's rulings: README, Agents).
