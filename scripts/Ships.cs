@@ -622,8 +622,8 @@ public static class Classes
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Reverb, Ab.Rewind, Ab.Emp } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
-            Blurb = "An ambusher: its scattergun is murder point blank and half again from behind. While its veil is up nothing hostile can pick it.",
-            Hint = "WRAITH  ·  mouse aims the scattergun, x1.5 from behind  ·  F veil  ·  Q venom",
+            Blurb = "An ambusher: its scattergun is murder point blank and half again from behind. It veils so nothing can pick it, poisons what it hits, and steps into the shadow behind its prey.",
+            Hint = "WRAITH  ·  mouse aims the scattergun, x1.5 from behind  ·  F veil  ·  Q venom  ·  E shadow step",
             Drive = Drives.Boost,
             Shot = Shots.Pellet,
             Nums = new() {
@@ -660,12 +660,16 @@ public static class Classes
                 new() { Group = "Venom", Id = "venom_dps",      Label = "Each dose eats",    Base = 1.25, Unit = "/s", Dec = 2 },
                 new() { Group = "Venom", Id = "venom_last",     Label = "After the last",    Base = 5, Unit = "s", Dec = 1 },
                 new() { Group = "Venom", Id = "venom_cooldown", Label = "Cooldown",          Base = 22, Unit = "s", Dec = 1, Inverse = true },
+                // SHADOW STEP (DL3): 140 u behind the selected hostile, up to 900 u off; 14 s
+                new() { Group = "Shadow step", Id = "step_reach",    Label = "Reach",        Base = 900, Unit = "u", Dec = 0 },
+                new() { Group = "Shadow step", Id = "step_behind",   Label = "Lands behind", Base = 140, Unit = "u", Dec = 0 },
+                new() { Group = "Shadow step", Id = "step_cooldown", Label = "Cooldown",     Base = 14, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://light_wraith_hull.png", Length = 70f, HalfWidth = 14.97f,
                 Mains = new Vector2[] { new(0.0f, -10.5f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Veil, Ab.Venom } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Veil, Ab.Venom, Ab.Step } },
     };
 
     private static readonly Dictionary<ShipClass, ClassDef> ById = All.ToDictionary(c => c.Id);

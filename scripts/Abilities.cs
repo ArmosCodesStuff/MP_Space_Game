@@ -644,6 +644,20 @@ public static class Ab
         Show = (s, _) => Timed(s, "venom", "venom_cooldown", "COATED"),
     };
 
+    // THE WRAITH'S SHADOW STEP (DL3): a blink to 140 u behind the selected hostile within 900 u, nose on it, the speed
+    // kept; any web lets go; 14 s. The owner blinks at the press (flight is its own); the host counts it.
+    public static readonly AbilityDef Step = new()
+    {
+        Id = "step", Name = "Shadow step", Short = "STEP", Default = Key.E,
+        Blurb = "Blinks you 140 u behind the hostile you have selected, up to 900 u off, nose on it and your speed kept. Any web on you lets go.",
+        AtOnce = (s, _) => s.Step(s.PressTarget),
+        Press = (s, t) => s.Stepped(t),
+        Refuse = (s, t) => !PlayerShip.Steppable(t) ? "NO TARGET"
+                         : s.Position.DistanceTo(t.Position) > s.Stats["step_reach"] ? "OUT OF REACH"
+                         : s.Sl("step").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "step", "step_cooldown", "READY"),
+    };
+
     // THE WRAITH'S VEIL (DL3): 5 s nothing hostile can pick it (it can still be hit), x1.35 top speed, and the next volley
     // x3 -- fired from inside it, which ends it, or the first after; 18 s
     public static readonly AbilityDef Veil = new()

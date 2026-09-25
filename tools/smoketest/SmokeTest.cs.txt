@@ -9140,6 +9140,169 @@ public partial class _Test : Node
         wt.Demo = demo; wt.Velocity = Vector2.Zero;
     }
 
+    // ── SLICE 6d: THE WRAITH'S SHADOW STEP (DL3): 140 u behind the selected hostile (its tail; no heading: the far side),
+    // up to 900 u off, nose on it, the speed kept; refused NO TARGET / OUT OF REACH / COOLING; any web lets go; 14 s.
+    void LaneA6dStepRowChecks()
+    {
+        var st = new ShipStats(ShipClass.LightWraith);
+        var sp = Abilities.Find(ShipClass.LightWraith, "step");
+        var kit = Classes.Of(ShipClass.LightWraith).Abilities.Select(a => a.Id).ToArray();
+        Check(st["step_reach"] == 900 && st["step_behind"] == 140 && st["step_cooldown"] == 14 && sp?.Default == global::Godot.Key.E
+              && sp?.AtOnce != null && Unlocks.Nth(ShipClass.LightWraith, 3) == Ab.Step && Items.IdsOf("@output", ShipClass.LightWraith).Contains("venom_dps")
+              && kit.SequenceEqual(new[] { "guns", "firemode", "veil", "venom", "step" }),
+              $"the Shadow step row: {st["step_behind"]:0} u behind (140), up to {st["step_reach"]:0} u (900), {st["step_cooldown"]:0} s (14), on E, ability 3; the Wraith learns {string.Join(",", kit)}");
+    }
+
+    async Task LaneA6dStepChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightWraith);
+        var wt = Me; bool demo = wt.Demo; wt.Demo = true; wt.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        void Ready() { wt.Sl("step").Left = 0; wt.Sl("step").Cool = 0; }
+        bool NoseOn(IHittable t) => Vector2.Up.Rotated(wt.Rotation).Dot((t.Position - wt.Position).Normalized()) > 0.9999f;
+
+        // THE BLINK: a held gunship at a varied heading, the Wraith 300-880 u off at a varied bearing moving 100-250 u/s: it
+        // lands 140 u off the gunship's tail, nose on it, its speed kept along the new nose, x1.5 there (Backstab); 14 s
+        for (int run = 0; run < 3; run++)
+        {
+            Ready();
+            var foe = HeldI(VaryNear(yonder, 300f), Enemies.Gunship); float rrot = VaryAngle(); foe.Rotation = rrot;
+            var at = foe.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 880f); float rot = VaryAngle(); float v = Vary(100f, 250f);
+            wt.Position = at; wt.Rotation = rot; wt.Velocity = Vector2.Up.Rotated(rot) * v;
+            await Frame(); foe.Rotation = rrot;
+            float speed0 = wt.Velocity.Length(); var from = wt.Position;
+            wt.UseAbility("step", foe.NetId);
+            var want = foe.Position - Vector2.Up.Rotated(rrot) * 140f;
+            float off = wt.Position.DistanceTo(want); bool nose = NoseOn(foe); float speed1 = wt.Velocity.Length();
+            bool along = wt.Velocity.Normalized().Dot(Vector2.Up.Rotated(wt.Rotation)) > 0.9999f;
+            double mult = wt.Backstab(foe);
+            await Frame();
+            Check(off < 1f && nose && Mathf.Abs(speed1 - speed0) < 0.5f && along && NearI(mult, 1.5) && Math.Abs(wt.Sl("step").Cool - 14) < 0.1,
+                  $"a step from {from.DistanceTo(foe.Position):0} u at {speed0:0} u/s: {off:0.00} u from the spot 140 u off the tail, nose on it {nose}, {speed1:0} u/s along the new nose; there x{mult:0.0} (1.5); cooling {wt.Sl("step").Cool:0.0} (14)");
+            foe.TakeDamage(1e12);
+            await Wait(0.3);
+        }
+
+        // NO HEADING: the practice dummy -- the far side from where the Wraith pressed, 140 u from its middle (clear of its
+        // 46), at three varied bearings and ranges
+        {
+            var dummy = H.GetNode<TargetDummy>("TargetDummy1");
+            string ls = ""; bool ok = true;
+            for (int k = 0; k < 3; k++)
+            {
+                Ready();
+                var at = dummy.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 850f);
+                wt.Position = at; wt.Velocity = Vector2.Zero; await Frame();
+                wt.UseAbility("step", dummy.NetId);
+                var want = dummy.Position + (dummy.Position - at).Normalized() * 140f;
+                float off = wt.Position.DistanceTo(want);
+                ok &= off < 1f && NoseOn(dummy); ls += $"{at.DistanceTo(dummy.Position):0} u -> {off:0.00}; ";
+                await Frame();
+            }
+            Check(ok, $"a step on the practice dummy (no heading) lands on its far side 140 u from its middle, nose on it: {ls}");
+        }
+
+        // REFUSED: no target, a target 905-960 u off (past 900), and while it cools -- the Wraith stays where it was, its
+        // speed and heading its own, at three varied spots
+        for (int run = 0; run < 3; run++)
+        {
+            Ready();
+            var foe = HeldI(VaryNear(yonder, 300f), Enemies.Gunship);
+            var at = foe.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(905f, 960f); float rot = VaryAngle();
+            wt.Position = at; wt.Rotation = rot; wt.Velocity = Vector2.Zero; await Frame();
+            wt.UseAbility("step", 0); bool none = wt.Position.DistanceTo(at) < 1e-3f && wt.Sl("step").Cool <= 0;
+            wt.UseAbility("step", foe.NetId); bool far = wt.Position.DistanceTo(at) < 1e-3f && wt.Sl("step").Cool <= 0;
+            var near = foe.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 600f);
+            wt.Position = near; await Frame();
+            wt.UseAbility("step", foe.NetId); var landed = wt.Position;
+            await Frame();
+            wt.Position = near; wt.Rotation = rot; await Frame();
+            wt.UseAbility("step", foe.NetId); bool cooling = wt.Position.DistanceTo(near) < 1e-3f && Mathf.Abs(Mathf.AngleDifference(wt.Rotation, rot)) < 1e-4f;
+            Check(none && far && landed.DistanceTo(near) > 100f && cooling,
+                  $"refused with no target ({none}), at {at.DistanceTo(foe.Position):0} u ({far}: past 900); stepped from {near.DistanceTo(foe.Position):0} u, then refused while it cools ({cooling})");
+            foe.TakeDamage(1e12);
+            await Wait(0.3);
+        }
+
+        // A WEB LETS GO: two webifiers latched on the Wraith, a step onto one of them or onto a held gunship 400-800 u off:
+        // pinned no longer and every web off within 0.3 s, at three varied spots
+        for (int run = 0; run < 3; run++)
+        {
+            Ready();
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+            await Wait(0.3);
+            var at = VaryNear(yonder, 300f); wt.Position = at; wt.Velocity = Vector2.Zero; wt.Rotation = VaryAngle();
+            var webs = new List<Raider>();
+            for (int k = 0; k < 2; k++) { var w = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 280f)); w.Quarry = wt; webs.Add(w); }
+            var gun = HeldI(at + Vector2.Right.Rotated(VaryAngle()) * Vary(400f, 800f), Enemies.Gunship);
+            for (int i = 0; i < 60 * 6 && !webs.All(w => w.Latched); i++) { wt.Position = at; wt.Velocity = Vector2.Zero; await Frame(); }
+            bool latched = webs.All(w => w.Latched) && wt.Pinned;
+            IHittable onto = run == 1 ? webs[0] : gun;
+            wt.UseAbility("step", onto.NetId);
+            double clock = 0, freedAt = -1;
+            while (freedAt < 0 && clock < 0.5) { wt.Velocity = Vector2.Zero; await Frame(); clock += GetProcessDeltaTime(); if (!wt.Pinned && webs.All(w => !w.Latched)) freedAt = clock; }
+            Check(latched && freedAt >= 0 && freedAt <= 0.3,
+                  $"a step onto {(run == 1 ? "one of the two webifiers on it" : "a gunship")} from under two webs: every web let go {freedAt:0.00} s on (0.3)");
+            foreach (var r in webs) r.TakeDamage(1e12); gun.TakeDamage(1e12);
+            await Wait(0.3);
+        }
+        Ready();
+        wt.Demo = demo; wt.Velocity = Vector2.Zero; wt.Position = yonder;
+    }
+
+    // ── SLICE 6d, RUNG 5: A GUEST'S SHADOW STEP. The host (LaneA6dStepHostWatch) holds a gunship 400-600 u off the guest's
+    // Wraith at a varied heading; the guest (LaneA6dStepGuestChecks) steps onto it: on the guest it lands 140 u off the
+    // tail; on the host the step is counted (14 s) and the guest's hull, 1 s on, is within 30 u of the host's own spot.
+    sealed class LaneA6dStepSeen { public bool Done, Counted; public float Off = -1; public double Since = -1; public Raider Held; }
+    LateSampler LaneA6dStepHostWatch(LaneA6dStepSeen seen)
+    {
+        float rrot = VaryAngle();
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (seen.Done || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.LightWraith, Alive: true } g || Math.Abs(g.MaxHp - 220) > 1e-6) return false;
+            if (seen.Held == null) { seen.Held = HeldI(g.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(400f, 600f), Enemies.Gunship); }
+            seen.Held.Rotation = rrot;
+            if (g.Sl("step").Cool <= 0) return false;
+            if (seen.Since < 0) { seen.Since = 0; seen.Counted = g.Sl("step").Cool > 13; }
+            seen.Since += GetProcessDeltaTime();
+            if (seen.Since < 1.0) return false;
+            seen.Off = g.Position.DistanceTo(seen.Held.Position - Vector2.Up.Rotated(rrot) * 140f);
+            seen.Done = true;
+            return true;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6dStepHostChecks(LateSampler watch, LaneA6dStepSeen seen)
+    {
+        await RealTime(() => seen.Done, Wan ? 90 : 60);
+        watch.QueueFree();
+        await Wait(1.0);
+        if (seen.Held != null && IsInstanceValid(seen.Held)) seen.Held.TakeDamage(1e12);
+        Check(seen.Done && seen.Counted && seen.Off >= 0 && seen.Off <= 30f,
+              $"arena host: the guest Wraith's shadow step is counted ({seen.Counted}: 14 s) and its hull lands {seen.Off:0.0} u from the host's own spot 140 u off the gunship's tail (30)");
+    }
+    async Task LaneA6dStepGuestChecks()
+    {
+        await SetClass(ShipClass.LightWraith);
+        var me = Me; me.AutopilotTo = null; bool demo = me.Demo; me.Demo = true;
+        await RealTime(() => Math.Abs(me.MaxHp - 220) < 1e-6, Wan ? 20 : 10);           // the host's word for the hull
+        // the host's gunship, 400-600 u off (the EMP's craft, still about, were held 150-250 u off)
+        Raider Near() => H.Raiders.Where(r => r.Position.DistanceTo(me.Position) is >= 330f and <= 700f).OrderBy(r => r.Position.DistanceTo(me.Position)).FirstOrDefault();
+        await RealTime(() => Near() != null, Wan ? 20 : 10);                                // the host's gunship, spawned for this Wraith
+        await Wait(0.5);
+        var foe = Near();
+        me.Sl("step").Cool = 0; me.Velocity = Vector2.Zero;
+        me.UseAbility("step", foe.NetId);
+        var want = foe.Position - Vector2.Up.Rotated(foe.Rotation) * 140f;
+        float off = me.Position.DistanceTo(want);
+        var spot = me.Position; float rot = me.Rotation;
+        for (double t = 0; t < 2.0; t += GetProcessDeltaTime()) { me.Position = spot; me.Rotation = rot; me.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        Check(foe != null && off < 1f,
+              $"arena guest: its Wraith's shadow step lands {off:0.00} u from the spot 140 u off the host's gunship's tail, as this peer sees it");
+        me.Demo = demo;
+    }
+
     // ── SLICE 6d, RUNG 5: A GUEST'S PEPPERBOX. The guest (LaneA6dPepperGuestChecks) flies a DART at rest, its cursor
     // on a varied point 400-600 u off the nose, and holds the trigger 2 s: its own world shows the host's darts
     // (cosmetic copies, Commanded onto ITS cursor) -- 12 +- 2 of them, each within 10° of the bearing to the cursor
@@ -15230,6 +15393,8 @@ public partial class _Test : Node
             await LaneA6dVeilChecks(yonder);
             LaneA6dVenomRowChecks();
             await LaneA6dVenomChecks(yonder);
+            LaneA6dStepRowChecks();
+            await LaneA6dStepChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -15612,6 +15777,7 @@ public partial class _Test : Node
                     ["emp"]       = sp => sp.Sl("emp").Cool > sp.Stats["emp_cooldown"] - 0.1,
                     ["veil"]      = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("veil").Left > sp.Stats["veil_time"] - 0.1,
                     ["venom"]     = sp => sp.Sl("venom").Left > sp.Stats["venom_time"] - 0.1 && sp.Sl("venom").Cool > sp.Stats["venom_cooldown"] - 0.1,
+                    ["step"]      = sp => sp.Sl("step").Cool > sp.Stats["step_cooldown"] - 0.1,
                     ["anchor"]    = sp => sp.Sl("anchor").Left > sp.Stats["anchor_time"] - 0.1 && sp.Held == 0f,
                     ["tether"]    = sp => sp.Sl("tether").N == 1 && sp.Sl("tether").Cool > sp.Stats["tether_recharge"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId),
                     ["flares"]    = sp => sp.Sl("flares").Cool > sp.Stats["flare_cooldown"] - 0.1 && H.Salvos.Any(sv2 => sv2.At.DistanceTo(sp.Position) < 5f),
@@ -18843,6 +19009,8 @@ public partial class _Test : Node
             var rewindWatch = LaneA6dRewindHostWatch(rewindSeen);           // slice 6d: ...then flies an Echo and rewinds
             var empSeen = new LaneA6dEmpSeen();
             var empWatch = LaneA6dEmpHostWatch(empSeen);                    // slice 6d: ...then pulses its EMP beside two held craft
+            var stepSeen = new LaneA6dStepSeen();
+            var stepWatch = LaneA6dStepHostWatch(stepSeen);                 // slice 6d: ...then flies a Wraith and shadow-steps onto a held gunship
             await LaneBHostDrives();                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
             await LaneA6cLungeHostChecks(lungeWatch, lungeSeen);
             await LaneA6cPrismHostChecks(prismWatch, prismSeen);
@@ -18865,6 +19033,7 @@ public partial class _Test : Node
             await LaneA6dRamjetHostChecks(ramjetWatch, ramjetSeen);         // slice 6d: the host's own copy of the guest's ramjet
             await LaneA6dRewindHostChecks(rewindWatch, rewindSeen);         // slice 6d: the guest's rewind, its hull from the host's own trail
             await LaneA6dEmpHostChecks(empWatch, empSeen);                  // slice 6d: the guest's EMP jams the craft beside it
+            await LaneA6dStepHostChecks(stepWatch, stepSeen);               // slice 6d: the guest's shadow step, counted and landed on the host
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
                                  && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
             var fg = H.Ships.FirstOrDefault(s => !s.Mine);
@@ -19158,6 +19327,7 @@ public partial class _Test : Node
             await LaneA6dRamjetGuestChecks();                               // slice 6d: a guest's ramjet (its host half: LaneA6dRamjetHostChecks)
             await LaneA6dRewindGuestChecks();                               // slice 6d: a guest's rewind (its host half: LaneA6dRewindHostChecks)
             await LaneA6dEmpGuestChecks();                                  // slice 6d: a guest's EMP, the jam marks on this peer (its host half: LaneA6dEmpHostChecks)
+            await LaneA6dStepGuestChecks();                                 // slice 6d: a guest's shadow step (its host half: LaneA6dStepHostChecks)
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.

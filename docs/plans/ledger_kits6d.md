@@ -474,3 +474,26 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
   last pellet, front / behind / out of the veil x3; the 6 s coat and 22 s cooldown x3; never on a cruise missile's hull, never
   from a non-primary blow, the dummy dosed and credited venom x3); frame 78d_wraith_venom; sweep witness ["venom"].
 - next: kits6d-J11 (Shadow step).
+
+## kits6d-J11 · PRE
+- tier opus; intent: Shadow step (DL3): Ab.Step (E, ability 3): refused NO TARGET / OUT OF REACH (900) / COOLING; the owner blinks (AtOnce, PlayerShip.PressTarget = the press's target) to StepSpot = 140 u behind it (its tail; no heading: the far side), pushed clear of its hull, nose on it, speed kept; the host (Stepped) cooldown 14, SkipYaw for a guest, every web let go, its reach judged with 1.25x slack for a guest's lag. **DL14** the host takes the owner's spot (flight is owner-side, as the Slingshot and the Rewind); the 30 u agreement is proved at rung 5, not enforced.
+- HEAD a2edf11f6f8f12eb2211ab418be8ea761000f997
+- scripts/Abilities.cs 9b3ebdcb61d189d70d02131e918e265154992333
+- scripts/PlayerShip.cs 7adabadf366f04b9960f29bf79a74b0c502a8fe3
+- scripts/Ships.cs 7adccbfab061bb3083ee003b64b34441623e68a7
+- scripts/Items.cs ad167e0c10c50a769f428ddeca9386e716d49afb
+- tools/smoketest/SmokeTest.cs.txt ffb1a8114067f6ff785e9f5fae304d5aad33a8fe
+- tools/screens/Shots.cs.txt 9855637615cd6f6c24f6c9708f471e69198285d7
+
+## kits6d-J11 · POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- built: Ab.Step (E, ability 3; refused NO TARGET / OUT OF REACH / COOLING); PlayerShip.PressTarget (the press's target, set in
+  UseAbility before AtOnce), StepSpot (pure: 140 u off the tail, or the far side for no heading, pushed clear of the hull),
+  Steppable, Step (owner: onto the spot, nose on it, speed kept), Stepped (host: cooldown 14, Slot.At, SkipYaw for a guest, every
+  web let go, reach with 1.25x slack). Rows step_reach 900 / step_behind 140 / step_cooldown 14; venom_dps joins @output. The
+  Wraith's Blurb and Hint name all three; it learns guns, firemode, veil, venom, step. DL14 (the host takes the owner's spot).
+- checks: LaneA6dStepRowChecks, LaneA6dStepChecks (the blink x3: < 1 u of the spot, nose on, speed kept, x1.5 there, cool 14;
+  the dummy's far side x3; refused none / 905-960 u / cooling x3; two latched webs let go <= 0.3 s x3); rung 5
+  LaneA6dStepHostWatch/HostChecks (counted, the guest's hull within 30 u of the host's spot) + LaneA6dStepGuestChecks;
+  sweep witness ["step"].
+- next: kits6d-J12 (record).

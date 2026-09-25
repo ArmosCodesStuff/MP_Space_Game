@@ -596,6 +596,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (def.Refuse?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null) is { } why) { Fail(id, why); return; }
         var point = def.TakesPoint ? AimPoint : Vector2.Zero;
         var ids = def.TakesTargets && picks != null ? picks : System.Array.Empty<int>();
+        PressTarget = targetId != 0 ? Combat.ById(targetId) : null;
         if (Mine && Alive) def.AtOnce?.Invoke(this, point);
         if (Net.Sim) DoAbility(id, targetId, point, ids);
         else Net.AskHost(this, nameof(RequestAbility), id, targetId, point, ids);
@@ -1072,6 +1073,39 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
     public int DosedOn(IHittable t, DoseDef def) => _doses.StacksOn(t, def);
     private readonly Doses _doses = new();
+
+    // THE TARGET THE LAST PRESS NAMED (UseAbility's targetId), for an AtOnce row that needs it: the Shadow step.
+    public IHittable PressTarget { get; private set; }
+    // SHADOW STEP (the Wraith's E, DL3). Pure: the spot `behind` u behind `t` -- its tail, or, for a thing with no heading,
+    // the far side from `from` -- pushed on along that line until clear of its hull, so owner, host and checks agree.
+    public static Vector2 StepSpot(Vector2 from, IHittable t, float behind)
+    {
+        var dir = t.Facing is { } nose ? -nose : (t.Position - from).Normalized();
+        if (dir.LengthSquared() < 1e-6f) dir = Vector2.Down;
+        var spot = t.Position + dir * behind;
+        for (int i = 0; i < 40 && t.Covers(spot, 20f); i++) spot += dir * 20f;
+        return spot;
+    }
+    public static bool Steppable(IHittable t) => t != null && Combat.Hostiles.Contains(t) && t.Alive && !TagExt.Is(t, Tag.Missile);
+    // the OWNER's blink: onto the spot, nose on it, the speed it had along the new nose
+    public void Step(IHittable t)
+    {
+        if (!Steppable(t)) return;
+        var spot = StepSpot(Position, t, (float)Stats["step_behind"]);
+        float speed = Velocity.Length();
+        Position = spot; Rotation = Aim.Face(spot, t.Position); _yawRate = 0f;
+        Velocity = Vector2.Up.Rotated(Rotation) * speed;
+    }
+    // its press on the HOST: the cooldown, the spot noted, the host's ramjet-style copies told a snap came (SkipYaw), every
+    // web let go. The reach is judged with 1.25x slack: a guest's position here is a report behind its own.
+    public void Stepped(IHittable t)
+    {
+        ref var sl = ref Sl("step");
+        if (!Net.Sim || !Alive || sl.Cool > 0 || !Steppable(t) || Position.DistanceTo(t.Position) > Stats["step_reach"] * 1.25) return;
+        sl.Cool = Cooling(Stats["step_cooldown"]); sl.At = StepSpot(Position, t, (float)Stats["step_behind"]);
+        if (!Mine) SkipYaw = true;
+        LetGoWebs();
+    }
     private double _primed = 1;
 
     public void OrderStrike(IHittable t)
