@@ -36,12 +36,19 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
-**2026-09-24 (local session): R0 is green** -- rung 2, rung 3 on seeds 90331 and 4127, `-OneDll`,
-`-ReplyWindow` (every delay to 60 s connected: `Link.ReplyWindowS` = 30, DESIGN.md). Three harness
-faults fixed on the way (ledger J6). Owner rulings since: the Echo's Rewind goes back 8 s with hull,
-from a 0.5 s snapshot ring; no boss-hull trim for adds (docs/plans/README.md). **Next:** the bar
-(`verify.ps1 -Update`), a push to both branches, then R1 (network_webrtc.md §13), whose first edit
-adds `Link.ReplyWindowS = 30` and the permanent reply-window check.
+**2026-09-24 (local session): R0 is VERIFIED (aa1e4f9) and pushed to version-l and main.** Rung 2,
+rung 3 on seeds 90331 and 4127, `-OneDll`, `-ReplyWindow` (every delay to 60 s connected:
+`Link.ReplyWindowS` = 30, DESIGN.md), then a green bar. Owner rulings since: the Echo's Rewind goes
+back 8 s with hull, from a 0.5 s snapshot ring; no boss-hull trim for adds (docs/plans/README.md).
+**Four lanes run in parallel** (owner, for speed), each a writer in its own worktree OUTSIDE this
+folder, compile rungs only; the main session runs every engine rung, one at a time, then merges:
+| worktree (branch) | lane | ledger |
+|---|---|---|
+| `..\WarShips_wt_net` (wt/net) | WebRTC R1: codes, STUN rows, `Link.ReplyWindowS` = 30 | `docs/plans/ledger_webrtc.md` J7+ |
+| `..\WarShips_wt_kits` (wt/kits) | kits lane A: the v2/v3/raids_v2 specs into docs/plans, slices 1-2 | `docs/plans/ledger_kits.md` |
+| `..\WarShips_wt_art` (wt/art) | sprites: enemies, bosses, fleet, siege, then the 12 hulls | `docs/plans/ledger_sprites.md` |
+| `..\WarShips_wt_walls` (wt/walls) | kits lane C: `Unlocks.cs`, 6 chip slots, walls, `Peak` | `docs/plans/ledger_walls.md` |
+Each ledger lists the engine rungs it owes. A lane whose ledger has a PRE with no POST was interrupted.
 
 **2026-09-25 (cloud session): WebRTC slice R0's code landed** (tested since: above).
 Ledger: `docs/plans/ledger_webrtc.md` (jobs J1-J6, decisions D1-D7, v1 of the plan is not in the repo).
