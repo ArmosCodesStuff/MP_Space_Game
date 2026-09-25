@@ -45,7 +45,7 @@ public partial class _Shots : Node
             if (c is Button bt && bt.Text.Length > 0 && !bt.ClipText && TextW(bt, bt.Text) + 8 > r.Size.X + 2)
                 GD.Print($"LINT {frame}: clipped {id} needs {TextW(bt, bt.Text) + 8:0} px, has {r.Size.X:0}");
             // (the hint card takes no input, but it is a block on the HUD all the same)
-            if (c.GetParent() is CanvasLayer && !(c is ColorRect) && c.MouseFilter != Control.MouseFilterEnum.Ignore || c is HullHud || c is AbilityBar || c is BasePanel || c.GetParent() is Hints)
+            if (c.GetParent() is CanvasLayer && !(c is ColorRect) && c.MouseFilter != Control.MouseFilterEnum.Ignore || c is HullHud || c is AbilityBar || c is ReloadBar || c is BasePanel || c.GetParent() is Hints)
                 if (c.GetParent() is CanvasLayer) tops.Add(c);
         }
         for (int i = 0; i < tops.Count; i++)
@@ -82,6 +82,8 @@ public partial class _Shots : Node
         zp.SetValue(hub, 0.45f); await W(1.0);
         Fx.Raise(Fx.TauntRing, Me().Position, 1000f);
         await W(0.35); await Snap("83b_taunt_ring");
+        await LaneA6cTauntFrames(hub, yard);
+        await LaneA6cCurtainFrames(hub, yard);
         // 84: a chunk torn from a practice dummy, mid-tumble, with its sparks, smoke and scar
         var d1 = hub.GetNode<TargetDummy>("TargetDummy1");
         Me().Position = d1.GlobalPosition + new Vector2(0, 320); Me().Velocity = Vector2.Zero;
@@ -91,6 +93,44 @@ public partial class _Shots : Node
         zp.SetValue(hub, z0); await W(0.4);
         Character.Class = ShipClass.Battleship; P(hub, "ApplyLocalIdentity"); await W(0.3);
     }
+    // SLICE 6c: the Warden's taunt on a real press (82c): Q with two webifiers standing 600-800 u off -- the 1000 u
+    // flash, the shimmer and its "−33%" over the hull, both webifiers turning for it.
+    async Task LaneA6cTauntFrames(Hub hub, Vector2 yard)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel");
+        Character.Class = ShipClass.HeavyWarden; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var s = hub.GetNode<PlayerShip>("Ship_1"); s.Visible = true; s.Position = yard; s.Velocity = Vector2.Zero; s.Rotation = 0.5f;
+        s.Sl("taunt").Left = 0; s.Sl("taunt").Cool = 0;
+        var webs = new[] { new Vector2(650f, -300f), new Vector2(-500f, 520f) }.Select(o => { var w = hub.SpawnRaider(yard + o, Enemies.Webifier); w.Hp = 1e9; return w; }).ToArray();
+        zp.SetValue(hub, 0.55f); await W(1.0);
+        s.Position = yard; s.Velocity = Vector2.Zero;
+        s.UseAbility("taunt", 0);
+        await W(0.4); await Snap("82c_taunt_pressed");
+        foreach (var w in webs) w.TakeDamage(1e12);
+        s.Sl("taunt").Left = 0; s.Sl("taunt").Cool = 0; s.Statuses.Clear(Status.Hardened);
+        await W(0.3);
+    }
+
+    // SLICE 6c: the Warden's flak curtain through E (82d): the cursor 420 u ahead, snapped 1.0 s on -- the 500 x 80 u
+    // bar across the aim, its five bursts, a webifier held inside it.
+    async Task LaneA6cCurtainFrames(Hub hub, Vector2 yard)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel");
+        Character.Class = ShipClass.HeavyWarden; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var s = hub.GetNode<PlayerShip>("Ship_1"); s.Visible = true; s.Position = yard; s.Velocity = Vector2.Zero; s.Rotation = 0.5f;
+        bool demo = s.Demo; s.Demo = true; s.Sl("curtain").Cool = 0;
+        var aim = yard + Vector2.Up.Rotated(0.5f) * 420f;
+        var web = hub.SpawnRaider(aim + Vector2.Right.Rotated(0.5f) * 120f, Enemies.Webifier); web.Hp = 1e9; web.ApplyStatus(Status.Disabled, 10);
+        zp.SetValue(hub, 0.9f); await W(1.0);
+        s.Position = yard; s.Velocity = Vector2.Zero; s.AimPoint = aim;
+        s.UseAbility("curtain", 0);
+        await W(1.0); await Snap("82d_flak_curtain");
+        web.TakeDamage(1e12);
+        foreach (var z in hub.Laid.ToList()) hub.Down(Spawns.Zone, z, burst: false, float.NaN);
+        s.Sl("curtain").Cool = 0; s.Demo = demo;
+        await W(0.3);
+    }
+
     // 84b: the same on the arena's boss -- the chunk is cut from the boss's own art, so it shows its plating
     async Task FieldsBossFrame(Boss boss, PlayerShip at)
     {
@@ -217,15 +257,28 @@ public partial class _Shots : Node
         Key(global::Godot.Key.K); await W(0.4); await Snap("5_k_keys");
         N<StatsWindow>().First().ShowPane(false); await W(0.2); await Snap("6_k_stats");
         Key(global::Godot.Key.K); await W(0.2);
-        // the same window on a carrier flying boss drops: fighters added, downsides in red
+        // the same window on a carrier flying boss drops: a torpedo added, prices in red
+        // (Heavy Battery T4, Magazine Core T9: +2 torpedoes a bomber)
         {
             var cl = Character.LoadoutFor(ShipClass.Carrier); var keep = (string[])cl.Clone();
-            cl[0] = "cv_swarm_3"; cl[4] = "cv_widebay_3";
+            cl[0] = "heavy_battery_t4"; cl[4] = "magazine_core_t9";
             Character.Class = ShipClass.Carrier; P(H, "ApplyLocalIdentity"); await W(0.3);
             Key(global::Godot.Key.K); await W(0.4);
             N<StatsWindow>().First().ShowPane(false); await W(0.2); await Snap("6b_k_stats_gear");
             Key(global::Godot.Key.K); await W(0.2);
             for (int k = 0; k < keep.Length; k++) cl[k] = keep[k];
+            Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.3);
+        }
+        // the same window on a Dart wearing three conditional lines (Redline T10, Reset Core T5, Ablative
+        // Skin T9): the CONDITIONS group, each row x1 + its share, Ablative's row past its 40% ceiling
+        {
+            var dl = Character.LoadoutFor(ShipClass.LightDart); var keep = (string[])dl.Clone();
+            dl[0] = "redline_t10"; dl[4] = "reset_core_t5"; dl[2] = "ablative_skin_t9";
+            Character.Class = ShipClass.LightDart; P(H, "ApplyLocalIdentity"); await W(0.3);
+            Key(global::Godot.Key.K); await W(0.4);
+            N<StatsWindow>().First().ShowPane(false); await W(0.2); await Snap("6d_k_stats_conditions");
+            Key(global::Godot.Key.K); await W(0.2);
+            for (int k = 0; k < keep.Length; k++) dl[k] = keep[k];
             Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.3);
         }
         // THE ABILITY WALLS (Unlocks) at level 1: a walled key's row in K says the level that opens it, and
@@ -379,6 +432,9 @@ public partial class _Shots : Node
         await Close(ShipClass.Destroyer, "9d_destroyer_closeup");
         await Close(ShipClass.Battleship, "9_battleship_closeup");
         await LaneBDriveFrames();
+        await LaneADecoyFrames();
+        await LaneA6cBladeFrames();
+        await LaneA6cPrismFrames();
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -479,12 +535,14 @@ public partial class _Shots : Node
             Character.GearLevel.Clear(); foreach (var kv in keepLv) Character.GearLevel[kv.Key] = kv.Value;
             Character.BossCleared.Clear(); foreach (var kv in keepCl) Character.BossCleared[kv.Key] = kv.Value;
         }
-        // ...and with boss drops: an Epic shield fitted (its name in the Epic colour, its effects in
-        // words), and a hold of every class's parts, some of them doubled
+        // ...and with boss drops (ItemsFrames): a T10 shield fitted (its name in the T10 colour, its
+        // effects in words), and a hold of parts from every category at tiers 1 to 10, sorted by
+        // tier, some of them doubled -- the other categories' listed with what they need
         {
             var bl = Character.LoadoutFor(Character.Class); var keep = (string[])bl.Clone();
-            bl[2] = "sh_glass_3"; bl[6] = "chip_combat_2";
-            foreach (var id in new[] { "bs_heavy_2", "dd_seeker_3", "bs_barrage_2", "drv_racing_1", "sh_bulwark_3", "fr_flak_1", "chip_target_1", "chip_target_1", "cv_elite_3", "cv_widebay_2" })
+            bl[2] = "bulwark_belt_t10"; bl[6] = "chip_combat_t2";
+            foreach (var id in new[] { "heavy_battery_t2", "salvo_core_t7", "magazine_core_t3", "helm_drive_t1", "bulwark_belt_t5", "aegis_array_t1",
+                                       "chip_target_t1", "chip_target_t1", "hot_barrel_t10", "cargo_plating_t4", "swarm_rack_t9" })
                 Character.Stow(id);
             P(H, "ApplyLocalIdentity"); H.ToggleEquipment(); await W(0.4);
             await Snap("58_equipment_hold");
@@ -497,8 +555,8 @@ public partial class _Shots : Node
         // Engine Chip in the hold has its EQUIP greyed ("next chip slot opens at level 8")
         {
             var bl = Character.LoadoutFor(Character.Class); var keep = (string[])bl.Clone(); int keepPeak = Character.Peak;
-            Character.Peak = 4; bl[5] = "chip_combat_1"; bl[6] = "chip_armour_2";
-            Character.Stow("chip_engine_1");
+            Character.Peak = 4; bl[5] = "chip_combat_t1"; bl[6] = "chip_armour_t2";
+            Character.Stow("chip_engine_t1");
             P(H, "ApplyLocalIdentity"); H.ToggleEquipment(); await W(0.4);
             await Snap("58b_eq_chip_walls");
             H.ToggleEquipment(); await W(0.2);
@@ -566,7 +624,7 @@ public partial class _Shots : Node
             await Snap("81_equipment_base");
             ebShip.NoteCombat(); await W(0.3);
             await Snap("81b_equipment_base_in_combat");
-            foreach (var id in new[] { "bs_heavy_2", "dd_seeker_3", "sh_bulwark_3", "chip_target_1" }) Character.Stow(id);
+            foreach (var id in new[] { "heavy_battery_t2", "salvo_core_t6", "bulwark_belt_t10", "chip_target_t1" }) Character.Stow(id);
             H.ToggleEquipment(); await W(0.3);
             N<Button>(N<EquipmentWindow>().First()).First(b => b.Name == "Recycler").EmitSignal(BaseButton.SignalName.Pressed); await W(0.4);
             await Snap("81c_recycler");
@@ -623,11 +681,13 @@ public partial class _Shots : Node
             GetViewport().GetCamera2D().Zoom = new Vector2(3.2f, 3.2f);
         }
         await Close(ShipClass.Carrier, "10_carrier_closeup");
-        // a Wide Bay III: five bombers parked on the deck, three to port of the runway and two to starboard
+        // five bombers parked on the deck, three to port of the runway and two to starboard (the
+        // pilot's own share: no line moves a bomber count)
         {
             var cl = Character.LoadoutFor(ShipClass.Carrier); var keep = (string[])cl.Clone();
-            cl[4] = "cv_widebay_3";
+            Character.Bonuses["bomber_count"] = 1.5;
             await Close(ShipClass.Carrier, "10b_carrier_gear_docked");
+            Character.Bonuses.Remove("bomber_count");
             for (int k = 0; k < keep.Length; k++) cl[k] = keep[k];
             P(H, "ApplyLocalIdentity"); await W(0.2);
         }
@@ -794,28 +854,38 @@ public partial class _Shots : Node
             }
             // THE RAIL'S FLASH: the 2 px line every peer draws for a railgun's report (Beam.Rail), inside
             // the blue bar -- a sniper 520 u under dummy 1 firing up through it, snapped the frame after
-            // the rail goes (its cooldown starts as it fires), inside the flash's 0.1 s. The hub sets the
-            // camera's zoom from its own ZoomLevel every frame: set that, not the camera's.
+            // the rail goes (a full charge let go on a seated round, its row's Loose), inside the flash's
+            // 0.1 s. The hub sets the camera's zoom from its own ZoomLevel every frame: set that, not the camera's.
             await Class(ShipClass.HeavySniper);
             {
                 var rzp = typeof(Hub).GetProperty("ZoomLevel"); float rz0 = (float)rzp.GetValue(hub);
                 var rs = Me(); rs.Visible = true;
                 void RailHold() { rs.Position = d1.Position + new Vector2(0, 520); rs.Velocity = Vector2.Zero; rs.Rotation = 0f; }
                 RailHold(); rzp.SetValue(hub, 0.7f); await W(1.2);
-                RailHold(); rs.UseAbility("railgun", 0);
-                for (int i = 0; i < 60 * 5 && rs.Sl("railgun").Cool <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                RailHold(); rs.Sl("railgun").Left = 0; rs.Sl("railgun").N = (int)Chamber.Seated;
+                Abilities.Find(ShipClass.HeavySniper, "railgun").Loose(rs, 1.0);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 await Snap("73b_sniper_rail_flash");
+                await LaneA6cRailFrames(rs, RailHold);
+                await LaneA6cTetherFrames(rs, RailHold);
+                await LaneA6cFlaresFrames(rs, RailHold);
                 rzp.SetValue(hub, rz0); await W(0.4);
             }
             // a freighter with its three turrets out, and the bubble up over them
             await Class(ShipClass.FreightHauler);
             await Frame(yard, 1.1f, hideShip: false);
+            // R throws a sentry to the cursor (it lands 0.8 s later): three throws from the yard spot,
+            // each to its own cursor 180 u from the last, so no press lands within recall_pick (60 u)
+            // of a sentry already out and recalls it instead.
             var fship = Me(); fship.Rotation = 0f;
+            fship.Position = yard; fship.Velocity = Vector2.Zero;
             for (int i = 0; i < 3; i++)
             {
-                fship.Sl("deploy").Cool = 0; fship.UseAbility("deploy", 0);
-                fship.Position = yard + new Vector2(-180 + 180 * i, 120); await W(0.25);
+                fship.Sl("deploy").Cool = 0;
+                fship.AimPoint = yard + new Vector2(-180 + 180 * i, 120); fship.UseAbility("deploy", 0);
+                await W(0.25);
             }
+            await W(0.9);                                       // the last throw has landed
             fship.Position = yard; fship.UseAbility("bubble", 0); await W(0.5);
             await Snap("79_freighter_turrets_and_bubble");
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
@@ -973,6 +1043,121 @@ public partial class _Shots : Node
     // ring, in the amber-to-red band with its 2 s / 4 s / 6 s ticks, the ghost's "+640 u · DISABLED
     // 4.3 s" and the slot's WARP readout; then the landing flash, and the hull bar's DISABLED. Then a
     // dart's boost: BOOST 2.1 s on its slot and the hull bar, and BOOST n s while it cools.
+    // F14 decoys (lane A slice 5, kits5-J7): a flare salvo alight round the pilot, and a raid missile's
+    // red mark pulled off the hull onto one of the flares
+    async Task LaneADecoyFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        var ps = H.GetNode<PlayerShip>("Ship_1");
+        ps.Position = new Vector2(-900, 1100); ps.Rotation = 0.6f; ps.Velocity = Vector2.Zero;
+        cam.Zoom = new Vector2(0.7f, 0.7f);
+        H.Flares(ps.Position, ps.Rotation);
+        await W(0.8);
+        H.ThrowMissile(new MissileSpec { Side = Missiles.Raid, Damage = 0, Blast = 90f, Flight = 2.5 },
+                       ps.Position + new Vector2(900, -300), ps.Position + new Vector2(40, 30), 0);
+        await W(0.3); await Snap("43_lanea_flares_pull_a_mark");
+        await W(5.0);
+        cam.Zoom = z0;
+    }
+
+    // SLICE 6c: the Warrior's blade held (its 160 u, ±55° wedge and the sweep across it), then its whirlwind (the 210 u ring).
+    async Task LaneA6cBladeFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        Character.Class = ShipClass.HeavyWarrior; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var ws = H.GetNode<PlayerShip>("Ship_1");
+        ws.Position = new Vector2(-900, 1100); ws.Rotation = 0.4f; ws.Velocity = Vector2.Zero;
+        cam.Zoom = new Vector2(1.6f, 1.6f);
+        var space = Abilities.KeyFor(ShipClass.HeavyWarrior, "blade");
+        Input.ParseInputEvent(new InputEventKey { Keycode = space, PhysicalKeycode = space, Pressed = true });
+        await W(0.5); await Snap("74b_warrior_blade_swing");
+        Input.ParseInputEvent(new InputEventKey { Keycode = space, PhysicalKeycode = space, Pressed = false });
+        ws.Sl("whirlwind").Cool = 0; ws.UseAbility("whirlwind", 0);                  // the spin: the whole 210 u ring
+        await W(0.6); await Snap("74c_warrior_whirlwind");
+        await W(1.6);
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
+    }
+
+    // SLICE 6c: the reload bar under the Sniper at its sweet spot (73c), then its enhanced round
+    // (sniper_active_reload.md §3.6) -- the white glint at the muzzle
+    // while it is seated, then its shot: the rail's bar in white, 1.5x as wide. The same sniper and zoom as 73b.
+    async Task LaneA6cRailFrames(PlayerShip rs, System.Action hold)
+    {
+        // THE RELOAD BAR (sec 4.4): 73b's shot left the chamber reloading; the frames step until the view is half
+        // way (the fill in the white box), the owner's timing press lands PERFECT, and the frame is 3 frames later:
+        // the grey track and fill, the white box, the white flash, the pip about to seat white.
+        for (int i = 0; i < 400 && rs.ReloadView.Running && rs.ReloadView.Since < 0.5 * rs.ReloadView.Length; i++)
+        { hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        ActiveReload.Press(rs, ActiveReload.Rail);
+        for (int i = 0; i < 3; i++) { hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        await Snap("73c_sniper_reload_spot");
+        for (int i = 0; i < 400 && ActiveReload.Reloading(rs.Sl("railgun")); i++) { hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        await W(0.5);
+        hold(); rs.Sl("railgun").Left = 0; rs.Sl("railgun").N = (int)Chamber.Enhanced;
+        await W(0.3); await Snap("73d_sniper_enhanced_glint");
+        hold(); Abilities.Find(ShipClass.HeavySniper, "railgun").Loose(rs, 1.0);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await Snap("73e_sniper_enhanced_rail");
+    }
+
+    // SLICE 6c: the Sniper's tether mine (73f) -- Q laid at the stern, snapped once it is live (0.7 s): the faint
+    // 170 u ring and the bright core. The same sniper and zoom as 73b.
+    async Task LaneA6cTetherFrames(PlayerShip rs, System.Action hold)
+    {
+        hold(); rs.Sl("tether").N = 0; rs.Sl("tether").Cool = 0;
+        rs.UseAbility("tether", 0);
+        for (int i = 0; i < 60 && (H.Laid.Count == 0 || H.Laid[H.Laid.Count - 1].Age < 0.7); i++) { hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        await Snap("73f_sniper_tether_mine");
+        foreach (var z in H.Laid.ToList()) H.Down(Spawns.Zone, z, burst: false, float.NaN);
+        rs.Sl("tether").N = 0; rs.Sl("tether").Cool = 0;
+    }
+
+    // SLICE 6c: the Sniper's flares through its own E (73g) -- snapped 0.8 s after the press, the six burning in
+    // their ring 180 u round the hull, the first astern. The same sniper and zoom as 73b.
+    async Task LaneA6cFlaresFrames(PlayerShip rs, System.Action hold)
+    {
+        hold(); rs.Sl("flares").Cool = 0;
+        rs.UseAbility("flares", 0);
+        for (int i = 0; i < 90 && (H.Salvos.Count == 0 || H.Salvos[H.Salvos.Count - 1].Age < 0.8); i++) { hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        await Snap("73g_sniper_flares_key");
+        foreach (var sv in H.Salvos.ToList()) H.Down(Spawns.Decoy, sv, burst: false, float.NaN);
+        rs.Sl("flares").Cool = 0;
+    }
+
+    // SLICE 6c: the Warrior's prism stance -- the wedge on its guard (SQUARE bright, SLANT faint), then a
+    // 50 beam tick caught SQUARE (the friendly child back along the guard into a gunship, the quarter
+    // going on), then one caught SLANT at 40 deg (the mirrored child and the bent one fanning apart).
+    async Task LaneA6cPrismFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        Character.Class = ShipClass.HeavyWarrior; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var ws = H.GetNode<PlayerShip>("Ship_1");
+        var at = new Vector2(-900, 1100);
+        ws.Position = at; ws.Rotation = 0.4f; ws.Velocity = Vector2.Zero;
+        var g = Vector2.Up.Rotated(ws.Rotation);
+        var foe = H.SpawnRaider(at + g * 420f, Enemies.Gunship); foe.Hp = 1e9;
+        cam.Zoom = new Vector2(0.9f, 0.9f);
+        ws.Sl("prism").Cool = 0; ws.UseAbility("prism", 0);
+        await W(0.3); await Snap("74d_warrior_prism_wedge");
+        ws.AimPoint = at + g * 600f; foe.Position = at + g * 420f;
+        var uSq = -g.Rotated(Mathf.DegToRad(6f));
+        Prism.Catch(ws, BlowKind.Beam, at - uSq * 900f, at + uSq * 500f, 50, "shots:square");
+        await W(0.1); await Snap("74e_warrior_prism_square");
+        await W(0.7);
+        ws.AimPoint = at + g * 600f;
+        var uSl = -g.Rotated(Mathf.DegToRad(40f));
+        Prism.Catch(ws, BlowKind.Beam, at - uSl * 900f, at + uSl * 500f, 50, "shots:slant");
+        await W(0.1); await Snap("74f_warrior_prism_slant");
+        foe.TakeDamage(1e12);
+        await W(1.5);
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
+    }
+
     async Task LaneBDriveFrames()
     {
         var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;

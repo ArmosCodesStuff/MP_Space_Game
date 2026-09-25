@@ -112,7 +112,7 @@ public sealed class SpawnSet<T> : SpawnSet where T : Node2D
 public static class Spawns
 {
     // The index IS the kind on the wire (Hub.NetSpawn), so APPEND ONLY.
-    public const int Raider = 0, Turret = 1, Emplacement = 2;
+    public const int Raider = 0, Turret = 1, Emplacement = 2, Decoy = 3, Zone = 4;
 
     public static readonly List<SpawnKind> All = new()
     {
@@ -154,5 +154,21 @@ public static class Spawns
                 Gone = (h, n, hp) => { var e = (Emplacement)n; if (float.IsFinite(hp)) e.Hp = hp; h.LetGo(e); },
                 Hull = n => (float)((Emplacement)n).Hp,
                 TakeHull = (n, hp) => ((Emplacement)n).SetNet(hp) },
+
+        // A DECOY SALVO (Decoys.cs): one spawn for all its points, which every peer derives. `N` is
+        // its row of Decoys.All, `A` the thrower's rotation, `B` its age -- so a joiner draws it
+        // where it is now and lets it go when the host does. It is no body: nothing hits it.
+        new() { Id = "Decoy", Space = NetIds.Decoy, Burst = 0f,
+                Bag = k => new SpawnSet<DecoySalvo>(k),
+                Make = (h, s) => new DecoySalvo { NetId = s.NetId, Row = s.N, At = s.At, Rot = (float)s.A, Age = s.B },
+                Seed = n => { var d = (DecoySalvo)n; return new SpawnSeed(d.NetId, d.At, d.Row, d.Rot, d.Age); } },
+
+        // A ZONE (Zones.cs): a patch a pilot laid. `N` is its row of Zones.All, `A` the layer's rotation, `B`
+        // its age, so a joiner draws it as it stands; whose it is and what it holds stay on the host's node.
+        // It is no body: nothing hits it. A tether that goes off leaves a burst.
+        new() { Id = "Zone", Space = NetIds.Zone, Burst = 24f,
+                Bag = k => new SpawnSet<ZoneNode>(k),
+                Make = (h, s) => new ZoneNode { NetId = s.NetId, Row = s.N, At = s.At, Rot = (float)s.A, Age = s.B },
+                Seed = n => { var z = (ZoneNode)n; return new SpawnSeed(z.NetId, z.At, z.Row, z.Rot, z.Age); } },
     };
 }

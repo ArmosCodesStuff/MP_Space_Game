@@ -76,6 +76,10 @@ public interface ITurretHost
     IReadOnlyList<Turret> Siblings { get; }     // PD turrets that may have claimed a target
     void NoteDealt(double d, IHittable target, string weapon);  // what this gun just did, and to what
     PlayerShip Credit { get; }                  // whose shell it is, for the tally (may be null)
+    // WHAT IT TAKES FIRST, whatever its rank, while it is in reach and the gun's Prey may choose it:
+    // a sentry's owner's paint (F14). An emplacement names its drawing pilot (a Taunt), which its own gun's choice
+    // reads (Emplacement.WarnAndFire): its mount is a main gun and follows AimAt. Null changes nothing.
+    IHittable Prefer => null;
 }
 
 public partial class Turret : Node2D
@@ -104,7 +108,7 @@ public partial class Turret : Node2D
     // cursor within the wind-up; the host names that rate, and the faster of the two wins.
     private float RotSpeed
     {
-        get { var s = S; return PointDefense ? s.Turn : Mathf.Max(s.Turn, Host.FastSwing); }
+        get { var s = S; return PointDefense ? s.Turn * (Host.Credit?.TrackingOn(Target) ?? 1f) : Mathf.Max(s.Turn, Host.FastSwing); }
     }
 
     private Sprite2D _sprite;          // the turret's own sprite (TurretSpec.Texture)
@@ -147,9 +151,15 @@ public partial class Turret : Node2D
         // dummy, to a turret left standing) is never HELD: it is picked again every tick, so the
         // first thing that can die to come into reach takes the gun off it. What it does hold, it
         // keeps only until something free betters it (Acquire's `held`).
+        // THE PAINT (Host.Prefer) OUTRANKS THE HOLD: a paint in reach that it is not on, or the paint it
+        // was following lapsing, is a fresh pick -- otherwise a sentry would stay on a seeker when a
+        // paint went up, and on the painted gunship after the paint lapsed.
         Vector2 wp = GlobalPosition;
-        Target = !StillThere(Target) || S.Prey.IsFallback(Target) || wp.DistanceTo(Target.Position) > Range * 1.15f
+        var prefer = Preferred(wp);
+        bool repick = (prefer != null && !ReferenceEquals(prefer, Target)) || (_onPrefer && !ReferenceEquals(prefer, Target));
+        Target = repick || !StillThere(Target) || S.Prey.IsFallback(Target) || wp.DistanceTo(Target.Position) > Range * 1.15f
             ? Acquire(wp, null) : Acquire(wp, Target);
+        _onPrefer = prefer != null && ReferenceEquals(prefer, Target);
 
         float desired = Target != null ? (Target.Position - wp).Angle() : rest;
         float diff = Swing(desired, delta);
@@ -200,8 +210,16 @@ public partial class Turret : Node2D
     // back to the best claimed one -- in a single pass with no allocation. Tick calls it EVERY
     // FRAME FOR EVERY TURRET THAT PICKS FOR ITSELF: to pick, and, holding (`held`), to see whether
     // something free betters what it holds.
+    private bool _onPrefer;                  // what it holds is its host's Prefer
+    // the host's Prefer, if it is still in the world, in reach and a thing this gun may choose
+    private IHittable Preferred(Vector2 from)
+    {
+        var p = Host.Prefer;
+        return StillThere(p) && S.Prey.Chooses(p) && from.DistanceTo(p.Position) <= Range ? p : null;
+    }
     private IHittable Acquire(Vector2 from, IHittable held)
     {
+        if (Preferred(from) is { } pref) return pref;          // above every rank, claimed or not
         IHittable bestFree = null, bestAny = null;
         int freePri = 0, anyPri = 0; float freeDist = 0, anyDist = 0;
         var spec = S;

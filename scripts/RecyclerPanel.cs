@@ -83,7 +83,7 @@ public partial class RecyclerPanel : PanelContainer
         {
             var it = Equipment.ById(g.Key);
             var row = Ui.HBox(8, "Q_" + g.Key);
-            row.AddChild(Ui.Lbl($"{it?.Name ?? g.Key}{(g.Count() > 1 ? $"  x{g.Count()}" : "")}", Ui.Body, Ui.RarityColor(it?.Rarity ?? Rarity.Common)));
+            row.AddChild(Ui.Lbl($"{it?.Name ?? g.Key}{(g.Count() > 1 ? $"  x{g.Count()}" : "")}", Ui.Body, Ui.TierColor(it?.Tier ?? 1)));
             var back = Ui.Btn("TAKE BACK", () => { yard.UnqueueScrap(g.Key); Rebuild(); }, "TakeBack");
             back.SizeFlagsHorizontal = SizeFlags.ShrinkEnd; row.AddChild(back);
             _queue.AddChild(Ui.CardWrap(row));
@@ -98,8 +98,8 @@ public partial class RecyclerPanel : PanelContainer
             var row = Ui.HBox(8, "Hold_" + kv.Key);
             var text = Ui.VBox(1); text.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             text.AddChild(Ui.Lbl($"{it.Name}{(kv.Value > 1 ? $"  x{kv.Value}" : "")}",
-                                 Ui.Body, Ui.RarityColor(it.Rarity)));
-            text.AddChild(Ui.Lbl($"{it.Slot.ToString().ToUpperInvariant()}  ·  {Economy.ScrapValue(it.Rarity):0} salvage", Ui.Small, Ui.Dim));
+                                 Ui.Body, Ui.TierColor(it.Tier)));
+            text.AddChild(Ui.Lbl($"{it.Slot.ToString().ToUpperInvariant()}  ·  {Tiers.Scrap(it.Tier):0} salvage", Ui.Small, Ui.Dim));
             row.AddChild(text);
             var lockBtn = Ui.Btn(locked ? "LOCKED" : "LOCK", () => { Character.ToggleGearLock(kv.Key); Rebuild(); }, "Lock");
             row.AddChild(lockBtn);

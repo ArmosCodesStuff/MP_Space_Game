@@ -10,8 +10,10 @@ using System.Linq;
 // is its own whoever hosted.
 //
 //   crates   2 per pilot, 3 from boss level 6, 4 from level 11
-//   rarity   L1-5 Common; L6-10 Common 70 / Rare 30; L11+ Common 55 / Rare 30 / Epic 15
-//   parts    70% one for the pilot's own class (or a general part), 30% any part that drops
+//   tier     the level's base tier, 1 + floor((L-1)/4), rolled 20% one lower, 70% on it, 10% one
+//            higher, held to T1-T10: tier t first drops at L 4t-7 (T2 at L1, T10 at L33) and is the
+//            main drop over L 4t-3 to 4t (numbers_curve_raids_items.md §3.2; Par's rows assume it)
+//   parts    70% from the pilot's own HULL CATEGORY (its lines and the chips), 30% any part that drops
 //
 // The drops are on the pilot's file from the moment of the kill (Character.Unclaimed), so a quit,
 // a crash or a lost host costs nothing: the next world the pilot enters claims them (ClaimAll).
@@ -25,12 +27,14 @@ public static class Loot
 
     public static int CratesFor(int bossLevel) => 2 + (bossLevel >= 6 ? 1 : 0) + (bossLevel >= 11 ? 1 : 0);
 
-    private static Rarity RollRarity(int level, Random rng)
+    // THE DROP ROW: a tier every TierEvery levels, the roll either side of it, the own-category share.
+    public const int TierEvery = 4;
+    public const double Lower = 0.20, Higher = 0.10, Own = 0.70;
+    public static int BaseTier(int bossLevel) => Math.Clamp(1 + (Math.Max(1, bossLevel) - 1) / TierEvery, 1, Tiers.Count);
+    public static int RollTier(int bossLevel, Random rng)
     {
         double r = rng.NextDouble();
-        if (level >= 11) return r < 0.15 ? Rarity.Epic : r < 0.45 ? Rarity.Rare : Rarity.Common;
-        if (level >= 6) return r < 0.30 ? Rarity.Rare : Rarity.Common;
-        return Rarity.Common;
+        return Math.Clamp(BaseTier(bossLevel) + (r < Lower ? -1 : r >= 1 - Higher ? 1 : 0), 1, Tiers.Count);
     }
 
     // Host: every pilot's drops for a boss of `level`, by peer.
@@ -45,16 +49,16 @@ public static class Loot
             var drops = new string[CratesFor(level)];
             for (int i = 0; i < drops.Length; i++)
             {
-                var rarity = RollRarity(level, rng);
-                bool own = rng.NextDouble() < 0.7;
-                // "the pilot's own class" is a PREFERENCE, not a filter. As a filter the narrowed
-                // pool can come out EMPTY -- a rarity this hull's slots have no part in -- and
-                // rng.Next(0) returns 0, so this indexed an empty list: on the HOST, at the instant
-                // a boss died, after MissionWon was set and before anyone was paid. It falls back
-                // to everything of that rarity, and that to everything that drops at all.
-                var byRarity = all.Where(it => it.Rarity == rarity).ToList();
-                var mine = own ? byRarity.Where(it => Equipment.Fits(it, it.Slot, cls)).ToList() : byRarity;
-                var pool = mine.Count > 0 ? mine : byRarity.Count > 0 ? byRarity : all;
+                int tier = RollTier(level, rng);
+                bool own = rng.NextDouble() < Own;
+                // "the pilot's own category" is a PREFERENCE, not a filter. As a filter the narrowed
+                // pool could come out EMPTY, and rng.Next(0) returns 0, so this would index an empty
+                // list: on the HOST, at the instant a boss died. It falls back to everything of that
+                // tier, and that to everything that drops at all.
+                var cat = Hulls.Of(cls);
+                var byTier = all.Where(it => it.Tier == tier).ToList();
+                var mine = own ? byTier.Where(it => it.Cat == null || it.Cat == cat).ToList() : byTier;
+                var pool = mine.Count > 0 ? mine : byTier.Count > 0 ? byTier : all;
                 drops[i] = pool[rng.Next(pool.Count)].Id;
             }
             d[peer] = drops;
@@ -112,7 +116,7 @@ public partial class LootCrate : Node2D
     public override void _Draw()
     {
         var it = Equipment.ById(Item);
-        var col = Ui.RarityColor(it?.Rarity ?? Rarity.Common);
+        var col = Ui.TierColor(it?.Tier ?? 1);
         float pulse = 0.55f + 0.45f * Mathf.Sin(_t * 3f);
         DrawCircle(Vector2.Zero, Size * 1.3f, col with { A = 0.12f * pulse });
         var box = new Rect2(-Size / 2, -Size / 2, Size, Size);

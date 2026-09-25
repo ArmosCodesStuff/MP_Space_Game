@@ -591,7 +591,7 @@ saved per character; nothing grants them yet.
 **A class is asked what it is FITTED with, never "is it the battleship".** `Fit.Guns`
 (cursor-aimed main turrets), `Fit.Broadside`, `Fit.Missiles` (a magazine of bursts), `Fit.Wing`
 (fighters and bombers), `Fit.Pd` (point defence: passive, no key, firing whenever the ship is
-alive), `Fit.Deploy` (turrets it drops and collects). The stat sheet grows each group only for a class that carries it
+alive), `Fit.Deploy` (sentries it throws and recalls). The stat sheet grows each group only for a class that carries it
 (a row a class lacks reads 0), the ship builds the matching hardware from the same flag, and the K
 window prints the matching figures.
 
@@ -611,8 +611,8 @@ it sees between two reports (`Drives.Priced`): a fallen charge bit past the flig
 made, and any snap over 600 u with no bit at all; only warp hulls. **Traps:** a relocation the host
 makes must call `PlayerShip.Relocated` (both `NetPlace` sends do), or a returning pilot is disabled for
 arriving; the smoke test's host roles move guests' warp hulls by hand, so they set
-`Drives.PriceSnaps = false` outside `LaneBHostDrives`. The nine BOOST on the ability path (one F1 lift
-on top, thrust and the slide). The slide (F24): Shift + A/D on a hull whose `strafe_speed` > 0,
+`Drives.PriceSnaps = false` outside `LaneBHostDrives`. The nine BOOST on the ability path (two F1 lifts:
+surge_lift on top speed and thrust, surge_strafe on the slide (AbilityDef.StrafeStat, PlayerShip.StrafeMult)). The slide (F24): Shift + A/D on a hull whose `strafe_speed` > 0,
 read from the stat, never the class; holds multiply after the lifted sum (`PlayerShip.StrafeTop`); the
 host reads a report's speed held to hypot(top, strafe) x 1.1 (`Drives.Clamp`).
 
@@ -952,28 +952,48 @@ piece of player state that is **not** host-owned — it is identity, not a resou
 - Edited in the hub with **C**; every close saves. A new character can be cancelled; an edit cannot,
   because edits apply as you make them.
 - The class selector runs three pages of three
-- **Save format 2** (`Game.Version`): the file also carries the pilot's **hold** (every part owned and
+- **Save format 4** (`Game.Version`, the items release): the file also carries the pilot's **hold** (every part owned and
   not fitted, for any class), **unclaimed loot** (dropped at a kill, not yet flown over), and the
   **hints** seen with the tutorial's off switch. A file from another format is greyed out, never
-  repaired. **A part that is renamed or changes class is carried forward, not a new format**:
-  `Character.Load` reads every part id through `Equipment.Migrated` (the battleship's missile rack and
-  its four rack lines are the destroyer's now, `bs_*` → `dd_*`), and a fitted part that no longer fits
-  its slot goes into the hold -- on the owner's own file only; the host still sanitises a guest's
+  repaired: nothing is migrated and nothing refunded (the owner, for version 4), and a part id the
+  build does not know reads as nothing. The host still sanitises a guest's
   claimed loadout strictly. Things that come in runs (loot pickups, hints) save through `Character.SaveSoon`: 2.5 s
   after the last call, written at once on leaving or switching pilot.
 
 ## Gear, loot, the tutorial and reconnection (the owner's batch of 2026-09-21)
 
-- **A part leans hard one way.** Four specialisations per slot type at three rarities: the upside
-  grows with rarity (x1 / x1.5 / x2), the downside does not, so a rarer copy is strictly better but
-  never free. The owner's carrier examples are literals in the tests (Elite III, Swarm III). No part
+- **A part is a LINE at TEN TIERS, for one HULL CATEGORY** (`Items.cs`, numbers_curve_raids_items.md §3):
+  capital, freighter, heavy, light, 10-11 lines each, plus 6 chips for every hull; ids `{stem}_t{n}`.
+  The ups grow x1.10 a tier from the T1 lean (power +25%, a multiplier +20%, reach 18%, top 22%, a
+  chip 8%, an unpriced unconditional line half the lean); the PRICE never grows, so a higher tier is
+  strictly better but never free. A rider adds +1 to a count (+2 from T6 on 6, T9 on 4). No part
   touches a turret count: the mounts are fixed on the drawing, and a part cannot add one.
+- **A line names ROLES, not classes** (`Items.Roles`): `@primary`, `@output`, `@area`, `@duration` and
+  the rest expand onto the rows of that role the hull's sheet has, so a kit's new row joins a role in
+  one table and every line of the category lifts it. `~id` lifts a x-multiplier row's excess over x1.
+- **A conditional line lifts a sheet row at x1, read at one door** (`Items.Conditions`): craft,
+  execute and redline damage in `Dealt.Deal` (through the pilot, `PlayerShip.Outgoing`), a kill's
+  cooldown cut there too, small hits in `Guarded`, point defence swinging onto craft, a web's hold and
+  slow in `ApplyStatus` and the pinned top, the primary's rate after the drive's run, the primary's
+  ramp on one target. A row's share stops at its ceiling (Ablative 40%, Web Breaker 60%). Unpriced
+  (§3.1), and Par never wears one.
+- **A web's hold is the pin's own clock, not the ask's length.** A raider's latch asks for the pin
+  again every frame, so shortening each ask (the first Web Breaker) only trimmed the 0.25 s tail and
+  the latch held as long as ever. The ship keeps the longest ask whole and holds it in
+  `Items.WebRound` (2 s) rounds, pinned (1 - cut) of each (`Items.WebHoldLeft`); with no cut a round
+  is all hold, so an unworn ship is pinned exactly as before.
+- **A repeat is weighed once** (`Items.Repeats`): the echo stores blows already weighed at the door,
+  so its blast passes `Outgoing` as it is. Weighing it again squared every Dealt condition (Redline
+  T10 x2.53 for x1.59).
+- **The boost's slide is a row of its own** (`surge_strafe`, `AbilityDef.StrafeStat`, read by
+  `PlayerShip.StrafeMult`): one lift on top speed and slide made a slide part (Convoy Rig) move the
+  top speed too, which is Burner Drive's headline.
 - **The multiplier floor (0.1)** is there because gear stacks: the worst sum of downsides on any stat
   is -55%, but a file on the player's disk can carry any bonus.
 - **The hull keeps its fraction across a refit.** Keeping the damage taken let a pilot swap Bulwark
   III on at 10 hull and come out at 316.
 - **Gear is per pilot and trusted like purchases**: the host sanitises a claimed loadout (known parts,
-  right slot, right class) but cannot see a guest's hold -- the same trust as `Bought`, and a rarity
+  right slot, right category) but cannot see a guest's hold -- the same trust as `Bought`, and a tier
   check by level is unsound (a low pilot can be carried to a high boss).
 - **Loot never goes to waste.** Drops are on the pilot's file at the kill and claimed on the next
   world entry: a quit, a crash or a lost host costs nothing. Crates are local nodes with no network:
@@ -1120,6 +1140,48 @@ bosses"); the numbers are `numbers_curve_raids_items.md` §2.
   the raider packet (squad id in bits 8-23, the lead and lock bits, the line's end) and the kind's row, so
   the radar's diamond / bracket / rim chevron, the victim's "GANK:" line and the names under the hulls are
   all worked out from those, on the host as on a guest. A new enemy row needs nothing there.
+
+## Class kits, lane A slice 6c: the heavies (2026-09-25)
+
+The three heavies' rows and keys (ledger_kits6c.md D38-D58). What is durable:
+- **A zone is a row, laid by an ability row** (`Zones.cs`, `AbilityDef.Lays`, `Spawns.Zone`). What every peer DRAWS is
+  literal on the row (reach, length, arm, life), because a guest builds it from the seed alone; what only the host
+  DECIDES (a trap's hold, a field's damage) is a stat of the layer's sheet, read at the lay and kept on the host's
+  node. A trap (Holds) goes off on its first prey; a field (First / Tick / Every) strikes each body on that body's own
+  clock through `Dealt`, credited to the row's id, so the Taunt's x1.5 and every item door reach it.
+- **What a press spends is one door** (`PlayerShip.Spend`): charges (slot N = spent, one recharging at a time) or a
+  Cooldown stat. A new laid or popped ability names its row and its stats, and writes no timer of its own.
+- **A fused round is a shot row** (`ShotDef.Fuse`, `Resists`): the burst takes every hostile hull within the fuse,
+  at the range end too; a class says what its main guns fire (`ClassDef.Shot`), so the Warden's flak is the Guns
+  row's shell swapped, not a second gun path. The Warden keeps FireMode: Fit.Guns brings both rows (D56).
+- **A stance may let go slowly or keep** (`StanceSpec.Release`, `Keeps`): the Anchor weighs in 0.3 s on a second
+  press and survives the tether and the flares; the prism drops at once and ends on any other press.
+- **The Taunt's x1.5 is the dealer's stat** (`taunt_mult`, 0 elsewhere) read in `Outgoing` through `ICalled`, never
+  a class test; the call itself is the squad's (slice 5).
+- **The Taunt draws the emplacement guns by a row flag** (`AbilityDef.Draws`, read through `IRaidTarget.Draws`): an
+  emplacement's gun takes the nearest drawing pilot in its reach before the nearest of all (`Emplacement.Prefer`, read
+  where each warning goes up). Its mount is a main gun that follows `AimAt`, so `Turret.Preferred` never sees it.
+- **The active reload** is `ActiveReload.cs` (sniper_active_reload.md): one meaning per stroke, the host judges a
+  guest's claimed share within its leeway, and the reload bar (`ReloadBar.cs`) draws only the owner's view.
+
+## Class kits, lane A slice 5: the mechanisms under the heavies' and freighters' keys (2026-09-25)
+
+The mechanisms only; the class rows and keys that press them are slice 6 (ledger_kits5.md D28).
+- **A call is the squad's** (`Squad.Call`): a squad fights as one, so a raider cannot be pulled out of it; the
+  override re-forms at once (a latched webber lets go), and the lapse re-picks with the quarry first. Taunt's x1.5
+  from the caller is a door row that reads `CalledBy` (6c).
+- **The sentry throw is a host pending list, not a body in flight** (`PlayerShip.DeployTurret`): it counts as out
+  (the 3-out cap sees it) and nothing can hit it until it lands through `Hub.Drop`. The landing mark is the
+  friendly `Fx.AimZone`, so no new RPC. A recall stows the hull it had; the next throw reuses it.
+- **A flare salvo is one spawn** (`Decoys.cs`, `Spawns.Decoy`): every peer derives the 6 points from the seed. Every
+  rule (lure, mark, dazzle) reads where the points come to rest, from the pop: a rule on the coasting points would
+  lure a seeker onto the hull at age 0 and chase a moving point with an RPC every frame. `Hub.NetDecoy` moves a shot
+  or a predicted blast by its id on every peer (its landing on the host, its missile and its circle everywhere).
+- **Tow and hurl own the craft before its AI** (`Towing.cs`, checked in `Raider` after the status tick and before
+  Disabled): a towed craft is off its post, so it neither webs nor fires, with no gate in the AI itself.
+- **The latch gates are OutGuards columns** (`BlocksLatch`, `DropsLatch`): Dazzled takes no new latch, Jammed takes
+  none and drops its own. Named so a row's default is "no effect". Raiders fire only while latched, so a
+  blocked latch is also a silent laser.
 
 ## Traps that have already cost time
 

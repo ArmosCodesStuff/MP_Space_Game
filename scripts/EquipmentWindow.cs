@@ -108,7 +108,7 @@ public partial class EquipmentWindow : PanelContainer
         var owned = Character.GearHold.Where(kv => kv.Value > 0).Select(kv => (it: Equipment.ById(kv.Key), n: kv.Value))
                              .Where(x => x.it != null)
                              .OrderBy(x => !Equipment.Fits(x.it, x.it.Slot, cls))
-                             .ThenBy(x => x.it.Slot).ThenByDescending(x => x.it.Rarity).ThenBy(x => x.it.Name).ToList();
+                             .ThenBy(x => x.it.Slot).ThenByDescending(x => x.it.Tier).ThenBy(x => x.it.Name).ToList();
         if (owned.Count == 0) _hold.AddChild(Ui.Lbl("Parts a boss drops for you land here.", Ui.Small, Ui.Dim));
         foreach (var (it, n) in owned)
         {
@@ -146,7 +146,7 @@ public partial class EquipmentWindow : PanelContainer
         // A LEVELLED SLOT SAYS SO beside its part's name: what it lifts the part to, in the units the
         // salvage bought (+3% a level to what the part is FOR).
         var item = Ui.Lbl((it?.Name ?? "(empty)") + (lv > 0 ? $"   +{lv * Equipment.LevelStep * 100:0}%" : ""),
-                          Ui.Body, it != null ? Ui.RarityColor(it.Rarity) : Ui.Dim);
+                          Ui.Body, it != null ? Ui.TierColor(it.Tier) : Ui.Dim);
         item.Name = "Item"; text.AddChild(item);
         if (it != null)
         {

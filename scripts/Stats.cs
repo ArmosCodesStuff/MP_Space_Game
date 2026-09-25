@@ -237,6 +237,8 @@ public class ShipStats
         foreach (var r in Def.Rows) Add(r.Group, r.Id, r.Label, r.Base, r.Unit, r.Dec, r.Inverse);
         // ...and its DRIVE's (Drives.cs): what V is made of, on the sheet so gear can move it.
         if (Def.Drive != null) foreach (var r in Def.Drive.Rows) Add(r.Group, r.Id, r.Label, r.Base, r.Unit, r.Dec, r.Inverse);
+        // ...and the CONDITIONS its category's gear can lift (Items.RowsOf): x1 until a part does.
+        foreach (var r in Items.RowsOf(cls)) Add("Conditions", r.Id, r.Label, 1, "x", 2);
 
         if (bonuses != null)
             foreach (var kv in bonuses)
@@ -358,15 +360,15 @@ public static class Dps
 
     public static readonly DpsSource Railgun = new()
     {
-        Label = "Railgun, averaged over its charge and cooldown",
-        Rate = s => s["rail_damage"] / (s["rail_charge"] + s["rail_cooldown"]),
-        Note = s => $"{s["rail_damage"]:0} damage every {s["rail_charge"] + s["rail_cooldown"]:0.0} s, the charge and the cooldown",
+        Label = "Railgun, a perfect reload every round",
+        Rate = s => s["rail_damage"] * s["rail_perfect"] / (s["rail_reload"] + s["rail_charge"]),
+        Note = s => $"{s["rail_damage"] * s["rail_perfect"]:0} every {s["rail_reload"] + s["rail_charge"]:0.0} s, the reload and the charge, with a perfect reload every time ({s["rail_damage"]:0} without)",
     };
 
-    public static readonly DpsSource Emp = new()
+    public static readonly DpsSource Blade = new()
     {
-        Label = "Rush EMP, averaged over its cooldown", Rate = s => s["emp_damage"] / s["rush_cooldown"],
-        Note = s => $"{s["emp_damage"]:0} inside {s["emp_range"]:0} u, every {s["rush_cooldown"]:0.0} s",
+        Label = "Blade, held", Rate = s => s["blade_damage"] / s["blade_interval"],
+        Note = s => $"{s["blade_damage"]:0} to each body in its arc every {s["blade_interval"]:0.00} s",
     };
 
     public static readonly DpsSource Hunters = new()

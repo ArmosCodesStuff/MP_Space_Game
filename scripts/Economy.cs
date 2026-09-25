@@ -46,12 +46,9 @@ public static class Economy
     public const double OutpostStop = 4;
     // ── hull, and rebuilding what is lost ──
     public const double HaulerHull = 262.5;
-    // THE RECYCLER: what a part scraps for, by rarity, and how long each one takes. A part could
-    // not be got rid of at all before this, so a hold filled with commons a pilot would never fit
-    // again. The figures are the salvage a gear level costs at the bottom of its ladder (100), so
-    // one common is one early level of something kept.
+    // THE RECYCLER: how long each part takes to scrap. What it pays is its tier's row
+    // (Tiers.Scrap: 100 at T1, 745 at T10).
     public const double ScrapEvery = 5.0;
-    public static double ScrapValue(Rarity r) => r switch { Rarity.Epic => 600, Rarity.Rare => 250, _ => 100 };
     public const double RebuildDelay = 30;         // seconds after it is destroyed
     public const double RebuildShare = 0.10;       // of everything invested so far in its category
     // ITS OWN POINT DEFENCE: one turret on the spine, firing whenever the hauler is out there.

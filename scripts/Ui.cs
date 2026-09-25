@@ -31,8 +31,13 @@ public static class Ui
         Warn   = new(0.984f, 0.749f, 0.141f),   // #fbbf24
         Bad    = new(0.973f, 0.443f, 0.443f),   // #f87171
         Epic   = new(0.749f, 0.451f, 1.000f);   // #bf73ff  the rarest gear
-    // A part's name is drawn in its rarity's colour, everywhere it is named.
-    public static Color RarityColor(Rarity r) => r switch { Rarity.Rare => Accent, Rarity.Epic => Epic, _ => Text };
+    // A part's name is drawn in its TIER's colour, everywhere it is named: T1 the text colour, T10
+    // Epic, through Accent halfway (Tiers.Count tiers). It replaced three rarity colours.
+    public static Color TierColor(int t)
+    {
+        float f = Mathf.Clamp((t - 1) / (float)(Tiers.Count - 1), 0f, 1f);
+        return f < 0.5f ? Text.Lerp(Accent, f * 2f) : Accent.Lerp(Epic, (f - 0.5f) * 2f);
+    }
 
     // Corner radii. A panel is rounder than the things inside it: a card with its container's
     // radius looks like it is bulging out of it.

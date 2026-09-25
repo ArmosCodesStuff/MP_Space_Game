@@ -9,12 +9,12 @@ using Godot;
 //
 // WHEN TO BUMP IT: whenever a release changes what a character file MEANS in a way that cannot be
 // carried forward -- a new persisted field with no sensible default, a changed unit, a rebalanced
-// cost that invalidates what was bought. A part that is renamed or moves to another class is
-// carried forward instead (Equipment.Migrated), and needs no bump. Not for a visual change, a fix,
+// cost that invalidates what was bought, a renamed part (4: the items by hull category and tier;
+// nothing is migrated and nothing refunded, by the owner's ruling). Not for a visual change, a fix,
 // or anything a save cannot notice.
 public static class Game
 {
-    public const int Version = 3;
+    public const int Version = 4;
 
     // WHICH BUILD THIS IS, for a bug report to name. Read once out of the BUILD.txt a release
     // ships beside the executable (tools\pack.ps1 writes it); "dev" in the editor and in every

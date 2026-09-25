@@ -1,0 +1,645 @@
+# Ledger: kits lane A, slice 6c (the heavies: Warrior, Sniper, Warden)
+
+Writer: one agent at a time in worktree `WarShips_wt_kits6c`, branch `wt/kits6c`, started at a8a5e81 (version-l).
+Spec (newest wins): kits_v2 §3 cards (WARRIOR / SNIPER / WARDEN) + §5 → kits_v3 §3.4 / §3.5 + §5 → kits_v31 §2,
+§3.4 (the drive vs every move), §3.6 (walls), §6, §7, §8; `sniper_active_reload.md` (the Sniper's piece);
+numbers_curve_raids_items.md §8 (owns no heavy-kit number). Rulings: version-l's docs/plans/README.md.
+Conventions and D1-D37: ledger_kits.md (D1-D27), ledger_kits5.md (D28-D37). BUILD PHASE: no engine run; per job
+typecheck + verify -Quick + a read of the own diff; every check written now, run in the final test phase.
+A PRE with no POST is an interrupted job: compare the hashes, revert half-made edits, redo it first.
+Checks go in NAMED methods `LaneA6c<Thing>Checks` in SmokeTest.cs.txt (solo) and `LaneA6c<Thing>Frames` in
+Shots.cs.txt; rung-5 pairs `LaneA6c<Thing>HostChecks` / `...GuestChecks`. SmokeTest.cs.txt is LF: write it in binary.
+6.7: every ability >= 3 distinct checks (effect with the spec's literals; each kits_v31 §7 interaction; guest
+role or named frame), each from 3 varied situations (Vary / VaryAngle / VaryNear).
+
+## Decisions taken where the spec is silent or superseded (D38 on)
+
+- **D38 Overcharge is NOT built** (README ruling; ledger_kits D27): the Sniper's piece is the ACTIVE RELOAD. The
+  task prompt's "Overcharge" is superseded. No `rail_over_*` rows.
+- **D39 The open question's default:** a perfect press does NOT finish the reload (it only enhances the round, x1.5).
+- **D40 Hulls:** Warrior 300, Sniper 240, Warden 270 (kits_v2 cards; README "heavies 240-300"). Today all three
+  read 140. Only these three rows move; any harness check asserting the heavies' 140 is rewritten (6.3).
+- **D41 Learn order (ClassDef.Abilities, the walls read it):** Weapon rows first (never walled), then
+  Warrior {Lunge E, Whirlwind Q, Prism stance F}; Sniper {Anchor F, Tether mine Q, Flares E};
+  Warden {Hunters F, Taunt Q, Flak curtain E} (kits_v31 §3.6 table).
+- **D42 Replaced in the same edits (invariant C):** Warrior's twin cannons + FireMode + Rush (rush_* and emp_*
+  rows, StartRush / RushEmp, Dps.Emp, Ab.Rush, kit parts warrior_main_guns / heavy_rush_drive); Sniper's light
+  cannon + FireMode + the F railgun and its lock (rail_cooldown, Ab.Railgun on F, ChargeRail); Warden's light gun
+  + FireMode (the proximity flak replaces it). HeavyCannon kit part goes when no class carries it.
+  Items.cs @output / @area / @duration lists name rush_time / emp_* (lines ~100-104): remove those ids there,
+  add the new ability rows' ids to the same lists (blade_damage, whirl_*, lunge_*, taunt_time, curtain_*,
+  tether_*, anchor_time, flare_*) so the items' category doors still reach the heavies. `Dealt.Emp` / Fx "emp"
+  stay only if something still reads them (6d's EMP is the Echo's; the analyser decides).
+- **D43 The Warden's primary, Proximity flak (Space, Weapon):** its main gun keeps the turret path but fires the
+  F5 `Flak` shot row (D24: lands with its class): bursts when within `flak_fuse` 70 u of a hostile (or at
+  `main_range` 700 u), damage in the fuse radius, x0.75 on a Boss tag (a row field, not a type test), 45 DPS
+  at the sheet (main_damage / main_interval). PD x1 unchanged.
+- **D44 The Flak curtain is a ZONE row** (new `Zones.cs`, named for the mechanism; v2 §5 F9 "Zones gain a Bar
+  shape"): ZoneDef {Id, Length, Width, Time, Arm, First, Tick, Every, Prey(TargetFilter), Weapon}; host tick
+  deals First on entry then Tick every Every to Prey inside the capsule, through Dealt (credit `curtain`);
+  every peer draws it from ONE raise on an appended Spawns row (the decoy's pattern, NetIds space appended at
+  the END). Row `curtain`: 500 x 80 u, 6 s, live 0.5 s after the press, 20 then 10 / 0.5 s, Light|Heavy only
+  (no boss, structure, missile, ally), cursor clamped 150-700 u, perpendicular to the aim, cooldown 18 s.
+- **D45 The Tether mine (v1, numbers only in kits_v2: "2 charges · 170 u · holds raiding craft 3 s"):** Q drops
+  a mine at the stern (default; nothing says the cursor); it arms 0.5 s later; the first raider (Light|Heavy,
+  never a boss) within 170 u sets it off and every raider within 170 u is held (Status.Disabled) 3 s; 2
+  charges, each recharging 12 s (default: no v1 cooldown survives in the repo); at most 2 mines out, the oldest
+  goes. A mine is a Zones row with a trigger (`tether`), so it rides the same raise and wire (D44).
+- **D46 Lunge:** a fixed 420 u along the nose in 0.3 s (kits_v31 §3.4: never priced from speed), owner-side
+  motion like the F8 payload; the host sweeps the path and strikes each body once for 40 (credit `lunge`),
+  and the Warrior is Hardened x0.5 for the 0.3 s. Cooldown 7 s. It ends a Prism stance (kits_v2 card).
+- **D47 Whirlwind:** 2 s, Melee row `whirl` (210 u, ±180°, Stops 0) ticking 10 every 0.25 s (40 DPS);
+  on the press every web on the Warrior drops and no web can take it for the 2 s ("clears and blocks webs":
+  a host-only Status appended at the END of the enum, read where Pinned is applied); cooldown 14 s; no blade
+  swings while spinning; it ends a Prism stance.
+- **D48 Blade (Space, Weapon, Hold):** Melee row `blade` (160 u, ±55°, Stops 0), 26 every 0.40 s (blade_damage,
+  blade_interval through Cadence), host-struck while Trigger is held; no swings in stance or spin.
+- **D49 Prism stance (F):** 2.0 s (prism_time), Status.Parrying for the run, Hold 0.5 (share after the sum:
+  boosted 0.75), press F again to drop, Q or E ends it, cooldown 12 s from its END (prism_cooldown), the
+  split tick 0.75 s and at most 3 splits a stance (Prism.cs has the bands / split / walk; the tick and the
+  cap are this job's). Fx row `warn_beam` for the clip, appended.
+- **D50 Anchor (F):** up to 8 s (anchor_time), Hold 0 (so Drives' ANCHORED refusal already applies to the
+  boost: kits_v31 §3.4 is met by the generic Held rule, Drives.cs:154-159 -- the check is still written),
+  RateStat anchor_rate 2.5 (runs the charge AND the reload through Cadence), reach x1.4 (anchor_reach: the
+  rail's reach reads it while anchored), 0.3 s release (anchor_release), press F again to release, cooldown
+  12 s from the release.
+- **D51 Flares (E):** calls the existing `Hub.Flares(at, heading)` (Decoys.cs row `flares`), cooldown 16 s
+  (flare_cooldown), never refused.
+- **D52 Taunt (Q):** taunt_time 6, taunt_reach 1000, taunt_mult 1.5, taunt_cooldown 20, taunt_guard 0.67.
+  Press: every raider squad whose member stands within 1000 u or hunts a target within 1000 u is Called
+  (Squad.Call, kits5-J6) for 6 s; the Warden is Hardened(6, 0.67); Fx.TauntRing raised at the reach; the
+  field row `taunt` (already in Fx.cs, keyed on slot "taunt") draws the shimmer and "−33%" from the slot.
+  x1.5: `PlayerShip.Outgoing` adds a row -- a target whose CalledBy is this ship takes x taunt_mult (a stat on
+  the dealer's sheet, 1 on every other class: reached by the stat, not by class). Emplacement guns prefer a
+  Warden in range while its taunt runs (the Prefer filter), if the emplacement chooser has a Prefer hook;
+  otherwise recorded as owed.
+
+## Jobs (foundations before their users; each: PRE, edit + checks, typecheck + quick, POST, commit)
+
+- **kits6c-J1 Warrior row + Blade** (D40-D42, D48): ClassDef row (hull 300, Fit none of Guns, Weapons Dps.Blade),
+  Melee.All rows blade + whirl, Ab.Blade (Space), the host blade tick; Rush / cannons / emp deleted with every
+  caller (Abilities, PlayerShip ~756-775, Ships, Stats ~370, Statuses:53, Items ~100-104, SmokeTest ~19 lines,
+  Shots.cs.txt). Checks LaneA6cBladeChecks (26 per 0.40 s in the arc at 3 VaryAngle / VaryNear spots, nothing
+  behind or past 160 u; 65 DPS on the sheet), the walls' order check rewritten (Warrior lunge, whirl, prism).
+- **kits6c-J2 Lunge** (D46). Checks LaneA6cLungeChecks (420 ± 5 u in 0.3 s at 3 headings; 40 to each of 2-3
+  bodies on the path once; half damage taken inside the dash; 7.0 s cooldown; ends a stance; boosted it is
+  still 420 u -- the drive interaction), rung-5 guest lunge within 20 u of the host.
+- **kits6c-J3 Whirlwind** (D47). Checks LaneA6cWhirlChecks (40 DPS ± 1 to bodies all round inside 210 u, 0 past;
+  a latched webber lets go and cannot re-latch for 2 s; cooldown 14; no blade while spinning; ends a stance).
+- **kits6c-J4 Prism stance** (D49; kits_v2 Proves: bands, SQUARE 37.5 / 12.5, SLANT at 40°, no re-split, tick
+  at 1.9 s caught / 2.1 s lands 50, drop -> 12.0 s cd, x0.5 speed and boost x0.75, no blade, projectiles,
+  rays, cursor at 120° clamps to 90°). Checks LaneA6cPrismStanceChecks, frames (wedge, SQUARE clip, SLANT fan)
+  LaneA6cPrismFrames, rung-5 LaneA6cPrismHost/GuestChecks (the guest draws, the host decides).
+- **kits6c-J5 ActiveReload foundation** (sniper_active_reload.md §2.2, §3): Net.Leeway, PlayerShip.SendInterval
+  public, ActiveReload.cs (ReloadSpec, Chamber, Verdict, Spent / Seat / Take / Judge / Press / View),
+  AbilityDef.Reload, RequestReloadPress RPC, the owner's one-meaning-per-stroke rule, the host charge latch.
+  Checks: pure Judge (claims clamped, NaN / 7.0, one press a reload) LaneA6cReloadJudgeChecks.
+- **kits6c-J6 Sniper row + railgun on Space** (§2.1 rows: rail_damage 120, rail_charge 0.8, rail_tap 40,
+  rail_reload 3.0, rail_spot_at 40, rail_spot 20, rail_perfect 1.5; rail_cooldown deleted, rlg_wide
+  re-pointed; Dps.Railgun 47.4; Damage 6.0; Cycle rail_reload), hull 240, cannon / FireMode / F railgun
+  deleted; Beam + Fx `rail_enhanced` appended; Sfx.Special -> Sfx.ByName; make_sounds.py rows rail_perfect /
+  rail_miss (a python tool, not the engine) + _gap; the muzzle glint; Hint + Hints row `reload`.
+  Checks S1-S9 (LaneA6cReloadChecks), rung-5 G1-G5 (LaneA6cReloadHost/Guest/Guest2Checks).
+- **kits6c-J7 ReloadBar** (§4): HUD control following the ship, the lint overlap list, frame 73c_sniper_reload_spot.
+- **kits6c-J8 Anchor** (D50). Checks LaneA6cAnchorChecks (0 u moved in 2 s with W and Shift+D; reload 1.2 s and
+  spot 0.48-0.72 anchored; reach 3500 hits a dummy at 3400 and not unanchored; 12.0 s cooldown from a release
+  at Vary 1-8 s; 8 s cap; V refused ANCHORED; a reload started before the Anchor keeps its length).
+- **kits6c-J9 Zones foundation + Tether mine** (D44, D45): Zones.cs, the Spawns row + NetIds space appended, the
+  draw on every peer; row `tether`. Checks LaneA6cZoneChecks (pure capsule / trigger), LaneA6cTetherChecks
+  (a raider at 169 u held 3 s, 171 u not; boss ignored; 2 charges then refused; recharge), rung 5 guest sees it.
+- **kits6c-J10 Flares ability** (D51). Checks LaneA6cFlaresChecks (E pops the salvo at the hull, 16.0 s cooldown,
+  seeker lured / mark moved / webber dazzled -- kits_v2 Proves, through the key), frame LaneA6cFlaresFrames,
+  rung 5 (a guest's E: flares at the host's spots).
+- **kits6c-J11 Warden row + Proximity flak** (D40-D43): hull 270, Flak shot row, Hunters prey order (latched on
+  a friendly hull first). Checks LaneA6cFlakChecks (fuse at 69 / 71 u, x0.75 on the boss, 45 DPS sheet,
+  700 u), LaneA6cHunterPreyChecks.
+- **kits6c-J12 Taunt** (D52; v2 Beacon Proves under the new name + v3 guard: 30 -> 20.1 at 0.5 / 5.9 s, 30 at
+  6.1 s; beam tick 50 -> 33.5; 999 / 1001 u; hunting-within-reach switch; latched lets go in 0.25 s; edge
+  heavy boosts in; back at 6.1 s; boss ignores; flak 33.75 vs 22.5). Checks LaneA6cTauntChecks, frame (the
+  existing 82_taunt_shimmer re-posed on a real press) LaneA6cTauntFrames, rung 5 guest sees Hardened + swing.
+- **kits6c-J13 Flak curtain** (D44 row `curtain`). Checks LaneA6cCurtainChecks (clamp 100 / 900 -> 150 / 700;
+  perpendicular at VaryAngle; (40 + r − 1) u takes 20 then 10 / 0.5 s, (40 + r + 1) u takes 0; boss /
+  structure / seeker 0; gone at 6.1 s; credit in NoteDealt; the Taunt x1.5 on a called craft), frame
+  LaneA6cCurtainFrames, rung 5 guest draws it.
+- **kits6c-J14 Record**: CHANGES.md Unreleased + Handoff, DESIGN.md slice-6c section, final POST (what the test
+  phase owes: checks, rungs, frames).
+
+## JOB 0 · POST
+- Worktree created from version-l a8a5e81. Spec read; job list above. No code touched. Next: kits6c-J1.
+
+## Handover 1: the first agent stops after JOB 0 (context spent reading the spec), at a job boundary
+Pointers for J1 on (a8a5e81 tree): Ships.cs heavies rows 370-475 (Sniper 370, Warrior 401, Warden 434; the
+HeavyCannon kit part 150); Abilities.cs Ab.Railgun 290, Ab.Rush 304, Ab.Hunters 315, Timed() 367, AbilityDef
+fields Hold / RateStat / SpeedStat / While / OnDealt 51-101; PlayerShip.cs Lifts / Held 139-192, Cadence 204,
+Outgoing 216 (the Taunt x1.5 row goes here), Slot 248, FitClass 352, DoAbility 589, ChargeRail / FireRail
+739-754 (Charges.At + Lines.Strike), StartRush / RushEmp 756-775, SeekerPrey / LaunchHunters 782-811,
+Disabled 887, Prismatic / GuardAngle 903-904, ApplyStatus 905, Incoming 1007, TickAbilities 1166, LocalFlight
+1246, Steer 1322, SendHostState 1447, _Draw 1533. Melee.cs (Pick / Guard / Nose / Strike, no rows yet),
+Prism.cs (GuardMax, Bands, Resolve, Catch, Walk), Decoys.cs + Hub.Flares, Squads.cs Call / CalledBy (146, 247),
+Statuses.cs enum 16-30 (Hardened 8 takes the applier's share), Fx.cs Fields rows 492-503 (the taunt field on slot
+"taunt", the boost plume) and Fx.TauntRing = 10, Drives.cs:154-159 (ANCHORED = Held <= 0). Old-kit callers to
+delete in J1/J6/J11 (grep rush_|emp_damage|emp_range|emp_stun|Ab\.Rush|Ab\.Railgun|rail_cooldown|Dps\.Emp|Dps\.Railgun|heavy_main_gun|heavy_rush_drive|warrior_main_guns|heavy_railgun|HeavyCannon):
+Abilities 3, Items 3 (~100-104), PlayerShip 7, Ships 20, Stats 4 (~364-371), Statuses 1 (:53 rush_guard
+comment), SmokeTest.cs.txt 19 (~6459, 6899, 9483, 10768-10783, 11074, 11276 ...). Commit messages: write the file
+with [IO.File]::WriteAllText (PowerShell's utf8 adds a BOM to the subject).
+## kits6c-J1 · PRE (agent 2)
+- tier opus. Intent: Warrior row (hull 300, no guns) + Blade (Space, Melee row blade 160 u ±55°, 26 / 0.40 s) + the trigger generalised to the class's Weapon Hold row + Stills; Rush / twin cannons / EMP deleted with every caller (D40-D42, D48). HEAD 669af1e86831ae88c769e176d0666a164de33579
+- scripts/Ships.cs 5415309685219dbbec36724dfee2c526ed106413
+- scripts/Abilities.cs fdd4a423b516cbf1e187e372ec963810e197aea6
+- scripts/PlayerShip.cs d532201f0baf49377bba9c8b96018b6ddcf6eb88
+- scripts/Stats.cs 106a2e3fc29510501789cfdac653fac0a667557a
+- scripts/Statuses.cs e77870f6ce301940cf665789cca2ea2740c03586
+- scripts/Items.cs c35ab118e76ad338218307e8c446a0b7204cf3ad
+- scripts/Melee.cs 5f80c66ccb9e5369bbf5208d155288753a5da983
+- tools/smoketest/SmokeTest.cs.txt 59e7c40100d0ffc791c20a1e5a65601e740bb610
+## kits6c-J1 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- Built: Warrior row (Fit.None, hull 300, rows blade_damage 26 / blade_interval 0.40 / blade_reach 160, Dps.Blade 65,
+  kit warrior_blade + warrior_prism (utility; names blade_damage until J4 re-points it at prism_time)); Melee.Blade row
+  (+ MeleeDef.Damage / Every), Melee.Draw (the wedge + sweep on every peer), Melee.Running; AbilityDef.Swing + Stills,
+  PlayerShip.Swings (host) / Stilled; Abilities.TriggerOf (Trigger = the class's Weapon Hold row, not Fit.Guns + "guns");
+  Items roles: blade ids in @primary / @primary_rate / @primary_range, "blade" in PrimaryShots; rush_* / emp_* out.
+- Deleted: Ab.Rush, StartRush / RushEmp, Dps.Emp, twin cannons + FireMode + Guns on the Warrior, rush_/emp_ rows.
+- Kept (merge risk): Fx.Emp and Dealt.Emp now have no game raiser; the rung-5 wire check raises Fx.Emp by hand. 6d's
+  EMP (Echo) should use them; if it does not, delete both at the merge.
+- Checks: LaneA6cBladeChecks (new: sheet, 3 varied swings 78 in 1.0 s / 0 behind / past / off-arc, released + DISABLED);
+  rewritten: weapon-rows list (+blade), walls kit (Rush -> Hunters), Weapons-level rise (blade_damage), EveryDamageStat,
+  Warrior SustainedDps 65, rush speed-lift push -> the V boost's x1.5 push on the Warrior, EMP on a cruise missile ->
+  the blade on it, sweep witness ["blade"], reach case blade_reach (+pairs 31), rush_guard -> taunt_guard, arena host
+  Warrior (hull 300, own rows + 7, host-applied HARDENED + Fx.Emp ring); frame 74b_warrior_blade_swing (LaneA6cBladeFrames).
+- Checkpoint: the commit below. Next: kits6c-J2 Lunge.
+
+## kits6c-J2 · PRE
+- tier opus. Intent: Lunge (E, ability 1): DashSpec row on AbilityDef (owner-side carry along the nose, 420 u in 0.3 s, never priced from speed; host sweeps the start line and strikes each body once for 40, credit lunge; Hardened 0.5 for the 0.3 s; cooldown 7 s). HEAD a2fee51ae0d6194a40fc532b85a37f907038a8d1
+- scripts/Abilities.cs 0e8055639c30e84e210e20a18dbeca64b1f01bfb
+- scripts/PlayerShip.cs 0401394ec675414dc9ce76baef8e4e97a7deee82
+- scripts/Ships.cs 417f2f1a452223cea8c17aa0b2623b4c3b4c5b1b
+- scripts/Items.cs 7a4df5f01bbdc0680705d29937984a1ec73e8e39
+- tools/smoketest/SmokeTest.cs.txt 96ad32b633a57609c7d648e06dd707d2761fdf47
+## kits6c-J2 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- Built: DashSpec (AbilityDef.Dash: Reach / Time / Damage / Guard / Cooldown stat ids); PlayerShip.StartDash (host press:
+  Left, cooldown, At + Own = the start, Hardened at the Guard share), DashSweep (host: the start line, each body once,
+  credit = the row id; every frame + at 1 by Expire), DashCarry (owner: the whole Time from the first frame it sees Left,
+  a stale packet told from a fresh press by the cooldown jumping back up > 1 s; replaces Steer while it runs). Ab.Lunge
+  (E), Warrior rows lunge_reach 420 / lunge_time 0.3 / lunge_damage 40 / lunge_guard 0.5 / lunge_cooldown 7; Damage
+  lunge_damage 2; Items @output + lunge_damage. Warrior Abilities {Blade, Lunge}.
+- Checks: LaneA6cLungeChecks (new: rows; 3 runs rest / top speed / boosted: 420 +- 5 u in 0.3 s, 2-3 bodies 40 once,
+  off-line 0, DealtBy, 50 in / 100 after, cooldown 7.0, second press COOLING); rung 5 LaneA6cLungeHostWatch /
+  LaneA6cLungeHostChecks / LaneA6cLungeGuestChecks (new); rewritten: EveryDamageStat (+lunge_damage, nine), sweep witness
+  ["lunge"].
+- Next: kits6c-J3 Whirlwind.
+
+## kits6c-J3 · PRE
+- tier opus. Intent: Whirlwind (Q, ability 2): Melee.Whirl row (210 u, all round, 10 every 0.25 s = 40 DPS, 2 s), Stills the blade, the press drops the web and Status.Unwebbed (512, host-only, appended) refuses a new pin for the 2 s; cooldown 14 s (D47). HEAD b4aeea25233ee4e5545c489aa4b05410a053c323
+- scripts/Abilities.cs a385a4d979d99295db8ccdb1f86f0f93c875c0b0
+- scripts/PlayerShip.cs 00f6a41114b1f12dac792b1eb3ca6ead40366b61
+- scripts/Ships.cs 0a43f48530a2d1bc71aa4cacce71f97cc926aa2e
+- scripts/Items.cs 607be96fb1f8c636aaea157834c32a0bfadbe265
+- scripts/Melee.cs bb15cebc11cd4e8f9810b6882f0816768836f2d6
+- scripts/Statuses.cs dd5ed0fbe603d3b0f0baedd7841c804419a35dc8
+- tools/smoketest/SmokeTest.cs.txt 531bc4e18ff6d66f6f0e353726ef3c873e69198f
+- tools/screens/Shots.cs.txt 8e3eeecbdd9de6ace7a1d3558359212547185923
+## kits6c-J3 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- Built: Melee.Whirl (whirl_reach 210, 180 deg, whirl_damage 10 / whirl_interval 0.25), Ab.Whirlwind (Q, Swing + Stills),
+  PlayerShip.Whirl (host press: Left whirl_time 2, cooldown whirl_cooldown 14, the web's pin and ask dropped,
+  Status.Unwebbed 512 appended (host-only) for the spin; ApplyStatus refuses a pin while it runs). Melee.Running: a
+  Press row runs while Left > 1e-6 (no ninth blow off a rounding hair). Items: whirl_damage @output, whirl_reach @area,
+  whirl_time @duration; Damage whirl_damage 0.5. Warrior Abilities {Blade, Lunge, Whirlwind}.
+- Checks: LaneA6cWhirlChecks (new: rows; 3 runs: 4 bodies all round lose 80, 280-340 u 0, cooldown 14, SPINNING;
+  a latched webifier freed in 1-2 frames, free for the spin, re-takes after 2 s; the blade held through the spin
+  swings 0, then swings); frame 74c_warrior_whirlwind (LaneA6cBladeFrames); rewritten: EveryDamageStat (+whirl, ten),
+  sweep witness ["whirlwind"].
+- Next: kits6c-J4 Prism stance.
+
+## Handover 2: agent 2 stops after J3 (context), at a job boundary. J4 is next; no PRE written for it.
+Conventions this agent used (keep them): checks are written in the scratchpad and spliced into SmokeTest.cs.txt with a
+python exact-match edit (assert count == 1), each LaneA6c method inserted after the previous LaneA6c method; solo calls
+go after `await LaneA6cWhirlChecks(yonder);` (the WARRIOR block, ~11200); the sweep's witness rows sit after
+["whirlwind"]; frames go in LaneA6cBladeFrames (Shots.cs.txt ~1019). All harness roles run at Peak = Unlocks.Top.
+Generic machinery built so far, for J4 on: AbilityDef.Swing (MeleeDef) + Stills (PlayerShip.Stilled holds the trigger's
+weapon while such a row's Left runs), AbilityDef.Dash (DashSpec; PlayerShip.StartDash / DashSweep / DashCarry),
+Abilities.TriggerOf, Melee.Draw / Running, Status.Unwebbed 512 (host-only).
+J4 pointers (Prism stance, D49): nothing draws the prism wedge yet (grep Prismatic: only PlayerShip:882 and Prism.cs).
+Prism.Catch (Prism.cs:116) splits every caught ray / beam with no cadence; D49's split tick (0.75 s, at most 3 a stance)
+belongs to the stance row: suggested shape -- IPrism gains `bool Split()` (PlayerShip: the running row with the stance's
+split stats counts N / the last split's clock in its slot; no running stance row = no cadence, so the slice-5
+LaneAPrism*Checks that ApplyStatus(Parrying) directly keep passing), and Catch strikes the children only when Split()
+says so (the catcher still takes 0). The stance row: Id "prism", Key.F, Hold = 0.5 (Held: share after the sum, boosted
+0.75), Stills = true (no blade), Press toggles (F again drops: Left = 0 and the cooldown 12 s from the END -- set Cool
+in the drop and in Elapsed/Expire, not at the press), Status.Parrying applied for prism_time 2.0 and cleared on the drop;
+StartDash("lunge") and Whirl() must end a running stance (read the stance by a row flag, e.g. AbilityDef.EndsOnPress /
+"Stance", never by id). Rows: prism_time 2, prism_cooldown 12, prism_hold 0.5 (or Hold literal), prism_split 0.75,
+prism_splits 3. Re-point the kit part warrior_prism (Ships.cs Warrior Kit) from blade_damage to prism_time. Warrior
+Abilities in learn order {Blade, Lunge, Whirlwind, Prism}; then the walls check at SmokeTest ~6922 (Learns lunge,
+whirlwind, prism) goes live once every class has 3. Fx `warn_beam` (appended at the END of Fx's ids) for the clip.
+Checks owed (ledger job list J4): LaneA6cPrismStanceChecks, LaneA6cPrismFrames (wedge, SQUARE clip, SLANT fan),
+rung 5 LaneA6cPrismHostChecks / LaneA6cPrismGuestChecks; sweep witness ["prism"]; the Stills witness.
+
+## kits6c-J4 · PRE (agent 3)
+- tier opus. Intent: Prism stance (F, ability 3, D49): AbilityDef.Stance (StanceSpec: Time / Cooldown / Every / Splits stat ids + the Status it holds), PlayerShip.Stance / EndStance, any other ability 1-3 press ends a running stance, IPrism.Split (the stance's split tick 0.75 s, at most 3 a stance; no running stance row = every catch splits), Hold 0.5, Stills; Field row prism (FieldLook.Wedge) drawn on every peer; kit part warrior_prism -> prism_time. HEAD 0f19074d1188a66af716bac8ac1690e297a38bd8
+- scripts/Abilities.cs 26a59cdcf242bd39a1d91a6b94fc00c6f3b0e648
+- scripts/PlayerShip.cs a640e05f711cdadbc0213ce839db6540ceb53bb2
+- scripts/Ships.cs 29ab7bdbd3aa4f6620029fb4f7f009c2053f41c1
+- scripts/Prism.cs 858fa2c677b534b11e58f6a21f5f97eff52d0bf5
+- scripts/Fx.cs a44e9429b3c6e0609b246a43fa48afc061f27f27
+- scripts/Items.cs 9401325a16e5aebe715f4cf89daee1ccb10e94e6
+- tools/smoketest/SmokeTest.cs.txt 77513606092ca43d127322e5a1d52e925397ff63
+- tools/screens/Shots.cs.txt 705e8d6693817b55be7f325829a4955bc1391e4c
+## kits6c-J4 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- Built: StanceSpec (AbilityDef.Stance: Time / Cooldown / Every / Splits stat ids, Holds a Status); Ab.PrismStance (F,
+  Hold 0.5, Stills, Press toggles, Elapsed = EndStance on every peer); PlayerShip.Stance / EndStance (cooldown from the
+  end) / Split (IPrism.Split: at most prism_splits a stance, prism_split apart, 0.05 s early allowed; no stance running =
+  every catch splits); DoAbility: any other of the class's abilities (not Weapon, not the drive) ends a running stance;
+  Prism.Catch strikes children only when Split says so (the catcher still takes 0). FieldLook.Wedge + Fields row
+  "prism" (the wedge on every peer from the slot). Rows prism_time 2 / prism_split 0.75 / prism_splits 3 /
+  prism_cooldown 12; kit part warrior_prism -> prism_time; Items @duration + prism_time. Warrior Abilities in learn order
+  {Blade, Lunge, Whirlwind, PrismStance}.
+- Defaults (D53): no warn_beam Fx row -- the clip and the fan are the children's own Lines lines (slice 5) and the
+  wedge; nothing would read the row. The slot's N counts splits (Own = when the last fell), not the band: every peer
+  draws the band from the children's lines.
+- Checks: LaneA6cPrismStanceChecks (new: rows; 3 runs: every-frame SQUARE ticks -> 0 taken, 112.5 on the guard;
+  1.85-1.9 s caught, 2.1-2.2 s lands 50; cooldown 12.0 at the end; held 0.5 / 0.75 boosted; blade 0; F / E / Q at
+  0.3-1.7 s ends it, cooldown 12, COOLING); rung 5 LaneA6cPrismHostWatch / HostChecks / GuestChecks (new); frames
+  74d_warrior_prism_wedge, 74e_warrior_prism_square, 74f_warrior_prism_slant (LaneA6cPrismFrames); rewritten: sweep
+  witness ["prism"] + a stance's second press drops it (cooldown = its row), Parrying cleared after the sweeps.
+- Next: kits6c-J5 ActiveReload foundation.
+
+## kits6c-J5 · PRE
+- tier opus. Intent: the ActiveReload foundation (sniper_active_reload.md §2.2, §3): ActiveReload.cs (new: ReloadSpec incl. Charge, Chamber, Verdict, Spent / Seat / Take / Judged / Give / Judge / Press / Shot / Step / View), Net.Leeway, AbilityDef.Reload + Loose, PlayerShip.RequestReloadPress + AskReloadPress, the owner's stroke rule, the host's charge latch, a fitted chamber seated; Sfx.Special renamed Sfx.ByName (Press plays through it). No row uses it yet (J6). Checks: LaneA6cReloadJudgeChecks (pure). HEAD c6c67808764fa0329d148c1f19321632b3595712
+- scripts/ActiveReload.cs new
+- scripts/Abilities.cs 0ed703fad647696f5b8fc44f80b2d16a3d373644
+- scripts/PlayerShip.cs f9da5898c6fd5d163cd8368dfea98de71c02b7b7
+- scripts/Net.cs f424f5a20037bb4fe6aeb298886ee58de1d1b04d
+- scripts/Sfx.cs 01157ae1939d553ea78014a3926c7ad6d44664b6
+- scripts/Boss.cs 873f332ec2392263d6d977c5f9dabb46a43365c9
+- scripts/Fx.cs 54e6c935b131221c1ee07d0a15226d26de6c8475
+- scripts/Hub.cs ab952edc87ccfb72862347360be24402bedeb011
+- scripts/Shots.cs 05c56a1f0517457bda6938d963d7330c049989ef
+- scripts/ThrownRock.cs c398efc801266348f7db2d56049911dd7fa64f67
+- tools/smoketest/SmokeTest.cs.txt a1b003390d24ecd2588fb34a5eb2f962b7113f78
+## kits6c-J5 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- Built: scripts/ActiveReload.cs (ReloadSpec {Id, Reload, SpotAt, Spot, Perfect, Charge}, Chamber, Verdict, Rail row,
+  Reloading / Seated / Progress / Spot, Spent, Seat, Take, Judged + Give (pure), Judge (host), Press / Shot / Step (owner),
+  View {Since, Length, Flash, Off, Charge, Said, Running}); Net.LeewayCap 0.10 + Net.Leeway (0 offline and for the host's
+  own ship; a guest gets the cap: WebRTC reports no per-peer jitter -- D54); AbilityDef.Reload + Loose; PlayerShip
+  ReloadView, Stroke (the one-meaning-per-stroke rule on the trigger row), ChargeLatch (host: later of trigger and seat,
+  Cadence(Charge), Loose(share) on release; wreck / DISABLED / Stilled drops the charge), AskReloadPress +
+  RequestReloadPress RPC (FromPlayer && OwnerId), a refit seats every chamber and clears the view. Sfx.Special renamed
+  Sfx.ByName (Boss, Fx, Hub, Shots, ThrownRock); Sfx._gap rail_perfect / rail_miss; tools/make_sounds.py rows
+  perfect_tick / miss_click, header renamed; sfx/rail_perfect.wav + sfx/rail_miss.wav generated (python, no engine; the
+  other wavs byte-identical). Spent / Take / Rail have no game caller until J6 (the Sniper's Space row).
+- Checks: LaneA6cReloadJudgeChecks (new, pure: the row's ids and the leeway; 3 draws: honest in / before / after;
+  lies clamped (0.5 and 7.0 at 0.15-0.45 s), give 0.033 of 3 s and 0.05 anchored, NaN / inf on the host's clock;
+  no-leeway vs the cap's give at 0.36-0.39).
+- Next: kits6c-J6 the Sniper row + the railgun on Space (the first ActiveReload row).
+
+## Handover 3: agent 3 stops after J5 (context), at a job boundary. J6 is next; no PRE written for it.
+J6 plan (sniper_active_reload.md §2.1, §2.2 "Where it is wired", §3.6, §4.3, §5; D38, D42): Ships.cs Sniper row ->
+Fit.None, hull 240, no main_* rows, Guns / FireMode gone; rows rail_damage 120, rail_charge 0.8 (Inverse), rail_tap 40,
+rail_reload 3.0 (Inverse), rail_spot_at 40, rail_spot 20, rail_perfect 1.5, rail_range 2500, rail_width 14;
+rail_cooldown deleted (Abilities :345, PlayerShip FireRail, Stats Dps.Railgun :364-365); Damage rail_damage 6.0;
+Cycle rail_charge 1 + rail_reload 1; Dps.Railgun = rail_damage * rail_perfect / (rail_reload + rail_charge) = 47.4,
+note "180 every 3.8 s ...". Ab.Railgun -> Weapon, Hold, Space, Reload = ActiveReload.Rail, Elapsed = Seat, Loose =
+(s, share) => s.FireRail(share), no Hold 0 / Press / Expire / Refuse; Show per §4.3 (RELOAD x.xs / PERFECT / READY /
+x1.5 ROUND / CHARGE). FireRail(share): ramp = tap + (1 - tap) * share (rail_tap / 100), Charges band line, x
+ActiveReload.Take, the Lines row RailEnhanced (append to Lines.All: Fx rail_enhanced + Beam rail_enhanced, both appended at
+the END of their tables; Beam: Tint (0.92, 0.96, 1), Report laser_boss, Pitch 0.63), then ActiveReload.Spent.
+Sfx.ByName("rail_enhanced") is NOT needed: the Beam row plays it. The muzzle glint in PlayerShip._Draw when
+Sl(railgun).N == Enhanced. Kit: HeavyCannon Needs loses rail_damage (Warden only until J11); Sniper Kit = Weapon
+"heavy_railgun" (rail_damage) + a Utility part (anchor later, J8 re-points it). Hint per §4.3 and a Hints row "reload".
+HARNESS CALLERS TO REWRITE (the old F-press + `Sl("railgun").Left = 0.001` idiom): SmokeTest ~2236-2264 LaneAHoldChecks
+(the railgun lock is gone: re-point to the Anchor in J8, or to a Hold-0 row), ~2831-2855 (rail credit), ~3215-3228,
+~3599-3610, ~3946-3948 (Lines rail sheet: rail_damage 150 -> 120), ~4063-4084 (Charges bands), ~9931-9932
+(Equipment.Default(HeavySniper)[0] heavy_main_gun / [4] heavy_railgun), ~11214-11240 (Weapons rise: 9 of 150 -> 7.2 of
+120), ~11441-11466, ~11688-11697 (cruise missile), sweep witness ["railgun"] ~11894 and its reach case ~12164-12183,
+rung 5 ~15207-15217 (railgun heard on a guest), Shots.cs.txt ~819-827 (73b). Suggested helper in SmokeTest: RailFire(sn,
+hold) = seat the chamber (N = Seated, Left 0, ReloadView = default), KeyDown(Space) for Cadence(rail_charge) + 0.05 s (or
+`hold`), KeyUp, two frames. Checks owed: S1-S9 (LaneA6cReloadChecks), G1-G5 rung 5, then J7 ReloadBar + frame 73c.
+
+## kits6c-J6 · PRE (agent 4)
+- tier opus. Intent: the Sniper row (hull 240, Fit.None, rail rows per sniper_active_reload §2.1, rail_cooldown deleted,
+  Damage rail_damage 6.0, Cycle rail_charge + rail_reload, Dps.Railgun 47.4) and the railgun as its Space Hold Weapon row
+  (Reload = ActiveReload.Rail, Elapsed = Seat, Loose = FireRail(share): ramp rail_tap, x Take, Spent); cannon / FireMode /
+  F railgun / ChargeRail deleted; Beam + Fx + Lines row rail_enhanced appended; the muzzle glint; Hint + Hints row
+  `reload` (met on the owner's first reload). Harness callers of the F railgun rewritten. Checks S1-S9
+  (LaneA6cReloadChecks), rung 5 G1-G5 (LaneA6cReloadHost/Guest/Guest2Checks). HEAD c0d051db8744cba08a8829ab8e2a47f383ded2e3
+- scripts/Ships.cs 0510a149e03af43c878eff55a2ba28e417b6e3b3
+- scripts/Abilities.cs 32460bcef764e4a309f203933b0d12aad969c13e
+- scripts/PlayerShip.cs 58a6da69a45d034522052ccec92f048a92e6c1dd
+- scripts/Stats.cs 5647b134ceba80f1fb0a9cd9821010c13a5cc29b
+- scripts/Charge.cs 0eba90b277df9e1b68c1349bf22e8ced73472bb4
+- scripts/Lines.cs d418369851aa9d783b38e31e27381821f2ca85a4
+- scripts/Beam.cs 459b969f5aa0cefc8946923d8a3725f5c4b1e419
+- scripts/Fx.cs b6c50ea9d12f7134e88a076ec9ecca75faa454fd
+- scripts/Hints.cs 0686f81650d6a21218070dcfa6a69b57d830f3f9
+- scripts/Hub.cs b4599a2553c187d788643c167852b1d03880c050
+- scripts/Items.cs 522b3d7d042dc710397a399afbee4d5c634b8353
+- tools/smoketest/SmokeTest.cs.txt dbbd1d8beb26ae1800ea0c2cd7297fa6d8f38152
+- tools/screens/Shots.cs.txt e04412b7a33f00ff8d28725a841c7dfa219312ce
+## kits6c-J6 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- Built: Sniper row (Fit.None, hull 240, Hint per §4.3, Blurb; rows rail_damage 120 / rail_charge 0.8 / rail_tap 40 /
+  rail_reload 3.0 / rail_spot_at 40 / rail_spot 20 / rail_perfect 1.5 / rail_range / rail_width; rail_cooldown and the
+  main_* rows gone; Damage rail_damage 6.0; Cycle rail_charge + rail_reload; Weapons {Dps.Railgun}; Kit = Weapon
+  "heavy_railgun" only -- J8 adds the Anchor's Utility part; HeavyCannon now needs hunter_count only). Ab.Railgun = Space
+  Hold Weapon row (Reload = ActiveReload.Rail, Elapsed = Seat, Loose = FireRail(share), Show = ActiveReload.Slot);
+  Sniper Abilities {Railgun} (J8-J10 append Anchor, Tether, Flares). FireRail(share): Charges band (x Take, the
+  enhanced round down Lines.RailEnhanced) then Spent; ChargeRail deleted. Charge.cs: ChargeBand.Pct (a band's Mult read
+  from the firer's sheet, percent), Charges.At(bands, share, stat); the railgun's table = the README ruling's ramp
+  {0: rail_tap} -> {1: x1, Ramp}. Dps.Railgun = 120 x 1.5 / 3.8 = 47.4. Beam / Fx / Lines row rail_enhanced appended
+  (Beam 9, Fx 15, Lines 3). ActiveReload.Slot (the bar's words) + ActiveReload.Draw (the muzzle glint, every peer, from
+  the slot). Hints row "reload", met in Hub when the owner's view first reloads.
+- Harness rewritten (6.3): LaneAHoldChecks, F24 ROOTED, ANCHORED now go through the Anchor (helper SniperAnchor: UseAbility
+  "anchor", a second press weighs it, waits out the release) -- THEY GO LIVE ONLY WHEN J8 BUILDS row "anchor" (Hold 0,
+  F, a second press releases after anchor_release); rail credit, rung-5 railgun heard (RailFire helper: seat, Space held
+  a full charge, let go); F23 rail row 120 + NEW enhanced-row check; F7 bands (ramp 40 -> 100% read from rail_tap, 120)
+  and the fingerprint mutant on the full band; kit carriers heavy_main_gun 1; Default(HeavySniper)[0] heavy_railgun;
+  Weapons rise 7.2 of 120; sniper DPS 47.4, one line; L window row (no "Damage per shot"); sniper first shot (hull free
+  while charging, 120 on release); cruise missile (nothing while charging, then 120); sweep witness "railgun" (Trigger,
+  seated, CHARGE) and its rail_range case (the row's Loose); Beam pinned rail_enhanced 0.63; Shots 73b via Loose.
+- Checks: NEW LaneA6cReloadChecks (S1-S6, S8, S9; 3 runs); NEW rung 5 LaneA6cReloadHostWatch / HostChecks / GuestChecks
+  (G1-G3: blows 120 / 180 / 120 / 120 / 180 on dummy 1 held down the guest copy's nose); NEW frames
+  73d_sniper_enhanced_glint, 73e_sniper_enhanced_rail (LaneA6cRailFrames); the F23 enhanced-row check.
+- Owed: S7 (anchored bar) in J8's LaneA6cAnchorChecks; G4 / G5 need the host / guest / guest2 scenario (a third pilot's
+  claim refused; guest2 sees the glint and hears rail_enhanced, not rail_perfect) -- default: written in J7 or J10 if
+  the guest2 role has a window, else recorded as owed. Pre-existing stale: two `Fx.All.Length == 10` checks (~11431,
+  ~11452) already read 15 rows before this lane's 16th; not this lane's truth to rewrite (recorded, untouched).
+- Next: kits6c-J7 ReloadBar (§4) + frame 73c; then J8 Anchor (also makes the SniperAnchor callers live).
+
+## Handover 4: agent 4 stops after J6 (context), at a job boundary. J7 is next; no PRE written for it.
+Conventions kept: edits by a python exact-match script (scratchpad), harness LF preserved (newline=''); LaneA6c methods
+after LaneA6cReloadChecks / LaneA6cReload*Host/Guest (SmokeTest ~5390-5620); solo call after `await
+LaneA6cReloadChecks(yonder);` (~11800); rung-5 host watch beside reloadWatch (~15400), guest after
+LaneA6cReloadGuestChecks; frames: LaneA6cRailFrames (Shots, before LaneA6cPrismFrames) is called from the 73b block.
+J7 (ReloadBar, sniper_active_reload §4.1-4.4): a HUD Control (direct child of the HUD CanvasLayer, Hub.cs ~311-348,
+MouseFilter Ignore, 180 x 22 rect) following the owner's ship, drawn from me.ReloadView (grey track + fill, white box
+at ActiveReload.Spot, white / grey flash from View.Flash + Said, blue while Charge > 0); only when the flown class's
+TriggerOf has a Reload; add "ReloadBar" to the lint's overlap list (Shots.cs.txt ~43); frame 73c_sniper_reload_spot
+(after 73b: fire one real shot, step until the view's share is 0.5, press, snap 3 frames later) -- inside
+LaneA6cRailFrames. J8 Anchor must satisfy SniperAnchor (SmokeTest ~5399): UseAbility("anchor") drops it (Left > 0,
+Held 0), a second UseAbility weighs it (Left runs out within 60 frames, anchor_release 0.3), then write S7 there.
+
+## kits6c-J7 · PRE (agent 5)
+- tier opus. Intent: ReloadBar (sniper_active_reload §4.1-4.2, §4.4): a HUD Control (child of the HUD CanvasLayer, MouseFilter
+  Ignore, 180 x 22) following the owner's ship, drawn from ReloadView (grey track + fill, white spot box, pip, blue charge,
+  white / grey flash); shown only for a class whose Space row has a Reload, hidden on a wreck, off screen, under BASE,
+  or on the bottom HUD. Lint overlap list gains ReloadBar; frame 73c_sniper_reload_spot. Checks: LaneA6cReloadBarChecks
+  (solo), frame 73c. HEAD dc925baaa0f59961038e9bc09e27c38362a8070f
+- scripts/Hub.cs 6a4208dabff59f33d4eaf3668b96b2b291828d27
+- tools/screens/Shots.cs.txt fd8ff4a42ed49a4f11885299e3fe96f1dbec8904
+- tools/smoketest/SmokeTest.cs.txt 78985e7033206f6582e338387178e89a75c36b15
+- scripts/ReloadBar.cs (new)
+## kits6c-J7 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: scripts/ReloadBar.cs (a HUD Control on the HUD layer, added in Hub beside AbilityBar; follows the owner's ship,
+  top Drop = hull half-length x zoom + 20 below its centre; draws §4.2 from ReloadView and the slot's chamber; shown
+  while reloading / charging / enhanced waiting / < 0.6 s after the seat; hidden for a class whose trigger row has no
+  Reload, on a wreck, off screen, under BASE, or meeting HullHud / AbilityBar). Shots lint overlap list gains ReloadBar.
+- Checks: NEW LaneA6cReloadBarChecks (pure Drop at 3 zooms + Wanted; 3 varied runs: size, place, HUD clear, linger /
+  gone around 0.6 s, enhanced waiting; a Warrior holding Space never shows it); NEW frame 73c_sniper_reload_spot
+  (inside LaneA6cRailFrames, before 73d).
+- Next: kits6c-J8 Anchor (satisfy SniperAnchor; S7 in LaneA6cAnchorChecks).
+
+## kits6c-J8 · PRE
+- tier opus. Intent: the Anchor (D50) as a STANCE row: StanceSpec gains Release (a second press lets it go after that
+  stat's seconds, not at once) and Keeps (another ability leaves it running); Holds may be Status.None. AbilityDef gains
+  ReachStat (a running row lifts reach, Lift.Reach, PlayerShip.ReachMult; the ramp stays on speed / strafe only); the
+  rail reads rail_range x ReachMult. Sniper rows anchor_time 8 / anchor_rate 2.5 / anchor_reach 1.4 / anchor_release 0.3
+  / anchor_cooldown 12; Utility kit part sniper_anchor; Items @duration + anchor_time; Abilities {Railgun, Anchor}.
+  Old truth (6.3): weapon-rows list gains railgun, the walls kit swaps Ab.Railgun (a Weapon since J6) for Ab.Anchor.
+  Checks LaneA6cAnchorChecks (S7 included), rung 5 LaneA6cAnchorGuestChecks. HEAD 2fa13b1a702b434a44723a2ac2c8f61eee27dc64
+- scripts/Abilities.cs 81e3cee470f26833973805613ab80900fe83e16f
+- scripts/PlayerShip.cs 0c5d90edf136f69a254970532cd68cff6c000108
+- scripts/Ships.cs 9cabd4386e0c9bfdcdcbb81e34b924b1c926a3bc
+- scripts/Items.cs 522b3d7d042dc710397a399afbee4d5c634b8353
+- tools/smoketest/SmokeTest.cs.txt 2d5975e3bb2dcadab05722dc3859c8c0f59cf142
+## kits6c-J8 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: Ab.Anchor (F) = a STANCE row (StanceSpec + Release "anchor_release", Keeps, Holds None), Hold 0, RateStat anchor_rate,
+  ReachStat anchor_reach; AbilityDef.ReachStat + PlayerShip.ReachMult (Lift.Reach; the ramp now names speed / strafe);
+  FireRail reach = rail_range x ReachMult; PlayerShip.Stance cuts Left to the Release on a second press; the stance-ending
+  loop skips Keeps rows; Split only reads a stance that names Splits. Sniper rows anchor_time 8 / anchor_rate 2.5 /
+  anchor_reach 1.4 / anchor_release 0.3 / anchor_cooldown 12; kit part sniper_anchor (Utility, anchor_time); Items
+  @duration + anchor_time; Sniper Abilities {Railgun, Anchor}. SniperAnchor's three callers (LaneAHoldChecks, F24 ROOTED,
+  ANCHORED) now have their row.
+- D53 (default): anchored the hull cannot turn either (Hold 0 roots the heading, v1 "rooted"; D50).
+- Checks: NEW LaneA6cAnchorChecks (rows; 3 runs: the earlier reload keeps 3.0; W+Shift+D 2 s rooted; V ANCHORED; S7 reload
+  1.2 / spot 0.48-0.72 / charge 0.32 / perfect or missed press; reach 3500 vs 2500; release 0.3 or the 8 s cap; cooldown
+  12 + COOLING); NEW rung 5 LaneA6cAnchorGuestChecks; REWRITTEN (6.3, stale since J6) the weapon-rows list (+ railgun)
+  and the walls kit (Ab.Railgun -> Ab.Anchor, still opens at 6).
+- Owed: the Anchor kept through the flares / tether presses (J9 / J10 write it).
+- Next: kits6c-J9 Zones foundation + Tether mine.
+
+## Handover 5: agent 5 stops after J8 (context), at a job boundary. J9 is next; no PRE written for it.
+J9 pointers (read before the PRE): the pattern to copy is Decoys.cs (a DecoyDef table + a DecoySalvo node + Decoys.Tick
+from Hub ~1651 under Net.IsHost) and its Spawns row (Spawned.cs ~112-160: Spawns.Decoy = 3, Space NetIds.Decoy; Seed N /
+A / B = row / thrower rotation / age; Hub.Flares ~1348 spawns it; Hub.Salvos ~1214 reads the live set). NetIds spaces in
+scripts/Ids.cs:12 (append `Zone = 60000`, width 1000, at the END; the merge renumbers a collision). Spawns: append
+`Zone = 4` + its row. The seed has only N (int), A, B (double): a guest must draw the zone from the ROW, so the drawn
+geometry is the row's own (literal base u); if an @area item should reach it, one way is N = row + 16 x (area share in
+percent, read from the owner's sheet on the host) -- default: geometry literal in the row, the host-only numbers (time,
+arm, damage, hold) read from the owner's stat rows at the drop (kept on the host's node; the host Downs it at its end).
+D44 / D45 hold the rows (tether: 170 u, arms 0.5 s, the first Light|Heavy raider in reach sets it off, every raider in
+170 u Disabled 3 s, never a boss; 2 charges of 12 s each, at most 2 out, the oldest goes; Q, dropped at the stern).
+Charges: grep an existing charged ability (Sl.N as a count) before inventing one. The Sniper's list becomes {Railgun,
+Anchor, Tether} (ability 2, L3); its kit / Items lists take tether_* ids (D42). J9 also owes: the Anchor KEPT through a
+tether press (Stance.Keeps), one line in LaneA6cTetherChecks. Harness: LaneA6c methods go after LaneA6cAnchorChecks
+(SmokeTest, before LaneA6cAnchorGuestChecks); solo call after `await LaneA6cAnchorChecks(yonder);`; rung-5 guest call
+after `await LaneA6cAnchorGuestChecks();`. Edits: a python exact-match script in the scratchpad (heredocs with quotes
+break the bash tool; write the script with the Write tool), SmokeTest.cs.txt LF (newline='').
+
+## kits6c-J9 · PRE (agent 6)
+- tier opus. Intent: Zones foundation (D44/D45): new scripts/Zones.cs (ZoneDef table + pure Inside + host Tick + ZoneNode
+  drawn on every peer), Spawns row `Zone` (appended, 4) + NetIds.Zone 60000 (appended), Hub.Zones / Hub.Lay + Zones.Tick;
+  row `tether` (170 u disc, arms 0.5 s, geometry literal on the row; the hold read from the owner's tether_hold at the drop);
+  AbilityDef.Charges / Recharge (a charged row: N spent, one recharging at a time); Ab.Tether (Q, dropped astern);
+  Targeting.Raiding; Sniper rows tether_charges 2 / tether_recharge 12 / tether_hold 3 / tether_most 2; Items @duration
+  + tether_hold; Sniper Abilities {Railgun, Anchor, Tether}. Checks LaneA6cZoneChecks (pure), LaneA6cTetherChecks
+  (169 / 171 u, 3 s hold, boss ignored, charges, recharge, the oldest goes, the Anchor kept), frame 73e_tether_mine.
+  HEAD 0e6138bd54375b8c0145aba4f6d796c4f04eec94
+- scripts/Abilities.cs b6ed93df62e429ea74a8adae8d97f4ff26552a9e
+- scripts/PlayerShip.cs 462c7b56b412d78dd845b8e994d4c15b4b881a23
+- scripts/Ships.cs 5fb399719e97fb93149e4703be71242826a632df
+- scripts/Items.cs 2f0ee2c2c4a3eb024750986ea64d9b2b3a1eb29d
+- scripts/Spawned.cs 33e138055ef12f5bd1dca0b6b0291d115f903c60
+- scripts/Ids.cs 6bf752b43e1b3fc23733ac4dafe10d169a2d77b5
+- scripts/Hub.cs 6cc0e937fb8337da6537c1fcbe4a85f979e599c6
+- scripts/Targeting.cs 68d6620199d90187f05dea54f6fb4dab78de327c
+- tools/smoketest/SmokeTest.cs.txt f48baa06f39ca50c10ea703bf0ef3eccfd3b03e3
+- tools/screens/Shots.cs.txt af566f79a087e46b6a881beb45286fe872ef3f57
+- scripts/Zones.cs (new)
+## kits6c-J9 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: scripts/Zones.cs (ZoneDef table: Id, Reach, Arm, Prey, Holds, HoldFor, Most, Tint; pure Inside; host Lay (oldest goes past
+  Most) and Tick (an armed zone with prey inside holds every prey inside, then Down with a burst); ZoneNode drawn on every peer);
+  Spawns.Zone = 4 + row, NetIds.Zone = 60000 (both appended); Hub.Laid + Zones.Tick beside Decoys.Tick; Targeting.Raiding
+  (Light|Heavy, never Boss/Dummy/Missile/Hulled); AbilityDef.Charges / Recharge (N = spent, one recharging at a time: PlayerShip.Spend
+  + TickAbilities) and AbilityDef.Lays (PlayerShip.Lay, at the stern); Ab.Tether (Q); Sniper rows tether_charges 2 /
+  tether_recharge 12 / tether_hold 3 / tether_most 2; Items @duration + tether_hold; Abilities {Railgun, Anchor, Tether}; hint.
+- D54 (default): the zone's geometry (Reach 170, Arm 0.5) is literal on its row (every peer draws it from the seed), so @area
+  items do not reach the tether's 170 u; its hold (tether_hold) is the owner's stat, read at the lay (@duration reaches it).
+- D55 (default): a mine lasts until it goes off or a third is laid (no lifetime: nothing in the spec gives one).
+- Checks: NEW LaneA6cZoneChecks (pure, 3 runs), NEW LaneA6cTetherChecks (3 runs; the Anchor KEPT through Q in runs 1-2),
+  NEW frame 73f_sniper_tether_mine (LaneA6cTetherFrames, after LaneA6cRailFrames). No guest check: the tether is not on
+  kits_v31 §8's rung-5 list; the frame is its third check.
+- Next: kits6c-J10 Flares ability.
+
+## kits6c-J10 · PRE
+- tier opus. Intent: the Flares (D51) as a row: AbilityDef.Pops (a Decoys.All row popped round the hull, PlayerShip.Pop) +
+  AbilityDef.Cooldown (the stat a Pops press sets); Ab.Flares (E, flare_cooldown 16, only COOLING refuses); Sniper row flare_cooldown;
+  Abilities {Railgun, Anchor, Tether, Flares}; hint. Checks LaneA6cFlaresChecks (3 runs, runs 1-2 anchored: the salvo at the hull
+  through E, 16 s, COOLING, seeker lured, mark moved, webifier dazzled, the pilot takes 0, the Anchor kept), frame
+  73g_sniper_flares_key (LaneA6cFlaresFrames), rung 5 LaneA6cFlaresGuestChecks. HEAD 0c33841e8f027ca22af095025dbb6992e85edf44
+- scripts/Abilities.cs 3c85864b9d7ae08008dcd7f79878151056a24c5b
+- scripts/PlayerShip.cs e203a8eacc30d3d61ab290cd2292bb5b3df85a2d
+- scripts/Ships.cs 7cbbc6bb731a6090c4a3fb7a08e0143ab5c2ba3a
+- tools/smoketest/SmokeTest.cs.txt 0c5c83cfb875dd53dbcbe53cb3759e28c91bac1c
+- tools/screens/Shots.cs.txt 3e4158ca3c8c4857e767c0456fdb353400ab311b
+## kits6c-J10 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: AbilityDef.Pops (a Decoys.All row) + AbilityDef.Cooldown (its stat); PlayerShip.Pop (host: the cooldown, then
+  Hub.Flares at the hull); Ab.Flares (E, only COOLING refuses, Keeps the Anchor through Stance.Keeps); Sniper row
+  flare_cooldown 16; Abilities {Railgun, Anchor, Tether, Flares} (ability 3 at L6); hint.
+- Checks: NEW LaneA6cFlaresChecks (3 runs, 1-2 anchored), NEW rung 5 LaneA6cFlaresGuestChecks (after the Anchor's; waits the
+  salvo out so LaneADecoyGuestChecks reads the host's own), NEW frame 73g_sniper_flares_key (LaneA6cFlaresFrames).
+- Risk (test phase): the guest joins at Character.Level 2; ability 3 opens at L6 -- LaneA6cPrismGuestChecks (J4) already
+  presses an ability 3 there, so both stand or fall on the guest's Peak. If LOCKED, raise the guest's peak for those two.
+- Next: kits6c-J11 Warden row + Proximity flak.
+
+## kits6c-J11 · PRE
+- tier opus. Intent: the Warden row (D40, D43; D56 below): hull 270, the main gun fires ClassDef.Shot = the appended Shots row
+  flak (ShotDef.Fuse 70 u off a hostile's hull or at its range: every hostile within Fuse of the burst takes the round,
+  x ResistShare 0.75 on a Resists = Boss tag), 22.5 every 0.5 s (45 DPS), 700 u; the kit part renamed (id kept);
+  SeekerPrey ordered latched first, then nearest. Old truth (6.3): ChipChecks' warden 140 -> 270, the warden's sheet
+  DPS, and the ability sweep (witnesses anchor / tether / flares, a stance with a Release, the laid mines and salvos
+  put back). Checks LaneA6cFlakChecks, LaneA6cHunterPreyChecks. HEAD 919e1b8aed38f65f295166b81dcac498b346b714
+- scripts/Shots.cs 43f16380ff327ca82212d02de7a66ec73e61e0cd
+- scripts/Ships.cs bc23b9634fb8a6db43d934d51cf112d62b6c4908
+- scripts/PlayerShip.cs d19a239e05ca5c8e12d41a6ee91b2ee2c605f6b9
+- tools/smoketest/SmokeTest.cs.txt 0c4e5a294d10a20de2c2fa5847e100f75f8967b5
+## kits6c-J11 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: ShotDef.Fuse / Resists / ResistShare + Shot.Fused / Burst (a fused round bursts 70 u off a hostile hull or at its
+  range; everything within the fuse takes it, x0.75 on Tag.Boss); Shots row flak = 8 (appended); ClassDef.Shot (Spec's Kind);
+  Warden hull 270, main 22.5 / 0.5 s / 700 u (45 DPS), Shot = Flak, level damage 1.125; the kit part heavy_main_gun renamed
+  "Mk I Flak Battery" (id kept: saves); SeekerPrey ordered latched first (ISquadMember.Latched), then nearest.
+- D56 (default): the Warden keeps its Guns + FireMode rows (Fit.Guns brings both, the fit sweep's rule; every one-mount
+  light keeps FireMode too); the primary IS the Guns row firing the class's Shot row. D42's "FireMode deleted" is not built.
+- Checks: NEW LaneA6cFlakChecks, NEW LaneA6cHunterPreyChecks. REWRITTEN (6.3): ChipChecks warden 140 -> 270; the warden's
+  SustainedDps 12/0.6 -> 22.5/0.5; the ability sweep: witnesses anchor / tether / flares (J8-J10's rows had none: the
+  coverage check would have failed), the second-press rule for a stance with a Release (the anchor's 0.3 s), laid mines and
+  salvos put back; the kit-part message.
+- Next: kits6c-J12 Taunt.
+
+## kits6c-J12 · PRE
+- tier opus. Intent: the Taunt (D52): Ab.Taunt (Q, ability 2) -> PlayerShip.Taunt (host: every raider squad with a member within
+  taunt_reach 1000 or hunting a target within it is Called 6 s; Hardened 6 s at taunt_guard 0.67; Fx.TauntRing); ICalled
+  (Squads.cs) on Raider; PlayerShip.Outgoing x taunt_mult 1.5 on a craft this ship called; Warden rows taunt_*; Items
+  @duration + taunt_time, @area + taunt_reach; the sweep's witness. Checks LaneA6cTauntChecks, frame 82c_taunt_pressed
+  (LaneA6cTauntFrames; 82_taunt_shimmer goes live on its own), rung 5 LaneA6cTauntGuestChecks. HEAD 5216caaf428c6e2001a951f28ad365ae8d900852
+- scripts/Abilities.cs 1369b5e006aeeaa8f00ae5dddfb3c3035107c67c
+- scripts/PlayerShip.cs cc487f418c4b04d63ad79fdd513100913a573e3f
+- scripts/Ships.cs b313f0b15d1383ec17c333ea0e2eda4dd25927d1
+- scripts/Items.cs e855cb19e81b50698502357350e94144e10cc7d6
+- scripts/Squads.cs d09edfc48b645789217dc26bf9255e914a6f653d
+- scripts/Raider.cs 80c5232b0031d7a4a6d753a8c9403817ad7f1b67
+- tools/smoketest/SmokeTest.cs.txt 8c545f449a09cd4f6ff94df834b24300f988517c
+- tools/screens/Shots.cs.txt 03e3445c5070853a3ed787faf4f6a4387eddcc42
+## kits6c-J12 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: Ab.Taunt (Q, Warden ability 2); PlayerShip.Taunt (host: calls every Targeting.Raiding raider within taunt_reach or hunting a
+  target within it for taunt_time; Hardened at taunt_guard; Fx.TauntRing); ICalled (Squads.cs) on Raider; Outgoing x taunt_mult on a
+  craft this ship called (0 = none on other sheets); Warden rows taunt_time 6 / reach 1000 / mult 1.5 / guard 0.67 / cooldown 20;
+  Items @duration + taunt_time, @area + taunt_reach; hint. Frame 82_taunt_shimmer now has an owner (it printed "shot skipped").
+- D57 (default, owed): "standoff heavies treat the Warden as pinned and boost in at once" and "emplacement guns prefer it" are NOT
+  built -- Raider.cs's commit / pinned logic and Emplacements.cs have no Prefer hook; both are other lanes' files. The call
+  itself (they turn for the Warden) is built.
+- Checks: NEW LaneA6cTauntChecks (3 runs), NEW rung 5 LaneA6cTauntGuestChecks, NEW frame 82c_taunt_pressed (LaneA6cTauntFrames,
+  after 83b), NEW sweep witness "taunt".
+- Next: kits6c-J13 Flak curtain.
+
+## kits6c-J13 · PRE
+- tier opus. Intent: the Flak curtain (D44) as a Zones row: ZoneDef gains Length (a bar: a capsule), Life, Touch (a hull, not a
+  centre), First / Tick / Every (stat ids: damage on the first touch, then every Every, through Dealt with the row's id), Near /
+  Far (laid at the cursor clamped, across the aim; 0 = the stern); Zones.Lay reads the layer's sheet; PlayerShip.Spend also
+  takes a Cooldown row (Pop uses it); Ab.Curtain (E, ability 3); Warden rows curtain_first 20 / tick 10 / every 0.5 /
+  cooldown 18. Checks LaneA6cCurtainChecks (+ the pure bar in LaneA6cZoneChecks, rewritten for Inside's rotation), frame
+  82d_flak_curtain (LaneA6cCurtainFrames), rung 5 LaneA6cCurtainGuestChecks, sweep witness. HEAD 68ccceedee7e47d39ff9608b825827c83092fa9a
+- scripts/Zones.cs d655c06f0fc16ebc5fcce2e948801ba6c900a755
+- scripts/Abilities.cs 308b108dfb8e1781c8f70177477c4524da67fac1
+- scripts/PlayerShip.cs 1d4a4c2df00c73cfb006602cfdfb793b0e4ba2a8
+- scripts/Ships.cs 511c4f78c390d98accc834dde2488638865e2c0a
+- tools/smoketest/SmokeTest.cs.txt ab5552acc30b0be01e914da03af047a15b102f6c
+- tools/screens/Shots.cs.txt 6a5e681970ad04bc664d260054c42fb835f8734c
+## kits6c-J13 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: ZoneDef gains Length (a bar), Touch, Life, First / Tick / Every, Near / Far; Zones.Nearest / Inside(d, at, rot, p) /
+  Takes / Spot (stern or clamped cursor, bar across the aim); Zones.Lay reads the layer's sheet (PlayerShip passed); Tick expires
+  by Life and strikes a field on each body's own clock (ZoneNode.Next, cleared in _ExitTree), credit the row id through Dealt
+  (so the Taunt's x1.5 applies); the bar drawn with five flickering bursts. Row curtain = 1 (appended): 500 x 80, 0.5 s, 6 s,
+  150-700 u, Raiding prey. PlayerShip.Spend takes a Cooldown row too (Pop uses it); Ab.Curtain (E, Warden ability 3); Warden
+  rows curtain_first 20 / tick 10 / every 0.5 / cooldown 18.
+- D58 (default): the curtain's geometry and times are literal on its row (drawn on every peer); its damage and cooldown are the
+  Warden's stats. A body that leaves and re-enters keeps its clock (no second First).
+- Checks: NEW LaneA6cCurtainChecks (3 runs; run 2 taunted: 30 / 15), NEW rung 5 LaneA6cCurtainGuestChecks, NEW frame
+  82d_flak_curtain (LaneA6cCurtainFrames), NEW sweep witness "curtain"; REWRITTEN LaneA6cZoneChecks (Inside takes the rotation;
+  the bar's side and cap proved beside the disc).
+- Next: kits6c-J14 Record.
+
+## kits6c-J14 · PRE
+- tier opus. Intent: the record -- CHANGES.md Handoff + Unreleased + the default-keys table rows for the three heavies, DESIGN.md
+  slice-6c section; the final POST (what the test phase owes). HEAD 8c92c222762f885031b6f8ccf632d9d544824aaa
+- docs/CHANGES.md b8ea2883874cf4ebd42121c6f7c55c4b78bd8352
+- docs/DESIGN.md e6fb2469d75ea399dc4059850553a2dd237d2aa5
+## kits6c-J14 · POST (the lane's final)
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: CHANGES.md Handoff + Unreleased entry + the three heavies' rows in the default-keys table; DESIGN.md "slice 6c" section.
+- THE TEST PHASE OWES (chain `quick,solo,solo,six,six,screens`):
+  - rung 3 x2: LaneA6cBlade / Lunge / Whirl / PrismStance / ReloadJudge / Reload / ReloadBar / Anchor / Zone / Tether / Flares /
+    Flak / HunterPrey / Taunt / Curtain checks; the rewritten ability sweep (witnesses anchor, tether, flares, taunt, curtain;
+    the Release rule), ChipChecks (warden 270), the warden's SustainedDps, the weapon-rows list, the walls kit.
+  - rung 4: frames 73c (the reload bar: one look by eye), 73f, 73g, 82 (now owned), 82c, 82d, the prism frames.
+  - rung 5 x2: LaneA6cLunge / Prism / Reload / Anchor / Flares / Taunt / Curtain guest checks. G4 / G5 (guest2) not written.
+- Owed / not built: D57 (Taunt: heavies boost in, emplacements prefer); @area items do not reach the tether / curtain (D54,
+  D58); two stale `Fx.All.Length == 10` checks pre-date this lane (version-l red at rung 3 already).
+- Merge risks: Spawns.Zone = 4, NetIds.Zone, Shots.Flak = 8, Zones rows, ICalled on Raider (one line in Raider.cs),
+  AbilityDef.{Charges, Recharge, Lays, Pops, Cooldown, ReachStat}, StanceSpec.{Release, Keeps}, ClassDef.Shot, Hub (Laid,
+  Zones.Tick, ReloadBar child), the ability sweep's witness table, Items @duration / @area lists.
+
+## kits6c-J15 · PRE (kits6c gate fix)
+- tier opus. Intent: the opus merge gate's six findings, exactly: (1) LaneA6cLungeChecks part 2, a lunge with Shift+A/D held
+  (3 runs, side varied): 420 +-5 along the nose, < 5 sideways; (2) part 3, the lunge as a web-breaker: Pinned by a latched
+  webifier, E carries 420 u and the pin is gone within 0.3 s of the dash's end; (3) NEW LaneA6cTauntLatchChecks: a webifier
+  LATCHED on a Drop'd sentry lets go within 0.25 s of the guard showing, then CalledBy == Target == the Warden, plus the slot
+  line on each press; (4) D57's emplacement half built: AbilityDef.Draws (a running row that draws the hostile guns; the
+  Taunt), IRaidTarget.Draws (false by default; PlayerShip: any running Draws row), Emplacement.Prefer (the nearest drawing
+  pilot in its gun's reach) read first by its gun's choice; NEW LaneA6cTauntEmplacementChecks (3 varied placements);
+  (5) the Taunt's slot reads "TAUNT 5.9s  -33%" while it runs; (6) the Whirlwind's press comment moved above Whirl().
+  Records: CHANGES.md Known broken + DESIGN.md slice 6c (D57 now only the heavies' boost-in).
+- HEAD 6d6ba0de6636040fe8f5647dca1ffeeeece70903
+- scripts/Abilities.cs b7e7297d6159d58d5a75aea9a1b1bb91ee63c149
+- scripts/PlayerShip.cs 2ce3bedabb02b678f8939493d47f74d3d04f15a8
+- scripts/Emplacements.cs 9e91e950912d5c59960179fa30d503a8e4500e2b
+- scripts/ShipClasses.cs bfd8d210c94136bc6b853ba91969d59064ecdd78
+- tools/smoketest/SmokeTest.cs.txt a6c160e309a198cd713857c33346ffb4349f4217
+- scripts/Turrets.cs 28741b6301656d9c9714467a9f255a3306b2737f
+- docs/DESIGN.md 9c1b4f899be9d263dc686b4d19cc57f89d0e644c
+- docs/CHANGES.md 420516338ad798c98ac17ae2b2a1b8074d60b45f
+## kits6c-J15 · POST (kits6c gate fix)
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: AbilityDef.Draws (Taunt true); IRaidTarget.Draws (default false; PlayerShip: any running Draws row of its class);
+  Emplacement.Prefer (nearest drawing pilot, Attackable, in its gun's Range), read first in its _Process prey choice;
+  the Taunt's slot "TAUNT {Left:0.0}s  -{(1-taunt_guard)*100:0}%" lit while it runs; blurb names the emplacements;
+  the Whirlwind's press comment above Whirl(); ITurretHost.Prefer's comment says why the emplacement's mount never reads it.
+- D57 narrowed: only "standoff heavies boost in" stays unbuilt (Raider.cs, another lane's file); CHANGES Known broken +
+  DESIGN slice 6c say so.
+- Checks: REWRITTEN LaneA6cLungeChecks (+ part 2: Shift+A/D held, 3 runs; + part 3: Pinned by a latched webifier, 3 runs),
+  NEW LaneA6cTauntLatchChecks (3 runs: latched webber lets go <= 0.25 s, called; the slot line x2 per run),
+  NEW LaneA6cTauntEmplacementChecks (3 placements, a seat-2 PlayerShip as the nearer pilot; run 3 out of reach).
+  The test phase owes them at rung 3 x2 (chain quick,solo,solo). No guest check (the choice is the host's; the warning
+  lane's wire is unchanged).
+- Next: none (lane's gate fix done).

@@ -482,7 +482,7 @@ public partial class Yard : Node2D
         _scrapClock = 0;
         var id = _scrap[0]; _scrap.RemoveAt(0);
         var it = Equipment.ById(id);
-        double paid = Economy.ScrapValue(it?.Rarity ?? Rarity.Common);
+        double paid = Tiers.Scrap(it?.Tier ?? 1);
         const string res = "salvage";
         if (_parked) _ownStock[res] = _ownStock.GetValueOrDefault(res) + paid; else SetStock(res, Stock(res) + paid);
         Character.Save();

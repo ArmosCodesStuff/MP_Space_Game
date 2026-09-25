@@ -59,6 +59,7 @@ public sealed class MissileSide
     public Func<Hub, IEnumerable<Node2D>> Pool;
     public TargetFilter Prey;
     public Action<Node2D, double, Vector2, string> Land;
+    public bool Decoyable;                                   // a decoy may pull its mark aside (Decoys.cs)
 }
 
 public static class Missiles
@@ -80,7 +81,7 @@ public static class Missiles
         new() { Id = "heavy", Mark = Fx.WarnZone,
                 Body = new Color(0.45f, 0.30f, 0.28f), Nose = new Color(1f, 0.30f, 0.25f),
                 Glow = new Color(1f, 0.60f, 0.30f),
-                Pool = h => h.RaiderTargets(), Prey = Targeting.Attackable,
+                Pool = h => h.RaiderTargets(), Prey = Targeting.Attackable, Decoyable = true,
                 Land = (n, d, at, src) => (n as IRaidTarget)?.Hit(d, at, src) },
 
         // AN OUTPOST'S (Lanes.cs). The same missile from the other side: it looks through the
@@ -143,6 +144,12 @@ public partial class MissileVisual : Node2D
     private MissileSide Def => Missiles.Of(Side);
 
     public override void _Ready() { Position = From; Rotation = Aim.Face(From, To); ZIndex = 6; }
+    // PULLED ASIDE by a decoy (Hub.NetDecoy): the rest of its flight goes to the new point.
+    public void Retarget(Vector2 to)
+    {
+        From = Position; To = to; Flight = Math.Max(1e-3, Flight - _t); _t = 0;
+        Rotation = Aim.Face(From, To);
+    }
 
     public override void _Process(double delta)
     {

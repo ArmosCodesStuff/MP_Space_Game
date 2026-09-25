@@ -200,3 +200,15 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
 - Default taken (deviation from the gate's suggested picks): the host's hull and the guest's turrets are not in
   Combat.Hostiles, which is all Combat.ById reads, so they would be dropped on every run; the practice hulks are.
 - Checkpoint: the commit after this entry. Slice 4 gate 2 fix complete.
+
+## kits4-MERGE (version-l into wt/kits4) -- PRE
+- tier: merge. intent: take version-l (615f4dd9b998ae3a15ab34f3e22e2459202adede: kits 5, 6c, items and the other merged lanes) into the lane before its own merge. HEAD fe80f2f819883957b16f20e5e8c04842307492a9.
+- conflicted: docs/CHANGES.md, scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt.
+
+## kits4-MERGE -- POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. No engine run (build phase).
+- scripts/PlayerShip.cs: DoAbility keeps both -- the point/picks written first (F8), then 6c's stance end and Press with the one target; TickAbilities keeps the wreck ending the helm move AND 6c's _afterDrive count-down; LocalFlight: a helm move flies first, else a dash carries (DashCarry), else Steer.
+- tools/smoketest/SmokeTest.cs.txt: the run list keeps both (LaneA4* and ItemsDoorChecks); the railgun, blade_reach and deploy_range sweep cases take version-l's rewritten bodies (kits4 had only moved their DoAbility calls to the 4-argument form; the new bodies do not call DoAbility); the arena guest keeps LaneADecoyGuestChecks then LaneA4GuestPointPress (which presses the bubble F in place of the plain press). Every remaining DoAbility reflection call passes 4 arguments.
+- docs/CHANGES.md: Handoff and Unreleased keep both sides (kits4's entry first).
+- wire: no enum value, id or slot index taken by both; kits4 adds only HelmEnd (new) and the RequestAbility point/picks arguments.
+- next: merge wt/kits4 into version-l.

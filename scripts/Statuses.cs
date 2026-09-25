@@ -8,9 +8,8 @@ using System.Collections.Generic;
 // THE HOST DECIDES. A guest counts nothing down: it is sent the bits (PlayerShip's state) and
 // shows them. A status with no time left is simply absent.
 // THESE VALUES ARE THE WIRE FORMAT (StatusSet.Bits). Never renumber one that is here.
-// The next status that a guest must see takes 32, and 32 is free: Shielded held it, was declared
-// "a pool absorbs damage before the hull", and was never set, read or implemented by anything --
-// the only such pool is the freighter's bubble, which is Sl("bubble") and PlayerShip.ThroughBubbles.
+// 32 is Parrying (F11): every peer draws a prism stance from it. (Shielded held 32 once and was never
+// set, read or implemented by anything; the only such pool is the freighter's bubble.)
 // 64 and up are HOST-ONLY (StatusSet.HostOnly): the host resolves them and no packet carries them.
 [System.Flags]
 public enum Status
@@ -23,9 +22,11 @@ public enum Status
     Untargetable = 4,    // nothing hostile may choose it (stealth)
     Hardened = 8,        // taking less: by the share its applier gave (StatusSet.Apply), else the row's
     Evading = 16,        // the next hits miss outright
+    Parrying = 32,       // a prism stance is up: light caught off its guard is split, rounds reflected (Prism.cs; on the wire)
     Suppressed = 64,     // its guns weakened, its throws held (StatusSet.OutGuards; host-only)
     Dazzled = 128,       // blinded: its throws held (StatusSet.OutGuards; host-only; never on a boss)
     Jammed = 256,        // its guns silenced, its throws held (StatusSet.OutGuards; host-only; never on a boss)
+    Unwebbed = 512,      // no web can take it: a pin asked of it is refused (the whirlwind; PlayerShip.ApplyStatus; host-only)
 }
 
 // WHICH OF A HOSTILE'S BLOWS the outgoing door is scaling (StatusSet.Out): a gun of a craft or a
@@ -43,12 +44,14 @@ public struct OutGuard
     public Status Status;
     public double Gun, Move, Super;
     public bool HoldsThrow;
+    public bool BlocksLatch;      // a raider carrying it takes no NEW latch (kits_v2 F17: Dazzled, Jammed)
+    public bool DropsLatch;       // ...and lets go of the one it holds (Jammed)
     public Tag Spares;
 }
 
 // WHAT A STATUS DOES TO A BLOW, as a row. PlayerShip.Guarded walks this table. THE SHARE COMES
-// FROM WHOEVER APPLIED THE STATUS (StatusSet.Apply's share: the warrior's rush gives its own
-// rush_guard row, a taunt gives 0.67), and the row's Share is only the default for an applier
+// FROM WHOEVER APPLIED THE STATUS (StatusSet.Apply's share: a taunt gives its own taunt_guard
+// row, 0.67), and the row's Share is only the default for an applier
 // that named none, so a hardening from any class carries that class's own figure.
 // A NEW ROW: the status, and the share a blow is multiplied by when the applier named none.
 public struct StatusGuard
@@ -76,11 +79,11 @@ public struct StatusSet
     public static readonly OutGuard[] OutGuards =
     {
         new() { Status = Status.Suppressed, Gun = 0.5, Move = 0.7, Super = 1.0, HoldsThrow = true },
-        new() { Status = Status.Dazzled,    Gun = 1.0, Move = 1.0, Super = 1.0, HoldsThrow = true, Spares = Tag.Boss },
-        new() { Status = Status.Jammed,     Gun = 0.0, Move = 1.0, Super = 1.0, HoldsThrow = true, Spares = Tag.Boss },
+        new() { Status = Status.Dazzled,    Gun = 1.0, Move = 1.0, Super = 1.0, HoldsThrow = true, BlocksLatch = true, Spares = Tag.Boss },
+        new() { Status = Status.Jammed,     Gun = 0.0, Move = 1.0, Super = 1.0, HoldsThrow = true, BlocksLatch = true, DropsLatch = true, Spares = Tag.Boss },
     };
     // never on the wire: the host resolves them, and a guest has nothing that reads them
-    public const Status HostOnly = Status.Suppressed | Status.Dazzled | Status.Jammed;
+    public const Status HostOnly = Status.Suppressed | Status.Dazzled | Status.Jammed | Status.Unwebbed;
 
     // WHETHER A STATUS CAN BE PUT ON A THING OF THESE TAGS at all: no OutGuards row spares it
     public static bool Reaches(Status s, Tag on)
@@ -98,14 +101,16 @@ public struct StatusSet
         return d;
     }
     // ...and whether a launcher carrying them must hold its throw
-    public bool HoldsThrow
+    public bool HoldsThrow => Any(g => g.HoldsThrow);
+
+    // ...and whether a raider carrying them may take a new latch, or keep the one it has
+    public bool BlocksLatch => Any(g => g.BlocksLatch);
+    public bool DropsLatch => Any(g => g.DropsLatch);
+    private bool Any(System.Func<OutGuard, bool> row)
     {
-        get
-        {
-            if (_left == null) return false;
-            foreach (var g in OutGuards) if (g.HoldsThrow && Has(g.Status)) return true;
-            return false;
-        }
+        if (_left == null) return false;
+        foreach (var g in OutGuards) if (row(g) && Has(g.Status)) return true;
+        return false;
     }
 
     private Dictionary<Status, double> _left;

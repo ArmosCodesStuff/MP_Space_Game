@@ -130,6 +130,8 @@ public class ClassDef
     // follows from its sheet by that same rule (Equipment.Fits).
     public ItemDef[] Kit = Array.Empty<ItemDef>();
     public AbilityDef[] Abilities = Array.Empty<AbilityDef>();
+    // WHAT ITS MAIN GUNS FIRE: a row of Shots.All (PlayerShip.Spec). A shell, unless the class says (the Warden's flak).
+    public int Shot = Shots.Shell;
     // WHAT V DOES: one row of Drives.All (the warp on the capitals, the boost on the nine). Not in
     // Abilities: Abilities.For appends it after them, so it has a slot and no level wall.
     public DriveDef Drive;
@@ -142,13 +144,13 @@ public static class Classes
     // THE MOUNTS MORE THAN ONE HULL IS BORN WITH -- one ItemDef each, fitted to every hull that
     // carries it below. A part fits the hulls whose SIGNATURE row it names (ItemDef.Needs), so a
     // shared mount names one id per hull: the cargo gun the three freighters' three systems, the
-    // light cannon the sniper's railgun and the warden's hunters, the dart cannon the three
+    // light cannon the warden's hunters, the dart cannon the three
     // lights'. Written above All because static fields start in the order they are written, and
     // All is what fits them.
     private static readonly ItemDef CargoGun = ItemDef.Own(GearSlot.Weapon, "freight_main_gun", "Mk I Cargo Gun",
         "the freighter's single main turret", "bubble_pool", "overdrive_mult", "wave_range");
-    private static readonly ItemDef HeavyCannon = ItemDef.Own(GearSlot.Weapon, "heavy_main_gun", "Mk I Light Cannon",
-        "the single light turret", "rail_damage", "hunter_count");
+    private static readonly ItemDef WardenFlak = ItemDef.Own(GearSlot.Weapon, "heavy_main_gun", "Mk I Flak Battery",
+        "the proximity flak", "hunter_count");
     private static readonly ItemDef LightCannon = ItemDef.Own(GearSlot.Weapon, "light_main_gun", "Mk I Dart Cannon",
         "the light's single turret", "roll_time", "echo_time", "stealth_time");
 
@@ -270,7 +272,9 @@ public static class Classes
                 new() { Group = "Deployed turrets", Id = "deploy_hull",     Label = "Turret hull",      Base = 120, Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_max",      Label = "Out at once",      Base = 3, Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_cooldown", Label = "Between drops",    Base = 6, Unit = "s", Dec = 1, Inverse = true },
-                new() { Group = "Deployed turrets", Id = "collect_range",   Label = "Collect within",   Base = 120, Unit = "u", Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_reach",    Label = "Throw reach",      Base = 600, Unit = "u", Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_flight",   Label = "Throw flight",     Base = 0.8, Unit = "s", Dec = 1 },
+                new() { Group = "Deployed turrets", Id = "recall_pick",     Label = "Recall within",    Base = 60, Unit = "u", Dec = 0 },
                 new() { Group = "Bubble", Id = "bubble_pool", Label = "Damage it soaks", Base = 400, Dec = 0 },
                 new() { Group = "Bubble", Id = "bubble_radius", Label = "Radius",        Base = 260, Unit = "u", Dec = 0 },
                 new() { Group = "Bubble", Id = "bubble_time", Label = "Time up",         Base = 8, Unit = "s", Dec = 1 },
@@ -281,7 +285,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0.0f, -50.6f) },
                 Pds   = new Vector2[] { new(-32.9f, 64.4f), new(32.9f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Bubble, Ab.Deploy, Ab.Collect } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Bubble, Ab.Deploy } },
         new() { Id = ShipClass.FreightTender, Name = "TENDER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
             Blurb = "One main gun, two point-defence turrets, three deployable turrets, and an overdrive that lifts everything's rate of fire.",
             Hint = "TENDER  ·  mouse aims the main gun",
@@ -308,7 +312,9 @@ public static class Classes
                 new() { Group = "Deployed turrets", Id = "deploy_hull",     Label = "Turret hull",      Base = 120, Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_max",      Label = "Out at once",      Base = 3, Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_cooldown", Label = "Between drops",    Base = 6, Unit = "s", Dec = 1, Inverse = true },
-                new() { Group = "Deployed turrets", Id = "collect_range",   Label = "Collect within",   Base = 120, Unit = "u", Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_reach",    Label = "Throw reach",      Base = 600, Unit = "u", Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_flight",   Label = "Throw flight",     Base = 0.8, Unit = "s", Dec = 1 },
+                new() { Group = "Deployed turrets", Id = "recall_pick",     Label = "Recall within",    Base = 60, Unit = "u", Dec = 0 },
                 new() { Group = "Overdrive", Id = "overdrive_mult", Label = "Rate of fire", Base = 2, Unit = "x", Dec = 1 },
                 new() { Group = "Overdrive", Id = "overdrive_time", Label = "Time up",      Base = 8, Unit = "s", Dec = 1 },
                 new() { Group = "Overdrive", Id = "overdrive_cooldown", Label = "Cooldown", Base = 24, Unit = "s", Dec = 1, Inverse = true },
@@ -318,7 +324,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0.0f, -50.6f) },
                 Pds   = new Vector2[] { new(-31.6f, 64.4f), new(31.6f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Overdrive, Ab.Deploy, Ab.Collect } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Overdrive, Ab.Deploy } },
         new() { Id = ShipClass.FreightBastion, Name = "BASTION", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,
             Blurb = "One main gun, two point-defence turrets, three deployable turrets, and a shockwave that throws what is near it clear, or holds a boss still.",
             Hint = "BASTION  ·  mouse aims the main gun",
@@ -345,7 +351,9 @@ public static class Classes
                 new() { Group = "Deployed turrets", Id = "deploy_hull",     Label = "Turret hull",      Base = 120, Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_max",      Label = "Out at once",      Base = 3, Dec = 0 },
                 new() { Group = "Deployed turrets", Id = "deploy_cooldown", Label = "Between drops",    Base = 6, Unit = "s", Dec = 1, Inverse = true },
-                new() { Group = "Deployed turrets", Id = "collect_range",   Label = "Collect within",   Base = 120, Unit = "u", Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_reach",    Label = "Throw reach",      Base = 600, Unit = "u", Dec = 0 },
+                new() { Group = "Deployed turrets", Id = "deploy_flight",   Label = "Throw flight",     Base = 0.8, Unit = "s", Dec = 1 },
+                new() { Group = "Deployed turrets", Id = "recall_pick",     Label = "Recall within",    Base = 60, Unit = "u", Dec = 0 },
                 new() { Group = "Shockwave", Id = "wave_range",    Label = "Reach",          Base = 1000, Unit = "u", Dec = 0 },
                 new() { Group = "Shockwave", Id = "wave_push",     Label = "Throws them",    Base = 1000, Unit = "u", Dec = 0 },
                 new() { Group = "Shockwave", Id = "wave_disable",  Label = "Holds a boss",   Base = 3, Unit = "s", Dec = 1 },
@@ -358,99 +366,131 @@ public static class Classes
                 Mains = new Vector2[] { new(0.0f, 53.48f) },
                 Pds   = new Vector2[] { new(-27.1f, 64.4f), new(27.1f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Shockwave, Ab.Deploy, Ab.Collect } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Shockwave, Ab.Deploy } },
 
         // -- page 3: heavy fighters --------------------------------------------
-        new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.Guns,
-            Blurb = "Fast. A light main gun, and a railgun: locked while it charges, then a straight blue line through everything on it.",
-            Hint = "SNIPER  ·  mouse aims the main gun",
+        new() { Id = ShipClass.HeavySniper, Name = "SNIPER", Ready = true, Fit = Fit.None,
+            Blurb = "Fast and far. A railgun with one round in the chamber: hold to charge, let go for a straight blue line through everything on it. Time a press while it reloads and the next round hits half again as hard.",
+            Hint = "SNIPER  ·  Space: hold to charge, release to fire  ·  Space in the white box while it reloads: next round x1.5  ·  F anchor  ·  Q tether mine astern  ·  E flares",
             Drive = Drives.Boost,
             Nums = new() {
-                ["hull"] = 140,
+                ["hull"] = 240,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
-                ["main_count"] = 1, ["main_damage"] = 6, ["main_interval"] = 0.8, ["main_range"] = 900, ["shell_speed"] = 700,
             },
-                // 7.5 = 5% of the railgun's 150, what a level is worth on a battleship's shell
-            Damage = new() { ["main_damage"] = 1, ["rail_damage"] = 7.5 },
-            Reach = new() { ["main_range"] = 1, ["rail_range"] = 1 },
-            Cycle = new() { ["main_interval"] = 1, ["rail_charge"] = 1 },
-            Weapons = new[] { Dps.Main, Dps.Railgun },
+                // 6.0 = 5% of the railgun's 120, what a level is worth on a battleship's shell
+            Damage = new() { ["rail_damage"] = 6.0 },
+            Reach = new() { ["rail_range"] = 1 },
+            Cycle = new() { ["rail_charge"] = 1, ["rail_reload"] = 1 },
+            Weapons = new[] { Dps.Railgun },
             Kit = new[] {
-                HeavyCannon,
-                ItemDef.Own(GearSlot.Utility, "heavy_railgun", "Railgun Mount", "the railgun's charge and its slug", "rail_damage"),
+                ItemDef.Own(GearSlot.Weapon, "heavy_railgun", "Railgun Mount", "the railgun: its round, its charge and its reload", "rail_damage"),
+                ItemDef.Own(GearSlot.Utility, "sniper_anchor", "Anchor Winch", "the anchor: how long it holds", "anchor_time"),
             },
             Rows = new StatRow[] {
-                new() { Group = "Railgun", Id = "rail_damage", Label = "Damage",         Base = 150, Dec = 0 },
-                new() { Group = "Railgun", Id = "rail_charge", Label = "Charge (locked)",Base = 3, Unit = "s", Dec = 1, Inverse = true },
-                new() { Group = "Railgun", Id = "rail_range",  Label = "Reach",          Base = 2500, Unit = "u", Dec = 0 },
-                new() { Group = "Railgun", Id = "rail_width",  Label = "Beam width",     Base = 14, Unit = "u", Dec = 0 },
-                new() { Group = "Railgun", Id = "rail_cooldown", Label = "Cooldown",     Base = 1, Unit = "s", Dec = 1, Inverse = true },
+                // sniper_active_reload.md 2.1: one round, 3.0 s to reload, the spot 40-60% of it, x1.5
+                new() { Group = "Railgun", Id = "rail_damage",  Label = "Damage, full charge", Base = 120, Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_charge",  Label = "Charge to full",      Base = 0.8, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Railgun", Id = "rail_tap",     Label = "Released at once",    Base = 40, Unit = "%", Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_reload",  Label = "Reload",              Base = 3.0, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Railgun", Id = "rail_spot_at", Label = "Sweet spot opens",    Base = 40, Unit = "% of the reload", Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_spot",    Label = "Sweet spot",          Base = 20, Unit = "% of the reload", Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_perfect", Label = "Perfect round",       Base = 1.5, Unit = "x", Dec = 1 },
+                new() { Group = "Railgun", Id = "rail_range",   Label = "Reach",               Base = 2500, Unit = "u", Dec = 0 },
+                new() { Group = "Railgun", Id = "rail_width",   Label = "Beam width",          Base = 14, Unit = "u", Dec = 0 },
+                // the v1 Anchor (kits_v3 3.4): up to 8 s rooted, every interval x2.5, reach x1.4, 0.3 s to weigh, 12 s
+                new() { Group = "Anchor", Id = "anchor_time",     Label = "Holds",           Base = 8, Unit = "s", Dec = 1 },
+                new() { Group = "Anchor", Id = "anchor_rate",     Label = "Charge and reload", Base = 2.5, Unit = "x", Dec = 1 },
+                new() { Group = "Anchor", Id = "anchor_reach",    Label = "Rail reach",      Base = 1.4, Unit = "x", Dec = 1 },
+                new() { Group = "Anchor", Id = "anchor_release",  Label = "Weighs in",       Base = 0.3, Unit = "s", Dec = 1 },
+                new() { Group = "Anchor", Id = "anchor_cooldown", Label = "Cooldown",        Base = 12, Unit = "s", Dec = 1, Inverse = true },
+                // the v1 Tether mine (kits_v2's card): 2 charges, 170 u (the row's, Zones.cs), holds 3 s; 12 s a charge
+                new() { Group = "Tether mine", Id = "tether_charges",  Label = "Charges",        Base = 2, Dec = 0 },
+                new() { Group = "Tether mine", Id = "tether_recharge", Label = "Recharge (each)", Base = 12, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Tether mine", Id = "tether_hold",     Label = "Holds",          Base = 3, Unit = "s", Dec = 1 },
+                new() { Group = "Tether mine", Id = "tether_most",     Label = "Out at once",    Base = 2, Dec = 0 },
+                // the Flares (kits_v2's card; the salvo itself is Decoys.All "flares"): 16 s
+                new() { Group = "Flares", Id = "flare_cooldown", Label = "Cooldown", Base = 16, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://heavy_sniper_hull.png", Length = 120f, HalfWidth = 30.03f,
                 Mains = new Vector2[] { new(0.0f, -24.0f) },
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Railgun } },
-        new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Ready = true, Fit = Fit.Guns,
-            Blurb = "Fast. Two main guns, and a rush: a burst of speed at a fraction of the damage taken, ending in a stunning EMP.",
-            Hint = "WARRIOR  ·  mouse aims the main guns",
+            Abilities = new[] { Ab.Railgun, Ab.Anchor, Ab.Tether, Ab.Flares } },
+        new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Ready = true, Fit = Fit.None,
+            Blurb = "Fast and close. A blade that cuts everything in front of it, a dash, a spin, and a prism stance that splits light.",
+            Hint = "WARRIOR  ·  Space swings the blade",
             Drive = Drives.Boost,
             Nums = new() {
-                ["hull"] = 140,
+                ["hull"] = 300,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
-                ["main_count"] = 2, ["main_damage"] = 9, ["main_interval"] = 0.7, ["main_range"] = 600, ["shell_speed"] = 520,
             },
-                // 3 = 5% of the EMP's 60
-            Damage = new() { ["main_damage"] = 1, ["emp_damage"] = 3 },
-            Reach = new() { ["main_range"] = 1, ["emp_range"] = 1 },
-            Cycle = new() { ["main_interval"] = 1 },
-            Weapons = new[] { Dps.Main, Dps.Emp },
+                // 1.3 = 5% of the blade's 26, 2 of the lunge's 40, 0.5 of the whirlwind's 10
+            Damage = new() { ["blade_damage"] = 1.3, ["lunge_damage"] = 2, ["whirl_damage"] = 0.5 },
+            Reach = new() { ["blade_reach"] = 1 },
+            Cycle = new() { ["blade_interval"] = 1 },
+            Weapons = new[] { Dps.Blade },
             Kit = new[] {
-                ItemDef.Own(GearSlot.Weapon, "warrior_main_guns", "Mk I Twin Cannons", "the two light turrets", "rush_mult"),
-                ItemDef.Own(GearSlot.Utility, "heavy_rush_drive", "Rush Drive", "the rush, and the EMP it ends in", "rush_mult"),
+                ItemDef.Own(GearSlot.Weapon, "warrior_blade", "Mk I Blade", "the blade: everything in its arc, every swing", "blade_damage"),
+                ItemDef.Own(GearSlot.Utility, "warrior_prism", "Prism Emitter", "the prism stance: how long it holds", "prism_time"),
             },
             Rows = new StatRow[] {
-                new() { Group = "Rush", Id = "rush_mult",  Label = "Top speed",        Base = 2.5, Unit = "x", Dec = 1 },
-                new() { Group = "Rush", Id = "rush_time",  Label = "Time up",          Base = 2.5, Unit = "s", Dec = 1 },
-                new() { Group = "Rush", Id = "rush_guard", Label = "Damage taken",     Base = 0.5, Unit = "x", Dec = 2 },
-                new() { Group = "Rush", Id = "emp_damage", Label = "EMP damage",       Base = 60, Dec = 0 },
-                new() { Group = "Rush", Id = "emp_range",  Label = "EMP reach",        Base = 260, Unit = "u", Dec = 0 },
-                new() { Group = "Rush", Id = "emp_stun",   Label = "EMP holds them",   Base = 2, Unit = "s", Dec = 1 },
-                new() { Group = "Rush", Id = "rush_cooldown", Label = "Cooldown",      Base = 18, Unit = "s", Dec = 1, Inverse = true },
+                // the blade (kits_v2 Warrior card): 160 u, ±55° (Melee.Blade), 26 every 0.40 s = 65 DPS
+                new() { Group = "Blade", Id = "blade_damage",   Label = "Damage (each body)", Base = 26, Dec = 0 },
+                new() { Group = "Blade", Id = "blade_interval", Label = "Between swings",     Base = 0.40, Unit = "s", Dec = 2, Inverse = true },
+                new() { Group = "Blade", Id = "blade_reach",    Label = "Reach",              Base = 160, Unit = "u", Dec = 0 },
+                // the lunge (kits_v2 card, kits_v31 §3.4): a fixed 420 u in 0.3 s, 40 a body, half damage taken, 7 s
+                new() { Group = "Lunge", Id = "lunge_reach",    Label = "Dash",               Base = 420, Unit = "u", Dec = 0 },
+                new() { Group = "Lunge", Id = "lunge_time",     Label = "In",                 Base = 0.3, Unit = "s", Dec = 1 },
+                new() { Group = "Lunge", Id = "lunge_damage",   Label = "Damage (each body)", Base = 40, Dec = 0 },
+                new() { Group = "Lunge", Id = "lunge_guard",    Label = "Damage taken",       Base = 0.5, Unit = "x", Dec = 2 },
+                new() { Group = "Lunge", Id = "lunge_cooldown", Label = "Cooldown",           Base = 7, Unit = "s", Dec = 1, Inverse = true },
+                // the whirlwind (kits_v2 card): 2 s, 210 u all round (Melee.Whirl), 10 every 0.25 s = 40 DPS, 14 s
+                new() { Group = "Whirlwind", Id = "whirl_damage",   Label = "Damage (each body)", Base = 10, Dec = 0 },
+                new() { Group = "Whirlwind", Id = "whirl_interval", Label = "Between blows",      Base = 0.25, Unit = "s", Dec = 2, Inverse = true },
+                new() { Group = "Whirlwind", Id = "whirl_reach",    Label = "Reach (all round)",  Base = 210, Unit = "u", Dec = 0 },
+                new() { Group = "Whirlwind", Id = "whirl_time",     Label = "Spin",               Base = 2, Unit = "s", Dec = 1 },
+                new() { Group = "Whirlwind", Id = "whirl_cooldown", Label = "Cooldown",           Base = 14, Unit = "s", Dec = 1, Inverse = true },
+                // the prism stance (kits_v2 card): 2 s, a split every 0.75 s at most 3 a stance, 12 s from its end
+                new() { Group = "Prism stance", Id = "prism_time",     Label = "Stance",          Base = 2, Unit = "s", Dec = 1 },
+                new() { Group = "Prism stance", Id = "prism_split",    Label = "Between splits",  Base = 0.75, Unit = "s", Dec = 2, Inverse = true },
+                new() { Group = "Prism stance", Id = "prism_splits",   Label = "Splits a stance", Base = 3, Dec = 0 },
+                new() { Group = "Prism stance", Id = "prism_cooldown", Label = "Cooldown",        Base = 12, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://heavy_warrior_hull.png", Length = 120f, HalfWidth = 31.54f,
-                Mains = new Vector2[] { new(-12.0f, -24.0f), new(12.0f, -24.0f) },
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Rush } },
+            // the weapon row, then the three it learns in this order (the walls read it: kits_v31 §3.6)
+            Abilities = new[] { Ab.Blade, Ab.Lunge, Ab.Whirlwind, Ab.PrismStance } },
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd,
-            Blurb = "Fast. Point defence that hits ten times as hard as a warship's, a modest main gun, and hunter-seekers that each take a target of their own.",
-            Hint = "WARDEN  ·  mouse aims the main gun",
+            Blurb = "Draws raiders in and shreds them. Proximity flak that bursts beside whatever comes near, point defence, and hunter-seekers that go first for whatever has a web on a friend.",
+            Hint = "WARDEN  ·  mouse aims the flak  ·  Space: fire  ·  F hunters  ·  Q taunt  ·  E flak curtain at the cursor",
+            Shot = Shots.Flak,
             Drive = Drives.Boost,
             Nums = new() {
-                ["hull"] = 140,
+                ["hull"] = 270,
                 ["thrust"] = 130, ["reverse_thrust"] = 60, ["max_speed"] = 190, ["reverse_speed"] = 70,
                 ["turn_radius"] = 55, ["turn_rate"] = 2.2, ["strafe_speed"] = 95, ["strafe_thrust"] = 380,
-                ["main_count"] = 1, ["main_damage"] = 12, ["main_interval"] = 0.6, ["main_range"] = 700, ["shell_speed"] = 600,
+                // THE PROXIMITY FLAK (kits_v2's card): 22.5 a burst every 0.5 s = 45 DPS, out to 700 u (Shots.All "flak")
+                ["main_count"] = 1, ["main_damage"] = 22.5, ["main_interval"] = 0.5, ["main_range"] = 700, ["shell_speed"] = 600,
                 // ITS ONE MOUNT IS A GUN, NOT A NUISANCE. "Half efficiency, always on" was first read
             // as half a warship's damage PER SHOT: 0.25 every 0.5 s is 0.5 DPS, which is 50 seconds
             // to kill one 25-hull light raider -- the class's whole reason for existing did
             // nothing a pilot could see. It is half by MOUNTS instead: one mount where a warship
             // carries two, firing the same 0.5 s cycle, at 5 a shot. 10 DPS, always, with nothing
-            // pressed -- and with its 20 DPS gun and 19.3 from the hunters that is the 50 the
+            // pressed -- and with its 45 DPS flak and 19.3 from the hunters it is well past the 50 the
             // whole game is tuned to.
             ["pd_count"] = 1, ["pd_damage"] = 5.0, ["pd_range"] = 420,
             },
-                // 2.25 = 5% of a hunter's 45 (pd_damage is left out on purpose: every class has that row,
-                // so naming it here would hand every ship in the game a chip-powered point-defence buff)
-            Damage = new() { ["main_damage"] = 1, ["hunter_damage"] = 2.25 },
+                // 1.125 = 5% of a flak burst's 22.5, 2.25 = 5% of a hunter's 45 (pd_damage is left out on purpose:
+                // every class has that row, so naming it here would hand every ship in the game a chip-powered point-defence buff)
+            Damage = new() { ["main_damage"] = 1.125, ["hunter_damage"] = 2.25 },
             Reach = new() { ["main_range"] = 1, ["hunter_range"] = 1, ["pd_range"] = 1 },
             Cycle = new() { ["main_interval"] = 1, ["pd_interval"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Hunters, Dps.Pd },
             Kit = new[] {
-                HeavyCannon,
+                WardenFlak,
                 ItemDef.Own(GearSlot.Utility, "heavy_hunter_cells", "Hunter Cells", "the six hunter-seekers", "hunter_count"),
             },
             Rows = new StatRow[] {
@@ -460,13 +500,24 @@ public static class Classes
                 new() { Group = "Hunters", Id = "hunter_turn",   Label = "Guidance",      Base = 2.5, Unit = "rad/s", Dec = 2 },
                 new() { Group = "Hunters", Id = "hunter_range",  Label = "Reach",         Base = 1200, Unit = "u", Dec = 0 },
                 new() { Group = "Hunters", Id = "hunter_cooldown", Label = "Cooldown",    Base = 14, Unit = "s", Dec = 1, Inverse = true },
+                // THE TAUNT (kits_v3 §3.5): 6 s, 1000 u, x1.5 on the called, 33% less taken, 20 s
+                new() { Group = "Taunt", Id = "taunt_time",     Label = "Lasts",            Base = 6, Unit = "s", Dec = 1 },
+                new() { Group = "Taunt", Id = "taunt_reach",    Label = "Reach",            Base = 1000, Unit = "u", Dec = 0 },
+                new() { Group = "Taunt", Id = "taunt_mult",     Label = "Called take",      Base = 1.5, Unit = "x", Dec = 2 },
+                new() { Group = "Taunt", Id = "taunt_guard",    Label = "Damage taken",     Base = 0.67, Unit = "x", Dec = 2 },
+                new() { Group = "Taunt", Id = "taunt_cooldown", Label = "Cooldown",         Base = 20, Unit = "s", Dec = 1, Inverse = true },
+                // THE FLAK CURTAIN (kits_v2's card; its 500 x 80 u, 0.5 s and 6 s are the row's, Zones.cs): 20, then 10 every 0.5 s; 18 s
+                new() { Group = "Flak curtain", Id = "curtain_first",    Label = "On touching",  Base = 20, Dec = 0 },
+                new() { Group = "Flak curtain", Id = "curtain_tick",     Label = "Then, each",   Base = 10, Dec = 0 },
+                new() { Group = "Flak curtain", Id = "curtain_every",    Label = "Every",        Base = 0.5, Unit = "s", Dec = 2 },
+                new() { Group = "Flak curtain", Id = "curtain_cooldown", Label = "Cooldown",     Base = 18, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://heavy_warden_hull.png", Length = 120f, HalfWidth = 28.68f,
                 Mains = new Vector2[] { new(0.0f, -24.0f) },
                 Pds   = new Vector2[] { new(0.0f, 31.2f) },
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Hunters } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Hunters, Ab.Taunt, Ab.Curtain } },
 
         // -- page 4: lights -----------------------------------------------------
         new() { Id = ShipClass.LightDart, Name = "DART", Ready = true, Fit = Fit.Guns,
@@ -583,13 +634,6 @@ public static class Classes
     // every weapon stat any class has: what a part that lifts "every weapon" reaches
     public static IReadOnlyDictionary<string, double> ReachOf(ShipClass c) => Of(c).Reach;
     public static IReadOnlyDictionary<string, double> CycleOf(ShipClass c) => Of(c).Cycle;
-    // Every reach id any class declares, for a part that lifts "every weapon's range".
-    public static IEnumerable<string> EveryReachStat()
-    {
-        var seen = new SortedSet<string>();
-        foreach (var c in All) foreach (var k in c.Reach.Keys) seen.Add(k);
-        return seen;
-    }
     public static IEnumerable<string> EveryDamageStat()
     {
         var seen = new SortedSet<string>();

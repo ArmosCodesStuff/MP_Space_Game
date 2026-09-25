@@ -48,6 +48,9 @@ public interface IHittable
     // Does a projectile at p (with pad for its own size) touch this? A circle by
     // default; a long ship answers with a capsule along its keel.
     bool Covers(Vector2 p, float pad) => p.DistanceTo(Position) <= HitRadius + pad;
+    // THE SHARE OF ITS HULL LEFT, 0..1 (Executioner's "under 35%"). A thing with no hull to speak of
+    // answers 1, so nothing executes it.
+    double HullLeft => 1;
     // A missile (Tag.Missile) can be shot down but is never SELECTED (click or Tab); a body in
     // flight with a hull of its own (Tag.Hulled) is picked like any hull.
     bool Selectable => true;
@@ -66,6 +69,9 @@ public interface IRaidTarget : IStatused
     // (Hub.EscortThreat). That asked `quarry is Hauler h ? h.Payout : 0`, so a second kind of
     // target worth raiding meant a second arm on the type test.
     double Payout => 0;
+    // WHAT DRAWS THE HOSTILE GUNS: true while a row that Draws runs on it (AbilityDef.Draws: the Taunt), and an
+    // emplacement's gun then takes it before any other in its reach (Emplacement.Prefer). False for everything else.
+    bool Draws => false;
 }
 
 // ── Wing craft: ONE ROW PER CRAFT ────────────────────────────────────────────

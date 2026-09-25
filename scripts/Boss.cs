@@ -74,7 +74,7 @@ public class BossMove
     public float Turn;                 // a guided body's turn rate (rad/s)
     public float Size = 1f;            // a fired body's drawn size
     public string Source;              // DamageSource: what the blow is called on a hull
-    public string Cue, Strike;         // Sfx.Special as the warning goes up, and as it lands
+    public string Cue, Strike;         // Sfx.ByName as the warning goes up, and as it lands
     // A BOLT'S FLASH: a row of Beam.All, its line and its note. A Bolt row NAMES one: row 0 is
     // point defence, a friend's note. (Not MoveWay.Beam -- that is a move that burns down a line
     // for Live seconds, and it is heard by its Cue and Strike.)
@@ -510,7 +510,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         {
             case MoveWay.Bolt:
                 if (!Sees(s.Target)) break;
-                s.Target.Hit(Out(m), Position, m.Source);
+                if (!Prism.Catch(s.Target, BlowKind.Ray, nose, s.Target.Position, Out(m), m.Source))   // a bolt is a ray (F11)
+                    s.Target.Hit(Out(m), Position, m.Source);
                 Combat.Flash(nose, s.Target.Position, m.Beam);
                 break;
             case MoveWay.Shoot:
@@ -548,10 +549,9 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                     // ADDED, not set: the overshoot carries, so at 60 fps a judgement lands every 15
                     // frames and a full burn is all 13 of them.
                     s.Next += m.Tick;
+                    // Walked nearest first, and a prism on it catches the rest (Prism.Walk, F11)
                     var (la, lb) = Segment(m.Id);
-                    foreach (var p in _hittable)
-                        if (Combat.DistToSegment(p.Position, la, lb) <= m.Width / 2f + p.HitRadius)
-                            p.Hit(Out(m), Position, m.Source);
+                    Prism.Walk(la, lb, m.Width / 2f, Out(m), Position, m.Source, _hittable);
                     if (--s.Left <= 0) s.At = Phase.Idle;   // its last judgement ends it (Judgements)
                 }
                 break;
@@ -642,7 +642,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     // warning to carry it (a warning plays its move's cue and strike itself)
     protected void Sound(string name, Vector2 at)
     {
-        Sfx.Special(name, at);
+        Sfx.ByName(name, at);
         if (Net.IsOnline) Hub?.SendBossSound(name, at);
     }
 
