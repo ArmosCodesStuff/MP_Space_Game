@@ -3225,6 +3225,58 @@ public partial class _Test : Node
               $"the railgun is a Lines row: 2500 x 14 u (reach {sheet[rail.Reach]:0}, width {sheet[rail.Width]:0}), through everything (Stops {rail.Stops}), the rail bar and report, 150 a line");
     }
 
+    // ── F6 · A PREDICTED MISSILE HAS AN ID ON EVERY PEER (lane A slice 3, J10) ───────────────────
+    // Three harmless outpost missiles (0 damage, 10 u) thrown at 3 varied spots far from anything: each
+    // blast the host holds and each MissileVisual it shows carry the same id, from the missiles' one
+    // space (NetIds.Missile, 10000-19999), three different ids, none a live shot's; then all three land.
+    static IEnumerable<int> BlastIds(Hub h) =>
+        ((System.Collections.IList)typeof(Hub).GetField("_blasts", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(h))
+            .Cast<object>().Select(e => (int)e.GetType().GetField("Item5").GetValue(e));
+    static bool InMissileSpace(int id) => id >= NetIds.Missile && id < NetIds.Missile + 10000;
+    async Task LaneAMissileIdsChecks(Vector2 yonder)
+    {
+        var before = Nodes<MissileVisual>().ToHashSet();
+        var ids0 = BlastIds(H).ToHashSet();
+        int pending0 = H.BlastsPending;
+        var spots = new Vector2[3];
+        for (int k = 0; k < 3; k++)
+        {
+            spots[k] = yonder + Vector2.Right.Rotated(VaryAngle()) * Vary(2500f, 3500f);
+            H.ThrowMissile(new MissileSpec { Side = Missiles.Outpost, Damage = 0, Blast = 10f, Flight = Vary(1.5f, 2.5f) },
+                           spots[k] + new Vector2(0, -600), spots[k], 0);
+        }
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var mine = Nodes<MissileVisual>().Where(v => !before.Contains(v)).ToList();
+        var held = BlastIds(H).Where(i => !ids0.Contains(i)).ToHashSet();
+        var shotIds = Nodes<Shot>().Select(s => s.NetId).Where(i => i != 0).ToHashSet();
+        bool eachAtItsSpot = spots.All(p => mine.Count(v => v.To.DistanceTo(p) < 1f) == 1);
+        var seen = mine.Select(v => v.NetId).ToHashSet();
+        Check(mine.Count == 3 && eachAtItsSpot && seen.Count == 3 && seen.SetEquals(held) && seen.All(InMissileSpace) && !seen.Overlaps(shotIds),
+              $"three predicted missiles thrown at once: the host's blasts and the missiles it draws carry the same three ids, from the missiles' one space ({string.Join(", ", seen)} / held {string.Join(", ", held)})");
+        for (int i = 0; i < 60 * 4 && H.BlastsPending > pending0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Check(H.BlastsPending == pending0 && !BlastIds(H).Any(held.Contains),
+              $"...and all three land, their ids gone with them ({H.BlastsPending - pending0} still pending)");
+    }
+    // Rung 5, the host's half: three at far spots, once both guests are in; they fly 40 s.
+    void LaneAMissileIdsHost()
+    {
+        for (int k = 0; k < 3; k++)
+        {
+            var at = new Vector2(-7000, 7000) + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 900f);
+            H.ThrowMissile(new MissileSpec { Side = Missiles.Outpost, Damage = 0, Blast = 10f, Flight = 40 }, at + new Vector2(0, -600), at, 0);
+        }
+        var drawn = Nodes<MissileVisual>().Where(v => v.Flight > 30).Select(v => v.NetId).ToHashSet();
+        Check(drawn.Count == 3 && drawn.All(InMissileSpace), $"host: three predicted missiles thrown for the guests, each with its own id ({string.Join(", ", drawn)})");
+    }
+    // Rung 5, the guest's half: the three arrive with the host's ids -- three, different, in the missiles' space.
+    async Task LaneAMissileIdsGuest()
+    {
+        await RealTime(() => Nodes<MissileVisual>().Count(v => v.Flight > 20) >= 3, 25);
+        var got = Nodes<MissileVisual>().Where(v => v.Flight > 20).Select(v => v.NetId).ToList();
+        Check(got.Count == 3 && got.Distinct().Count() == 3 && got.All(InMissileSpace),
+              $"guest: the host's three predicted missiles arrive each with its id, the host's, three different ones in the missiles' space ({string.Join(", ", got)})");
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -7998,6 +8050,7 @@ public partial class _Test : Node
             await LaneAHeavyRowsChecks(yonder);
             await LaneAShotStopsChecks(yonder);
             LaneALinesChecks();
+            await LaneAMissileIdsChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);
@@ -11529,6 +11582,7 @@ public partial class _Test : Node
             Check(refusals == 1, $"the host refused the one peer that knocked as another build ({refusals})");
             var ships = Nodes<PlayerShip>().ToList();
             Check(ships.Count == 3, $"host sees 3 ships: itself and two guests ({ships.Count})");
+            LaneAMissileIdsHost();
             Multiplayer.PeerConnected -= AtLetIn;
             // A guest just let in may not have the host's own "done" yet (lost on the way, resent), and
             // Godot throws away with an engine error anything else that reaches it first. Its answer to
@@ -11903,6 +11957,7 @@ public partial class _Test : Node
             for (int i = 0; i < 60 * 3 && !H.Raiders.Any(r => r.Position.DistanceTo(new Vector2(-6000, -6000)) < 2500); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.Raiders.Any(r => r.Position.DistanceTo(new Vector2(-6000, -6000)) < 2500),
                   "a raider that existed before this guest joined reached it (the catch-up a joining guest is sent)");
+            await LaneAMissileIdsGuest();
             // Watched at the END of every frame: the ship overwrote the host's pinned flag in its own
             // frame, so a check made at any earlier point would have seen the flag and passed.
             var pinWatch = new LateSampler { Probe = () => mine != null && GodotObject.IsInstanceValid(mine) && mine.Pinned };

@@ -841,3 +841,19 @@ nothing, and return status blocked with open "NOTE 4: moved to parallel lanes".
   Beam.Rail are the row's. Bodies are now struck nearest first (the order was the list's); nothing reads it.
 - Files: scripts/Lines.cs (new), scripts/PlayerShip.cs (FireRail); SmokeTest.cs.txt (`LaneALinesChecks`).
 - Checkpoint: the commit after this entry. Next: J10 (F6).
+
+### J10 · PRE · F6 NetIds on predicted missiles (D26) -- tier opus
+- Intent: each thrown predicted missile takes an id from NetIds.Missile (Combat.NextMissileId); _blasts carries
+  it; Hub.NetMissile sends it; MissileVisual.NetId holds it on every peer. Checks: LaneAMissileIdsChecks (solo),
+  LaneAMissileIdsHost / LaneAMissileIdsGuest (rung 5).
+- Files: scripts/Hub.cs, scripts/Missiles.cs, tools/smoketest/SmokeTest.cs.txt, this ledger.
+- HEAD 3c514197ecf4412ac08b0892bd5e86f8babdfd2c · Hub.cs a6f66721660f653fef9a479de878c800aecef7be · Missiles.cs 5fabd6a7c4240dc9d7685ece0747c9739d718b0c · SmokeTest.cs.txt b710d2409a6b0afe6e23aebb17b8e5d006324436
+### J10 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. A wire change: `Hub.NetMissile` gains `int id` (the protocol fingerprint moves with it, as for any
+  RPC change). Nothing reads the id yet but the checks; its reader is F14's NetDecoy (slice 5).
+- Files: scripts/Hub.cs (ThrowMissile, _blasts, NetMissile, ShowMissile), scripts/Missiles.cs (MissileVisual.NetId);
+  SmokeTest.cs.txt (`BlastIds`, `InMissileSpace`, `LaneAMissileIdsChecks` in solo after LaneALinesChecks;
+  `LaneAMissileIdsHost` after the host's "host sees 3 ships"; `LaneAMissileIdsGuest` after the guest's
+  "a raider that existed before this guest joined").
+- Checkpoint: the commit after this entry. Next: J11 (F7 charge bands, the slice's CHANGES).
