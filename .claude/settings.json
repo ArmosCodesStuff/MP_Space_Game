@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/lanes.ps1",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,296 +1,233 @@
 # Warships — how to work on this project
 
-Godot 4.7.2 (.NET / C#). Host owns the world; each player owns their ship; single player is a host
-with no peers. The repo is the only source of truth. Written for an instance with no memory of it.
+Godot 4.7.2 (.NET / C#). Host owns the world; each player owns their ship; single player is a host with
+no peers. The repo is the only source of truth. Written for an instance with no memory of it.
 
-**Accuracy outranks speed. Speed outranks everything else.**
+**Speed first (owner, 2026-09-25): build everything quickly, then test at the end.** Accuracy is kept by
+the checks, which are written with every change and run at the end of each batch, never skipped. Save
+tokens wherever it costs no speed. This file is loaded into every agent and every turn: keep it short,
+never paste it into a prompt.
 
----
+## 1 · Roles
 
-## 1 · Session start (≤ 2 tool calls)
+- **Coordinator** = the main conversation. It plans, launches batches, reads verdicts, merges, and talks
+  to the owner. It does not build or debug; it holds ledger paths and verdicts, nothing more.
+- **Lane** = one branch `wt/<lane>` in its own worktree BESIDE the project folder
+  (`..\WarShips_wt_<lane>`; a worktree inside it is copied by every runner). One writer per worktree.
+  Lanes whose files do not overlap run at the same time.
+- **Batch** = a lane's next jobs, picked so they share files (read once, not once per job), launched as
+  ONE workflow holding the whole chain: step 0 `git merge version-l` into the lane; each job (ledger PRE,
+  edit with its checks, `quick`, POST, commit); after the LAST job, the lane's engine chain once (section
+  8), its reds fixed then; a fresh agent from the ledger when one stops; one model-tier escalation on a
+  red; on the lane's final batch, its merge gate. The coordinator wakes once per batch, on "green" or
+  "stuck", so the rules for a red live in the workflow script, not in a later turn.
 
-```
-git -C <repo> log --oneline -3 ; git -C <repo> status --short
-```
-Read `docs/CHANGES.md` Handoff only. Read `DESIGN.md`/`REVIEW.md` sections only when the task touches
-them (grep, do not read whole files). Do not run verify at session start.
-Anything in the tree you did not write: report it in one line, then ADOPT or REVERT.
+## 2 · Session start (≤ 2 tool calls)
 
-## 2 · Plan the whole batch before writing code
+Automatic: the SessionStart hook runs `tools\lanes.ps1` (every worktree's head and ledger, the newest
+engine chains, and `docs/plans/ledger_main.md`). Then the `docs/CHANGES.md` Handoff only. `docs/DESIGN.md`, `docs/REVIEW.md`, `docs/plans/`: grep the section a task
+touches. No verify at session start.
+Anything in the tree you did not write: one line to the owner, then ADOPT or REVERT.
 
-1. List the player's requests **in their order**.
-2. For each: the foundation it needs (field, hook, accessor, node type, save field, data table).
-   **Build every foundation before the feature that uses it**, even if that reorders the work.
-3. One clarifying question batch, each with the default you will use anyway. Then build.
-4. Never ask what the repo answers.
+## 3 · Plan the batch before any code
 
-### Sequence only what depends -- and fan out only what pays (§2b)
+1. List the owner's requests in their order. 2. For each, the foundation it needs (field, hook, node
+type, save field, table row); **every foundation before the feature that uses it**. 3. ONE question
+batch, each question with the default you will build anyway; then build. 4. Never ask what the repo
+answers. Owner rulings go to `docs/plans/README.md` (rulings, newest wins) the moment they are given.
 
-Two pieces of work are sequential only when one needs the other's OUTPUT -- a foundation before
-the feature that uses it, an edit before the check that proves it. Everything else starts at once.
+**Concurrency.** Steps are sequential only when one needs the other's OUTPUT (a foundation, an edit before
+its check); otherwise they start together. Independent tool calls go in one message. Lanes run in
+parallel; jobs inside a lane run in order. Take results as they land; stop stragglers.
 
-- **Independent tool calls go in one message**, never one per turn.
-- **Read-only work MAY go to a second agent, on a DIFFERENT ANGLE** (a review, an audit, a sweep of a
-  subsystem you have not read) when §2b says it pays: give it a scope no other one has, so the
-  findings ADD UP. Duplicates of one job only cost tokens, and most work is cheaper as one agent's
-  BATCH (§2b rule 3).
-- **Take results as they land.** Stop the stragglers once the map is complete rather than waiting
-  for the slowest.
-- **An engine rung and read-only agents run together fine** -- but every agent's prompt must say
-  not to build and not to start the engine: the rung 3-6 harnesses share one scratch folder, and a
-  second one wipes the first (§4).
-- **Agents that WRITE never run in parallel** unless each has its own worktree. Two edits to one
-  file is a lost edit.
-- Sequential is a decision that needs a reason. If you cannot name what the second step takes from
-  the first, they were concurrent and you were slow.
+## 4 · Agents and tokens
 
-## 2b · Tokens: spend them where they buy accuracy
+The cost is the context re-read on every turn and by every agent, not the output.
 
-Measured on the 2026-09-24 session (1.52 billion tokens, 97% of it re-reading cached context): the
-conversation's own size, re-read on every turn, is the cost -- not output. Every rule below is
-explicit and binding.
+1. **Every agent runs Opus 5.5 (`model: 'opus'`), `effort` set on every call** (owner, 2026-09-25, "just to
+   be safe"; it replaces "lowest tier"). Effort: low for git-only steps (a merge, a grep), medium for builds
+   and sweeps, high for a merge gate, a diagnosis or a second attempt after a red (the one escalation).
+2. **Prompts** give paths, the job, the chain, the return schema, and only the rules that bite here, plus one
+   line: an owner message that reaches the agent mid-run is for the coordinator; never stop or wait for it.
+   **Returns** are a verdict and a pointer: `status` (done / stopped_context / red / blocked), `head`,
+   ≤10 lines of summary, `open`. Detail goes to the ledger.
+3. **Fan-outs.** Every lane gets ONE merge-gate reviewer (opus, read-only), once. A fan-out review (≤ 5
+   finders, each finding verified by ≤ 3 skeptics) only for authority, wire or save-format lanes. Any
+   fan-out (review, design, audit, research) is ≤ 5 agents, each on an angle you can name that no other
+   one sees; duplicates only cost tokens. No critic stage for a mechanical plan.
+4. **Never paste a log.** Redirect it, grep the verdict and the failing lines. **Read slices**: grep, then
+   an offset. `SmokeTest.cs.txt`, `Hub.cs`, `PlayerShip.cs`, `CHANGES.md`, `DESIGN.md` are never read
+   whole; `version/MAP.md` answers "what exists".
+5. **Wake-ups.** Every finished background job is a full coordinator turn. Chain work so each batch wakes
+   it once; take a verdict in silence when nothing is actionable; report when the owner must see or decide.
+6. **Compaction-safe at every moment** (owner, 2026-09-25: keep the conversation small).
+   `docs/plans/ledger_main.md` is the coordinator's memory, under 40 lines, in four sections: **Running**
+   (each batch: workflow run id + task id, what it does, where its result lands, what to do when it
+   lands), **Next**, **Owner questions** (each with its default), **Notes** (merge risks, promised
+   follow-ups). Update it on disk at EVERY event (a launch, a verdict, a ruling, a merge, a question)
+   as the first call after it, BEFORE anything else, and delete what is done; commit it at once. So the
+   owner may compact at ANY moment and nothing breaks: running batches are untouched by a compact, and
+   the SessionStart hook (`.claude/settings.json`) re-injects `tools\lanes.ps1`'s output, ledger_main.md
+   included, trusted over the summary; nothing else is re-read until a task needs it. Claude never asks
+   for a compact (owner, 2026-09-25).
+7. **Agent context.** An agent stops at a job boundary with its ledger current past ~150k; a fresh agent
+   reads the ledger, never the old transcript. Resume the same agent only while it is under ~150k.
 
-1. **Compact aggressively; never every turn.** Write a 10-20 line state note first (what runs,
-   what is next, open questions with defaults -- in the repo's docs/CHANGES.md Handoff or
-   docs/plans/, never only in the conversation), then compact when ANY of these is true: the
-   context passes ~200k tokens; a slice is committed; a design or decision document has landed and
-   its outcome is written down; the work turns to a different subject; a big log or report has
-   been read and its conclusion written down. Do not compact every turn: it throws away the prompt
-   cache (a cached re-read costs about a tenth of fresh input) and the detail that then has to be
-   re-read. Hold off only while waiting on a job whose purpose is not in the state note yet.
-   Claude cannot run `/compact` itself: at a trigger it writes the note and tells the owner
-   "compact now" in one line.
-2. **Fewer wake-ups.** Every background job's completion is a full turn at the full context's
-   price (37% of that session's turns were wake-ups). Chain engine rungs into ONE background
-   command that stops at the first red; start agents so they finish together; take a finished job
-   in silence when nothing is actionable, and report once, when there is something the owner must
-   see or decide.
-3. **One or two agents at a time, each on a BATCH (the default way to delegate).**
-   - At most two agents run at once, never two writers in one checkout. A wider fan-out (a
-     workflow) is only for large design, audit or research with genuinely different angles --
-     name what each extra agent sees that the others do not; cap it at 5; no critic stage for a
-     mechanical plan; one restart per agent, after reading why the first attempt failed.
-   - A batch is several related jobs, in order, chosen so they SHARE files: the big files are read
-     once per batch, not once per job (SmokeTest.cs.txt was opened 378 times in one session).
-   - Every agent keeps a LEDGER on disk (scratchpad `ledger/<batch>.md`, or `docs/plans/` when it
-     must outlive the session). The ledger is the record; the agent's reply is the ledger's path
-     plus at most 10 lines. Each job writes TWO entries:
-     - **PRE, before it touches anything:** job id, intent, the files it will touch, the commit it
-       starts from (`git rev-parse HEAD`) and each of those files' hash (`git hash-object`).
-     - **POST, when it is finished:** verdict, files changed, the checkpoint commit (a writer
-       commits after every finished job), what comes next.
-   - A PRE with no POST is an INTERRUPTED job, and the next agent redoes it before anything else:
-     it compares those files with their recorded hashes, reverts that job's half-made edits (or
-     keeps them only where they match the plan exactly), then runs the job again. Jobs are written
-     to be repeatable: exact-match edits skip what is already applied, so a redo never doubles an
-     edit, and an interruption costs at most the one job in flight.
-   - An agent stops at a job boundary with its ledger current once its own context passes ~150k;
-     the rest of the batch goes to a FRESH agent that reads the ledger, not the old transcript.
-   - The one writer may run the engine rungs for its own batch (build, rung, fix, re-run) while no
-     other engine run is going: the fix loop then happens in its small context, not the main one.
-   - The main conversation holds only ledger paths and verdicts, so compacting it loses nothing and
-     nothing is multiplied by the number of agents.
-4. **Cheap agents for mechanical work.** Applying a written plan, resolving a merge, copying files,
-   grepping, re-running a check: a smaller model at low effort. The default model is for design,
-   diagnosis and review.
-5. **Sequential beats parallel when jobs share files; resume while small.** Several agents reading
-   the same files each pay for them; one agent doing the jobs in turn reads them once. For a
-   follow-up on the same scope, RESUME the agent that did the work while its transcript is under
-   ~150k; past that, a fresh agent reading its ledger is cheaper.
-6. **Agents return a verdict and a pointer, not a report.** Detail goes to a file; the reply is at
-   most ~40 lines: pass/fail, what changed (file: one line), the number that matters, the file to
-   read for more. (Returned reports reached 89 KB and all of it entered the caller's context.)
-7. **Never paste a log.** Redirect engine and build output to a file and grep the verdict and the
-   failing lines back. A whole log in the conversation is paid for on every later turn.
-8. **Read slices, never whole big files.** SmokeTest.cs.txt, Hub.cs, PlayerShip.cs, CHANGES.md and
-   DESIGN.md: grep for the name, then read the lines around it with an offset. version/MAP.md (the
-   generated map of every script, member and RPC) answers "what exists" without opening the code.
+## 5 · Ledgers
 
-## 3 · Build
+Every writer keeps `docs/plans/ledger_<lane>.md` in its lane; it is the record, the reply only points at it.
+- **PRE**, before touching anything: job id, tier, intent, files, `git rev-parse HEAD`, `git hash-object` of
+  each file. **POST**: verdict, files, checkpoint commit, next. Commit after every job.
+- A PRE with no POST is an interrupted job: compare the hashes, revert its half-made edits (keep only what
+  matches the plan exactly), redo it first. Edits are exact-match, so a redo never doubles one.
+- **Rulings mid-batch**: running workflow agents cannot be messaged. The coordinator appends a numbered
+  `## COORDINATOR NOTE n` to the end of the LANE's copy (`..\WarShips_wt_<lane>\docs\plans\ledger_<lane>.md`,
+  never version-l's); a writer re-reads its ledger's tail before every PRE, and the PRE that acts on a
+  note says "applies NOTE n".
 
-- Batch edits. No engine run during development, ever. Compile checks (`typecheck.ps1`,
-  `dotnet build`) are free — use them; they are not tests.
-- **The harness is source.** `tools/smoketest/SmokeTest.cs.txt` and `tools/screens/Shots.cs.txt`
-  are compiled INTO the game by their runners. A rename or a deletion makes them callers you must
-  fix in the same edit. `typecheck.ps1` compiles them with `scripts/`, so it costs a minute;
-  before it did, it cost an engine run three minutes in, after a full copy and import.
-- **Never start an engine run while a compile check is red.** Green `-Quick` first, always.
-- **EVERY CHANGE CARRIES ITS CHECK — no exceptions, same edit pass.** Before the first line of a
-  feature is written, name the checks that will prove it; they land in the same commit.
-  1. **New** (a mechanic, feature, ability, row, weapon, enemy, status, screen, rule): at least one
-     NEW check that fails without it and passes with it — asserting a literal from the request,
-     from **3 varied situations** (range, angle, in front / behind, moving / still — `Vary`).
-  2. **Interaction** (two things meeting: a weapon on a heavy, a status on a boss, a light's web
-     under a heavy's missile, an ability against a platform): its OWN check, per pair touched. "Each
-     side works alone" is not a check of the pair.
-  3. **Changed** (a number, a rule, a behaviour): grep the harness for every check that asserts the
-     old truth — its literal, its row id, its message — and REWRITE each to the new truth in the same
-     edit. A check is never deleted or loosened to make a change pass; if it is truly obsolete, its
-     replacement lands in the same edit.
-  4. **Fixed bug**: a check that reproduces the bug first (it must fail on the old code), then passes.
-  5. **Visible**: a named frame in `Shots.cs.txt`, read by eye once.
-  6. **Wire** (an RPC, a field, a host-decided state a guest sees): a check in a guest role (rung 5).
-  The commit message ends with a `Checks:` line naming every check added or rewritten. `verify.ps1`
-  refuses a code change under `scripts/` with no harness change since the last `VERIFIED:` commit.
-- **A CHECK IS CODE, AND FLAKES ARE BUGS IN IT.** Before a new check is committed, rule out the
-  three traps that have cost this project engine runs — each of them passed once and failed later:
-  - **A knife edge.** A spot exactly ON a boundary, dead astern (π), exactly at a range limit,
-    a float compare on an accumulated clock: vary AROUND the edge, never onto it.
-  - **A stale pick.** Anything chosen or measured before a wait (the nearest foe, a position, a
-    heading) is re-taken after it — the world moved.
-  - **Timed from the input, not the effect.** Start a clock on the first frame the effect shows (the
-    hull moves, the shot exists), never on the key press or the call.
-  A new or rewritten check must pass on **two different seeds** at its rung before its commit.
-- **Generalise, never special-case.** A new boss, class, enemy, ability or upgrade must be a row of
-  data plus parameters, not a new `if`. If a request forces a special case, the system is wrong:
-  fix the system.
-- **BUILD EVERY NEW SYSTEM GLOBALLY, AND SAY WHERE IT LIVES.** Anything new — a class, an enemy,
-  an ability, a weapon, a status, an effect, a screen, an upgrade — is built so that the NEXT one
-  is a row, not a copy. Five requirements, all of them:
-  1. **A table of rows.** The thing's numbers, art and text live in data (`Classes.All`,
-     `Enemies.All`, `Ab.*`, `Economy.All`, `Missions`), never in the code that uses them.
-  2. **A named public contract.** A small interface or struct anything else can implement or read
-     (`ITurretHost`, `ITagged`, `IStatused`, `IRaidTarget`, `TurretSpec`, `StatRow`). If only one
-     class can ever use what you wrote, it is not a system yet.
-  3. **One file that owns it, named for the thing** — `Ships.cs`, `Enemies.cs`, `Abilities.cs`,
-     `Turrets.cs`, `Statuses.cs`, `Targeting.cs`, `Ids.cs`, `Aim.cs` — with a header saying what it
-     replaced and what a new row must fill in.
-  4. **Reached by id or tag, never by type.** `Tag`, a row index, an ability id, a stat id. A
-     `is Raider` / `is Torpedo` / `HitRadius < 20f` in new code is a bug in the design, not a shortcut.
-  5. **The generic path is the ONLY path.** Delete the specific one in the same edit. Two ways to
-     do a thing is how the next instance picks the wrong one.
-- **NAME IT FOR THE MECHANISM, NEVER FOR ITS FIRST USE.** `DamageNumbers` was right until
-  something else wanted a floating readout; `ShipClasses.cs` stopped being true the day the class
-  table moved to `Ships.cs`. A name that describes one use is a name that becomes a lie, and the
-  next instance either believes it or copies the file rather than extending it. When a second use
-  arrives, the rename happens in the SAME edit as the second use -- never "later".
-- **Extend a table before inventing one.** These already exist — add to them:
-  `Classes.All` (a class) · `Ab.*` + `ClassDef.Abilities` (an ability) · `ClassDef.Rows` (a stat
-  only one class has) · `Enemies.All` (an enemy) · `Economy.All` (an upgrade) · `Missions` (a boss
-  level) · `Equipment` (a part) · `Tag` (a kind of thing) · `Status` (a thing done to something) ·
-  `NetIds` (an id space) · `TargetFilter` (who may be shot) · `TurretSpec`/`ITurretHost` (a gun and
-  what carries it) · `Aim`/`Motion` (pointing and arriving) · `PlayerShip.Slot` (per-ability state,
-  which is also how it reaches the wire) · `PlayerShip.Incoming`/`Guarded` (all damage, and every
-  defence against it) · `PlayerShip.NoteDealt` (all damage this ship deals).
-- **Before writing the second of anything, make the first one a row.** The second boss, the second
-  freighter, the second always-on gun: that is the moment the table is cheap and the copy is not.
-- Delete what a change replaces in the same edit. `UNUSED ANYWHERE: 0` is enforced.
-- No new tool script unless the same job will recur or it cannot be done inline; extend an existing
-  tool first. Scratch files go in the scratchpad, never in the repo.
-- Commit a checkpoint per slice. Only a green full run earns `VERIFIED:`.
+## 6 · Build — every change carries its check
 
-## 4 · The ladder — always the cheapest rung that can SEE the problem
+Edit in batches. Compile checks (`typecheck.ps1`, `verify.ps1 -Quick`) run after every job; they are cheap
+and are not tests. The engine runs once at the end of a batch, never to explore, never while a compile
+check is red.
 
-Every check in this project sits on a rung. **Run the lowest rung that can see the thing you
-changed. Never run a higher rung to prove something a lower rung proves.**
+**The harness is source.** `tools/smoketest/SmokeTest.cs.txt` and `tools/screens/Shots.cs.txt` compile
+INTO the game; a rename or deletion makes them callers to fix in the same edit (`typecheck.ps1` sees them).
 
-| # | Rung | Cost | What it can SEE | What it is BLIND to |
+Before the first line of a change, name its checks; they land in the same commit:
+1. **New** (mechanic, ability, row, weapon, enemy, status, screen, rule): a NEW check that fails without
+   it, asserting a literal from the request, from 3 varied situations (range, angle, front/behind,
+   moving/still).
+2. **Interaction** (two things meeting): its own check per pair. "Each works alone" is not a check.
+3. **Changed** (a number, rule, behaviour): grep the harness for every check asserting the old truth
+   (literal, row id, message) and rewrite it. Never delete or loosen a check; an obsolete one is replaced
+   in the same edit.
+4. **Fixed bug**: a check that fails on the old code first.
+5. **Visible**: a named frame in `Shots.cs.txt`, read by eye once.
+6. **Wire** (RPC, field, host-decided state a guest sees): a check in a guest role (rung 5).
+
+The commit message ends with a `Checks:` line naming every check added or rewritten. `verify.ps1` refuses a
+`scripts/` change with no harness change since the last `VERIFIED:` commit.
+
+**A check is code; a flake is a bug in it.** Rule out the three traps before committing one:
+- **Knife edge**: nothing exactly ON a boundary (dead astern, a range limit, an accumulated clock); vary
+  around the edge.
+- **Stale pick**: anything chosen before a wait (nearest foe, a position, a heading) is re-taken after it.
+- **Timed from the input**: start a clock on the first frame the effect shows, never on the key press.
+
+Positions and angles come from `Vary`/`VaryAngle`/`VaryNear` (a per-run `SEED n`; the steps `solo@<n>` and
+`six@<n>` replay it). Never vary a figure the check asserts. A new or rewritten check passes on **two seeds**
+at its rung before its lane merges (the merge chain runs it twice); a flaky one is fixed at rung 3 until
+three seeds pass. Never re-run a higher
+rung hoping for a different draw. Prove numbers with literals from the request; where a check must read a
+table, prove the table against literals in one place. Mutants only for authority, save-format and
+removed-path invariants, and only when a check's wiring is in doubt.
+
+## 7 · Systems — the next one is a row
+
+- **Generalise, never special-case.** A new boss, class, enemy, ability or upgrade is a row plus
+  parameters. A forced special case means the system is wrong: fix the system.
+- **Every new system**: a table of rows (numbers, art, text in data); a named public contract (`ITurretHost`,
+  `ITagged`, `IStatused`, `IRaidTarget`, `TurretSpec`, `StatRow`); one file named for the thing, with a
+  header saying what it replaced and what a row must fill in; reached by id or tag, never by type (`is
+  Raider`, `HitRadius < 20f` are design bugs); the generic path is the ONLY path.
+- **Name it for the mechanism, not its first use**; the rename happens in the same edit as the second use.
+- **Extend before inventing**: `Classes.All` · `Ab.*` + `ClassDef.Abilities` · `ClassDef.Rows` ·
+  `Enemies.All` · `Economy.All` · `Unlocks.All` · `Missions` · `Equipment` · `Tag` · `Status` · `NetIds` ·
+  `TargetFilter` · `TurretSpec`/`ITurretHost` · `Aim`/`Motion` · `PlayerShip.Slot` ·
+  `PlayerShip.Incoming`/`Guarded` · `PlayerShip.NoteDealt`. Before the second of anything, make the first
+  a row.
+- Delete what a change replaces in the same edit (`UNUSED ANYWHERE: 0`). No new tool script unless the job
+  recurs; scratch files go in the scratchpad.
+
+## 8 · The ladder — the cheapest rung that can SEE it
+
+| # | Rung | Cost | Sees | Blind to |
 |---|---|---|---|---|
-| 0 | Read the code, and the log you already have | free | anything you can reason about | nothing it was not given |
-| 1 | `typecheck\typecheck.ps1` | ~20 s | every rename, signature, missing caller — in `scripts/` **and in the harness** (`SmokeTest.cs.txt`, `Shots.cs.txt`) | behaviour, numbers, reflection by string |
-| 2 | `verify.ps1 -Quick` | ~1 min | rung 1 + 0 warnings, 0 analyser findings, `UNUSED ANYWHERE: 0`, no control characters, and no code change without a check change | behaviour, numbers, anything drawn |
-| 3 | `tools\smoketest\run.ps1 -Solo` | ~1.5 min | the whole single-player narrative: behaviour, every number, ability state, UI state | a host and a guest disagreeing |
-| 4 | `tools\screens\run.ps1` | ~1.5 min | what is DRAWN: 108 frames, `LINT: 0` for off-screen, clipped and overlapping | behaviour |
-| 5 | `tools\smoketest\run.ps1` (all six) | ~4 min | authority, replication, the protocol: host + two guests + the two-player arena | nothing the game does; it is the last word on correctness |
-| 6 | `verify.ps1 -Update` | ~13 min | **the bar**: rungs 1-5, ×3 runs, + map, snapshot, manifest, integrity | nothing — it is the release gate, not a debugging tool |
+| 0 | read the code and the logs you have | free | what you can reason about | what you were not given |
+| 1 | `typecheck\typecheck.ps1` | ~20 s | renames, signatures, callers, harness included | behaviour, reflection by string |
+| 2 | `verify.ps1 -Quick` | ~1 min | 1 + 0 warnings/findings, `UNUSED ANYWHERE: 0`, control chars, check-with-change | behaviour, drawing |
+| 3 | `run.ps1 -Solo` | ~2 min | the single-player narrative: numbers, abilities, UI state | host and guest disagreeing |
+| 4 | `tools\screens\run.ps1` | ~3 min | what is drawn: ~110 frames, `LINT: 0` | behaviour |
+| 5 | `run.ps1` (six roles) | ~4 min | authority, replication, protocol | nothing the game does |
+| 6 | `verify.ps1 -Update` | ~13 min | the bar: 1-5 ×3, map, snapshot, manifest, integrity | nothing; a gate, not a debugger |
 
-**Choosing a rung.** A rename or a signature: 1. A number, a behaviour, an ability, an economy
-row: 3. Anything visual: 4. Anything that crosses peers — an RPC, a field on the wire, a
-host-decided state a guest must see: 5. Anything else: the lowest rung on this list that names it.
+**Every engine run goes through `tools\rungs.ps1`** (`powershell -NoProfile -ExecutionPolicy Bypass -File
+tools\rungs.ps1 -Tree <checkout> -Tag <new tag> -Steps <chain>`; `-Tree` is required, so a lane is never
+tested as version-l by mistake): it runs the chain in order, stops at the
+first red, waits for the engine to be free, and writes `%TEMP%\warships_rungs\<tag>\summary.txt` + one log
+per step. Read the summary, grep a log; never start a harness directly.
 
-**Escalating.** Go up ONE rung, and only for one of two reasons:
+Per job: `quick` only. At the end of a batch, ONE chain covering everything the batch touched:
 
-1. **The rung is blind to it.** Authority is invisible below 5; a layout is invisible below 4. Do
-   not run a rung that cannot see the problem "to check" — that is a wasted run, and its green
-   verdict is worse than nothing.
-2. **The same rung has failed to resolve it twice.** Two attempts at a rung without the answer
-   means the rung is the wrong instrument, not that you need more of it.
+| the batch touched | end-of-batch chain |
+|---|---|
+| renames, signatures only | `quick` |
+| a rename of anything reached by string (RPC, NodePath, `Call("x")`) | `quick,solo,six` |
+| numbers, behaviour, abilities, rows | `quick,solo,solo` |
+| anything drawn | add `screens` |
+| anything a guest sees, an RPC, authority | add `six,six` |
+| the lane's last batch before its merge | `quick,solo,solo,six,screens` (`six,six` with new guest checks) |
+| all merges done | `bar`, once |
 
-**Coming back down is mandatory.** When rung 5 or 6 fails, read WHICH role and WHICH check failed,
-then drop to the lowest rung that covers that check, fix it there, and re-prove it there. A check
-that failed in the solo role is re-proved by rung 3 in 1.5 minutes — never by re-running the bar.
+A red at the end is traced through the ledger's job list (which job's files the failing check touches;
+`git bisect` over the job commits if unclear), fixed, and the chain re-run once.
 
-**Rung 6 runs ONCE, at the end of a batch**, and its output is a verdict, not a debugging tool. If
-it fails: read, drop, fix, re-prove low, then run it once more. Two bars in a row for the same
-fix means the ladder was skipped.
+Other steps: `solo@<n>`, `six@<n>` (replay a seed), `wan`. A tag is used once: the runner clears its folder.
 
-**Standing rules on the engine rungs (3-6):**
+**Escalate** one rung only when the lower rung is blind to it, or has failed to resolve it twice. **Come
+back down** always: on a red at 5 or 6, read which role and check, fix and re-prove at the lowest rung that
+covers it. Two bars in a row for one fix means the ladder was skipped.
 
-- Never start an engine rung while a compile rung is red. Green `-Quick` first, always.
-- Never run two engine harnesses at once (they share one scratch folder; the second wipes the first).
-- Prove numbers with **literals from the request**, never with the code's own constants. Where a
-  behaviour check must read a table, prove that table against literals in one place and let the
-  behaviour check read the row.
-- Mutants only for authority, save-format and removed-path invariants, and only when a check's
-  wiring is in doubt. Otherwise a new check passing on two different seeds is enough (§3).
-- A flaky check is a broken check. Fix its geometry at rung 3 until it passes three runs with
-  different seeds; never re-run a higher rung hoping for a different draw.
+## 9 · Standing invariants
 
-### Varied, not repeated
-
-Checks must not be tied to one placement. Use `Vary`, `VaryAngle` and `VaryNear` (SmokeTest) for
-positions, angles and distances: they draw from a per-run seed the run prints as `SEED n`, so each
-run covers different geometry and any failure comes back with `run.ps1 -Seed <n>`, which puts the
-same numbers back. Never vary a figure the check ASSERTS — only where a thing is and which way it
-faces. A check that only holds at one spot is a check that hides a bug.
-
-## 5 · Standing invariants
-
-- **A · Lifetime.** Everything created, subscribed or hooked is released in `_ExitTree`. Orphan and
-  object counts must not grow across leaving and re-entering a world.
-- **B · Authority.** World and combat state changes only under `Net.Sim` / `Net.IsHost`. Guests
-  request by RPC; the host checks the sender. Every visible state reaches guests.
-- **C · Replacement.** The old path is deleted, not left beside the new one. No comment describes
-  old behaviour.
+- **A · Lifetime.** Everything created, subscribed or hooked is released in `_ExitTree`; orphan and object
+  counts do not grow across leaving and re-entering a world.
+- **B · Authority.** World and combat state change only under `Net.Sim` / `Net.IsHost`; guests request by
+  RPC and the host checks the sender; every visible state reaches guests.
+- **C · Replacement.** The old path is deleted; no comment describes old behaviour.
 - **D · Correctness.** 0 warnings, 0 analyser findings, 0 unused members.
 
-## 6 · Replies to the player
+## 10 · Merge and release
 
-**Two to four lines. State facts, not process.** The player reads these to decide what to do next,
-not to learn what you did.
+- A lane merges when its merge chain is green at its HEAD and its gate passed: `git merge --no-ff wt/<lane>`
+  into `version-l`. Conflicts are resolved from the ledgers' intent (haiku only if the resolution is written).
+- After the merges, the bar once. Red: the lane its failing check traces to gets a fix batch (a new lane
+  from `version-l` if it traces to the combination), proved low, then the bar once more. Green: a
+  `VERIFIED:` commit, push to BOTH `version-l` and `main`. The owner
+  has a standing OK for GitHub releases. Real two-machine play has never worked: never call multiplayer
+  "working" until the owner and a friend have played.
 
-Say only what they cannot see for themselves:
+## 11 · Replies to the owner
 
-- **Done, or not**, with the rung that proved it: `rung 3 green` · `rung 5: 2 fails` ·
-  `compiles, untested`. Never "verified" without a green run.
-- **A problem**, in one line: what broke, where, and what it costs.
-- **Scope**, whenever they ask for something new -- this is the one thing they always want and
-  cannot get anywhere else. Three answers, in these words:
-  - **a row** -- it fits a table that exists; say which.
-  - **a new table** -- it needs a foundation first; say what the foundation is, in one line.
-  - **not without X** -- it cannot be done as asked; say what X is.
-- **A number they asked for**, on its own.
-- **A question you need answered**, in one line, with the default you will use if they do not answer.
+Two to four lines of facts, not process. Say only what they cannot see:
+- **Done or not**, with the rung: `rung 3 green` · `rung 5: 2 fails` · `compiles, untested`. Never
+  "verified" without a green run.
+- **A problem** in one line: what broke, where, what it costs.
+- **Scope** of every new request: **a row** (which table) · **a new table** (its foundation) · **not
+  without X**.
+- **A number** they asked for; **a question** in one line with its default.
 
-Never:
+Never narrate, restate the request, re-explain an approved design, paste what a tool printed, or praise
+your own work. WHY gets one sentence; detail when asked.
 
-- narrate what you are about to do, or what you just read
-- restate their request back to them
-- re-explain a design they have already approved
-- paste a table, a log or a diff the tool already printed -- point at it
-- use adjectives about your own work
-
-If they ask WHY, answer in one sentence. If they ask for detail, give it -- brevity is the default,
-not a rule against answering.
-
-## 7 · Commands
+## 12 · Commands
 
 ```
 typecheck\typecheck.ps1 · dotnet build · tools\analyse\run.ps1 · python tools\analyse\xref.py
-tools\smoketest\run.ps1 [-Solo|-Wan|-Seed <n>]
-tools\screens\run.ps1            # sweep; trust LINT: 0 for layout, read a frame only for new art
-tools\make_ships.ps1             # ship sprites from art_source\
-tools\finish_ships.ps1           # shade, upscale, detail a sprite
-python tools\make_sounds.py      # boss/ability sounds
+tools\lanes.ps1                                          # state in one call: lanes, chains, ledger_main
+tools\rungs.ps1 -Tree <checkout> -Tag <t> -Steps <chain>   # every engine run, the bar included
+tools\smoketest\run.ps1 · tools\screens\run.ps1   # only through rungs.ps1; trust LINT: 0 for layout,
+                                                  # read a frame only for new art
+tools\make_ships.ps1 · tools\finish_ships.ps1 · python tools\make_sounds.py
 python tools\map.py · tools\snapshot.ps1 · tools\manifest.ps1
 ```
-Godot is found by `tools\find-godot.ps1`. `-Update` regenerates map, snapshot and manifest in that
-order, then checks integrity. **Integrity is asked only in `-Update`**: anywhere else the
-manifest is still the last change's, so it could only ever say FAILED — and a red line in the
-verdict of every mid-session run is how a real failure gets waved through.
+Godot is found by `tools\find-godot.ps1`. `-Update` regenerates map, snapshot and manifest, then checks
+integrity; integrity is asked only there (anywhere else the manifest is the last change's and would read
+FAILED, which teaches everyone to ignore a red line).
 
-## 8 · Record (same commit as the code)
+## 13 · Record (same commit as the code)
 
-`docs/CHANGES.md` Handoff + Unreleased entry + honest `Known broken`; `DESIGN.md` for durable
-reasoning and new traps; `README.md` for sizes and commands; `REVIEW.md` for review passes.
-Keep each entry to what is true now — delete what a change reversed.
+`docs/CHANGES.md` Handoff + Unreleased + honest `Known broken`; `docs/DESIGN.md` for durable reasoning and
+new traps; `docs/README.md` for sizes and commands; `docs/REVIEW.md` for review passes. Keep each entry true
+now: delete what a change reversed.

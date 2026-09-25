@@ -29,15 +29,10 @@
 # flown, fired, its whole bar pressed with a target selected, and stood in front of a wave -- and
 # what it measured printed as FLY and ISSUE lines. For "what is actually wrong with this class",
 # which assertions cannot answer because they only know what we thought to ask.
-# -ReplyWindow is solo only, and ONE-TIME: the WebRTC reply-window measurement (docs/plans/
-# network_webrtc.md section 3.4). Seven in-process pairs, most of them made to wait until they fail, so the
-# plugin's own error lines are EXPECTED in this mode: they are printed and not counted. Its
-# `reply window:` line goes into DESIGN.md; ordinary runs never carry the measurement.
 # -OneDll is the one-DLL experiment (network_webrtc.md section 8): in the scratch copy only, the plugin's
 # debug line is pointed at its RELEASE DLL and the debug DLL deleted. Green means the editor loads
 # the release library, and the repo can vendor one DLL instead of two.
-param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed, [switch]$ReplyWindow, [switch]$OneDll)
-if ($ReplyWindow) { $Solo = $true }
+param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed, [switch]$OneDll)
 
 $ErrorActionPreference = 'Stop'
 
@@ -115,6 +110,16 @@ if (Test-Path $ud) { Remove-Item $ud -Recurse -Force }
 <configuration><packageSources><clear /><add key="godot" value="$nupkgs" /></packageSources></configuration>
 "@ | Set-Content (Join-Path $W 'nuget.config') -Encoding UTF8
 
+# Stops the box (below) through its control port, so it prints what it carried; killed if it does not
+# go. Safe to call twice, and from the finally: a box left running holds its ports, and the next run's
+# box could not bind them.
+$script:box = $null
+function Stop-Box {
+  if (-not $script:box -or $script:box.HasExited) { return }
+  try { Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:19480/box/quit' -TimeoutSec 3 | Out-Null } catch {}
+  if (-not $script:box.WaitForExit(5000)) { try { $script:box.Kill() } catch {} }
+}
+
 Push-Location $W
 try {
   # a test that does not compile tests nothing: stop here, loudly
@@ -177,6 +182,24 @@ try {
   & (Join-Path $PSScriptRoot '..\import.ps1') -Godot $Godot -Path $W -Log (Join-Path $W 'import.log') -Require $plugin
   if ($LASTEXITCODE -ne 0) { Write-Host "SMOKE TEST FAILED (the import)"; exit 2 }
 
+  # THE BOX (tools\smoketest\wan.py, network_webrtc.md section 10.1): the network between players,
+  # up for every run -- a STUN responder, silent ports, the pair proxy, and under -Wan the relays the
+  # guests join through, each 1000 above the session port it fronts. Stopped through its control port
+  # at the end, so it prints what it carried.
+  $boxArgs = @((Join-Path $PSScriptRoot 'wan.py'), '--http', 19480, '--life', 1300)
+  $gx = @()
+  if ($Wan) {
+    # one-way ms, jitter ms, loss %: WARSHIPS_WAN="150,40,5" for a worse day
+    $path = if ($env:WARSHIPS_WAN) { $env:WARSHIPS_WAN -split ',' } else { @(90, 25, 2) }
+    Write-Host ("internet: {0} ms each way, +/- {1} ms, {2}% lost" -f $path[0], $path[1], $path[2])
+    $boxArgs += @('--path', ($path -join ','))
+    foreach ($port in 27115, 27125) { $boxArgs += @('--relay', "$($port + 1000):$port") }
+    $gx = @('wan')
+  }
+  $script:box = Start-Process -FilePath python -ArgumentList $boxArgs -NoNewWindow -PassThru `
+         -RedirectStandardOutput (Join-Path $W 'box.out') -RedirectStandardError (Join-Path $W 'box.err')
+  Start-Sleep -Milliseconds 500
+
   $all = @()
   $want = 0
   if ($Fly) {
@@ -191,27 +214,9 @@ try {
             -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W 'fakeigd.out') -RedirectStandardError (Join-Path $W 'fakeigd.err')
     Start-Sleep -Milliseconds 500
     # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
-    $rwArg = if ($ReplyWindow) { @('replywindow') } else { @() }
-    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','solo') + $rwArg + $seedArg) 'solo' 1200) '[solo] '
+    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','solo') + $seedArg) 'solo' 1200) '[solo] '
     if (-not $fake.HasExited) { try { $fake.Kill() } catch {} }
     $want = 1
-  }
-
-  # The internet, for -Wan: one relay per session port, each 1000 above the port it fronts. The
-  # guests are told "wan" and join the relay instead of the host.
-  $relays = @()
-  $gx = @()
-  if ($Wan) {
-    $wanPy = Join-Path $PSScriptRoot 'wan.py'
-    # one-way ms, jitter ms, loss %: WARSHIPS_WAN="150,40,5" for a worse day
-    $path = if ($env:WARSHIPS_WAN) { $env:WARSHIPS_WAN -split ',' } else { @(90, 25, 2) }
-    Write-Host ("internet: {0} ms each way, +/- {1} ms, {2}% lost" -f $path[0], $path[1], $path[2])
-    foreach ($port in 27115, 27125) {
-      $relays += Start-Process -FilePath python -ArgumentList (@($wanPy, ($port + 1000), $port) + $path + 200) `
-                 -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W "wan$port.out") -RedirectStandardError (Join-Path $W "wan$port.err")
-    }
-    $gx = @('wan')
-    Start-Sleep -Milliseconds 300
   }
 
   if (-not $Solo -and -not $Fly) {
@@ -231,23 +236,20 @@ try {
     $all += Complete-Run $ah '[ahost] '
     $want += 5
   }
-  foreach ($r in $relays) { if (-not $r.HasExited) { try { $r.Kill() } catch {} } }
-  foreach ($port in 27115, 27125) {
-    $f = Join-Path $W "wan$port.out"
-    if ($Wan -and (Test-Path $f)) { Get-Content $f | ForEach-Object { Write-Host "  $_" } }
-  }
+  Stop-Box
+  # what the box carried: the relays' lines under -Wan, and anything it could not bind, always
+  $boxOut = @(Get-Content (Join-Path $W 'box.out') -ErrorAction SilentlyContinue)
+  $boxOut | Where-Object { ($Wan -and $_ -match '^wan ') -or $_ -match 'could not bind' } | ForEach-Object { Write-Host "  $_" }
 
   $all | ForEach-Object { Write-Host $_ }
-  $badRe = if ($ReplyWindow) { 'FAIL|Exception' } else { 'FAIL|Exception|ERROR' }
-  if ($ReplyWindow) { Write-Host "(-ReplyWindow: ERROR lines above are the late pairs timing out, and are not counted)" }
-  $bad = @($all | Where-Object { $_ -cmatch $badRe }).Count
+  $bad = @($all | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' }).Count
   $done = @($all | Where-Object { $_ -cmatch 'DONE' }).Count
   # "SOLO ONLY" in the verdict, always. A partial run that prints the same words as a full one is
   # a partial run that will be mistaken for the bar.
-  $what = if ($ReplyWindow) { 'SMOKE TEST (SOLO ONLY, REPLY WINDOW MEASUREMENT)' } elseif ($Solo) { 'SMOKE TEST (SOLO ONLY)' } elseif ($Wan) { 'SMOKE TEST (MULTIPLAYER OVER A SIMULATED INTERNET)' } else { 'SMOKE TEST' }
+  $what = if ($Solo) { 'SMOKE TEST (SOLO ONLY)' } elseif ($Wan) { 'SMOKE TEST (MULTIPLAYER OVER A SIMULATED INTERNET)' } else { 'SMOKE TEST' }
   if ($OneDll) { $what += ' (ONE DLL)' }
   if ($bad -gt 0 -or $done -ne $want) {
     Write-Host "$what FAILED ($bad problems, $done/$want runs finished)"; exit 1
   }
   Write-Host "$what PASSED"
-} finally { Pop-Location }
+} finally { Stop-Box; Pop-Location }

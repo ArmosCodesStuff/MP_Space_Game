@@ -50,7 +50,7 @@ public sealed class Raids
     private int _blockades;
     private void TickLanes(double delta)
     {
-        if (Hub.InArena || Missions.HighestBeaten(Missions.Bounty) < Lanes.NeedsBoss) return;
+        if (Hub.InArena || Missions.HighestBeaten(Missions.Bounty) < Unlocks.Boss(Opens.Raids)) return;
         if ((_laneIn -= delta) > 0) return;
         _laneIn = Lanes.BlockadeEvery;
         int lane = Lanes.NextOpen(_hub);

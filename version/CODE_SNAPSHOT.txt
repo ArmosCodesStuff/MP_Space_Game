@@ -1,8 +1,8 @@
 //==============================================================================
 // WARSHIPS -- code snapshot (master copy)
-// Taken 2026-09-24 21:24, on top of git commit d8df2f5. How it was verified is in the message of the
+// Taken 2026-09-24 23:49, on top of git commit 03d47ba. How it was verified is in the message of the
 //   commit that carries this file: one starting VERIFIED: is a green verify.ps1 -Update.
-// 124 files, 34114 lines. Code only: sprites, sounds and docs are in the zip.
+// 126 files, 34621 lines. Code only: sprites, sounds and docs are in the zip.
 //
 // Each file starts with a divider and a "// FILE: <path>" line. To split it back into
 // files, cut at each divider: everything after the divider's third line, up to the next
@@ -16,12 +16,12 @@
 //   MainMenu.tscn                                    6 lines   sha256 8a8dbe40f248
 //   PLAY.bat                                         6 lines   sha256 7f0033cefcde
 //   play.ps1                                        89 lines   sha256 25a3acbf4430
-//   verify.ps1                                     214 lines   sha256 b826bb37eaaa
+//   verify.ps1                                     224 lines   sha256 1b42ffa4a66d
 //   Warships.sln                                    19 lines   sha256 e41be78ae1d5
 //   docs/plans/models/adds_model.py                117 lines   sha256 5d86abc6d540
 //   docs/plans/models/curve.py                     151 lines   sha256 91958fdaf915
 //   docs/plans/models/curve_gated.py               157 lines   sha256 2df3b6ca76dd
-//   docs/plans/models/numbers_v2.py                600 lines   sha256 68eb90288013
+//   docs/plans/models/numbers_v2.py                608 lines   sha256 f218e1eb99ae
 //   docs/plans/models/player_model.py              126 lines   sha256 e650cf7b8e37
 //   docs/plans/models/power_v31.py                 276 lines   sha256 005fd49880b8
 //   docs/plans/models/raids_v2_model.py            120 lines   sha256 459e6bd23250
@@ -62,6 +62,7 @@
 //   scripts/Lancer.cs                               77 lines   sha256 917466494218
 //   scripts/Landmarks.cs                           208 lines   sha256 19daa0b72ace
 //   scripts/Lanes.cs                               332 lines   sha256 d76198ecf901
+//   scripts/Link.cs                                 80 lines   sha256 6ba892d1924b
 //   scripts/Loot.cs                                126 lines   sha256 e6667f04b596
 //   scripts/MainMenu.cs                            334 lines   sha256 8355e155b782
 //   scripts/MenuFoe.cs                             227 lines   sha256 14fb37605948
@@ -82,7 +83,7 @@
 //   scripts/ReturnButton.cs                         27 lines   sha256 e36ddbb19a08
 //   scripts/Router.cs                              429 lines   sha256 294cec245abf
 //   scripts/Session.cs                              93 lines   sha256 46348517ca82
-//   scripts/SessionMenu.cs                         141 lines   sha256 777687907142
+//   scripts/SessionMenu.cs                         153 lines   sha256 e939e4cd0636
 //   scripts/Settings.cs                             87 lines   sha256 4dd23a4a672f
 //   scripts/Sfx.cs                                 115 lines   sha256 0d13d491d744
 //   scripts/Shield.cs                               75 lines   sha256 0b089054ef52
@@ -111,28 +112,29 @@
 //   tools/find-godot.ps1                            53 lines   sha256 fabe4c75faae
 //   tools/finish_ships.ps1                         132 lines   sha256 2d7e2d5de2e4
 //   tools/gain.ps1                                  44 lines   sha256 41f4d8f93189
+//   tools/import.ps1                                79 lines   sha256 542a2a468c57
 //   tools/install.ps1                              120 lines   sha256 c173002da1d8
 //   tools/make_ships.ps1                           634 lines   sha256 805d9920a015
 //   tools/make_sounds.py                           239 lines   sha256 eb4db5729305
 //   tools/manifest.ps1                              76 lines   sha256 6f70070569f1
 //   tools/map.py                                   241 lines   sha256 75a5a67d7fc0
-//   tools/pack.ps1                                 225 lines   sha256 608096001f9a
+//   tools/pack.ps1                                 228 lines   sha256 4f38c670e187
 //   tools/snapshot.ps1                             103 lines   sha256 f56ea3d80a34
 //   tools/analyse/analysers.editorconfig            15 lines   sha256 45fdb7258163
 //   tools/analyse/run.ps1                           63 lines   sha256 e4826ee44822
 //   tools/analyse/run.sh                            16 lines   sha256 e6f2cd50f0c4
 //   tools/analyse/xref.py                           35 lines   sha256 2e1d2a7688ed
-//   tools/screens/run.ps1                          141 lines   sha256 99910d14c9b7
+//   tools/screens/run.ps1                          143 lines   sha256 eedc3703a368
 //   tools/screens/run.sh                            42 lines   sha256 73a5b3c63476
 //   tools/screens/Shots.cs.txt                     771 lines   sha256 f5d389d2f595
 //   tools/smoketest/fakeigd.py                     155 lines   sha256 b980d4fa4ad4
-//   tools/smoketest/run.ps1                        224 lines   sha256 eac0c409cadb
+//   tools/smoketest/run.ps1                        253 lines   sha256 5c782b950ed5
 //   tools/smoketest/run.sh                          57 lines   sha256 9ac9cbdf9115
-//   tools/smoketest/SmokeTest.cs.txt              9068 lines   sha256 16f713fbdd85
+//   tools/smoketest/SmokeTest.cs.txt              9343 lines   sha256 e55993fde081
 //   tools/smoketest/wan.py                          61 lines   sha256 97db24aa3f91
 //   typecheck/GodotStub.cs                         192 lines   sha256 2c5c2967bf5c
 //   typecheck/typecheck.ps1                        103 lines   sha256 dd966d7f62d7
-//   typecheck/typecheck.sh                          61 lines   sha256 c94fe5471263
+//   typecheck/typecheck.sh                          70 lines   sha256 36e5ed7ae7df
 //==============================================================================
 
 //==============================================================================
@@ -347,7 +349,7 @@ if ($Two) {
 
 //==============================================================================
 // FILE: verify.ps1
-// 214 lines   sha256 b826bb37eaaa
+// 224 lines   sha256 1b42ffa4a66d
 //==============================================================================
 # The whole bar, in one command:
 #
@@ -425,22 +427,32 @@ Step 'text' {
     # \f to a form feed, and tools\analyse\run.ps1 its \a and \r to a bell and a carriage return,
     # which split a comment in this file into a command. Tab and newline are text, and so is a
     # carriage return directly before a newline (PLAY.bat is CRLF, as a .bat should be). version/
-    # is generated, and an image or a sound is not text.
+    # is generated. A file with a NUL in its first 8000 bytes is binary (git's own test) and is not
+    # text, whatever its extension: a list of extensions let the vendored plugin DLLs in, and the
+    # millions of matches in 4 MB of machine code held this step for half an hour. Not git's
+    # w/-text, which also calls a lone carriage return binary and would skip the very file this
+    # step exists to catch.
     $env:Path += ';C:\Program Files\Git\cmd'
     $files = @(& git ls-files --cached --others --exclude-standard | Where-Object { $_ })
     $read = 0
+    $binary = 0
     $bad = @()
     foreach ($f in $files) {
-        if ($f -like 'version/*' -or $f -match '\.(png|ogg|wav)$' -or -not (Test-Path -LiteralPath $f)) { continue }
+        if ($f -like 'version/*' -or -not (Test-Path -LiteralPath $f)) { continue }
+        $path = Join-Path $PSScriptRoot $f
+        $head = New-Object byte[] 8000
+        $fs = [System.IO.File]::OpenRead($path)
+        try { $n = $fs.Read($head, 0, $head.Length) } finally { $fs.Dispose() }
+        if ([Array]::IndexOf($head, [byte]0, 0, $n) -ge 0) { $binary++; continue }
         $read++
-        $t = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot $f))
+        $t = [System.IO.File]::ReadAllText($path)
         foreach ($m in [regex]::Matches($t, '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]|\r(?!\n)')) {
             $bad += ('{0}:{1} U+{2:X4}' -f $f, $t.Substring(0, $m.Index).Split("`n").Count, [int][char]$m.Value)
         }
     }
     $bad | ForEach-Object { Write-Host "    $_" }
     # NONE READ IS NOT CLEAN. A git that listed nothing would otherwise pass this with 0 of 0.
-    Write-Host ("  {0} text files read, {1} control characters" -f $read, $bad.Count)
+    Write-Host ("  {0} text files read, {1} binary skipped, {2} control characters" -f $read, $binary, $bad.Count)
     $read -gt 0 -and $bad.Count -eq 0
 }
 
@@ -1030,7 +1042,7 @@ if __name__ == '__main__':
 
 //==============================================================================
 // FILE: docs/plans/models/numbers_v2.py
-// 600 lines   sha256 68eb90288013
+// 608 lines   sha256 f218e1eb99ae
 //==============================================================================
 # NUMBERS v2: one consistent model for the curve (base-class reference, level walls, no chips), the boss-fight
 # adds / raids, and the per-hull-category items (+10% compounding tiers). Read-only design model; see numbers_v2.md.
@@ -1052,14 +1064,14 @@ FIGHT, SHARE, MAXLEVEL = 60.0, 0.65, 40                # 60 s at par; par at 65%
 STEP = 0.03                                            # salvage: +3% of a part's ups per slot level (slot ladders)
 GROW, UP1, CHIP1 = 1.10, 0.25, 0.08                    # tiers compound +10%; T1 headline cap +25%; a chip's T1 lean
 MULT1 = 0.20                                           # T1 headline of a MULTIPLIER lean (rate, cooldown, duration)
-BASIC = (0.05, 0.05)                                   # the kit's Basic Combat Chip (+5% damage, +5% hull), NOT baked
 WALL_AB = (1, 3, 6)                                    # ability 1 / 2 / 3 open at pilot level
 WALL_CHIP = (2, 4, 8, 10, 12, 14)                      # chip slots 1-6 open at pilot level (6 on every hull)
 COMBAT_CAP = UTILITY_CAP = 3
 DRAKE_R = 700 / 760                                    # Drake row / Lancer row (kept from curve.md)
 TTD_TARGET = {'lancer': 31.0, 'drake': 42.0}           # the agreed time to die at par, sheet ("stops dodging")
 LADDER = (500, 1.10)                                   # salvage level n -> n+1 costs 500 x 1.10^n, gated
-REF = 'DESTROYER'                                      # the reference class (curve.md's median row)
+REF = 'DESTROYER'                                      # the reference class: its ROWS set every scale's shape
+ANCHOR = 'median'                                      # the L1 hull: 'median' = the fleet's walled L1 median (reconciled), 'ref' = REF's own
 Q_STEP = 1.01                                          # Missions.Quicken: wind-ups / 1.01^(L-1)
 
 # ---- the 12 base classes, kits v3 + the owner's later rulings. (category, base hull, weapon realistic DPS vs a
@@ -1068,13 +1080,13 @@ CLASSES = {
     'BATTLESHIP': ('capital', 500, 22.1, [('Broadside', 23.9), ('Brace', 0.0), ('CIWS', 0.0)]),
     'CARRIER':    ('capital', 425, 22.5, [('Bomber strike', 15.4), ('Warp gunships', 8.5), ('Supercarrier', 6.2)]),
     'DESTROYER':  ('capital', 395, 40.15, [('Long Lance', 14.2), ('Suppressing fire', 0.0), ('Grapnel', 0.65)]),
-    'FREIGHTER':  ('freighter', 450, 48.0, [('Time on target (hitscan)', 8.7), ('Bubble', 0.0), ('Redeploy', 0.0)]),
+    'FREIGHTER':  ('freighter', 450, 48.0, [('Time on target (hitscan)', 8.0), ('Bubble', 0.0), ('Redeploy', 0.0)]),
     'TENDER':     ('freighter', 380, 38.2, [('Overdrive', 6.1), ('Repair field', 0.0), ('Resupply', 1.7)]),
     'BASTION':    ('freighter', 420, 21.15, [('Bunker buster', 25.85), ('Shockwave', 0.0), ('Gravity well', 0.0)]),
     'WARRIOR':    ('heavy', 300, 40.0, [('Lunge', 5.9), ('Whirlwind', 0.0), ('Prism stance', 4.1)]),
     'SNIPER':     ('heavy', 240, 34.3, [('Anchor', 16.7), ('Tether mine', 0.0), ('Flares', 0.0)]),
     'WARDEN':     ('heavy', 270, 31.4, [('Hunters', 17.6), ('Taunt', 0.0), ('Flak curtain', 0.0)]),
-    'DART':       ('light', 200, 39.0, [('Rod from God', 22.0), ('Ramjet', 5.8), ('Slingshot', 0.0)]),
+    'DART':       ('light', 200, 41.6, [('Rod from God', 24.6), ('Ramjet', 5.8), ('Slingshot', 0.0)]),
     'ECHO':       ('light', 180, 61.2, [('Reverb', 10.8), ('Rewind', 0.0), ('EMP', 0.0)]),
     'WRAITH':     ('light', 220, 54.4, [('Veil', 4.4), ('Venom', 5.2), ('Shadow step', 0.0)]),
 }
@@ -1085,7 +1097,7 @@ RIP = {'DESTROYER': dict(frac=0.01, flat=10.0, cycle=21.0, use=0.8, nth=3)}
 # ---- boss rows per unit of scale (boss_model.md 1.3, re-read in Lancer.cs / Drake.cs). The escorts leave the
 # Lancer's sheet (they are squad wave 1 now). The beam is 5 ticks = 250 (fix B). Supers stay at their rows.
 LANCER = {'guns': (3.00, 1.00, False), 'trident': (3.00, 0.50, False), 'wave': (2.65, 0.50, False),
-          'beam': (250 / 30, 0.25, True), 'ram': (40 / 30, 0.25, True)}          # (sheet, land rate, super)
+          'beam': (250 / 30, 0.25, True), 'ram': (40 / 30, 0.25, False)}          # (sheet, land rate, super)
 DRAKE = {'gun': (2.40, 0.50, False), 'scrap': (2.50, 0.25, False), 'rock': (250 / 30, 0.25, True)}
 
 # ================================================================ THE ADDS SCHEDULE (raids_v2 + the rulings)
@@ -1196,7 +1208,6 @@ CHIPS = [   # generic: fit every hull; at most 3 combat and 3 utility fitted; NO
   ('chip_engine', 'Engine Chip', 'utility', None, 'top speed +5%, turn rate +6%', 'none'),
   ('chip_target', 'Targeting Chip', 'utility', None, 'every reach +6% (the Supercarrier ring included)', 'none'),
 ]
-BASIC_CHIPS = 3                                        # the starting kit: 3 Basic Combat Chips (combat kind)
 
 def wearable(cls):
     cat = CLASSES[cls][0]
@@ -1252,13 +1263,12 @@ def pilot(cls, L, k, chips=False, g=None, gear=None, hull_lines=True, chip_mode=
     Gg = G(g)
     dsh = 0.03 * w; hsh = UP1 * Gg * ((gr['Sh'] + gr['Fr']) if hull_lines else 0.0)
     if chips:
-        ci = ai = 0; basic_left = BASIC_CHIPS
+        ci = ai = 0                                                   # no starting chips: chip_basic is deleted
         for s in range(nc):
             kind = chip_mode[s]
             if kind == 'C':
                 p = gr['C'][ci]; ci += 1
-                if CHIP1 * p >= BASIC[0] or not basic_left: dsh += CHIP1 * p
-                else: dsh += BASIC[0]; hsh += BASIC[1]; basic_left -= 1     # the kit's Basic chip until one beats it
+                dsh += CHIP1 * p
             elif kind == 'A':
                 p = gr['A'][ai]; ai += 1
                 if p > 0: hsh += CHIP1 * p
@@ -1281,8 +1291,16 @@ def par(L):
     if L not in _PAR:
         rows = [pilot(REF, L, k) for k in range(4)]
         _PAR[L] = dict(H=sum(x[0] for x in rows) / 4, Dc=sum(x[1] for x in rows) / 4,
-                       boss=sum(hull_in_60(x[2], x[3]) for x in rows) / 4, rows=rows)
+                       boss=anchor_k() * sum(hull_in_60(x[2], x[3]) for x in rows) / 4, rows=rows)
     return _PAR[L]
+_AK = []
+def l1_dps(c): return sum(pilot(c, 1, k)[2] for k in range(4)) / 4      # a class's walled L1 boss DPS, over L1's 4 fights
+def anchor_k():
+    """Boss hull per unit of REF's 60 s hull: 1 for 'ref'; for 'median' the fleet's walled L1 median over REF's."""
+    if not _AK:
+        xs = sorted(l1_dps(c) for c in CLASSES); med = (xs[5] + xs[6]) / 2
+        _AK.append(1.0 if ANCHOR == 'ref' else med / l1_dps(REF))
+    return _AK[0]
 def hull_scale(L): return par(L)['boss'] / par(1)['boss']                # boss hull growth (the rip counts on bosses)
 def craft_scale(L): return par(L)['Dc'] / par(1)['Dc']                   # raiders' hull growth (no rip on craft)
 def dmg_scale(L): return par(L)['H'] / par(1)['H']                       # every boss and raider move's damage growth
@@ -1364,11 +1382,11 @@ def class_section():
             row.append(f"{tk:4.0f}/{ttd(hh, S):<4.0f}")
         print(f"   {c:<11}  {full_dps(c):5.1f}    " + ' '.join(row))
     rs = sorted(full_dps(c) for c in CLASSES)
-    print(f"   fleet median realistic {(rs[5] + rs[6]) / 2:.1f}; the reference's {full_dps(REF):.1f}. A median-DPS class kills in {60 * full_dps(REF) / ((rs[5] + rs[6]) / 2):.1f} s at L20+.")
+    print(f"   fleet median realistic {(rs[5] + rs[6]) / 2:.1f}; the reference's {full_dps(REF):.1f}. A median-DPS class kills in {60 * anchor_k() * full_dps(REF) / ((rs[5] + rs[6]) / 2):.1f} s at L20+ (anchor x{anchor_k():.3f}).")
 
 def chips_section():
     print("\n== 1c · THE SAME PILOT WITH EVERY OPEN CHIP SLOT FILLED (Combat, Combat, Combat, Armour, Armour, Armour in slot order;"
-          " a Basic chip until a Combat chip drops; no chip ladder)")
+          " no starting chips; no chip ladder)")
     print("   L  | chips open | TTK par -> chipped | x DPS | TTD par -> chipped (Lancer) | x hull || with a chip ladder at g = 0.65L: TTK")
     for L in (1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 35, 40, 60):
         p = par(L); S = boss_sheet('lancer') * dmg_scale(L)
@@ -1388,7 +1406,8 @@ def chips_section():
 
 # ================================================================ SECTION 2: RAIDS (boss-fight adds), re-run
 HEAVY_DPS, LIGHT_ROW = 2.58, RV.ROW                     # twin laser, 1.29 a barrel (ruling)
-REACT, EFF, RESPAWN, MISSILE, MISSILE_EVERY, LAND_PINNED = 2.0, 0.7, 30.0, 35.0, 12.0, 0.9
+REACT, EFF, RESPAWN, MISSILE, MISSILE_EVERY, LAND_PINNED = 2.0, 0.7, 30.0, 42.0, 12.0, 0.9   # MISSILE: EnemyDef.MissileDamage
+STRIP_SHARE = 55 / 46                                  # the escape floor is priced on the slowest class (D4)
 BEAM_FIRST, BEAM_EVERY, BEAM_WINDUP, BEAM_WAIT, ESCAPE = 6.0, 30.0, 6.0, 5.0, 0.6
 PAIR = RV.PAIR
 def Q(L): return Q_STEP ** (max(1, L) - 1)
@@ -1398,7 +1417,8 @@ def travel(slot, nl, heavy):
     c, b, t, r, *_ = RV.ROW[lk]; commit = c * b * t + r                   # a lights-only squad (Rusty L1-5)
     return RV.FORM_FOR + (commit - RV.hold(lk) - RV.EXTENT) / RV.burn(lk)
 def strip_time(hull_left, dp): return REACT + hull_left / (EFF * dp)
-def windup(L, pin_hull, dp): return max(BEAM_WINDUP / Q(L), strip_time(pin_hull, dp) + ESCAPE)
+def floor_strip(hull_left, dp): return strip_time(STRIP_SHARE * hull_left, dp)
+def windup(L, pin_hull, dp): return max(BEAM_WINDUP / Q(L), floor_strip(pin_hull, dp) + ESCAPE)
 
 def fight(L, dt=0.05, ignore=False, adds_on=True, hp=None):
     """Solo par pilot vs the level's boss and its adds. Everything scales by LEVEL: add hull x craft_scale(L), add and
@@ -1439,7 +1459,7 @@ def fight(L, dt=0.05, ignore=False, adds_on=True, hp=None):
             elif phase == 'winding' and pins > pins_before:
                 # THE ESCAPE FLOOR, live: a web that lands during the wind-up holds the burn until the par pilot
                 # could strip every pinner now on it (2 s react + hull / (0.7 x par DPS)) plus 0.6 s to leave the line.
-                burn_at = max(burn_at, t + strip_time(pin_hull, dp) + ESCAPE)
+                burn_at = max(burn_at, t + floor_strip(pin_hull, dp) + ESCAPE)
             if phase == 'winding': pins_before = pins
             if phase == 'winding' and t >= burn_at:
                 full = last_pin >= burn_at - ESCAPE - dt / 2            # still held 0.6 s before the first tick
@@ -1483,13 +1503,13 @@ def raids_section():
           f" With raiders taking a level, the strip is the same at every level (par L1 DPS vs craft {D1:.1f}):")
     for name, hull in (('2 webifiers (Rusty L1-8)', 50), ('3 webifiers (squad 1 from L15)', 75), ('3 talons (squad 2)', 54),
                        ('3 pods (squad 3, L39)', 180), ('all 9 lights at once (L39 worst)', 309)):
-        s = strip_time(hull, D1); print(f"     {name:<34} strip {s:4.2f} s -> floor {s + ESCAPE:4.2f} s")
+        s = floor_strip(hull, D1); print(f"     {name:<34} strip {s:4.2f} s -> floor {s + ESCAPE:4.2f} s")
     print("   L  | boss  | squads (H+lights)        | 6/Q(L) | squad-1 floor | windup vs squad 1 | margin || in the fight: wind-ups flown (s), beams landed on par")
     for L in (1, 3, 5, 7, 9, 11, 15, 17, 21, 25, 27, 29, 31, 33, 35, 37, 39, 41, 51):
         kinds = squad_kinds(L); n1 = kinds[0][1] if kinds else 0
-        fl = strip_time(25 * n1, D1) + ESCAPE if n1 else 0.0
+        fl = floor_strip(25 * n1, D1) + ESCAPE if n1 else 0.0
         wu = max(BEAM_WINDUP / Q(L), fl); f = fight(L)
-        print(f"   {L:<3}| {'RUSTY' if rusty(L) else 'DRAKE'} | {' '.join(f'[{('H' if h else '')}+{nl}]' for h, nl in kinds):<24} | {BEAM_WINDUP / Q(L):5.2f}  | {fl:5.2f}         | {wu:5.2f}             | {wu - (fl - ESCAPE) if n1 else float('nan'):4.2f}   || "
+        print(f"   {L:<3}| {'RUSTY' if rusty(L) else 'DRAKE'} | {' '.join('[' + ('H' if h else '') + f'+{nl}]' for h, nl in kinds):<24} | {BEAM_WINDUP / Q(L):5.2f}  | {fl:5.2f}         | {wu:5.2f}             | {wu - (fl - ESCAPE) if n1 else float('nan'):4.2f}   || "
               + ' '.join(f"{b[1]:.2f}" for b in f['beams']) + f"  landed {f['landed']}")
     print("\n   | L | adds | x boss | pinned | fight +% | adds' own DPS / DamageScale | full beams on par / fired | EXP +% (first fill) |")
     BANDS = [(1, 5), (6, 8), (9, 11), (12, 14), (15, 17), (18, 20), (21, 23), (24, 26), (27, 29), (30, 32), (33, 35), (36, 38), (39, 40)]
@@ -1505,7 +1525,7 @@ def raids_section():
             kinds = squad_kinds(Ls[0]); L0 = Ls[0]; pl = FIGHTS[L0][1]
             roster = sum((EXP_ADD['heavy'] if h else 0) + EXP_ADD['light'] * nl for h, nl in kinds)
             ex = roster * L0 / pl / (KILL * L0 / pl + DONE)
-            print(f"   | {a}-{b} {'RUSTY' if who == 'lancer' else 'DRAKE'} | {' '.join(f'[{('H' if h else '')}+{nl}]' for h, nl in kinds) or '-'} | x{x:.2f} | {100 * pin:.0f}% | {100 * fp:+.0f}% | {ad:.2f} | {lan}/{fired} | +{100 * ex:.0f}% |")
+            print(f"   | {a}-{b} {'RUSTY' if who == 'lancer' else 'DRAKE'} | {' '.join('[' + ('H' if h else '') + f'+{nl}]' for h, nl in kinds) or '-'} | x{x:.2f} | {100 * pin:.0f}% | {100 * fp:+.0f}% | {ad:.2f} | {lan}/{fired} | +{100 * ex:.0f}% |")
     print("\n   TIME TO DIE, realistic (dodging), boss alone -> with adds; par gear on each class's base hull")
     for L in (1, 6, 9, 18, 20, 30, 39, 40):
         r = res[L]; b = base[L]; row = []
@@ -1566,7 +1586,7 @@ def items_section():
             row.append(f"L{L} {100 * a / min(40, L):3.0f}%")
         print(f"     scrap 100 x {kk}^(t-1): " + '  '.join(row))
     # L40 builds
-    print("\n   L40, median class (DESTROYER, capital lines), against the L40 Lancer (hull", f"{boss_hull(40):.0f}", "): TTK s / TTD s (Lancer; Drake)")
+    print("\n   L40, the reference class (DESTROYER, capital lines), against the L40 Lancer (hull", f"{boss_hull(40):.0f}", "): TTK s / TTD s (Lancer; Drake)")
     L = 40; p = par(L); S_L = boss_sheet('lancer') * dmg_scale(L); S_D = boss_sheet('drake') * dmg_scale(L)
     T10 = {'W': P(10), 'U': P(10), 'Sh': P(10), 'Fr': P(10), 'C': [P(10)] * 3, 'A': [P(10)] * 3}
     NOHULL = dict(T10, Sh=0.0, Fr=0.0)
@@ -11054,6 +11074,91 @@ public partial class LaneGun : Node2D, ITurretHost
 }
 
 //==============================================================================
+// FILE: scripts/Link.cs
+// 80 lines   sha256 6ba892d1924b
+//==============================================================================
+using Godot;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+
+// THE TRANSPORT: THE ONE PLACE THAT NAMES WEBRTC (docs/plans/network_webrtc.md §7). The official
+// Godot webrtc-native plugin, vendored in addons/webrtc_native/, supplies the implementation of the
+// WebRtc* classes that core GodotSharp declares; this file owns what the game needs to know about it.
+// It grows slice by slice: R0 (this) holds the plugin row, the presence test, the channel table, the
+// sealing rule and the one way to hang up. R1 adds the STUN rows and the walk, R2 moves the session
+// onto it and deletes ENet's SetTimeout, ThrottleConfigure, RoundTripTime and PeerDisconnectLater.
+//
+// A PLUGIN UPGRADE IS A ROW: `Plugin` names the library, its version, the native class it registers
+// and its files; nothing else in the game names them. It is a readonly record, so it is part of the
+// build's fingerprint: two builds on different plugins do not meet.
+//
+// TRAP WHILE S1 IS IN THE TREE: Net's private `Link(ENetPacketPeer, int)` hides this class inside Net
+// (CS0119), so until R2 deletes that method only code outside Net names `Link`.
+public static class Link
+{
+    public sealed record PluginRow(string Name, string Version, string NativeClass, string Extension, string ReleaseDll);
+    public static readonly PluginRow Plugin = new("webrtc-native", "1.2.1", "WebRTCLibPeerConnection",
+        "res://addons/webrtc_native/webrtc_native.gdextension", "libwebrtc_native.windows.template_release.x86_64.dll");
+
+    // IS THE PLUGIN LOADED? Not a return code: with the DLL missing (or quarantined) the engine
+    // still answers Initialize, CreateOffer and CreateServer with Ok, and only a data channel comes
+    // back null (SPIKE F4). The class the library registers is the honest test, asked once.
+    // Not a readonly field: this machine's files are not part of the build's fingerprint.
+    public static bool Available => !PretendMissing && (_loaded ??= ClassDB.ClassExists(Plugin.NativeClass));
+    private static bool? _loaded;
+    // The smoke test's way to be a machine without the plugin, to prove the gate on a real menu.
+    public static bool PretendMissing;
+    // What the player reads where HOST and JOIN would be (plan §6.1, "plugin missing").
+    public static string MissingText =>
+        $"Multiplayer is off on this PC: its network library, {Plugin.ReleaseDll} ({Plugin.Name} {Plugin.Version}), did not load. "
+        + "It must sit beside Warships.exe; an antivirus may have quarantined it. Run PLAY.bat again to put it back. Playing offline works as always.";
+
+    // THE CHANNELS A SESSION NEGOTIATES, read off every [Rpc] in the game's assembly -- the harness's
+    // own stream included, since both ends of a test run are one build (§3.2). Transfer channel N is
+    // entry N - 1; a channel whose RPCs all ask for one unreliable mode gets it, anything else
+    // (a Reliable RPC on it, two modes, no RPC at all) is Reliable. Channel 0 is the plugin's own
+    // three. Each entry becomes its own data channel, so its own SCTP stream: a loss holds back only
+    // that row (NetChannels says which stream is which).
+    public static Godot.Collections.Array Channels()
+    {
+        const BindingFlags every = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        var rpcs = typeof(Link).Assembly.GetTypes().SelectMany(t => t.GetMethods(every))
+            .Select(m => m.GetCustomAttribute<RpcAttribute>()).Where(a => a != null && a.TransferChannel > 0).ToList();
+        int top = rpcs.Count == 0 ? 0 : rpcs.Max(a => a.TransferChannel);
+        var modes = new Godot.Collections.Array();
+        for (int ch = 1; ch <= top; ch++)
+        {
+            var asked = rpcs.Where(a => a.TransferChannel == ch).Select(a => a.TransferMode).Distinct().ToList();
+            modes.Add((int)(asked.Count == 1 ? asked[0] : MultiplayerPeer.TransferModeEnum.Reliable));
+        }
+        return modes;
+    }
+
+    // A BUNDLE IS SEALED ONE POLL AFTER GATHERING SAYS COMPLETE (v1 §2.6 S2): the last candidates
+    // arrive through signals inside the poll that reports Complete, so a bundle read in that same
+    // frame can miss one. Call once a frame after the connection's peer has been polled; true from
+    // the first frame after the one that first saw Complete.
+    public static bool Sealed(WebRtcPeerConnection c)
+    {
+        ulong id = c.GetInstanceId(), frame = Engine.GetProcessFrames();
+        if (c.GetGatheringState() != WebRtcPeerConnection.GatheringState.Complete) { _completeAt.Remove(id); return false; }
+        if (_completeAt.TryGetValue(id, out ulong at)) return at < frame;
+        foreach (var gone in _completeAt.Keys.Where(k => !GodotObject.IsInstanceIdValid(k)).ToList()) _completeAt.Remove(gone);
+        _completeAt[id] = frame;
+        return false;
+    }
+    private static readonly Dictionary<ulong, ulong> _completeAt = new();
+
+    // EVERY HANG-UP GOES THROUGH HERE (v1 §2.6 S3): the plugin's remove_peer prints an engine ERROR
+    // for an id it does not have, and a run with an ERROR line is a red run. A gone id is a no-op.
+    public static void Hang(WebRtcMultiplayerPeer mp, int id)
+    {
+        if (mp != null && mp.HasPeer(id)) mp.RemovePeer(id);
+    }
+}
+
+//==============================================================================
 // FILE: scripts/Loot.cs
 // 126 lines   sha256 e6667f04b596
 //==============================================================================
@@ -16562,7 +16667,7 @@ public static class Session
 
 //==============================================================================
 // FILE: scripts/SessionMenu.cs
-// 141 lines   sha256 777687907142
+// 153 lines   sha256 e939e4cd0636
 //==============================================================================
 using Godot;
 using System.Linq;
@@ -16609,12 +16714,20 @@ public partial class SessionMenu : CanvasLayer
         // the box lets go of the keyboard so the helm works again.
         _addr.TextSubmitted += t => { _addr.ReleaseFocus(); Limited(DoJoin); };
         _options.AddChild(_addr);
+        // NO PLUGIN, NO SESSION: without the WebRTC library HOST and JOIN are shut, and this says
+        // why and what fixes it. Offline play is untouched.
+        _missing = Ui.Lbl(Link.MissingText, Ui.Small, Ui.Dim);
+        _missing.Name = "PluginMissing";
+        _missing.Visible = !Link.Available;
+        _missing.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _missing.CustomMinimumSize = new Vector2(320, 0);
+        _options.AddChild(_missing);
 
         // FocusMode None: a clicked button must not keep keyboard focus, or Space/Enter
         // would press it again mid-flight.
         // one press a second: starting or stopping a session is not free, and nothing
         // should be able to hammer it
-        _hostBtn = Ui.Btn("HOST THIS WORLD", () => Limited(() => Net.I?.Host()), "Host");
+        _hostBtn = Ui.Btn("HOST THIS WORLD", () => Limited(() => { if (Link.Available) Net.I?.Host(); }), "Host");
         _joinBtn = Ui.Btn("JOIN", () => Limited(DoJoin), "Join");
         _offBtn = Ui.Btn("PLAY OFFLINE", () => Limited(() => Net.I?.GoOffline()), "Offline");
         _options.AddChild(_hostBtn); _options.AddChild(_joinBtn); _options.AddChild(_offBtn);
@@ -16659,6 +16772,9 @@ public partial class SessionMenu : CanvasLayer
         foreach (var btn in _sessionBtns) btn.Disabled = locked;
         // HOST while hosting would drop every guest to start the same session again
         _hostBtn.Disabled |= Net.IsHost && Net.IsOnline;
+        bool gated = !Link.Available;
+        _hostBtn.Disabled |= gated; _joinBtn.Disabled |= gated;
+        _missing.Visible = gated;
         var n = Net.I;
         _reconnect.Visible = n != null && n.CanReconnect;
         Refresh();
@@ -16690,10 +16806,11 @@ public partial class SessionMenu : CanvasLayer
         Ui.SetText(_toggle, $"{(_toggle.ButtonPressed ? "▾" : "▸")}  MULTIPLAYER  ({where})");
     }
 
-    private void DoJoin() => Net.I?.Join(_addr.Text);
+    private void DoJoin() { if (Link.Available) Net.I?.Join(_addr.Text); }
 
     private Button _hostBtn, _joinBtn, _offBtn, _reveal, _reconnect;
     private Button[] _sessionBtns;
+    private Label _missing;
     private bool _revealed;
     public const double PressGap = 1.0;
     private double _now, _lockedUntil;                          // game time: in play, the same as real time
@@ -22118,6 +22235,90 @@ for ($i = $dataAt; $i -lt $dataAt + $dataLen - 1; $i += 2) {
 Write-Host ("{0} -> {1}  x{2:0.0000}  ({3} samples)" -f $In, $Out, $Factor, [int]($dataLen / 2))
 
 //==============================================================================
+// FILE: tools/import.ps1
+// 79 lines   sha256 542a2a468c57
+//==============================================================================
+# IMPORTING A PROJECT FOLDER, JUDGED BY WHAT IT REGISTERED (docs/plans/network_webrtc.md section 7, section 8).
+#
+#   powershell -ExecutionPolicy Bypass -File tools\import.ps1 -Godot <console exe> -Path <project folder>
+#              [-Log <file>] [-Require res://addons/<name>/<name>.gdextension[,...]]
+#
+# `--headless --import` is the step that registers a GDExtension: it writes
+# .godot\extension_list.cfg. Its exit code is NOT the verdict. The first import after an extension
+# appears crashes AT EXIT (0xC0000005) after every step printed [ DONE ], with the import complete
+# and the list written (SPIKE F1: 3 of 3 on a fresh tree, 1 of 1 with the addon newly added; the
+# next import exited 0 every time). So an import that exits non-zero is run once more, and the
+# verdict is what the folder holds afterwards:
+#   * every extension named by -Require is in the folder;
+#   * every library file an extension names is in the folder -- which is also what keeps a vendored
+#     .gdextension trimmed to the libraries actually vendored (addons\webrtc_native: the two
+#     Windows x86_64 lines): a line for a file that is not there is refused, not left to fail at load;
+#   * every extension in the folder is listed in .godot\extension_list.cfg.
+# Exit 0 when all hold, 2 with the reason otherwise. Every tool that imports a folder calls this.
+param(
+  [Parameter(Mandatory = $true)][string]$Godot,
+  [Parameter(Mandatory = $true)][string]$Path,
+  [string]$Log,
+  [string[]]$Require = @()
+)
+
+$ErrorActionPreference = 'Stop'
+$Path = (Resolve-Path $Path).Path
+if (-not $Log) { $Log = Join-Path $Path 'import.log' }
+
+function Get-ResPath([string]$file) { 'res://' + ($file.Substring($Path.Length).TrimStart('\', '/') -replace '\\', '/') }
+function Get-DiskPath([string]$res) { Join-Path $Path (($res -replace '^res://', '') -replace '/', '\') }
+
+$exts = @()
+$addons = Join-Path $Path 'addons'
+if (Test-Path $addons) { $exts = @(Get-ChildItem $addons -Recurse -Filter '*.gdextension' | ForEach-Object { Get-ResPath $_.FullName }) }
+
+foreach ($r in $Require) {
+  if ($exts -notcontains $r) {
+    Write-Host "IMPORT REFUSED: $r is not in $Path. It is vendored by hand (docs\CHANGES.md, Handoff, says what goes there)."
+    exit 2
+  }
+}
+foreach ($e in $exts) {
+  $dir = Split-Path (Get-DiskPath $e)
+  foreach ($line in Get-Content (Get-DiskPath $e)) {
+    if ($line -match '^\s*[\w.]+\s*=\s*"([^"]+\.(dll|so|dylib|wasm))"') {
+      $lib = $Matches[1]
+      $file = if ($lib -like 'res://*') { Get-DiskPath $lib } else { Join-Path $dir ($lib -replace '/', '\') }
+      if (-not (Test-Path $file)) {
+        Write-Host "IMPORT REFUSED: $e names $lib, which is not there. Vendor it, or delete that line: only the libraries shipped belong in it."
+        exit 2
+      }
+    }
+  }
+}
+
+Set-Content $Log '' -Encoding UTF8
+$code = 0
+$tries = 0
+for ($try = 1; $try -le 2; $try++) {
+  $tries = $try
+  # Continue, not Stop, around the engine: under PowerShell 5.1 a native stderr line redirected
+  # with *> is a terminating error when Stop is set (SPIKE F8).
+  $ErrorActionPreference = 'Continue'
+  & $Godot --headless --import --path $Path *>> $Log
+  $code = $LASTEXITCODE
+  $ErrorActionPreference = 'Stop'
+  if ($code -eq 0) { break }
+  Add-Content $Log "import attempt $try exited $code; importing again (SPIKE F1: the first import after an extension appears crashes at exit)"
+}
+
+$list = Join-Path $Path '.godot\extension_list.cfg'
+$registered = if (Test-Path $list) { @(Get-Content $list | ForEach-Object { $_.Trim() }) } else { @() }
+$missing = @($exts | Where-Object { $registered -notcontains $_ })
+if ($missing.Count -gt 0) {
+  Write-Host "IMPORT FAILED: not registered after $tries import(s), last exit $code`: $($missing -join ', ') (log: $Log)"
+  exit 2
+}
+Write-Host ("import: {0} extension(s) registered{1}; last exit {2} after {3} import(s)" -f $exts.Count, $(if ($exts) { " ($($exts -join ', '))" } else { '' }), $code, $tries)
+exit 0
+
+//==============================================================================
 // FILE: tools/install.ps1
 // 120 lines   sha256 c173002da1d8
 //==============================================================================
@@ -23454,7 +23655,7 @@ print(f"MAP: {len(scripts)} scripts, {len(members)} members, {len(rpcs)} RPCs, {
 
 //==============================================================================
 // FILE: tools/pack.ps1
-// 225 lines   sha256 608096001f9a
+// 228 lines   sha256 4f38c670e187
 //==============================================================================
 # MAKE A RELEASE -- the one command that turns this tree into the five assets a player installs.
 #
@@ -23543,8 +23744,11 @@ Write-Host 'pack: exporting the game (a few minutes)'
 # at 0 CPU indefinitely. Waiting on that hangs the release with nothing to read and nothing to
 # diagnose. So: wait generously, then stop waiting and let the files decide. ($args is an
 # automatic variable in PowerShell and must not be used for this.)
-$exportArgs = @('--headless', '--path', $repo, '--export-release', 'Windows Desktop',
-                (Join-Path $game 'Warships.exe'))
+# QUOTED BY HAND. Windows PowerShell's Start-Process joins -ArgumentList with plain spaces and
+# quotes nothing, so the preset name "Windows Desktop" reached Godot as two arguments and the export
+# refused "Windows" as an unknown preset. Every element that can hold a space carries its quotes.
+$exportArgs = @('--headless', '--path', ('"{0}"' -f $repo), '--export-release', '"Windows Desktop"',
+                ('"{0}"' -f (Join-Path $game 'Warships.exe')))
 $proc = Start-Process -FilePath $godotExe -ArgumentList $exportArgs -PassThru -NoNewWindow
 if (-not $proc.WaitForExit($ExportWait * 1000)) {
     Write-Host ('pack: the export has not exited after {0} s -- judging it by what it wrote' -f $ExportWait)
@@ -23941,7 +24145,7 @@ print('USED ONLY BY TESTS:', len(test_only)); [print('  ' + x) for x in sorted(t
 
 //==============================================================================
 // FILE: tools/screens/run.ps1
-// 141 lines   sha256 99910d14c9b7
+// 143 lines   sha256 eedc3703a368
 //==============================================================================
 # Windows port of run.sh -- renders real screenshots of the game (select screen, creator,
 # both classes in the hub, the K window, a bomber strike) so layout and art can be LOOKED
@@ -24048,7 +24252,9 @@ try {
     Write-Host "SWEEP FAILED (the build failed)"; exit 1
   }
 
-  & $Godot --headless --import --path $W *> (Join-Path $W 'import.log')
+  # judged by what it registered, not by its exit code (SPIKE F1); refused without the WebRTC plugin
+  & (Join-Path $PSScriptRoot '..\import.ps1') -Godot $Godot -Path $W -Log (Join-Path $W 'import.log') -Require 'res://addons/webrtc_native/webrtc_native.gdextension'
+  if ($LASTEXITCODE -ne 0) { Write-Host "SWEEP FAILED (the import)"; exit 1 }
 
   $render = @('--path', $W, '--windowed', '--resolution', '1600x900')
   if ($Compat) { $render += @('--rendering-driver', 'opengl3', '--rendering-method', 'gl_compatibility') }
@@ -25070,7 +25276,7 @@ time.sleep(LIFE)
 
 //==============================================================================
 // FILE: tools/smoketest/run.ps1
-// 224 lines   sha256 eac0c409cadb
+// 253 lines   sha256 5c782b950ed5
 //==============================================================================
 # Windows port of run.sh -- headless runtime check: boots the REAL engine, drives real
 # input, and runs a host and TWO guests (three players) against each other over localhost.
@@ -25103,7 +25309,15 @@ time.sleep(LIFE)
 # flown, fired, its whole bar pressed with a target selected, and stood in front of a wave -- and
 # what it measured printed as FLY and ISSUE lines. For "what is actually wrong with this class",
 # which assertions cannot answer because they only know what we thought to ask.
-param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed)
+# -ReplyWindow is solo only, and ONE-TIME: the WebRTC reply-window measurement (docs/plans/
+# network_webrtc.md section 3.4). Seven in-process pairs, most of them made to wait until they fail, so the
+# plugin's own error lines are EXPECTED in this mode: they are printed and not counted. Its
+# `reply window:` line goes into DESIGN.md; ordinary runs never carry the measurement.
+# -OneDll is the one-DLL experiment (network_webrtc.md section 8): in the scratch copy only, the plugin's
+# debug line is pointed at its RELEASE DLL and the debug DLL deleted. Green means the editor loads
+# the release library, and the repo can vendor one DLL instead of two.
+param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed, [switch]$ReplyWindow, [switch]$OneDll)
+if ($ReplyWindow) { $Solo = $true }
 
 $ErrorActionPreference = 'Stop'
 
@@ -25145,6 +25359,21 @@ robocopy $src $W /E /XD .godot .git bin obj /NFL /NDL /NJH /NJS /NP | Out-Null
 # discarded, so a half-copied tree went on to build, import and report on whatever arrived.
 if ($LASTEXITCODE -ge 8) { Write-Host "copy FAILED (robocopy $LASTEXITCODE): $src -> $W"; exit 2 }
 Copy-Item (Join-Path $PSScriptRoot 'SmokeTest.cs.txt') (Join-Path $W 'scripts\_Test.cs') -Force
+
+# THE WEBRTC PLUGIN every run needs (Link.cs): its folder and the extension file in it.
+$plugin = 'res://addons/webrtc_native/webrtc_native.gdextension'
+if ($OneDll) {
+  $ext1 = Join-Path $W 'addons\webrtc_native\webrtc_native.gdextension'
+  if (-not (Test-Path $ext1)) { Write-Host "-OneDll: $plugin is not in the tree"; exit 2 }
+  $txt = [IO.File]::ReadAllText($ext1)
+  $rel = [regex]::Match($txt, '(?m)^\s*windows\.release\.x86_64\s*=\s*"([^"]+)"').Groups[1].Value
+  $dbg = [regex]::Match($txt, '(?m)^\s*windows\.debug\.x86_64\s*=\s*"([^"]+)"').Groups[1].Value
+  if (-not $rel -or -not $dbg) { Write-Host "-OneDll: the plugin has no windows debug and release x86_64 lines"; exit 2 }
+  [IO.File]::WriteAllText($ext1, $txt.Replace("""$dbg""", """$rel"""))
+  $dbgFile = if ($dbg -like 'res://*') { Join-Path $W (($dbg -replace '^res://', '') -replace '/', '\') } else { Join-Path (Split-Path $ext1) ($dbg -replace '/', '\') }
+  Remove-Item $dbgFile -Force
+  Write-Host "ONE DLL: the debug line now loads $rel, and $dbg is gone from the copy"
+}
 
 $pg = Join-Path $W 'project.godot'
 $t = Get-Content $pg -Raw
@@ -25224,7 +25453,9 @@ try {
   # the seed every role runs with: given, or each engine picks its own and prints it
   $seedArg = if ($Seed) { @("seed=$Seed") } else { @() }
 
-  & $Godot --headless --import --path $W *> (Join-Path $W 'import.log')
+  # judged by what it registered, not by its exit code (SPIKE F1); refused without the plugin
+  & (Join-Path $PSScriptRoot '..\import.ps1') -Godot $Godot -Path $W -Log (Join-Path $W 'import.log') -Require $plugin
+  if ($LASTEXITCODE -ne 0) { Write-Host "SMOKE TEST FAILED (the import)"; exit 2 }
 
   $all = @()
   $want = 0
@@ -25240,7 +25471,8 @@ try {
             -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W 'fakeigd.out') -RedirectStandardError (Join-Path $W 'fakeigd.err')
     Start-Sleep -Milliseconds 500
     # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
-    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','solo') + $seedArg) 'solo' 1200) '[solo] '
+    $rwArg = if ($ReplyWindow) { @('replywindow') } else { @() }
+    $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','solo') + $rwArg + $seedArg) 'solo' 1200) '[solo] '
     if (-not $fake.HasExited) { try { $fake.Kill() } catch {} }
     $want = 1
   }
@@ -25286,11 +25518,14 @@ try {
   }
 
   $all | ForEach-Object { Write-Host $_ }
-  $bad = @($all | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' }).Count
+  $badRe = if ($ReplyWindow) { 'FAIL|Exception' } else { 'FAIL|Exception|ERROR' }
+  if ($ReplyWindow) { Write-Host "(-ReplyWindow: ERROR lines above are the late pairs timing out, and are not counted)" }
+  $bad = @($all | Where-Object { $_ -cmatch $badRe }).Count
   $done = @($all | Where-Object { $_ -cmatch 'DONE' }).Count
   # "SOLO ONLY" in the verdict, always. A partial run that prints the same words as a full one is
   # a partial run that will be mistaken for the bar.
-  $what = if ($Solo) { 'SMOKE TEST (SOLO ONLY)' } elseif ($Wan) { 'SMOKE TEST (MULTIPLAYER OVER A SIMULATED INTERNET)' } else { 'SMOKE TEST' }
+  $what = if ($ReplyWindow) { 'SMOKE TEST (SOLO ONLY, REPLY WINDOW MEASUREMENT)' } elseif ($Solo) { 'SMOKE TEST (SOLO ONLY)' } elseif ($Wan) { 'SMOKE TEST (MULTIPLAYER OVER A SIMULATED INTERNET)' } else { 'SMOKE TEST' }
+  if ($OneDll) { $what += ' (ONE DLL)' }
   if ($bad -gt 0 -or $done -ne $want) {
     Write-Host "$what FAILED ($bad problems, $done/$want runs finished)"; exit 1
   }
@@ -25361,7 +25596,7 @@ echo "SMOKE TEST PASSED"
 
 //==============================================================================
 // FILE: tools/smoketest/SmokeTest.cs.txt
-// 9068 lines   sha256 16f713fbdd85
+// 9343 lines   sha256 e55993fde081
 //==============================================================================
 // Headless smoke test. NOT game code: run.sh copies the project to a scratch folder,
 // drops this in as scripts/_Test.cs, registers it as an autoload, and runs it.
@@ -25531,8 +25766,10 @@ public partial class _Test : Node
     // other reports a second threw four in ten of this stream away AT THE RECEIVER: 5.8 a second
     // arrived with nothing dropped before sending. The throttle is the PEER's, on every channel, so
     // a channel of its own still measures it, and only it. (The game's own streams have one each
-    // now, NetChannels; this one sits well clear of that table, and a check says so.)
-    const int StreamChannel = 200;
+    // now, NetChannels; this one is the next number after that table's last row, never one of its
+    // rows, and a check says so. Not further out: a WebRTC session opens only the channels
+    // Link.Channels() lists, and a gap is a data channel that carries nothing.)
+    const int StreamChannel = NetChannels.BossSounds + 1;
     bool _streaming; double _streamClock; int _streamGot;
     public override void _Process(double delta)
     {
@@ -25541,6 +25778,242 @@ public partial class _Test : Node
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = StreamChannel)]
     void NetStream() => _streamGot++;
+
+    // ── WEBRTC, R0: THE PLUGIN INSIDE WARSHIPS (docs/plans/network_webrtc.md §10.4 R0) ─────────────
+    // Two WebRtcMultiplayerPeers in this one process, polled by hand: a host (server) and a guest
+    // (client), one connection each, THE HOST MAKING THE OFFER as in every spike run, and the bundles
+    // swapped whole -- sealed, not trickled -- as an invite and its reply will be. Timed on the WALL
+    // clock: libjuice's timers are real time, and --fixed-fps game time is not.
+    sealed class RtcPair
+    {
+        public readonly int Id;
+        public readonly long ApplyAfterMs;              // the host takes the reply this long after it was made
+        public readonly bool Delivered;                 // the guest is handed the invite at all
+        public readonly WebRtcMultiplayerPeer Host = new(), Guest = new();
+        public readonly WebRtcPeerConnection HostConn = new(), GuestConn = new();
+        public readonly Error Served;
+        public readonly bool ConnectedAtOnce;
+        string _offer, _answer;
+        readonly List<(string media, int index, string name)> _offerCands = new(), _answerCands = new();
+        public bool OfferSealed, Pasted, ReplySealed, Applied;
+        public ulong ReplyAt, AppliedAt, HostSawAt, GuestSawAt, HostLostAt, GuestLostAt;
+        public WebRtcPeerConnection.ConnectionState GuestAtApply;   // had the guest's side got through alone (P2)?
+        public int Handlers, OffMain;                   // signal handlers run, and how many off the main thread
+        public RtcPair(int id, long applyAfterMs = 0, bool delivered = true)
+        {
+            Id = id; ApplyAfterMs = applyAfterMs; Delivered = delivered;
+            var ice = new Godot.Collections.Dictionary { ["iceServers"] = new Godot.Collections.Array() };
+            Served = Host.CreateServer(Link.Channels());
+            ConnectedAtOnce = Host.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected;
+            Guest.CreateClient(id, Link.Channels());
+            HostConn.Initialize(ice); GuestConn.Initialize(ice);
+            HostConn.SessionDescriptionCreated += (type, sdp) => { Seen(); HostConn.SetLocalDescription(type, sdp); _offer = sdp; };
+            HostConn.IceCandidateCreated += (m, i, n) => { Seen(); _offerCands.Add((m, (int)i, n)); };
+            GuestConn.SessionDescriptionCreated += (type, sdp) => { Seen(); GuestConn.SetLocalDescription(type, sdp); _answer = sdp; };
+            GuestConn.IceCandidateCreated += (m, i, n) => { Seen(); _answerCands.Add((m, (int)i, n)); };
+            Host.PeerConnected += p => { Seen(); if (p == Id) HostSawAt = Now; };
+            Host.PeerDisconnected += p => { Seen(); if (p == Id) HostLostAt = Now; };
+            Guest.PeerConnected += p => { Seen(); if (p == 1) GuestSawAt = Now; };
+            Guest.PeerDisconnected += p => { Seen(); if (p == 1) GuestLostAt = Now; };
+            Host.AddPeer(HostConn, id);
+            HostConn.CreateOffer();
+        }
+        public static ulong Now => Time.GetTicksMsec();
+        readonly ulong _born = Now;
+        void Seen() { Handlers++; if (OS.GetThreadCallerId() != OS.GetMainThreadId()) OffMain++; }
+        public bool Connected => HostSawAt > 0 && GuestSawAt > 0;
+        // How far a pair got, for the message of a check it failed: a pair that did not connect once
+        // in three bars said only "5000 ms", and nothing of which step it stopped at.
+        public string Stage() =>
+            $"offer sealed {OfferSealed}, pasted {Pasted}, reply sealed {ReplySealed} at {(ReplySealed ? ReplyAt - _born : 0)} ms, "
+            + $"applied {Applied} at {(Applied ? AppliedAt - _born : 0)} ms; host {HostConn.GetConnectionState()} with {_offerCands.Count} candidates, "
+            + $"guest {GuestConn.GetConnectionState()} with {_answerCands.Count}; host saw {HostSawAt > 0}, guest saw {GuestSawAt > 0}";
+        // One frame: poll both ends, then move the exchange on. The guest "pastes" the invite the
+        // frame it is sealed; the host takes the reply ApplyAfterMs after the guest sealed it.
+        public void Step()
+        {
+            Host.Poll(); Guest.Poll();
+            if (!OfferSealed && Link.Sealed(HostConn)) OfferSealed = true;
+            if (OfferSealed && !Pasted && Delivered)
+            {
+                Pasted = true;
+                Guest.AddPeer(GuestConn, 1);
+                GuestConn.SetRemoteDescription("offer", _offer);
+                foreach (var c in _offerCands) GuestConn.AddIceCandidate(c.media, c.index, c.name);
+            }
+            if (Pasted && !ReplySealed && Link.Sealed(GuestConn)) { ReplySealed = true; ReplyAt = Now; }
+            if (ReplySealed && !Applied && Now >= ReplyAt + (ulong)ApplyAfterMs)
+            {
+                Applied = true; AppliedAt = Now; GuestAtApply = GuestConn.GetConnectionState();
+                HostConn.SetRemoteDescription("answer", _answer);
+                foreach (var c in _answerCands) HostConn.AddIceCandidate(c.media, c.index, c.name);
+            }
+        }
+        // Every object this pair made, let go of here and now -- not by the collector's finalizer
+        // thread (Assets.cs: a C# handle released there can turn into an engine ERROR).
+        public void Free()
+        {
+            Host.Close(); Guest.Close(); HostConn.Close(); GuestConn.Close();
+            Host.Dispose(); Guest.Dispose(); HostConn.Dispose(); GuestConn.Dispose();
+        }
+    }
+    async Task<bool> RtcUntil(Func<bool> done, int ms, params RtcPair[] pairs)
+    {
+        ulong end = RtcPair.Now + (ulong)ms;
+        while (!done() && RtcPair.Now < end)
+        {
+            foreach (var p in pairs) p.Step();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        return done();
+    }
+    // One side's data channels, read once and let go of at once (see Free).
+    static List<(int id, WebRtcDataChannel.ChannelState state, int life)> RtcChannels(WebRtcMultiplayerPeer mp, int id)
+    {
+        using var peer = mp.GetPeer(id);
+        var seen = new List<(int, WebRtcDataChannel.ChannelState, int)>();
+        foreach (var v in peer["channels"].AsGodotArray())
+            using (var ch = v.As<WebRtcDataChannel>()) seen.Add((ch.GetId(), ch.GetReadyState(), ch.GetMaxPacketLifeTime()));
+        return seen;
+    }
+
+    // THE REPLY WINDOW, MEASURED ONCE (§3.4; `run.ps1 -ReplyWindow` hands the solo role
+    // `replywindow`). The friend's agent starts its give-up clock at paste; on this path -- an
+    // in-process pair over the LAN host candidate, where the host answers the guest's early checks
+    // (P2) -- the guest's DTLS client may start before the host has the reply, and bound the window
+    // sooner. Seven pairs start together at the top of the run; each host takes its reply 5, 10, 15,
+    // 25, 35, 45 or 60 s after the guest made it; each is judged 5 s after that. About 65 s, in the
+    // background. The edit that sets Link.ReplyWindowS from it replaces this with the permanent check.
+    static readonly int[] ReplyDelaysS = { 5, 10, 15, 25, 35, 45, 60 };
+    Task<List<(int delay, long ms, WebRtcPeerConnection.ConnectionState guest)>> _replyWindow;
+    async Task<List<(int delay, long ms, WebRtcPeerConnection.ConnectionState guest)>> MeasureReplyWindow()
+    {
+        if (!Link.Available) return null;
+        var pairs = ReplyDelaysS.Select((d, i) => new RtcPair(2 + i, d * 1000L)).ToList();
+        bool Judged(RtcPair p) => p.Connected || (p.Applied && RtcPair.Now > p.AppliedAt + 5000);
+        await RtcUntil(() => pairs.All(Judged), (ReplyDelaysS.Max() + 20) * 1000, pairs.ToArray());
+        var seen = pairs.Select(p => ((int)(p.ApplyAfterMs / 1000),
+                                      p.Connected && p.Applied ? (long)Math.Max(p.HostSawAt, p.GuestSawAt) - (long)p.AppliedAt : -1L,
+                                      p.GuestAtApply)).ToList();
+        foreach (var p in pairs) p.Free();
+        return seen;
+    }
+
+    async Task WebRtcPairs()
+    {
+        if (_replyWindow != null && await _replyWindow is { } measured)
+        {
+            // the window is the longest delay up to which EVERY pair connected
+            int window = 0;
+            foreach (var m in measured) { if (m.ms < 0) break; window = m.delay; }
+            int proposed = Math.Min(window - 10, 30);
+            GD.Print($"  reply window: {string.Join(" · ", measured.Select(m => $"{m.delay} s {(m.ms >= 0 ? $"connected {m.ms} ms after" : "NOT connected")} (guest {m.guest} at the reply)"))}; "
+                     + $"every delay up to {window} s connected, so Link.ReplyWindowS = {proposed}");
+            Check(proposed >= 15,
+                  $"the reply window leaves a friend at least 15 s: Link.ReplyWindowS would be {proposed} (every delay up to {window} s connected; under 15 stops the batch, network_webrtc.md §3.4)");
+        }
+        // THE PLUGIN LOADED, asked by the literal names the spike read (SPIKE Q1), so the row is
+        // proved against them here and every other check reads the row.
+        bool loaded = GDExtensionManager.GetLoadedExtensions().Contains("res://addons/webrtc_native/webrtc_native.gdextension");
+        Check(loaded && ClassDB.ClassExists("WebRTCLibPeerConnection") && Link.Available && Link.Plugin.Extension == "res://addons/webrtc_native/webrtc_native.gdextension",
+              $"the WebRTC plugin loaded: webrtc_native.gdextension is registered and WebRTCLibPeerConnection exists ({string.Join(", ", GDExtensionManager.GetLoadedExtensions())})");
+        if (!loaded || !Link.Available) return;              // every check below would only wait out its time
+
+        // THE CHANNEL TABLE: every [Rpc] in the build, the harness's stream included (§3.2). S1's 11
+        // rows -- Cosmetic Reliable, ten ordered streams -- and the harness's stream on 12, the next
+        // number after the last row.
+        var modes = Link.Channels().Select(v => (MultiplayerPeer.TransferModeEnum)(int)v).ToList();
+        Check(StreamChannel == 12 && modes.Count == 12 && modes[0] == MultiplayerPeer.TransferModeEnum.Reliable
+              && modes.Skip(1).All(m => m == MultiplayerPeer.TransferModeEnum.UnreliableOrdered),
+              $"a session negotiates 12 channels above 0: Cosmetic Reliable, then 11 ordered ones, the harness's stream the last ({string.Join(",", modes.Select(m => m.ToString()[0]))}; stream on {StreamChannel})");
+
+        // A CONNECTED PAIR, the id drawn as the host will draw it (2 .. 2^31 - 1)
+        var a = new RtcPair(Rng.RandiRange(2, int.MaxValue));
+        Check(a.Served == Error.Ok && a.ConnectedAtOnce, $"CreateServer is Connected in the same call ({a.Served})");
+        ulong t0 = RtcPair.Now;
+        bool up = await RtcUntil(() => a.Connected, 5000, a);
+        Check(up, $"an in-process pair connects, the host offering, bundles sealed and swapped whole ({RtcPair.Now - t0} ms, id {a.Id}{(up ? "" : "; " + a.Stage())})");
+        if (!up) { a.Free(); return; }
+        // every row's data channel open at both ends -- 15: channel 0's three and the 12 above -- and
+        // every one of them reliable whatever the row asked for (Godot writes maxPacketLifetime, the
+        // plugin reads maxPacketLifeTime: §2.1), which is why each row has its own
+        var hostCh = RtcChannels(a.Host, a.Id); var guestCh = RtcChannels(a.Guest, 1);
+        Check(hostCh.Count == 15 && guestCh.Count == 15 && hostCh.Concat(guestCh).All(c => c.state == WebRtcDataChannel.ChannelState.Open),
+              $"every row's data channel opens at both ends: 15 each ({hostCh.Count} host, {guestCh.Count} guest; ids {string.Join(",", hostCh.Select(c => c.id))})");
+        Check(hostCh.Concat(guestCh).All(c => c.life == -1),
+              $"every data channel is reliable: no packet lifetime on any of them ({string.Join(",", hostCh.Select(c => c.life).Distinct())})");
+        // a packet on the highest row arrives on that row, both ways
+        var got = new List<string>();
+        foreach (var (from, to, target) in new[] { (a.Host, a.Guest, a.Id), (a.Guest, a.Host, 1) })
+        {
+            from.TransferChannel = StreamChannel; from.TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered; from.SetTargetPeer(target);
+            from.PutPacket(BitConverter.GetBytes(a.Id ^ target));
+            await RtcUntil(() => to.GetAvailablePacketCount() > 0, 2000, a);
+            if (to.GetAvailablePacketCount() == 0) { got.Add("nothing"); continue; }
+            int peer = to.GetPacketPeer(), ch = to.GetPacketChannel();
+            byte[] body = to.GetPacket();
+            got.Add($"{peer}@{ch}:{(body.Length == 4 && BitConverter.ToInt32(body) == (a.Id ^ target) ? "ok" : "garbled")}");
+        }
+        Check(got.SequenceEqual(new[] { "1@12:ok", $"{a.Id}@12:ok" }),
+              $"a packet on the highest row (12) arrives on it, host to guest and guest to host ({string.Join("; ", got)})");
+        // a guest's Close() is seen by the host within 1 s
+        a.Guest.Close(); t0 = RtcPair.Now;
+        await RtcUntil(() => a.HostLostAt > 0, 3000, a);
+        Check(a.HostLostAt > 0 && a.HostLostAt - t0 <= 1000, $"a guest's Close() is seen by the host within 1 s ({(a.HostLostAt > 0 ? $"{a.HostLostAt - t0} ms" : "never")})");
+        // hanging up on an id that is gone, and one never known, prints nothing (an engine ERROR line
+        // would turn this run red)
+        Link.Hang(a.Host, a.Id); Link.Hang(a.Host, a.Id); Link.Hang(a.Host, Rng.RandiRange(2, int.MaxValue));
+        Check(!a.Host.HasPeer(a.Id), "Link.Hang on a gone id, twice, and on one never known: no peer left, and nothing printed");
+
+        // the host's DisconnectPeer is seen by the guest within 1 s
+        var b = new RtcPair(Rng.RandiRange(2, int.MaxValue));
+        bool bUp = await RtcUntil(() => b.Connected, 5000, b);
+        b.Host.DisconnectPeer(b.Id); t0 = RtcPair.Now;
+        await RtcUntil(() => b.GuestLostAt > 0, 3000, b);
+        Check(bUp && b.GuestLostAt > 0 && b.GuestLostAt - t0 <= 1000,
+              $"the host's DisconnectPeer is seen by the guest within 1 s ({(b.GuestLostAt > 0 ? $"{b.GuestLostAt - t0} ms" : "never")}, id {b.Id}{(bUp ? "" : "; " + b.Stage())})");
+
+        // a pending entry -- an invite whose reply never came -- hung up through Link.Hang is gone.
+        // THE INVITE NEVER REACHES THE GUEST: a guest holding it reaches the host before any reply is
+        // applied (P2) and starts its DTLS handshake, and freeing it mid-handshake has the plugin
+        // print two ERROR lines ("DTLS handshake failed") that turn the run red when the timing
+        // lands (seen once in two runs). The host's side, the one Link.Hang acts on, is the same.
+        var c = new RtcPair(Rng.RandiRange(2, int.MaxValue), delivered: false);
+        await RtcUntil(() => c.OfferSealed, 3000, c);
+        bool pending = c.Host.HasPeer(c.Id);
+        Link.Hang(c.Host, c.Id);
+        Check(c.OfferSealed && !c.Pasted && pending && !c.Host.HasPeer(c.Id), $"Link.Hang takes a pending entry off the host (pending {pending}, id {c.Id})");
+
+        // every signal handler ran on the main thread, inside a Poll()
+        var all = new[] { a, b, c };
+        Check(all.Sum(p => p.Handlers) >= 12 && all.Sum(p => p.OffMain) == 0,
+              $"every WebRTC signal handler runs on the main thread ({all.Sum(p => p.Handlers)} handlers, {all.Sum(p => p.OffMain)} off it)");
+        foreach (var p in all) p.Free();
+
+        // NOTHING LEAKS: three connect-and-close cycles, the first to warm up, the count after it
+        // against the count after the other two. A leaked pair is 34 objects (two peers, two
+        // connections, 15 channels a side); the 20 allowed is the hub's own churn, as below.
+        async Task<double> Objects()
+        {
+            for (int g = 0; g < 2; g++) { GC.Collect(); GC.WaitForPendingFinalizers(); }
+            for (int f = 0; f < 3; f++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            return Performance.GetMonitor(Performance.Monitor.ObjectCount);
+        }
+        double objA = 0;
+        var cycled = new List<string>();
+        for (int n = 0; n < 3; n++)
+        {
+            var p = new RtcPair(Rng.RandiRange(2, int.MaxValue));
+            bool ok = await RtcUntil(() => p.Connected, 5000, p);
+            cycled.Add(ok ? "up" : $"DOWN ({p.Stage()})");
+            Link.Hang(p.Host, p.Id);
+            p.Free();
+            if (n == 0) objA = await Objects();
+        }
+        double objB = await Objects();
+        Check(cycled.All(x => x == "up") && objB <= objA + 20,
+              $"three WebRTC connect-and-close cycles leave the object count flat ({objA:0} -> {objB:0}; {string.Join(",", cycled)})");
+    }
 
     // ── VARIED GEOMETRY, REPRODUCIBLE ──────────────────────────────────────
     // A check tied to one spot is a check that can only find the bug at that spot. Vary draws
@@ -25567,6 +26040,7 @@ public partial class _Test : Node
         var argv = OS.GetCmdlineUserArgs();
         string role = argv.FirstOrDefault() ?? "solo";
         SeedFrom(argv);
+        if (role == "solo" && argv.Contains("replywindow")) _replyWindow = MeasureReplyWindow();
         Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // six windows, nobody listening
         NoRouterNoInternet();
         await Wait(0.3);
@@ -28906,6 +29380,35 @@ public partial class _Test : Node
             // offline, there is nothing to get back in to
             var rcBtn = Nodes<Button>(sm).FirstOrDefault(b => b.Name == "Reconnect");
             Check(rcBtn != null && !rcBtn.Visible && !Net.I.CanReconnect && !Net.I.Reconnecting, "offline, there is no RECONNECT: nothing to get back in to");
+            // NO PLUGIN, NO SESSION (network_webrtc.md §6.1, "plugin missing"): on a machine where the
+            // WebRTC library did not load, every way into a session is shut -- the HOST button, the JOIN
+            // button and Enter in the address box, each pressed a full second apart so the gate, not the
+            // one-press-a-second lock, is what stops it -- and the panel says why and what fixes it.
+            {
+                var hostB = Nodes<Button>(sm).First(b => b.Name == "Host"); var joinB = Nodes<Button>(sm).First(b => b.Name == "Join");
+                var addrBox = Nodes<LineEdit>(sm).First(); var gateLbl = Nodes<Label>(sm).First(l => l.Name == "PluginMissing");
+                bool openBefore = !hostB.Disabled && !joinB.Disabled && !gateLbl.Visible;
+                Link.PretendMissing = true; await Wait(0.05);
+                bool shut = hostB.Disabled && joinB.Disabled && gateLbl.Visible
+                            && gateLbl.Text == "Multiplayer is off on this PC: its network library, libwebrtc_native.windows.template_release.x86_64.dll (webrtc-native 1.2.1), did not load. "
+                                             + "It must sit beside Warships.exe; an antivirus may have quarantined it. Run PLAY.bat again to put it back. Playing offline works as always.";
+                var leaked = new List<string>();
+                addrBox.Text = "127.0.0.1:9";
+                foreach (var (way, press) in new (string, Action)[] {
+                    ("HOST", () => hostB.EmitSignal(BaseButton.SignalName.Pressed)),
+                    ("JOIN", () => joinB.EmitSignal(BaseButton.SignalName.Pressed)),
+                    ("Enter", () => addrBox.EmitSignal(LineEdit.SignalName.TextSubmitted, addrBox.Text)) })
+                {
+                    press(); await Wait(0.1);
+                    if (Net.IsOnline || Net.I.Connecting) { leaked.Add(way); Net.I.GoOffline(); }
+                    await Wait(SessionMenu.PressGap);
+                }
+                addrBox.Text = "";
+                Link.PretendMissing = false; await Wait(0.05);
+                bool openAfter = !hostB.Disabled && !joinB.Disabled && !gateLbl.Visible;
+                Check(openBefore && shut && leaked.Count == 0 && openAfter && Net.I.NetworkIdle,
+                      $"without the WebRTC plugin HOST, JOIN and Enter are shut and the panel says why; with it they open again (open before {openBefore}, shut {shut}, got through: {(leaked.Count == 0 ? "none" : string.Join(",", leaked))}, open after {openAfter})");
+            }
             // A JOIN THAT NEVER CONNECTS, from offline: this pilot's world as it was -- the same ship,
             // not a fresh one at the spawn -- and nothing retried (it was never in)
             var ship0 = Me;
@@ -31381,6 +31884,10 @@ public partial class _Test : Node
                             told = $"empty sky: {flewNone} away, cooldown kept ({keptCool}), slot says {emptySays ?? "nothing"}; "
                                  + $"a dummy at hand: {flewDummy} away; a hostile at {pilot.Position.DistanceTo(mkIn.Position):0} u: {flew} away and the cooldown spent ({spentCool})";
                             Sink(mkIn);
+                            // ITS OWN SEEKERS DOWN before the next case: one whose mark is gone flies on
+                            // down its heading and strikes whatever it meets, and these twelve crossed the
+                            // Echo's blast marks three cases later (136 where 80 was stored, twice).
+                            foreach (var m in InFlight().Where(x => x.Source == pilot).ToList()) m.Intercept();
                             pilot.Sl("hunters").Cool = 0;
                             break;
                         }
@@ -31407,13 +31914,15 @@ public partial class _Test : Node
                             var landedAt = pilot.Position + way * Vary(60f, 140f);
                             var mkIn = await Marker(landedAt + way.Rotated(1f) * (float)(reach * Vary(0.40f, 0.85f)));
                             var mkOut = await Marker(landedAt + way.Rotated(-1f) * (float)(reach * Vary(1.20f, 1.60f)));
-                            double inWas = mkIn.Hp, outWas = mkOut.Hp;
-                            // NOTHING ELSE IN FLIGHT FIRST: an echo round from an earlier check lands
-                            // 0.6 s after its shot, and one landing inside this window is stored and
-                            // blasted too (read once: 136 where 80 was stored). Guns off, and past the
-                            // repeat's own delay before the window opens.
+                            // NOTHING ELSE LANDS ON THE MARKS: a hit while the echo is up is stored and
+                            // blasted too, and one before it would read as blast. Twice this read 136
+                            // where 80 was stored -- the Warden's seekers, flying on after their mark was
+                            // sunk (the hunters case downs its own now). Guns off, a beat for this ship's
+                            // own shells, and the hulls read AFTER it, never before the wait.
                             pilot.Trigger = false;
                             await Wait(0.8);
+                            double inWas = mkIn.Hp, outWas = mkOut.Hp;
+                            int strays = InFlight().Count();
                             pilot.Sl("echo").Cool = 0;
                             doAbility.Invoke(pilot, new object[] { "echo", 0 });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -31422,7 +31931,7 @@ public partial class _Test : Node
                             await Wait(0.12);
                             double blastWas = 80 * pilot.Stats["echo_share"];
                             proved = Math.Abs(inWas - mkIn.Hp - blastWas) < 0.01 && mkOut.Hp == outWas;
-                            told = $"{blastWas:0} stored puts {inWas - mkIn.Hp:0} on what stands {landedAt.DistanceTo(mkIn.Position):0} u from where it landed and {outWas - mkOut.Hp:0} on what stands {landedAt.DistanceTo(mkOut.Position):0} u from it";
+                            told = $"{blastWas:0} stored puts {inWas - mkIn.Hp:0} on what stands {landedAt.DistanceTo(mkIn.Position):0} u from where it landed and {outWas - mkOut.Hp:0} on what stands {landedAt.DistanceTo(mkOut.Position):0} u from it ({strays} missiles in flight at the press)";
                             Sink(mkIn); Sink(mkOut);
                             pilot.Sl("echo").Left = 0; pilot.Sl("echo").Cool = 0; pilot.Sl("echo").Own = 0;
                             break;
@@ -33021,6 +33530,7 @@ public partial class _Test : Node
             Check(moved.Count == 0, $"...and no sound that is not a beam moved ({string.Join(",", moved)})");
         }
 
+        await WebRtcPairs();
         // leaks: leaving and re-entering the hub must not grow the orphan-node or object
         // counts (the first cycle warms caches; compare the next two against it)
         async Task Cycle()
@@ -34805,7 +35315,7 @@ Write-Host '0 errors.'
 
 //==============================================================================
 // FILE: typecheck/typecheck.sh
-// 61 lines   sha256 c94fe5471263
+// 70 lines   sha256 36e5ed7ae7df
 //==============================================================================
 #!/bin/sh
 # Type-checks every script with the real Roslyn compiler.
@@ -34834,14 +35344,23 @@ fi
 R=""; for d in "$REF"*.dll; do R="$R -r:$d"; done
 rm -f /tmp/typecheck.dll
 
+# THE HARNESS IS SOURCE TOO (as typecheck.ps1): SmokeTest.cs.txt and Shots.cs.txt are compiled into
+# the game by their runners, so they are copied to .cs and handed to the same compiler.
+HARNESS=""
+for h in ../tools/smoketest/SmokeTest.cs.txt ../tools/screens/Shots.cs.txt; do
+  [ -f "$h" ] || continue
+  dst="/tmp/typecheck_$(basename "$h" .txt)"
+  cp "$h" "$dst"; HARNESS="$HARNESS $dst"
+done
+
 if [ -f GodotSharp.dll ]; then
   EXTRA="-r:GodotSharp.dll"
   [ -f GodotSharpEditor.dll ] && EXTRA="$EXTRA -r:GodotSharpEditor.dll"
-  SRC="../scripts/*.cs"
+  SRC="../scripts/*.cs $HARNESS"
   MODE="REAL GodotSharp.dll"
 else
   EXTRA=""
-  SRC="../scripts/*.cs GodotStub.cs"
+  SRC="../scripts/*.cs $HARNESS GodotStub.cs"
   MODE="hand-written stub (weaker -- drop GodotSharp.dll here to fix)"
 fi
 

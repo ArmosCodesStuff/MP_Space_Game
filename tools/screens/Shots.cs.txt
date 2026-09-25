@@ -64,11 +64,13 @@ public partial class _Shots : Node
         // sooner -- the sweep has to finish inside the sandbox's 300 s limit
         Engine.TimeScale = 2.0;
         Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // a real window on a real machine
+        // Both have reached the top level once (Character.Peak = Unlocks.Top), so every frame shows every
+        // wall open; the frames of the walls themselves set lower peaks.
         // two characters, like the user's: a black-hulled carrier and a default battleship -- hints
         // off, so no frame changes with whichever hint happens to be up (57 shows one on purpose)
-        Character.NewBlank(); Character.Name = "Commander"; Character.Class = ShipClass.Carrier; Character.Main = new Color(0.05f, 0.05f, 0.05f); Character.HintsOff = true; Character.Save();
+        Character.NewBlank(); Character.Name = "Commander"; Character.Class = ShipClass.Carrier; Character.Main = new Color(0.05f, 0.05f, 0.05f); Character.HintsOff = true; Character.Peak = Unlocks.Top; Character.Save();
         await W(0.05);
-        Character.NewBlank(); Character.Name = "Ironside"; Character.Class = ShipClass.Battleship; Character.HintsOff = true; Character.Save();
+        Character.NewBlank(); Character.Name = "Ironside"; Character.Class = ShipClass.Battleship; Character.HintsOff = true; Character.Peak = Unlocks.Top; Character.Save();
         await W(0.5);
         await W(0.6); await Snap("0_main_menu");
         GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"); await W(0.8); await Snap("1_select");
@@ -113,6 +115,14 @@ public partial class _Shots : Node
             Key(global::Godot.Key.K); await W(0.2);
             for (int k = 0; k < keep.Length; k++) cl[k] = keep[k];
             Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.3);
+        }
+        // THE ABILITY WALLS (Unlocks) at level 1: a walled key's row in K says the level that opens it, and
+        // the bar below draws it in the quiet box, LOCKED · L3 (once a class carries an ability 2 and 3)
+        {
+            int keepPeak = Character.Peak; Character.Peak = 1; P(H, "ApplyLocalIdentity"); await W(0.3);
+            Key(global::Godot.Key.K); await W(0.4); await Snap("6c_k_keys_walls");
+            Key(global::Godot.Key.K); await W(0.2);
+            Character.Peak = keepPeak; P(H, "ApplyLocalIdentity"); await W(0.3);
         }
 
         Character.Class = ShipClass.Carrier; P(H, "ApplyLocalIdentity"); await W(0.2);
@@ -323,7 +333,7 @@ public partial class _Shots : Node
             foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e9);
             rs2.Position = keepR2; rs2.Velocity = Vector2.Zero; await W(0.3);
         }
-        // the equipment window (I): five parts and five chips, the class's own
+        // the equipment window (I): five parts and six chip slots, the class's own, no chip fitted
         {
             H.ToggleEquipment(); await W(0.4);
             await Snap("55_equipment");
@@ -342,8 +352,21 @@ public partial class _Shots : Node
             for (int k = 0; k < keep.Length; k++) bl[k] = keep[k];
             Character.GearHold.Clear(); P(H, "ApplyLocalIdentity"); await W(0.2);
         }
+        // ...and the chip walls (Unlocks): a pilot whose highest level is 4 has chip slots 1 and 2
+        // open, both filled; slots 3-6 read LOCKED · L8 / L10 / L12 / L14 with no button, and the
+        // Engine Chip in the hold has its EQUIP greyed ("next chip slot opens at level 8")
+        {
+            var bl = Character.LoadoutFor(Character.Class); var keep = (string[])bl.Clone(); int keepPeak = Character.Peak;
+            Character.Peak = 4; bl[5] = "chip_combat_1"; bl[6] = "chip_armour_2";
+            Character.Stow("chip_engine_1");
+            P(H, "ApplyLocalIdentity"); H.ToggleEquipment(); await W(0.4);
+            await Snap("58b_eq_chip_walls");
+            H.ToggleEquipment(); await W(0.2);
+            for (int k = 0; k < keep.Length; k++) bl[k] = keep[k];
+            Character.Peak = keepPeak; Character.GearHold.Clear(); P(H, "ApplyLocalIdentity"); await W(0.2);
+        }
         // the hull bar with its fill's edge running through both readouts: every letter must read
-        // (dark on the fill, light past it) -- "HULL 180 / 375" and "WARP READY" split mid-word
+        // (dark on the fill, light past it) -- "HULL 144 / 300" and "WARP READY" split mid-word
         {
             var hs = H.GetNode<PlayerShip>("Ship_1"); double hp0 = hs.Hp;
             hs.Hp = hs.MaxHp * 0.48; await W(0.2);
@@ -358,6 +381,15 @@ public partial class _Shots : Node
             H.Hints.Meet("flight"); await W(0.5);
             await Snap("57_hint_card");
             Character.HintsOff = true; await W(0.1);
+        }
+        // ...and the walls' own: at peak 3 the PILOT window names the next wall (LEVEL 4 · CHIP SLOT 2), and
+        // the card a pilot is shown on crossing one (LEVEL 2 · CHIP SLOT 1) sits in its corner
+        {
+            int keepPeak = Character.Peak; Character.Peak = 3; P(H, "ApplyLocalIdentity");
+            Character.HintsOff = false; Character.HintsSeen.Remove("unlock_chipslot_1");
+            H.Hints.Meet("unlock_chipslot_1"); H.TogglePilot(); await W(0.5);
+            await Snap("57b_walls_next_card");
+            H.TogglePilot(); Character.HintsOff = true; Character.Peak = keepPeak; P(H, "ApplyLocalIdentity"); await W(0.2);
         }
         // a waypoint picked on the radar: its ring there, and the HUD naming it
         {

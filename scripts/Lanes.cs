@@ -97,10 +97,9 @@ public static class Lanes
     // ── the lanes' own clock ─────────────────────────────────────────────────
     // WHEN a blockade comes, as Economy.EscortFirstWave / EscortWaveEvery is when an escort's
     // waves come: the schedule belongs to the thing that runs it (Raids.TickLanes), and WHAT
-    // arrives is a row of Waves.All. A blockade waits on the base owner's standing, because the
-    // lanes are a pressure on a base with something to lose.
+    // arrives is a row of Waves.All. A blockade waits on the base owner's standing (Unlocks,
+    // Opens.Raids), because the lanes are a pressure on a base with something to lose.
     public const double FirstBlockade = 420, BlockadeEvery = 420;
-    public const int NeedsBoss = 1;
 
     // ── the gun at a lane's far end, before anything is bought ───────────────
     public const string Tab = "OUTPOSTS";

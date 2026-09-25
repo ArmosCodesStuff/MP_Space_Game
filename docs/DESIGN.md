@@ -262,11 +262,13 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   (`Net.Arriving`) so they end when the guest's own position is judged. Cosmetic reliable traffic
   (shells, torpedoes) rides its own ENet channel so a lost one does not hold up the rest; raider
   updates go in packets of 24, under the internet's ~1.2 KB.
-- **The WebRTC reply window** (R0, measured 2026-09-24, `run.ps1 -ReplyWindow`, an in-process pair
-  over the LAN host candidate): a host applying the reply 5, 10, 15, 25, 35, 45 or 60 s after the
-  guest made it connected every time, 4-6 ms after the reply, the guest `Connecting` at each. Every
-  delay up to 60 s connected, so `Link.ReplyWindowS` = min(60 - 10, 30) = **30 s**. A real internet
-  path is unmeasured (network_webrtc.md §3.4, the owner's two-machine test).
+- **The WebRTC reply window** (R0, measured once on 2026-09-24 by a seven-pair run since deleted, an
+  in-process pair over the LAN host candidate): a host applying the reply 5, 10, 15, 25, 35, 45 or
+  60 s after the guest made it connected every time, 4-6 ms after the reply, the guest `Connecting` at
+  each. Every delay up to 60 s connected, so `Link.ReplyWindowS` = min(60 - 10, 30) = **30 s**. Every
+  solo run now holds one pair to it (the host takes the reply 30 s after it was made, and must be
+  connected within 2 s of that), in the background from the top of the run. A real internet path is
+  unmeasured (network_webrtc.md §3.4, the owner's two-machine test).
 
 ## The batch after the review began (signed off by the player), in chunks
 
@@ -455,6 +457,19 @@ Recorded here so every chunk builds from the written word, not from memory.
   that the claimed purchases are affordable at the claimed level.
 - **Missions are host-authoritative**: party = everyone in the session; READY is a request the host
   records and broadcasts; WARP needs everyone ready; the portal opens after a 3 s bar.
+- **Level walls (`Unlocks.cs`, 2026-09-25)**: one table of what a pilot's level opens -- ability 1 at 1,
+  ability 2 at 3, ability 3 at 6, chip slots at 2/4/8/10/12/14 -- plus the base's boss-beaten rows
+  (Auto-sell, the lanes' blockades). **A wall reads the PEAK** (`Character.Peak`, the highest level ever
+  reached, on the identity), never the level: a refit costs a level and is the only class change, so
+  reading the level would lock again what a pilot had opened. **The host holds it**
+  (`PlayerShip.DoAbility`, `Equipment.Sanitize` at the ship's peak); the owner's press, the bar, K and
+  the equipment window only say it (`Unlocks.Locked`: `LOCKED · L3`).
+- **Trap: a class's list order IS its unlock order.** Abilities 1, 2 and 3 are the class's rows in
+  `ClassDef.Abilities` order, skipping `AbilityDef.Weapon` rows (a weapon's own actions) and the open
+  hotkeys -- reached by position, never by name. Reordering a class's list moves its walls; a new
+  weapon action without `Weapon = true` becomes a walled ability and shifts every one after it. Keys
+  never move with the walls (the Carrier's bar reads F E Q, the Warrior's E Q F). A walled row must
+  be a press: a held row is polled, and nothing on that path reads a wall (WallChecks asserts it).
 
 ## Launch limits and targeting rules
 
@@ -1350,6 +1365,51 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   "DTLS handshake failed", EOF). A guest holding an invite reaches the host before any reply is
   applied (SPIKE P2) and starts its handshake, so hanging up a pending invite does it whenever the
   timing lands. R0's pending-entry check never delivers its invite; a real guest will still print it.
+  The same trap is why a guest adds an invite's candidates only after its STUN walk (`Link.Gather`):
+  a walk remakes a connection whose row did not answer, and a guest that already knew the host's
+  addresses could be mid-handshake when it does.
+- **The codec is held to the plugin's own bytes.** A code carries only the five SDP values that vary
+  and the candidates; the far side rebuilds the other 12 lines from `Rendezvous.Sdp.Template`. A
+  plugin upgrade that changes or adds a line is refused by name when a code is made, and the solo run's
+  byte-for-byte check (the spike's bundles and the live pair's) fails on its first run, never in the
+  field.
+- **`Link.Backlog` does not see the SCTP socket's own send buffer.** The plugin's buffered amount is
+  what libdatachannel queues after that buffer is full: R1's first solo run put 1 MB on one row in one
+  frame and read 0. The check puts until the row backs up; §3.8's backlog guard acts only past it.
+- **The build's fingerprint must never be computed inside a type initializer, nor hash live state.**
+  `Net.Protocol = Fingerprint()` as a readonly field initializer ran mid-way through Net's own
+  initialization: it hashed itself as 0 (a readonly int is Plain) and every Net static declared below
+  it as unset, so every fingerprint taken later in the process differed (R1: 3724c77b at startup,
+  7991f5f3 at any moment after, "0 parts moved" within the run). It is a property now, set in Net's
+  static constructor. The same class of fault: `Character.Bought`, the pilot's purchases, was a
+  readonly int[] and so hashed live; it is a property over a mutable field. A value that is state, not
+  build, is never a readonly static of a Plain type; the solo run's `BuildChecks` hold both.
+- **A struct row was invisible to the fingerprint four ways.** `Net.Plain` took records and table
+  classes, not structs, so an array of `Post` (the pirate base's site) was never hashed and two builds
+  that placed its pylons differently met. The first fix (`StructRow`) demanded `IsReadOnlyAttribute`
+  and the game's own assembly, which left three more kinds of constant table through the gate: a MUTABLE
+  struct row (`StatusSet.Guards`: `StatusGuard[]`, no `readonly`; `EmplacementDef.Gun`: `TurretSpec?`,
+  the pirate base's cruise missile) printed as its bare type name, its numbers invisible; a
+  `System.ValueTuple`N` row (`Hub.PracticeTargets`, `Hub.Outposts`'s names) was skipped whole, being a
+  different assembly than the game's own; and a row with a DELEGATE FIELD (`WaveCrew.Count`, a `Func`
+  saying how many of a kind a wave brings; `Waves.Patrol`, `Waves.HuntPin`) was rejected outright by the
+  all-Plain test, so neither `Waves.Patrol` nor `Waves.HuntPin` ever entered the fingerprint, and
+  `WaveDef.Crew` printed as bare `[WaveCrew,...]`. Neither is less fixed for it: a value in a static
+  readonly field or a table row is as constant as what holds it, and the harness's own checks that move
+  a row and put it back (`BuildChecks`) prove the array element changes either way. `StructRow` now takes
+  any value type of the game's assembly, or any `System.ValueTuple`N`, whose public instance fields are
+  all Plain OR A DELEGATE, readonly or not; `Show` prints a delegate field only as its delegate type name
+  (`Func`2`), null as `null`, so WHICH code is assigned and what it computes are NOT compared: a changed
+  `Count` rule still goes unseen, while the row's other fields (`Kind`, `Way`, `Nth`, `At`, `Step`) are.
+- **"No Character part" was the wrong bar for "nothing about the pilot."** `Character` carries its own
+  `const` bounds (`Dir`, `MaxBonus`, `MaxStock`, `PaidKept`, `SaveDelay`) -- the same for every peer on
+  this build whichever pilot is loaded, so they belong in the fingerprint and always were part of it.
+  The `BuildChecks` solo check first asserted zero `Character.` parts at all and failed on its own
+  build-time constants; it now names them and asserts only that nothing a PLAYER decided (`Bought`
+  chief among them) is among the rest.
+- **A worktree goes BESIDE the project folder, never inside it.** Both runners robocopy the whole
+  folder (excluding only `.godot`, `.git`, `bin`, `obj`) into the scratch project, so a worktree
+  under `.claude\` or anywhere inside would put a second copy of every script into the build.
 
 ## Smoke test
 

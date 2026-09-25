@@ -450,6 +450,34 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
 - Files: as the PRE.
 - Checkpoint: commit "Kits lane A J6+J7" carries J6, J7 and K1 together (the working tree was never
   split). Next: K2 (merge version-l).
+- Addendum (K2's writer, opus): kits_k1 was never run (its folder holds only the header; the previous
+  agent stopped). Rung 1 on da21442: 0 errors. K1 is proven by the batch's end chain after K2.
+
+### K2 · PRE · merge version-l (2b875c5: net lane WebRTC R1, walls lane, CLAUDE.md)
+- Intent: `git merge version-l` into wt/kits; resolve conflicts from both ledgers' intent (kits: this
+  file; net: ledger_webrtc.md), keeping both behaviours. Then every constant static readonly table the
+  kits lane added (RampSpec, StatRow rows, EnemyDef fields, OutGuards) must be hashed by
+  Net.Fingerprint; a skip shown by its BuildChecks is fixed with its check. typecheck + quick; commit.
+- Model tier: opus (owner asked for opus on this batch).
+- HEAD da21442; version-l 2b875c5. Files both sides touched (hash at HEAD): CHANGES 5cf9fa5e · DESIGN
+  46f7059b · plans/README 115bc34e · Abilities 21eff277 · Equipment cf4427c6 · Lanes 5cde2b7b ·
+  PlayerShip 0e01154b · Ships 79f076a8 · Shots.cs.txt e2a1bf24 · SmokeTest.cs.txt 96f975c2.
+
+### K2 · POST
+- Verdict: merge resolved (four UU files: CHANGES, Abilities, PlayerShip, SmokeTest). Both behaviours
+  kept: DoAbility refuses a held press (kits) AND a level-walled row (walls); walls' `Weapon` flag on
+  every weapon row, kits' deletion of `Ab.Pd` kept (it was a Weapon row, so ability order 1/2/3 is
+  unchanged; the harness's weapon-row list says "seven, point defence is passive"). Net.cs, the
+  StructRow fingerprint and ledger_webrtc's intent taken whole from version-l. Fingerprint: the kits
+  tables (StatusSet.OutGuards struct rows, EnemyDef Barrels/MissileFlight/MissileDamage/Cc/Exp in
+  Enemies.All, AbilityDef SpeedAdd + Ramp's RampSpec table) are all reached by Net.Fingerprint's
+  Plain/Table/StructRow; proven by the new BuildChecks check "the kits lane's tables are part of the
+  build's fingerprint" (8 moves, each must move the hash and its own part). Rung 1 0 errors; rung 2
+  (verify -Quick) ALL CHECKS PASSED. Then version-l's 93b2c8c (docs only) merged on top.
+- engine-unproven: rungs 3-5 owed in the final test phase (owner ruling 2026-09-25: no engine runs
+  per batch). Owed chain: quick,solo,solo,six,screens (six,six for the guest PD check), two seeds for
+  every check J3-K2 added or rewrote.
+- Checkpoint: the merge commit. Next: the final test phase (coordinator).
 
 ## Engine rungs owed to the main session (run in the worktree, rebased, one engine at a time)
 

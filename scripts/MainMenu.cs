@@ -139,7 +139,9 @@ public partial class MainMenu : Node2D
         // which is exactly what happened, and every mechanical check passed on an invisible ship.
         // A ship is not a ship until Init.
         _cap.Init(Net.LocalId, _centre);
-        // Retuned AFTER Init, because Init rebuilds the sheet from the class and would discard it.
+        // Nobody's pilot: every level wall open (Unlocks), so the menu never waits on a class's order.
+        _cap.SetProgress(null, Unlocks.Top);
+        // Retuned AFTER Init and SetProgress: each rebuilds the sheet from the class and would discard it.
         _cap.Stats.SetBase("broadside_cooldown", BroadsideEvery);
         _cap.WarpHop = WarpHop;
         _cap.WarpEvery = AoeEvery - AoeWarn;      // ready again before the next area shot is called

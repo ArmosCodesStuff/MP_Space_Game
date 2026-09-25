@@ -96,12 +96,16 @@ public static class Progression
     // The claim, trimmed until a pilot of that level could have paid for it: the DEAREST point
     // goes first, so what survives is the most of what was claimed. Trimmed rather than refused
     // whole -- a pilot past level 100 used to arrive on any host it visited as a stock hull.
+    // A CLAIMED LEVEL, as this host takes it: 1 to MaxSpendLevel. One cap for what a claim may spend
+    // (Afford) and what it opens (Unlocks, through PlayerShip.SetProgress), so a claim of two billion
+    // is a level-100 pilot on both counts.
+    public static int Claim(int level) => System.Math.Clamp(level, 1, MaxSpendLevel);
     public static int[] Afford(int[] bought, int level)
     {
         var b = new int[All.Length];
         for (int i = 0; i < b.Length && i < (bought?.Length ?? 0); i++)
             b[i] = System.Math.Clamp(bought[i], 0, MaxPerUpgrade);
-        int lv = System.Math.Clamp(level, 1, MaxSpendLevel);
+        int lv = Claim(level);
         while (!Affordable(b, lv))
         {
             int most = 0;
@@ -156,14 +160,16 @@ public static class Progression
     public static int AddExp(int amount)
     {
         if (amount <= 0) return 0;
-        int gained = 0;
+        int gained = 0, was = Character.Peak;
         Character.Exp += amount;
         while (Character.Exp >= ExpToNext)
         {
             Character.Exp -= ExpToNext;
             Character.Level++; Character.Points++; gained++;
         }
+        Character.Peak = Math.Max(Character.Peak, Character.Level);         // a refit never lowers it
         if (gained > 0) { Hub.I?.Hints?.Meet("pilot"); Hub.I?.PilotChanged(); }   // the new level goes out with the identity
+        foreach (var u in Unlocks.Crossed(was, Character.Peak, Character.Class)) Hub.I?.Hints?.Meet(u.Hint);   // each wall crossed: its card, in order
         Character.Save();
         return gained;
     }

@@ -25,13 +25,15 @@ public partial class AbilityBar : Control
 
     public override void _Process(double delta) => QueueRedraw();
 
-    // What a slot says: the ability's own answer (AbilityDef.Show), or the refusal that is
-    // still showing. The bar knows nothing about what any ability does.
+    // What a slot says: the refusal that is still showing, the level wall it waits behind
+    // (Unlocks), or the ability's own answer (AbilityDef.Show). The bar knows nothing about what
+    // any ability does.
     public static SlotState StateOf(PlayerShip s, string id, IHittable selected)
     {
         var why = s.FailNote(id);                       // a refused press: say why, briefly
         if (why != null) return new SlotState { Line = why, Fail = true };
         var def = Abilities.Find(s.Class, id);
+        if (def != null && Unlocks.LockedAt(s.Class, s.Peak, def) is int at) return new SlotState { Line = Unlocks.Locked(at), Locked = true };
         return def?.State(s, selected) ?? new SlotState { Line = "READY" };
     }
 
@@ -59,6 +61,14 @@ public partial class AbilityBar : Control
                 continue;
             }
             var st = StateOf(s, ab.Id, Hub.Selected);
+            if (st.Locked)
+            {   // behind a level wall: the quiet box, its key and name dimmed, the level that opens it beneath
+                _open.Draw(GetCanvasItem(), r);
+                Txt.D(this, font, r.Position + new Vector2(8, 16), key0, HorizontalAlignment.Left, 0, 13, Ui.Warn with { A = 0.55f });
+                Txt.D(this, font, r.Position + new Vector2(0, 38), ab.Short, HorizontalAlignment.Center, SlotW, 16, Ui.Dim);
+                Txt.D(this, font, r.Position + new Vector2(0, 56), st.Line, HorizontalAlignment.Center, SlotW, 11, Ui.Dim);
+                continue;
+            }
             (st.Fail ? _bad : st.Lit ? _lit : _slot).Draw(GetCanvasItem(), r);
             if (st.Busy > 0)   // recharge sweep: a dark band shrinking from the top
                 DrawRect(new Rect2(r.Position, new Vector2(SlotW, SlotH * Mathf.Clamp(st.Busy, 0, 1))), new Color(0, 0, 0, 0.55f));
