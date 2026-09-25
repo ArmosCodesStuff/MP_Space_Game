@@ -37,7 +37,7 @@ public partial class SessionMenu : CanvasLayer
         root.AddChild(_options);
 
         // THE JOIN BOX takes a friend's invite (the whole message is fine) or a host's typed address.
-        _addr = new LineEdit { PlaceholderText = "paste an invite, or type host IP:port", CustomMinimumSize = new Vector2(300, 0) };
+        _addr = new LineEdit { Name = "JoinBox", PlaceholderText = "paste an invite, or type host IP:port", CustomMinimumSize = new Vector2(300, 0) };
         // Enter joins -- under the same one-press-a-second limit as the button -- and either way
         // the box lets go of the keyboard so the helm works again.
         _addr.TextSubmitted += t => { _addr.ReleaseFocus(); Limited(DoJoin); };

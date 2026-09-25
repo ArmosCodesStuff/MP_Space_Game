@@ -10256,6 +10256,169 @@ public partial class _Test : Node
               $"back offline: every invite hung up, the listener closed, nothing left running ({Net.I.Pending.Count} pending, port {Rendezvous.ListenPort})");
     }
 
+    // ── WEBRTC, R2c: THE ROLES MOVED (§10.2, §10.3) ─────────────────────────────────────────────────
+    // The `guest` role joins BY INVITE, its codes carried by the courier (the host posts each invite as a
+    // message, numbered n; the guest puts it through the JOIN box and posts back the reply it makes); the
+    // host takes reply 0 off the clipboard (the pickup, §3.4) and every later one through the reply box.
+    // Under -Wan the GUEST rewrites both codes to a box pair (Rewrite), so every datagram of the invite path
+    // crosses the box; the typed rows run direct. A file is written whole, then moved into its name.
+    static void Post(string file, string text)
+    {
+        System.IO.File.WriteAllText(file + ".part", text);
+        System.IO.File.Move(file + ".part", file, true);
+    }
+    readonly HashSet<string> _posted = new();
+    string _replySaid = "";
+    // Host: the newest invite this session made, once it is made, posted as invite n.
+    async Task<bool> R2cPostInvite(int n)
+    {
+        bool made = await RealTime(() => Net.I.LastInvite.Length > 0 && !_posted.Contains(Net.I.LastInvite), 8);
+        if (!made) return false;
+        _posted.Add(Net.I.LastInvite);
+        Post(CourierFile("invite", P(27115), n), Message(Net.I.LastInvite));
+        return true;
+    }
+    // Host: reply n, once the courier brings it, handed to the game the way a player would.
+    async Task<bool> R2cTakeReply(int n, bool byClipboard, double within)
+    {
+        string f = CourierFile("reply", P(27115), n);
+        if (!await RealTime(() => System.IO.File.Exists(f), within)) return false;
+        string text = System.IO.File.ReadAllText(f);
+        if (byClipboard) { Clip = text; return true; }             // copied from the DM: the pickup takes it
+        if (GetTree().Root.FindChild("ReplyBox", true, false) is not LineEdit box) return false;
+        box.Text = text;
+        box.EmitSignal(LineEdit.SignalName.TextSubmitted, text);
+        return true;
+    }
+    // Guest: invite n from the courier into the JOIN box, a friend's pause first; its reply posted back;
+    // true once this guest is let in.
+    async Task<bool> R2cJoinByInvite(int n, float pauseLo, float pauseHi, double within)
+    {
+        string f = CourierFile("invite", P(27115), n);
+        if (!await RealTime(() => System.IO.File.Exists(f), within)) { Check(false, $"guest: invite {n} reached the courier ({f})"); return false; }
+        string text = System.IO.File.ReadAllText(f);
+        int pair = 0, boxB = 0, hostReal = 0;
+        if (Wan)
+        {
+            var made = Box("POST", "/box/pair");
+            pair = made.GetProperty("n").GetInt32(); boxB = made.GetProperty("b").GetInt32();
+            text = Message(Rewrite(text, Rendezvous.Kind.Invite, made.GetProperty("a").GetInt32(), out hostReal));
+        }
+        await Wait(Vary(pauseLo, pauseHi));
+        if (GetTree().Root.FindChild("JoinBox", true, false) is not LineEdit box) { Check(false, "guest: the JOIN box is on the panel"); return false; }
+        string had = Net.I.ReplyCode;                              // the last join's, never taken for this one's
+        box.Text = text;
+        box.EmitSignal(LineEdit.SignalName.TextSubmitted, text);
+        if (!await RealTime(() => Net.I.ReplyCode.Length > 0 && Net.I.ReplyCode != had, 8)) { Check(false, $"guest: invite {n} made a reply ({Net.I.LastStatus})"); return false; }
+        string reply = Net.I.ReplyCode;
+        _replySaid = Net.I.LastStatus;
+        if (Wan)
+        {
+            reply = Rewrite(reply, Rendezvous.Kind.Reply, boxB, out int guestReal);
+            Box("POST", $"/box/pair/{pair}?host=127.0.0.1:{hostReal}&guest=127.0.0.1:{guestReal}&seed={Seed}");
+        }
+        Post(CourierFile("reply", P(27115), n), Message(reply));
+        return await RealTime(() => Net.IsOnline && Net.LocalId != 1, Wan ? 25 : 15);
+    }
+    // Host, from HOST: INVITE A FRIEND for the paste guest, its invite posted, its reply taken off the
+    // clipboard -- the host's part is "copy the friend's message" (§3.4).
+    async Task R2cHostCourier()
+    {
+        string joining = "";
+        void Joining(string s) { if (s.EndsWith(" is joining…")) joining = s; }
+        Net.I.Status += Joining;
+        Net.I.Invite();
+        bool posted = await R2cPostInvite(0);
+        bool copied = await R2cTakeReply(0, byClipboard: true, 12);
+        bool taken = copied && await RealTime(() => joining.Length > 0, 2);
+        Net.I.Status -= Joining;
+        Check(posted && taken && joining == "guest Base is joining…",
+              $"host: INVITE A FRIEND's invite went out by the courier, and the friend's reply was taken off the clipboard once copied (the pickup) -- \"{joining}\"");
+    }
+    // Host, once the guests are in: the paste guest joined by invite, the third player by address.
+    void R2cRows()
+    {
+        var g = Net.I.Players.FirstOrDefault(kv => kv.Value.Name == "Guesty").Key;
+        var t = Net.I.Players.FirstOrDefault(kv => kv.Value.Name == "Third").Key;
+        var rowOf = (System.Collections.Generic.Dictionary<int, string>)typeof(Net).GetField("_rowOf", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Net.I);
+        Check(g != 0 && t != 0 && rowOf.GetValueOrDefault(g) == "paste" && rowOf.GetValueOrDefault(t) == "address" && Net.I.Pending.Count == 0,
+              $"host: one session serves both rows -- Guesty came by invite, Third by the typed address, nothing left pending ({rowOf.GetValueOrDefault(g)}, {rowOf.GetValueOrDefault(t)}; {Net.I.Pending.Count} pending)");
+    }
+    // Host, after the third player has left: the paste guest dropped (no goodbye) gets a fresh invite and
+    // comes back into its held place by its rejoin token; then, back again before this host notices its
+    // old link die, its token takes the place from that live link (the live holder, S2b).
+    async Task R2cHostReturns()
+    {
+        var places = (System.Collections.IDictionary)Session.Places;
+        int gOld = H.Ships.FirstOrDefault(s => s.Pilot == "Guesty")?.OwnerId ?? 0;
+        const string Dropped = "Guesty dropped. Send them this invite to come back (their place is held 90 s): COPY.";
+        bool said = false;
+        void Heard(string s) { said |= s == Dropped; }
+        Net.I.Status += Heard;
+        Drop(gOld);
+        await RealTime(() => said, 5);
+        Net.I.Status -= Heard;
+        Check(said && gOld != 0 && places.Count == 1 && Net.I.Pending.All.Any(e => e.Row == "paste" && e.Stage == Rendezvous.Stage.Waiting && e.Name == "Guesty"),
+              $"host: a paste guest that drops is held 90 s and gets a fresh invite at once, named for it ({Net.I.LastStatus}; {places.Count} held)");
+        bool posted = await R2cPostInvite(1);
+        bool took = await R2cTakeReply(1, byClipboard: false, 45);
+        await RealTime(() => H.Ships.Any(s => s.Pilot == "Guesty" && s.OwnerId != gOld), Wan ? 25 : 15);
+        await Wait(0.5);
+        var g2 = H.Ships.FirstOrDefault(s => s.Pilot == "Guesty" && s.OwnerId != gOld);
+        string cid = g2 != null && Net.I.Players.TryGetValue(g2.OwnerId, out var gi) ? gi.CharacterId : "";
+        Check(posted && took && g2 != null && cid.EndsWith("-guest") && Session.Tokens.ContainsKey(cid) && places.Count == 0 && Net.I.Pending.Count == 0
+              && H.PartyIds.Contains(g2.OwnerId) && !H.PartyIds.Contains(gOld),
+              $"host: the paste guest came back by the fresh invite into its held place, claimed with its rejoin token ({g2?.OwnerId}; {places.Count} held, {Net.I.Pending.Count} pending)");
+        // THE LIVE HOLDER: a new invite for the same pilot, whose old link this host still thinks is up
+        int gMid = g2?.OwnerId ?? 0, again = 0;
+        void Again(string s) { if (s.Contains("Send them this invite to come back")) again++; }
+        Net.I.Status += Again;
+        Net.I.Invite();
+        bool posted2 = await R2cPostInvite(2);
+        bool took2 = await R2cTakeReply(2, byClipboard: false, 20);
+        ulong tTook = Time.GetTicksMsec();
+        await RealTime(() => H.Ships.Any(s => s.Pilot == "Guesty" && s.OwnerId != gMid && s.OwnerId != gOld) && !Multiplayer.GetPeers().Contains(gMid), Wan ? 12 : 8);
+        double handed = (Time.GetTicksMsec() - tTook) / 1000.0;
+        await Wait(0.5);
+        Net.I.Status -= Again;
+        var g3 = H.Ships.FirstOrDefault(s => s.Pilot == "Guesty" && s.OwnerId != gMid && s.OwnerId != gOld);
+        Check(posted2 && took2 && g3 != null && !Multiplayer.GetPeers().Contains(gMid) && handed < 6 && again == 0 && places.Count == 0 && Net.I.Pending.Count == 0
+              && H.PartyIds.Contains(g3.OwnerId) && !H.PartyIds.Contains(gMid),
+              $"host: the pilot back with its token while its old link still lived -- the old one let go at once ({handed:0.0} s after the reply, before the 8 s watchdog), its place handed over, no fresh invite for a pilot that is here ({g3?.OwnerId}; {again} fresh, {places.Count} held, {Net.I.Pending.Count} pending)");
+    }
+    // Guest, dropped by its host: by invite it cannot knock again, so it tries nothing for 20 s (the
+    // address row's retries end at 14 s and RECONNECT shows at 19 s), then comes back by the host's fresh invite.
+    async Task R2cGuestReturns()
+    {
+        ulong tLost = Time.GetTicksMsec();
+        bool tried = false;
+        while (Time.GetTicksMsec() - tLost < 20000)
+        {
+            tried |= Net.I.Connecting || Net.I.Reconnecting || Net.I.CanReconnect || Net.IsOnline;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        Check(!tried, $"guest: dropped from an invite, it tries nothing by itself for 20 s -- no retry, no RECONNECT ({Net.I.LastStatus})");
+        int before = Net.LocalId;
+        bool back = await R2cJoinByInvite(1, 0.5f, 3f, 30);
+        await Wait(0.5);
+        Check(back && Net.I.JoinedBy == "paste" && Session.Rejoin.Length == 32 && Me != null && Me.OwnerId == Net.LocalId && Me.Pilot == "Guesty",
+              $"guest: back in by the host's fresh invite, holding its rejoin token, flying its own ship ({Net.I.JoinedBy}; token {Session.Rejoin.Length} characters; id {Net.LocalId})");
+        // THE LIVE HOLDER: the next invite waits on the courier; this link goes silent without a word (the
+        // process frozen: its peer orphaned, still up, never polled), and the pilot joins at once
+        string next = CourierFile("invite", P(27115), 2);
+        await RealTime(() => System.IO.File.Exists(next), 15);
+        var peerField = typeof(Net).GetField("_peer", BindingFlags.NonPublic | BindingFlags.Instance);
+        var orphan = peerField.GetValue(Net.I) as WebRtcMultiplayerPeer;
+        int midId = Net.LocalId;
+        peerField.SetValue(Net.I, null);
+        Net.I.GoOffline();
+        bool back2 = await R2cJoinByInvite(2, 0.05f, 0.3f, 5);
+        await Wait(0.5);
+        Check(back2 && orphan != null && Net.LocalId != midId && Me != null && Me.OwnerId == Net.LocalId && Me.Pilot == "Guesty",
+              $"guest: back again while its old link still lived, under a new id (id {midId} -> {Net.LocalId})");
+        orphan?.Close();
+    }
+
     // P4 (host half): a boss held by a shockwave is still being shot. Its hull steps to 0.80, 0.75,
     // 0.70 and 0.65 of its max INSIDE one 3 s hold, 0.6 s apart, for the guest to see every step.
     async Task S2HeldBossHost(Boss boss)
@@ -10613,7 +10776,7 @@ public partial class _Test : Node
             var joinWatch = new JoinWatch(); AddChild(joinWatch);
             Net.I.Join(HostAt(Port));
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Net.IsOnline && Net.LocalId != 1, "arena guest: joined");
+            Check(Net.IsOnline && Net.LocalId != 1 && Net.I.JoinedBy == "address", $"arena guest: joined, by the typed address ({Net.I.JoinedBy})");
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.
@@ -11021,14 +11184,23 @@ public partial class _Test : Node
             // reach the guest's ship. (Its own battleship does not wear one.)
             Character.GearLevel["drv_racing_1"] = 40;
             H.GetNode<PlayerShip>("Ship_1").Position = new Vector2(-900, 900);   // out of the way
-            int refusals = 0;
+            // THE TWO REFUSALS OF THE THIRD PLAYER, counted apart: its knock as another build, refused over TCP
+            // before any connection (named, with both builds), and its connection that passed the knock but
+            // not the in-band check (OnAuth)
+            int knockRefusals = 0, authRefusals = 0;
+            string knockRefused = $"Refused guest2 Base on a different build of the game (theirs {Game.Build} {Net.Protocol ^ 1:x8}, this one {Game.Build} {Net.Protocol:x8}).";
             // THE HOST SENDS A GUEST NOTHING UNRELIABLE UNTIL IT HAS ANSWERED THE WELCOME: read the moment
             // each guest is let in (this handler runs after Net's), and again once both are here
             int heardAtLetIn = 0, letIn = 0;
             void AtLetIn(long id) { letIn++; if (Net.Hears((int)id)) heardAtLetIn++; }
             Multiplayer.PeerConnected += AtLetIn;
-            Net.I.Status += s => { if (s.StartsWith("Refused")) refusals++; };
+            Net.I.Status += s =>
+            {
+                if (s == knockRefused) knockRefusals++;
+                else if (s.StartsWith("Refused a player on a different build of the game")) authRefusals++;
+            };
             Net.I.Host(P(27115));
+            var courier = R2cHostCourier();
             _streaming = true;                         // ten a second to every guest let in, for the guest to count
             // A raider that exists BEFORE either guest joins: they can only learn of it from the
             // catch-up a joining guest is sent (Hub.NetMySector). Far out, and gone at 9 s.
@@ -11041,13 +11213,19 @@ public partial class _Test : Node
                   && Net.I.Addresses[0].EndsWith(":" + P(27115)),
                   $"hosting starts at once: the listener takes this run's port, and the panel's first address carries it ({Rendezvous.ListenPort}; {string.Join(" / ", Net.I.Addresses)})");
             await Wait(9.0);
+            // the invite guest's join is a person's pace (the courier, a pause, the pickup): waited for, not windowed
+            await RealTime(() => Nodes<PlayerShip>().Count() == 3 && Multiplayer.GetPeers().Length == 2, Wan ? 15 : 8);
+            await courier;
+            R2cRows();
             // THE BUILD HANDSHAKE. The save format is versioned (3, as a literal: a check that reads
             // the number it tests cannot catch the number being wrong); a SESSION is matched on the
             // build's fingerprint. The refusal is proved on a real connection by the third player,
-            // who first knocks as another build: exactly one refusal here, and no ship for it.
+            // who first knocks as another build (refused at the knock), then connects as one (refused
+            // in-band): one of each here, and no ship for either.
             Check(Game.Version == 3 && Net.Accepts(Net.Protocol) && !Net.Accepts(Net.Protocol ^ 1),
                   $"a session admits this build and refuses any other (save format {Game.Version}, build {Net.Protocol:x8})");
-            Check(refusals == 1, $"the host refused the one peer that knocked as another build ({refusals})");
+            Check(knockRefusals == 1 && authRefusals == 1,
+                  $"the host refused the third player's knock as another build once, naming both builds, and its in-band claim once ({knockRefusals} at the knock, {authRefusals} in-band)");
             var ships = Nodes<PlayerShip>().ToList();
             Check(ships.Count == 3, $"host sees 3 ships: itself and two guests ({ships.Count})");
             Multiplayer.PeerConnected -= AtLetIn;
@@ -11213,6 +11391,8 @@ public partial class _Test : Node
             double gTopNow = gNow == null ? 0 : gNow.Stats["max_speed"] / new ShipStats(ShipClass.Carrier)["max_speed"];
             Check(Math.Abs(gTopNow - 1.2875) < 1e-9,
                   $"a level a guest buys mid-session reaches the host's copy of its ship: top speed x{gTopNow:0.0000} (level 3: 1 + 0.25 x 1.15 = 1.2875; still level 2 would be 1.275)");
+            // THE PASTE GUEST'S DROP AND RETURN (§3.9), then the live holder
+            await R2cHostReturns();
             heldD["ghost2"] = Ghost(424243, 60000);          // a place still held when the host leaves
             Net.I.GoOffline();   // drop the guest
             await Wait(2.0);
@@ -11223,9 +11403,26 @@ public partial class _Test : Node
         {   // a third player: joins, sees everyone, leaves by hosting a world of its own
             var joinWatch = new JoinWatch(); AddChild(joinWatch);
             await Wait(1.6);
-            // FIRST, AS ANOTHER BUILD. It must be refused -- and learn why, on its own screen, which
-            // the old handshake never managed: its refusal went out in the same breath as the
-            // disconnect, and the disconnect threw it away.
+            // FIRST, ITS KNOCK AS ANOTHER BUILD (PretendAt.Code): the host's listener refuses it over TCP,
+            // before any connection -- no WebRTC peer on any frame of it -- and both builds are named
+            {
+                bool peerMade = false;
+                var noPeer = new LateSampler { Probe = () => peerMade |= Multiplayer.MultiplayerPeer is WebRtcMultiplayerPeer };
+                AddChild(noPeer);
+                Net.PretendAt = Net.Pretend.Code;
+                Net.I.Join(HostAt(P(27115)));
+                await RealTime(() => !Net.I.Connecting, 5);
+                Net.PretendAt = Net.Pretend.None;
+                noPeer.QueueFree();
+                Check(!Net.IsOnline && !peerMade && !Net.I.Reconnecting
+                      && Net.I.LastStatus == $"That host is on a different build of the game (theirs {Game.Build} {Net.Protocol:x8}, yours {Game.Build} {Net.Protocol ^ 1:x8}): "
+                                             + "you both need the same release (Esc menu, bottom). Playing offline.",
+                      $"third player: its knock as another build is refused by the listener before any connection, both builds named ({(peerMade ? "a peer was made" : "no peer")}; {Net.I.LastStatus})");
+                await Wait(0.3);
+            }
+            // THEN A KNOCK THAT PASSES, AS ANOTHER BUILD IN-BAND. It must be refused -- and learn why, on its
+            // own screen, which the old handshake never managed: its refusal went out in the same breath as
+            // the disconnect, and the disconnect threw it away.
             Net.PretendAt = Net.Pretend.Auth;
             Net.I.Join(HostAt(P(27115)));
             await RealTime(() => !Net.I.Connecting, 8);
@@ -11236,6 +11433,8 @@ public partial class _Test : Node
             await Wait(0.3);
             Net.I.Join(HostAt(P(27115)));
             await Wait(1.2);
+            await RealTime(() => Net.IsOnline, 4);
+            Check(Net.IsOnline && Net.I.JoinedBy == "address", $"third player: joined by the typed address, the row that knocks ({Net.I.JoinedBy})");
             Character.Name = "Third"; Character.Class = ShipClass.Battleship;
             // FIVE CHIPS AT PEAK 3 (level_walls check 15), written past its own window: one chip slot
             // is open at level 3, so every copy of this ship flies the first chip alone (324 hull).
@@ -11344,7 +11543,7 @@ public partial class _Test : Node
             Check(Net.IsHost && Net.IsOnline && Net.LocalId == 1 && !Net.I.Reconnecting && !Net.I.CanReconnect && !Net.I.Connecting,
                   $"third player: pressing HOST is leaving on purpose -- hosting its own world now, nothing retried ({Net.I.LastStatus})");
             Check(joinWatch.Frames > 0 && joinWatch.Online == 0 && joinWatch.Hosting == 0,
-                  $"third player: through every frame of its three joins (another build's, its own, and back after the drop) it is not online, and its panel does not read hosting, until the host has let it in ({joinWatch.Frames} frames joining; online on {joinWatch.Online}, 'hosting' on {joinWatch.Hosting})");
+                  $"third player: through every frame of its four joins (its knock as another build, its in-band claim as one, its own, and back after the drop) it is not online, and its panel does not read hosting, until the host has let it in ({joinWatch.Frames} frames joining; online on {joinWatch.Online}, 'hosting' on {joinWatch.Hosting})");
             joinWatch.QueueFree();
         }
         else
@@ -11375,8 +11574,11 @@ public partial class _Test : Node
             // what this peer has heard of a fighter's beam before it is anyone's guest (see below)
             int heardFighters0 = Sfx.Played.GetValueOrDefault("fighter");
             var joinWatch = new JoinWatch(); AddChild(joinWatch);
-            Net.I.Join(HostAt(P(27115)));
-            await Wait(1.2);
+            // BY INVITE (§10.3): the host's first invite, carried by the courier, into the JOIN box
+            bool byInvite = await R2cJoinByInvite(0, 0.5f, 3f, 10);
+            Check(byInvite && Net.I.JoinedBy == "paste" && _replySaid.StartsWith("Reply copied. Send it to HostPilot now: they have 30 s to take it."),
+                  $"guest: joined by the host's invite through the JOIN box, told to send the reply it copied within 30 s ({Net.I.JoinedBy}; {_replySaid})");
+            await Wait(0.3);
             Character.Name = "Guesty"; Character.Main = new Color(1, 0, 0); Character.Class = ShipClass.Carrier;
             Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
             var mine = Nodes<PlayerShip>().FirstOrDefault(s => s.Mine);
@@ -11585,17 +11787,19 @@ public partial class _Test : Node
                   && Nodes<Sprite2D>().Count(s => s.Name.ToString().StartsWith("Outpost")) == 4,
                   $"a guest sees the host's hauler hold at the south-west outpost and offload -- its outposts built here too (leg {stopLeg}, {stopMax:0.0} s, shown {shownMax:0.00} -> {shownMin:0.00} of the load)");
             Check(dispatchWatch.Seen && !Met("hauler"), "the hauler hint is the base owner's: a guest watching the host's loaded hauler is not shown buttons it cannot press");
-            // the host closes the session once its 15 s are up and the third player has gone (~24.5 s in)
+            // the host DROPS this guest (no goodbye) once its 15 s are up and the third player has gone (~24.5 s
+            // in): by invite there is no knocking again, so it is told how it gets back (§3.9)
             await RealTime(() => !Net.IsOnline, Wan ? 40 : 10);
-            Check(!Net.IsOnline && Net.LocalId == 1 && Net.I.LastStatus.Contains("Host closed") && !Net.I.Reconnecting,
-                  $"guest fell back offline when host left -- told it was closed, so nothing is retried ({Net.I.LastStatus})");
+            Check(!Net.IsOnline && Net.LocalId == 1 && !Net.I.Reconnecting && !Net.I.CanReconnect
+                  && Net.I.LastStatus == "Lost the connection to HostPilot. Ask them for a new invite code: your place is held 90 s. Your own world keeps running.",
+                  $"guest dropped from an invite: offline, nothing retried, told to ask for a new invite code with its place held 90 s ({Net.I.LastStatus})");
             Check(heldWatch.Seen, "while the third player was away, this guest's party list showed it as reconnecting");
             // THE WORLD'S NEXT FRAME, not the moment the session ended: the wait above wakes in the very
             // frame the host's hang-up is read, before this world has ticked once, and the portal follows
             // the mission state on the world's own tick (Hub.SyncMissionPortal). Given a second, not a frame.
             await RealTime(() => H.GetNodeOrNull("MissionPortal") == null, 1.0);
             Check(portalWasOpen && H.Mission == Hub.MissionState.Idle && H.GetNodeOrNull("MissionPortal") == null && H.PartyIds.SequenceEqual(new[] { 1 }),
-                  $"the host gone, its open portal and its party went with it: this pilot's own world has neither ({H.Mission}; party {string.Join(",", H.PartyIds)}; portal {(H.GetNodeOrNull("MissionPortal") == null ? "gone" : "still up")})");
+                  $"the host lost, its open portal and its party went with it: this pilot's own world has neither ({H.Mission}; party {string.Join(",", H.PartyIds)}; portal {(H.GetNodeOrNull("MissionPortal") == null ? "gone" : "still up")})");
             // Back to its OWN world, with nothing lost: everything held -- stock, the
             // ships' cargo, and credits from a sale -- is at least the 5000 it had, and
             // nowhere near the host's few hundred.
@@ -11612,6 +11816,12 @@ public partial class _Test : Node
                   "economy ships restart docked and empty in your own world");
             var ships = Nodes<PlayerShip>().ToList();
             Check(ships.Count == 1 && ships[0].Mine && ships[0].Name == "Ship_1", "guest rebuilt to its own single ship");
+            // BACK BY THE HOST'S FRESH INVITE, and then back again while its old link still lived
+            await R2cGuestReturns();
+            // the host closes the session once this pilot is back the second time
+            await RealTime(() => !Net.IsOnline, Wan ? 40 : 15);
+            Check(!Net.IsOnline && Net.LocalId == 1 && Net.I.LastStatus.Contains("Host closed") && !Net.I.Reconnecting,
+                  $"guest fell back offline when host left -- told it was closed, so nothing is retried ({Net.I.LastStatus})");
             Check(joinWatch.Frames > 0 && joinWatch.Online == 0 && joinWatch.Hosting == 0,
                   $"guest: through every frame of its join it is not online, and its panel does not read hosting, until the host has let it in ({joinWatch.Frames} frames joining; online on {joinWatch.Online}, 'hosting' on {joinWatch.Hosting})");
             joinWatch.QueueFree();

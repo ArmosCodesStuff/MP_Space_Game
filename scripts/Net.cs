@@ -965,8 +965,10 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
             bool paste = _rowOf.Remove(id, out var row) && row == Rendezvous.Paste.Id;
             Say(onPurpose || !_isHost ? $"Player {id} left." : $"Player {id} dropped.");   // only the host hears goodbyes
             PlayerLeft?.Invoke(id, info ?? new PlayerInfo(), onPurpose);
-            // A PASTE GUEST CANNOT KNOCK AGAIN (§3.9): its way back is a fresh invite, made at once.
-            if (_isHost && IsOnline && paste && !onPurpose)
+            // A PASTE GUEST CANNOT KNOCK AGAIN (§3.9): its way back is a fresh invite, made at once -- unless
+            // its pilot is already back under another id (its rejoin token beat this old link: Hub let it go).
+            bool back = info?.CharacterId is { Length: > 0 } cid && Players.Values.Any(p => p.CharacterId == cid);
+            if (_isHost && IsOnline && paste && !onPurpose && !back)
             {
                 string who = info?.Name is { Length: > 0 } n ? n : "Your friend";
                 if (MakeInvite(Rendezvous.Paste, 0, info?.Name ?? "", _ => Say($"{who} dropped. Send them this invite to come back "

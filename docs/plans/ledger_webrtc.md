@@ -969,3 +969,32 @@ heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu on
 - checks planned: rung 5 host `R2cHostCourier` / `R2cHostReturns`, guest `R2cJoinByInvite` /
   `R2cGuestReturns`, guest2's other-build knock; rewritten: the host's refusal count (split in two), the
   guest's end (the drop now precedes "Host closed").
+
+#### R2c POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED (0 findings, UNUSED ANYWHERE: 0).
+  engine-unproven: rungs owed in the final test phase.
+- Harness (SmokeTest.cs.txt, methods above `S2HeldBossHost`): `Post` (write whole, then move), `R2cPostInvite`,
+  `R2cTakeReply` (clipboard seam or ReplyBox's TextSubmitted), `R2cJoinByInvite` (JoinBox's TextSubmitted;
+  under -Wan the guest rewrites both codes and registers the box pair), `R2cHostCourier`, `R2cRows`,
+  `R2cHostReturns`, `R2cGuestReturns`. `guest` joins by invite; its end reordered: the host DROPS it after the
+  third player leaves (§3.9 text), its own-world checks run there, then 20 s of no attempt, the return by
+  fresh invite, the live holder (its `_peer` orphaned by reflection: up, never polled, so the host sees
+  silence, not a close), then "Host closed". `guest2` knocks with `PretendAt.Code` first (no WebRTC peer on
+  any frame), then Auth, then joins; `JoinedBy` asserted for guest/guest2/aguest.
+- Net fix: a paste peer let go while its pilot is back under another id (the rejoin token beat it) gets no
+  fresh invite (`OnPeer`). SessionMenu: the JOIN box is named `JoinBox`.
+- run.ps1: the host gets `wan` under -Wan (its waits), the three-player roles' limit 120 -> 180 s (20 s of
+  no-retry, two returns), `$expected` named rows for engine chatter (the UPnP sentence gone).
+- checks written (not run): rung 5 host "INVITE A FRIEND's invite went out by the courier ... taken off the
+  clipboard", "one session serves both rows", "a paste guest that drops is held 90 s and gets a fresh
+  invite", "came back by the fresh invite ... rejoin token", "the pilot back with its token while its old
+  link still lived"; guest "joined by the host's invite ... within 30 s", "dropped from an invite ...",
+  "tries nothing by itself for 20 s", "back in by the host's fresh invite", "back again while its old link
+  still lived"; guest2 "its knock as another build is refused by the listener before any connection",
+  "joined by the typed address"; aguest "joined, by the typed address". Rewritten: the host's refusal count
+  (one at the knock, one in-band, counted apart), the guest's "Lost the connection ... held 90 s" (was
+  "Host closed" at that point), guest2's joinWatch text (four joins).
+- Test-phase watch: the live holder leans on the orphaned peer's native threads keeping the link up
+  (libdatachannel); if the host sees a close instead, the check reads "again > 0" -- then orphan by
+  blackhole under -Wan only.
+- next: R3.
