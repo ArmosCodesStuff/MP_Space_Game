@@ -7798,6 +7798,207 @@ public partial class _Test : Node
         dt.Demo = demo; dt.Velocity = Vector2.Zero; dt.Position = yonder; dt.Sl("rod").Cool = 0;
     }
 
+    // ── SLICE 6d, THE DART'S RAMJET (kits_v3 §3.6; v31 §3.4 and §7: the speed lifts add). Its rows; then from 3 varied
+    // headings each: lit at the top with W held, the top {286, 338, 390, 390} +- 3 at {1, 3, 5, 7} s, a dart priced 11.25
+    // at +50%, 0 by 9.0 s, 20 s from the press and a second press refused; a full turn for 1 s (timed from the first frame
+    // at the full rate) takes 26 +- 3 off the top; the slide held 1 s takes nothing; a web holds it (no build); the rod
+    // at the end of a lit sprint 339.2; the boost on top x2.0 = 520, and the build pausing while the hull climbs to it.
+    void LaneA6dRamjetRowChecks()
+    {
+        var sh = new ShipStats(ShipClass.LightDart);
+        var dart = Classes.Of(ShipClass.LightDart);
+        Check(sh["ramjet_time"] == 8 && sh["ramjet_build"] == 0.10 && sh["ramjet_cap"] == 0.50 && sh["ramjet_bleed"] == 0.20 && sh["ramjet_cooldown"] == 20
+              && dart.Abilities.Length >= 3 && dart.Abilities[2] == Ab.Ramjet && Ab.Ramjet.Ramp is { Build: "ramjet_build", Cap: "ramjet_cap", Bleed: "ramjet_bleed" }
+              && Ab.Ramjet.Ramp.Condition != null && Ab.Ramjet.Default == global::Godot.Key.Q,
+              $"the ramjet's rows: lit {sh["ramjet_time"]:0} s, +{sh["ramjet_build"]:0.00} a second to +{sh["ramjet_cap"]:0.00}, a full turn -{sh["ramjet_bleed"]:0.00} a second, {sh["ramjet_cooldown"]:0} s; the Dart's ability 2, on Q");
+    }
+
+    async Task LaneA6dRamjetChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightDart);
+        var dt = Me; bool demo = dt.Demo; dt.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var W = global::Godot.Key.W;
+        async Task AtTop(float rot)
+        {   // flat out on a varied heading until the keel speed is at the sheet's top
+            dt.Demo = false; dt.Sl("ramjet").Left = 0; dt.Sl("ramjet").Own = 0; dt.Sl("ramjet").Cool = 0;
+            dt.Position = VaryNear(yonder, 300f); dt.Rotation = rot; dt.Velocity = Vector2.Up.Rotated(rot) * 250f;
+            KeyDown(W);
+            for (int i = 0; i < 60 * 6 && dt.SpeedAhead < 259f; i++) await Frame();
+        }
+        double pepper = dt.Stats["pepper_damage"];
+
+        // THE BUILD, timed from the press, the hull held straight and flat out
+        for (int run = 0; run < 3; run++)
+        {
+            float rot = VaryAngle();
+            await AtTop(rot);
+            dt.UseAbility("ramjet", 0);
+            double cool0 = dt.Sl("ramjet").Cool;
+            double l0 = dt.Sl("ramjet").Left; dt.UseAbility("ramjet", 0);
+            bool refused = dt.Sl("ramjet").Left <= l0 && dt.Sl("ramjet").Cool <= cool0;
+            var tops = new float[4]; var at = new[] { 1.0, 3.0, 5.0, 7.0 }; int k = 0;
+            double clock = 0, zeroAt = -1, dart7 = 0;
+            for (int i = 0; i < 60 * 11 && zeroAt < 0; i++)
+            {
+                dt.Rotation = rot;
+                await Frame();
+                clock += GetProcessDeltaTime();
+                if (k < 4 && clock >= at[k]) { tops[k] = dt.TopNow; if (k == 3) dart7 = Bores.DamageOf(dt, Ab.Pepperbox.Bore); k++; }
+                if (clock > 8.2 && dt.Sl("ramjet").Own <= 0) zeroAt = clock;
+            }
+            KeyUp(W);
+            var want = new[] { 286f, 338f, 390f, 390f };
+            bool ok = Enumerable.Range(0, 4).All(j => Mathf.Abs(tops[j] - want[j]) <= 3f);
+            Check(ok && Math.Abs(dart7 - 11.25) < 0.02 && Math.Abs(pepper - 7.5) < 1e-9 && zeroAt > 0 && zeroAt <= 9.0 + 2.0 / 60 && Math.Abs(cool0 - 20) < 0.1 && refused,
+                  $"the ramjet lit flat out on {Mathf.RadToDeg(rot):0}°: top {string.Join(" / ", tops.Select(x => x.ToString("0")))} at 1 / 3 / 5 / 7 s (286 / 338 / 390 / 390 +- 3), a dart then {dart7:0.00} (11.25), out and 0 by {zeroAt:0.00} s (9.0), cooldown {cool0:0.0} (20 from the press), a second press refused ({refused})");
+            dt.Velocity = Vector2.Zero;
+            await Frame();
+        }
+
+        // A FULL TURN BLEEDS IT, THE SLIDE NEVER: at +50%, lit, flat out; the rudder hard over (timed from the first frame
+        // the yaw reaches the hull's full rate) 1 s takes 26 +- 3 off the top; the slide held 1 s takes nothing
+        for (int run = 0; run < 3; run++)
+        {
+            float rot = VaryAngle();
+            await AtTop(rot);
+            dt.Sl("ramjet").Left = Vary(5f, 6.5f); dt.Sl("ramjet").Own = 0.5;
+            for (int i = 0; i < 60 && dt.SpeedAhead < 385f; i++) await Frame();
+            var rudder = run == 1 ? global::Godot.Key.A : global::Godot.Key.D;
+            KeyDown(rudder);
+            float turn = (float)dt.Stats["turn_rate"], lastRot = dt.Rotation, top0 = -1; double t = 0;
+            for (int i = 0; i < 60 * 4 && t < 1.0; i++)
+            {
+                await Frame();
+                double d = GetProcessDeltaTime();
+                float yaw = Mathf.Abs(Mathf.AngleDifference(lastRot, dt.Rotation)) / (float)d; lastRot = dt.Rotation;
+                if (top0 < 0 && yaw >= turn * 0.99f) top0 = dt.TopNow;
+                else if (top0 >= 0) t += d;
+            }
+            float bled = top0 - dt.TopNow;
+            KeyUp(rudder);
+            // the slide: Shift + A/D, the nose held
+            dt.Rotation = rot; dt.Sl("ramjet").Own = 0.5; dt.Sl("ramjet").Left = 3;
+            await Frame();
+            KeyDown(global::Godot.Key.Shift); KeyDown(rudder);
+            double own0 = dt.Sl("ramjet").Own;
+            await Wait(1.0);
+            double slid = dt.Sl("ramjet").Own;
+            KeyUp(rudder); KeyUp(global::Godot.Key.Shift); KeyUp(W);
+            Check(top0 > 0 && Mathf.Abs(bled - 26f) <= 3f && slid >= own0 - 1e-6,
+                  $"at +50% a full {(run == 1 ? "port" : "starboard")} turn for 1 s takes {bled:0.0} off the top (26 +- 3: -0.20 + 0.10 a second); a slide held 1 s leaves it at +{slid * 100:0.0}% (+50)");
+            dt.Velocity = Vector2.Zero; dt.Sl("ramjet").Left = 0; dt.Sl("ramjet").Own = 0;
+            await Frame();
+        }
+
+        // A WEB HOLDS IT: pinned (the throttle forced, the speed held under the pin's share of the top), 1.5 s lit builds nothing
+        for (int run = 0; run < 3; run++)
+        {
+            float rot = VaryAngle();
+            await AtTop(rot);
+            dt.Statuses.Apply(Status.Pinned, 3.0);
+            await Wait(Vary(0.3f, 0.6f));
+            dt.Sl("ramjet").Left = 4; dt.Sl("ramjet").Own = 0;
+            await Wait(1.5);
+            double own = dt.Sl("ramjet").Own;
+            KeyUp(W); dt.Statuses.Clear(Status.Pinned);
+            Check(own <= 1e-6, $"webbed at {Mathf.RadToDeg(rot):0}°, 1.5 s lit builds +{own * 100:0.0}% (nothing)");
+            dt.Velocity = Vector2.Zero; dt.Sl("ramjet").Left = 0; dt.Sl("ramjet").Own = 0;
+            await Frame();
+        }
+
+        // THE LIFTS ADD (v31 §3.4, §7): a rod at the end of a lit sprint at +50% carries 339.2; the boost on +50% is x2.0 =
+        // 520; and the boost struck mid-build pauses it while the hull climbs to the new top
+        dt.Demo = true;
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero;
+            dt.Sl("ramjet").Own = 0.5; dt.Sl("ramjet").Left = 5;
+            string boost = dt.Drive.Id;
+            dt.Sl(boost).Left = Vary(1.0f, 2.5f);
+            float boosted = dt.TopNow;
+            dt.Sl(boost).Left = 0;
+            var was = Nodes<Shot>().Where(x => x.Kind == Shots.Rod).ToHashSet();
+            dt.Sl("rod").Left = 0.02;
+            Shot rod = null;
+            for (int i = 0; i < 20 && rod == null; i++)
+            {
+                dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero; dt.Sl("ramjet").Own = 0.5;
+                await Frame();
+                rod = Nodes<Shot>().FirstOrDefault(x => x.Kind == Shots.Rod && !was.Contains(x));
+            }
+            Check(Mathf.Abs(boosted - 520f) < 0.5f && rod != null && Math.Abs(rod.Damage - 339.23) < 0.01,
+                  $"at +50%: boosted the top is {boosted:0} (520 = x2.0); a rod at the end of a lit sprint carries {rod?.Damage:0.0} (339.2 at 490)");
+            dt.Sl("ramjet").Left = 0; dt.Sl("ramjet").Own = 0;
+            await Wait(0.3);
+        }
+        for (int run = 0; run < 3; run++)
+        {
+            float rot = VaryAngle();
+            await AtTop(rot);
+            dt.Sl("ramjet").Left = 6; dt.Sl("ramjet").Own = Vary(0.10f, 0.25f);
+            await Wait(0.8);                                          // flat out at the lit top
+            string boost = dt.Drive.Id;
+            double own0 = dt.Sl("ramjet").Own;
+            dt.Sl(boost).Left = 3;
+            await Wait(0.25);
+            double own1 = dt.Sl("ramjet").Own;
+            float gap = dt.TopNow - dt.SpeedAhead;
+            KeyUp(W); dt.Sl(boost).Left = 0;
+            Check(own1 - own0 < 0.005 && gap > 0.05f * dt.TopNow,
+                  $"the boost struck at +{own0 * 100:0}%: 0.25 s later +{own1 * 100:0.0}% (paused: the hull {gap:0} u/s under its new top)");
+            dt.Velocity = Vector2.Zero; dt.Sl("ramjet").Left = 0; dt.Sl("ramjet").Own = 0;
+            await Frame();
+        }
+        dt.Demo = demo; dt.Velocity = Vector2.Zero; dt.Position = yonder;
+    }
+
+    // ── SLICE 6d, RUNG 5: A GUEST'S RAMJET, PRICED ON THE HOST. The guest (LaneA6dRamjetGuestChecks) flies flat out and
+    // straight on a varied heading, lights the ramjet and holds on 6 s: its own total +50%. The host (LaneA6dRamjetHostWatch)
+    // steps ITS copy from the guest's reports and prices from it: 5.5 s into the lit run its copy reads +50% and a dart of
+    // the guest's is 11.25 within 1%.
+    sealed class LaneA6dRamjetSeen { public double Own = -1, Dart = -1; public bool Done; }
+    LateSampler LaneA6dRamjetHostWatch(LaneA6dRamjetSeen seen)
+    {
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (seen.Done || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.LightDart } g) return false;
+            ref var sl = ref g.Sl("ramjet");
+            if (sl.Left <= 0 || sl.Left > g.Stats["ramjet_time"] - 5.5) return false;
+            seen.Own = sl.Own; seen.Dart = Bores.DamageOf(g, Ab.Pepperbox.Bore); seen.Done = true;
+            return true;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6dRamjetHostChecks(LateSampler watch, LaneA6dRamjetSeen seen)
+    {
+        await RealTime(() => seen.Done, Wan ? 60 : 40);
+        watch.QueueFree();
+        Check(seen.Done && Math.Abs(seen.Own - 0.5) <= 0.005 && Math.Abs(seen.Dart - 11.25) <= 11.25 * 0.01,
+              $"arena host: its own copy of the guest's ramjet 5.5 s lit reads +{seen.Own * 100:0.0}% (50), and prices the guest's dart at {seen.Dart:0.00} (11.25 within 1%)");
+    }
+    async Task LaneA6dRamjetGuestChecks()
+    {
+        var me = Me; me.AutopilotTo = null; bool demo = me.Demo; me.Demo = false;
+        float rot = VaryAngle();
+        me.Rotation = rot; me.Velocity = Vector2.Up.Rotated(rot) * 250f;
+        KeyDown(global::Godot.Key.W);
+        for (int i = 0; i < 60 * 6 && me.SpeedAhead < 259f; i++) { me.Rotation = rot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        me.UseAbility("ramjet", 0);
+        double own = 0;
+        for (double t = 0; t < 6.5; t += GetProcessDeltaTime())
+        {
+            me.Rotation = rot;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            own = me.Sl("ramjet").Own;
+        }
+        KeyUp(global::Godot.Key.W);
+        me.Demo = demo; me.Velocity = Vector2.Zero;
+        Check(Math.Abs(own - 0.5) <= 0.005, $"arena guest: its ramjet flown flat out and straight on {Mathf.RadToDeg(rot):0}° builds its own total to +{own * 100:0.0}% (50)");
+    }
+
     // ── SLICE 6d, RUNG 5: A GUEST'S PEPPERBOX. The guest (LaneA6dPepperGuestChecks) flies a DART at rest, its cursor
     // on a varied point 400-600 u off the nose, and holds the trigger 2 s: its own world shows the host's darts
     // (cosmetic copies, Commanded onto ITS cursor) -- 12 +- 2 of them, each within 10° of the bearing to the cursor
@@ -13867,6 +14068,8 @@ public partial class _Test : Node
             await LaneA6dPepperChecks(yonder);
             LaneA6dRodRowChecks();
             await LaneA6dRodChecks(yonder);
+            LaneA6dRamjetRowChecks();
+            await LaneA6dRamjetChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -14242,6 +14445,7 @@ public partial class _Test : Node
                     ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && InFlight().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
                     ["pepperbox"] = sp => sp.Trigger && Abilities.Find(sp.Class, "pepperbox").State(sp, null).Lit,
                     ["rod"]       = sp => sp.Sl("rod").Left > sp.Stats["sprint_time"] - 0.1 && sp.Forced && sp.Sl("rod").Cool > sp.Stats["rod_cooldown"] - 0.1,
+                    ["ramjet"]    = sp => sp.Sl("ramjet").Left > sp.Stats["ramjet_time"] - 0.1 && sp.Sl("ramjet").Cool > sp.Stats["ramjet_cooldown"] - 0.1,
                     ["echo"]      = sp => sp.Sl("echo").Left > sp.Stats["echo_time"] - 0.1,
                     ["stealth"]   = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("stealth").Left > sp.Stats["stealth_time"] - 0.1,
                     ["anchor"]    = sp => sp.Sl("anchor").Left > sp.Stats["anchor_time"] - 0.1 && sp.Held == 0f,
@@ -17469,6 +17673,8 @@ public partial class _Test : Node
             var pepperWatch = LaneA6dPepperHostWatch(pepperSeen);           // slice 6d: ...and, after its curtain, holds a Dart's pepperbox
             var rodSeen = new LaneA6dRodSeen();
             var rodWatch = LaneA6dRodHostWatch(rodSeen);                    // slice 6d: ...then sprints it and fires the rod
+            var ramjetSeen = new LaneA6dRamjetSeen();
+            var ramjetWatch = LaneA6dRamjetHostWatch(ramjetSeen);           // slice 6d: ...then lights its ramjet
             await LaneBHostDrives();                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
             await LaneA6cLungeHostChecks(lungeWatch, lungeSeen);
             await LaneA6cPrismHostChecks(prismWatch, prismSeen);
@@ -17488,6 +17694,7 @@ public partial class _Test : Node
                   $"arena host: hosting as a WARRIOR -- its stock 300 hull, no chips, its own rows, the drive and six open slots ({hw.MaxHp:0})");
             await LaneA6dPepperHostChecks(pepperWatch, pepperSeen);          // slice 6d: the guest's pepperbox, before it refits to a freighter
             await LaneA6dRodHostChecks(rodWatch, rodSeen);                  // slice 6d: the guest's rod, priced on the host
+            await LaneA6dRamjetHostChecks(ramjetWatch, ramjetSeen);         // slice 6d: the host's own copy of the guest's ramjet
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
                                  && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
             var fg = H.Ships.FirstOrDefault(s => !s.Mine);
@@ -17778,6 +17985,7 @@ public partial class _Test : Node
             await LaneA6cCurtainGuestChecks();                              // slice 6c: a guest's curtain, drawn where the host laid it
             await LaneA6dPepperGuestChecks();                               // slice 6d: a guest's pepperbox (its host half: LaneA6dPepperHostChecks)
             await LaneA6dRodGuestChecks();                                  // slice 6d: a guest's sprint and rod (its host half: LaneA6dRodHostChecks)
+            await LaneA6dRamjetGuestChecks();                               // slice 6d: a guest's ramjet (its host half: LaneA6dRamjetHostChecks)
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.

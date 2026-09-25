@@ -799,6 +799,36 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
     private float _kick;
 
+    // FLAT OUT AND KEEPING UP (a Ramp row's Condition, the Ramjet): the keel speed within `share` of the current top,
+    // at full throttle. The owner reads its own throttle; the HOST'S copy of a guest's ship has no throttle to read, only
+    // the reported velocity, so it asks the speed alone (DL9: a hull that lets go drops out of the 5% in a moment).
+    public bool FullAhead(float share)
+        => (!Mine || _throttle >= 1f) && (Mine ? Velocity : _netVel).Dot(Vector2.Up.Rotated(Mine ? Rotation : _netRot)) >= share * TopNow;
+    private float _throttle;
+
+    // THE HOST'S OWN COPY OF A GUEST'S RAMP (v3 §3.6 Authority), stepped once a report, over the time since the last:
+    // the yaw from the two reported headings, clamped to the hull's turn rate (a report cannot claim a sharper turn),
+    // and none across a snap (SkipYaw: the Slingshot's heading is a snap, not a turn). The host prices only from this.
+    private void RampsFromReport(float rot, float age)
+    {
+        float yaw = age > 0 ? Mathf.AngleDifference(_rampRot, rot) / age : 0f;
+        if (SkipYaw) { yaw = 0f; SkipYaw = false; }
+        _rampRot = rot;
+        double turnRate = Stats["turn_rate"], dt = Math.Min(age, 0.5f);
+        double share = turnRate > 0 ? Math.Min(1, Math.Abs(yaw) / turnRate) : 0;
+        foreach (var def in Abilities.For(Class))
+        {
+            if (def.Ramp is not { } ramp) continue;
+            ref var sl = ref Sl(def.Id);
+            bool holding = sl.Left > 0;
+            sl.Own = RampSpec.Step(sl.Own, Stats[ramp.Build], Stats[ramp.Cap], Stats[ramp.Bleed],
+                                   holding, holding && (ramp.Condition == null || ramp.Condition(this)), share, dt);
+        }
+    }
+    private float _rampRot;
+    // the next report's heading change is a snap, not a turn (set on the host by a row that snaps the heading)
+    public bool SkipYaw;
+
     public void StartOverdrive()
     {
         if (Sl("overdrive").Cool > 0) return;
@@ -1256,9 +1286,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             // A RAMP's running total (F1, D18) steps every frame regardless of Left, so it keeps
             // draining after the row stops -- Steer already ran this frame (LocalFlight, above),
             // so _yawRate is this frame's, not last frame's. OWNER-STEPPED: only the peer that
-            // holds the helm (Mine) has a throttle and a yaw to read; every other copy of the
-            // ship (the host's of a guest's included) never steps it, and ApplyHostState leaves
-            // the owner's own value alone (DESIGN.md, the authority model).
+            // holds the helm (Mine) has a throttle and a yaw to read, and ApplyHostState leaves the
+            // owner's own value alone (DESIGN.md, the authority model). The HOST steps its own copy of
+            // a guest's from the guest's reports instead (RampsFromReport), and prices from that.
             if (def.Ramp is { } ramp && Mine)
             {
                 bool holding = sl.Left > 0;
@@ -1616,6 +1646,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             (throttle, rudder) = Autopilot.Capital(Position, Rotation, Velocity, (float)Stats["max_speed"], dest, 60f);
         if (Pinned) { throttle = 1f; rudder = 0f; strafe = 0f; AutopilotTo = null; }   // forced thrust, no rudder, no slide
         else if (Forced) { throttle = 1f; AutopilotTo = null; }                          // a sprint: forced thrust, the rudder free
+        _throttle = throttle;
         Thrusting = throttle != 0f;
         // A HELM MOVE (F8) flies the hull by its own law while it lasts; a dash carries the hull instead
         // of the helm; otherwise the helm steers
@@ -1770,6 +1801,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _netPos = new Vector2(px, py);
         _netVel = new Vector2(vx, vy);
         _netRot = rot;
+        if (Net.Sim) RampsFromReport(rot, age);
         AimPoint = new Vector2(ax, ay);
         Trigger = trigger;          // the host fires on this; a guest only draws
         Staggered = staggered;

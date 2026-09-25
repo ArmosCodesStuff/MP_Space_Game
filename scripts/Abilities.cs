@@ -123,12 +123,12 @@ public class AbilityDef
 
     // A FLAT TOP SPEED (F1's Add), on top of SpeedStat's multiplier, before the hold: the stat id
     // this row's ship sheet names for it (PlayerShip.SpeedAdds sums every running row's, added in
-    // PlayerShip.TopSpeed -- see D18). No row uses it yet.
+    // PlayerShip.TopSpeed -- see D18). The Dart's sprint (Ab.Rod) is the first row.
     public string SpeedAdd;
     // A LIFT WHOSE SIZE IS A RUNNING TOTAL (F1's Ramp, D18): builds while it runs and Condition
     // holds, bleeds with the turn (whether or not Condition holds), caps, and drains once the row
     // stops. See RampSpec below -- the row names three stat ids and a condition; the math is not
-    // its own. No row uses it yet (6d, the Dart's Ramjet).
+    // its own. The Dart's Ramjet (Ab.Ramjet).
     public RampSpec Ramp;
     // A DASH (DashSpec below): pressed, it carries the hull a fixed distance along its nose, and the
     // host strikes what lies on that line. The Warrior's lunge is the first row.
@@ -554,6 +554,22 @@ public static class Ab
         Expire = s => s.Part("rod"),
         Refuse = (s, _) => s.Sl("rod").Left > 0 ? "SPRINTING" : s.Sl("rod").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => Timed(s, "rod", "rod_cooldown", "SPRINT"),
+    };
+
+    // RAMJET (the Dart's Q, kits_v3 §3.6): lit 8 s; at full throttle with the keel within 5% of the current top it builds
+    // +10% top a second, to +50%; a full turn bleeds 20% a second whether or not it builds (the slide never does); once
+    // it goes out it drains in at most 1 s. 20 s from the press. A Ramp row (F1, D18): the owner flies its own total, the
+    // host prices from ITS copy, stepped from the guest's reports (PlayerShip.RampsFromReport).
+    public static readonly AbilityDef Ramjet = new()
+    {
+        Id = "ramjet", Name = "Ramjet", Short = "RAMJET", Default = Key.Q,
+        Blurb = "Lit for 8 s: flat out and flying straight, your top speed climbs 10% a second, to half again. Turning bleeds it. The faster you go, the harder your darts and your rod hit.",
+        Ramp = new RampSpec { Build = "ramjet_build", Cap = "ramjet_cap", Bleed = "ramjet_bleed", Condition = s => s.FullAhead(0.95f) },
+        Press = (s, _) => s.Run("ramjet", "ramjet_time", "ramjet_cooldown"),
+        Refuse = (s, _) => s.Sl("ramjet").Left > 0 ? "LIT" : s.Sl("ramjet").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => s.Sl("ramjet").Left > 0
+            ? new SlotState { Line = $"+{s.Sl("ramjet").Own * 100:0}% {s.Sl("ramjet").Left:0.0}s", Lit = true }
+            : Timed(s, "ramjet", "ramjet_cooldown", "READY"),
     };
 
     public static readonly AbilityDef Echo = new()

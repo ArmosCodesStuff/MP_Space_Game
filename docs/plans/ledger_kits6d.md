@@ -243,3 +243,24 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
   mid-sprint no rod x3); sweep witness ["rod"]; rung 5 LaneA6dRodHostWatch/HostChecks (host price within 1%) +
   LaneA6dRodGuestChecks (forced within 0.5 s, past 300 u/s, rod seen); frame 76c_dart_sprint_rod (LaneA6dRodFrames).
 - next: kits6d-J3 (Ramjet).
+
+## kits6d-J3 · PRE
+- tier opus; intent: Ramjet (DL5): Ab.Ramjet (Q, ability 2) on the Ramp row; Condition PlayerShip.FullAhead (owner: throttle full and keel speed within 5% of the current top; host copy: the reported keel speed alone, DL9); the host's own copy stepped from each guest report (yaw from the reported headings clamped to turn_rate, a snap's report skipped).
+- HEAD 46f51002766194bb2cfa9b24c099de4e2d0ac431
+- scripts/Abilities.cs 94c9c6c146559d41ef3a376b0b22300ad17eed7f
+- scripts/PlayerShip.cs 09e1c5bec79e29955f99385eec0b53a467a97da7
+- scripts/Ships.cs 3a847cda2608af38abbf25200f268045060d2ba5
+- tools/smoketest/SmokeTest.cs.txt 10002adf2623658315db42784b6d3312cd3a0db2
+
+## kits6d-J3 · POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- built: Ab.Ramjet (Q, ability 2; Ramp row ramjet_build/cap/bleed, Run from the press), PlayerShip.FullAhead(share) (owner:
+  throttle 1 and keel speed >= 95% of TopNow; host copy: the reported keel speed alone -- **DL9**, the report carries no
+  throttle, a wire field was not worth it), PlayerShip.RampsFromReport (host, from ApplyState: yaw from the two reported
+  headings clamped to turn_rate, dt capped 0.5 s, SkipYaw for a snap -- J4's Slingshot sets it). Stale "no row uses it"
+  comments on SpeedAdd / Ramp and TickAbilities' authority note rewritten.
+- checks: LaneA6dRamjetRowChecks, LaneA6dRamjetChecks (build {286,338,390,390} +-3 x3 with the dart 11.25, 0 by 9.0, cool 20,
+  refused; full turn 1 s from full yaw -26 +-3 and the slide 1 s nothing x3; webbed no build x3; boosted 520 + rod 339.2 at
+  the end of a lit sprint x3; the boost pauses the build x3); sweep witness ["ramjet"]; rung 5 LaneA6dRamjetHostWatch/
+  HostChecks (host copy +50%, dart 11.25 within 1%) + LaneA6dRamjetGuestChecks.
+- next: kits6d-J4 (Slingshot + Slipstream).
