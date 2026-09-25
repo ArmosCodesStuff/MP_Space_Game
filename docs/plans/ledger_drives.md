@@ -145,3 +145,35 @@ drive" with its traps), Drives.cs (range labels scaled by the camera's zoom).
   the Anchor refuses the boost (6c: proved here with the railgun's hold), Rewind/Ramjet/Slipstream
   pricing (6d reads Drives.SpeedCap / PlayerShip.TopNow).
 Open defaults: B1-B9 above; decisions 1, 2, 3, 12, 13 at kits_v31 §10's defaults.
+
+## COORDINATOR NOTE 1 (2026-09-25): three checks per ability (owner ruling; CLAUDE.md 6.7)
+Every ability or drive row this lane adds carries AT LEAST THREE distinct checks, each from 3 varied situations: (1) its effect
+asserting the spec's literals, (2) each interaction its kit or kits_v31 section 7 names, (3) a guest-role check where a guest sees it,
+or a named frame where it is drawn. One check at three spots is ONE check. Written now with the code, run in the final test phase.
+Every PRE that adds an ability says "applies NOTE 1" and lists its three checks.
+
+### J7 PRE · tier opus · gate fix (the opus merge gate's five findings; applies NOTE 1)
+Intent: (1) ApplyState prices a guest's report only while Hub.PeerSector(OwnerId) == Hub.Sector, else
+From = null (clamp kept) + rung-5 check LaneBWorldEntryChecks in LaneBHostDrives (old-world report
+while the sector is unset, then the new spawn; and a re-board: wreck report, reboard, far report --
+no Disabled, warp Cool 0, 3 seeded spots each); (2) LaneBWarpChecks gains the two interaction checks:
+BB broadside mid-charge (3 seeded headings) and CV craft fight on through the warp's Disabled (3
+seeded runs, warp_safe lowered to 1000 so a 600 u overshoot leaves the carrier inside the wing's
+1500 u control range both sides of the jump); (3) Enemies.cs Cruise comment to the F22 truth;
+(4) TickOwner cancels a release when the slot is cooling (host's cooldown arrived mid-hold) + check;
+(5) Surge/Jump/Priced/WarpShow/SurgeShow read the slot by s.Drive.Id; the header says how stat ids
+work per kind. CHANGES: one line in lane B's Unreleased entry.
+HEAD 2467abe. Drives.cs 161a082 · PlayerShip.cs e74bb7a · Enemies.cs caddc1c · SmokeTest.cs.txt 6c0ca9e · CHANGES.md c48ba7c
+### J7 POST · green (typecheck 0, verify -Quick ALL CHECKS PASSED) -- gate fix
+Files: PlayerShip.cs (ApplyState prices only while Hub.PeerSector(OwnerId) == Hub.Sector, else From =
+null; clamp kept), Drives.cs (TickOwner: a release while the slot cools jumps nothing, V says COOLING;
+Surge/Jump/Priced/WarpShow/SurgeShow reach the slot by s.Drive.Id; header: stat ids are the kind's,
+they move onto DriveDef when a row needs its own), Enemies.cs (Cruise comment: over BB 88 / CV 99,
+under DD 117 and the rest), SmokeTest (LaneBWorldEntryChecks from LaneBHostDrives with snaps priced:
+3 late old-world reports + 3 re-boards; LaneBWarpChecks: broadside mid-charge x3 headings, cooldown
+arriving mid-hold x3, carrier fighters through the warp's disable x3 with warp_safe 1000 so both ends
+sit inside the 1500 u control range, ends back on the battleship), CHANGES (lane B entry lines).
+engine-unproven: rungs owed in the final test phase -- solo x2 for the three LaneBWarpChecks blocks
+(watch: the carrier block's "shots >= 2 in 3 s" and the fighters' 15 s burst clock), six x2 for
+LaneBWorldEntryChecks (host role). Owner-facing: raiders (100) now out-cruise the BB and CV (F22).
+Next: none; the lane waits for its re-gate and merge.

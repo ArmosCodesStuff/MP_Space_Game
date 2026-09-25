@@ -1301,8 +1301,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _drive.Remote = warping;
         if (Net.Sim)
         {   // THE HOST'S READING of a guest's report (Drives): a jump it made is priced, and the speed it
-            // claims is held to what its hull can do now
-            Drives.Priced(this, _drive, _netPos, warping, age, Drives.SpeedCap(TopNow, StrafeNow));
+            // claims is held to what its hull can do now. Priced only between two reports of the ship IN
+            // THIS WORLD: entering one drops every peer's sector until it reports again (Hub.EnterSector),
+            // and a guest's last reports from the world it left can still land here: priced, they would
+            // make its first report from the new spawn a snap, and a capital would arrive DISABLED.
+            if (Hub.PeerSector(OwnerId) == Hub.Sector) Drives.Priced(this, _drive, _netPos, warping, age, Drives.SpeedCap(TopNow, StrafeNow));
+            else _drive.From = null;
             _netVel = Drives.Clamp(_drive, _netVel, TopNow, StrafeNow);
         }
     }

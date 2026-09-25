@@ -38,7 +38,7 @@ history pick the work up from it alone. Update it in the same change as the code
 
 **2026-09-25 (worktree `WarShips_wt_drives`, branch `wt/drives`): kits lane B -- drives, helm,
 strafe (F21, F22, F24) -- built J1-J6; compiles, rung 2 green. engine-unproven: rungs owed in the final
-test phase** (solo x2, six x2, screens). V is the class's drive (`Drives.cs`): a held warp on the
+test phase** (solo x2, six x2, screens); J7 fixed the merge gate's five findings. V is the class's drive (`Drives.cs`): a held warp on the
 capitals, a boost on the nine; Shift + A/D strafe on the nine; capitals 88/99/117, freighters 120.
 Detail and what the test phase owes: `docs/plans/ledger_drives.md` (J6 POST).
 
@@ -540,7 +540,8 @@ and the bar, fixed on V, never walled. **Warp** (battleship, carrier, destroyer)
 then 800 u/s to a safe 2400 u, stopping 900 over; release to jump along the bow or short of a target or
 waypoint the bow is on; past the ring the hull lands DISABLED 2 s per 300 u over (the owner locks at
 once; the host prices what it sees -- a fallen charge bit, or any snap over 600 u with no bit; a
-relocation the host makes is never priced); 20 s from the jump. The pilot sees the safe ring, the
+relocation the host makes, a report from a peer not yet counted in the host's world, and a re-board
+are never priced; a release while the slot cools jumps nothing); 20 s from the jump. The pilot sees the safe ring, the
 charge ring, the amber-to-red band with 2 s / 4 s / 6 s ticks, the landing ghost and its readout; the
 slot and the hull bar read `WARP 1850 u`, `DISABLED 2.8 s`, `WARP 12 s`. **Boost** (the nine): tap V --
 +50% top speed, thrust and slide for 3 s (one F1 lift, `surge_lift`), 15 s from the press; refused
@@ -549,7 +550,9 @@ The host's speed clamp reads a report held to hypot(top, strafe) x 1.1. The titl
 the same warp, held to 500 u. Hints: warp, boost, strafe; the controls line names the drive.
 
 **Checks:** new `LaneBHelmChecks`, `LaneBStrafeChecks`, `LaneBWarpChecks`, `LaneBBoostChecks` (rung 3),
-`LaneBHostDrives` / `LaneBGuestDrives` (rung 5), frames 40, 40b, 41, 41b, 42, 42b (`LaneBDriveFrames`,
+`LaneBHostDrives` (+ `LaneBWorldEntryChecks`: world entry, re-board) / `LaneBGuestDrives` (rung 5);
+in `LaneBWarpChecks` the pairs a broadside mid-charge, a carrier's fighters through the warp's disable,
+and a cooldown arriving mid-hold; frames 40, 40b, 41, 41b, 42, 42b (`LaneBDriveFrames`,
 rung 4); rewritten: the battleship/destroyer/carrier speed literals, the title ship's hop, the drive's
 hint card, the snap flash, the bar sequences and `Abilities.For` lengths (+1 for the drive).
 **Rungs:** 1 and 2 in the worktree. None of it has run on the engine.

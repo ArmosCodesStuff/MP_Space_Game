@@ -19,7 +19,10 @@ using System.Linq;
 // a Surge), its StatRows (the numbers, on the sheet, so gear can move them) and its word on the
 // controls line. Abilities.For appends the class's drive row after its own, so it has a slot on the
 // wire and a box on the bar; it is not in ClassDef.Abilities, so no level wall and no Resupply
-// reaches it.
+// reaches it. The code reaches the slot by the hull's own row (s.Drive.Id), never by Warp or Boost;
+// the numbers are read by the KIND's stat ids (warp_* for a Jump, surge_* for a Surge), which a
+// second row of a kind states again with its own Base (a hull has one drive, so they never meet).
+// The day a row needs ids of its own, they move onto DriveDef.
 // ─────────────────────────────────────────────────────────────────────────────
 public enum DriveKind { Jump, Surge }
 
@@ -176,7 +179,7 @@ public static class Drives
     // THE BOOST: a timed lift on its own slot. Its cooldown runs from the press.
     private static void Surge(PlayerShip s)
     {
-        ref var sl = ref s.Sl(Boost.Id);
+        ref var sl = ref s.Sl(s.Drive.Id);
         if (Refusal(s) != null) return;
         sl.Left = s.Stats["surge_time"];
         sl.Cool = s.Cooling(s.Stats["surge_cooldown"]);
@@ -191,13 +194,16 @@ public static class Drives
     }
 
     // THE OWNER'S CHARGE: held, it grows; released past the spool, it jumps. Nothing survives stasis
-    // or a disable, and a release inside the spool costs nothing.
+    // or a disable, and a release inside the spool costs nothing. A release while the slot COOLS jumps
+    // nothing: a guest's predicted cooldown is overwritten by the host's reports until the host's own
+    // arrives, and V taken in that gap would otherwise jump through the host's 20 s.
     public static void TickOwner(PlayerShip s, DriveRun r, bool held, double dt)
     {
         if (r.Held < 0) return;
         if (!s.Alive || s.Disabled || s.Drive?.Kind != DriveKind.Jump) { r.Held = -1; return; }
         r.Held += dt;
         if (held) return;
+        if (s.Sl(s.Drive.Id).Cool > 0) { r.Held = -1; s.Fail(s.Drive.Id, "COOLING"); return; }
         float reach = Reach(r.Held, s.Stats["warp_rate"], s.Stats["warp_safe"]);
         r.Held = -1;
         if (reach >= 0) Jump(s, r, reach);
@@ -213,7 +219,7 @@ public static class Drives
         s.Position = dest; s.Velocity = Vector2.Zero;
         r.Flash = FlashFor;
         r.Lock = off;
-        s.Sl(Warp.Id).Cool = s.Cooling(s.Stats["warp_cooldown"]);
+        s.Sl(s.Drive.Id).Cool = s.Cooling(s.Stats["warp_cooldown"]);
         if (Net.Sim && off > 0) s.ApplyStatus(Status.Disabled, off);
     }
 
@@ -222,8 +228,9 @@ public static class Drives
     // where the charge bit falls with the hull moved further than it could have flown since the last
     // one, and any snap over SnapAt whatever the bit says -- so a guest that clears the bit early, or
     // never sets it, buys nothing. Only a warp hull is priced. A relocation the host itself made
-    // (Quiet) and a ship new to this world (no From) are never a jump. `age`: seconds since the last
-    // report; `flight`: the fastest the hull may fly, u/s.
+    // (Quiet) and a ship new to this world (no From) are never a jump; nor is a report from a peer
+    // the host does not count in its own world (PlayerShip.ApplyState forgets From for it). `age`:
+    // seconds since the last report; `flight`: the fastest the hull may fly, u/s.
     public static void Priced(PlayerShip s, DriveRun r, Vector2 now, bool bit, float age, float flight)
     {
         bool fell = r.Bit && !bit;
@@ -234,7 +241,7 @@ public static class Drives
         float moved = was.DistanceTo(now);
         float jump = moved - flight * Math.Max(age, 0.05f);
         if (!(fell && jump > 0) && !(PriceSnaps && moved > SnapAt)) return;
-        s.Sl(Warp.Id).Cool = s.Cooling(s.Stats["warp_cooldown"]);
+        s.Sl(s.Drive.Id).Cool = s.Cooling(s.Stats["warp_cooldown"]);
         double off = DisabledFor(jump - s.Stats["warp_safe"]);
         if (off > 0) s.ApplyStatus(Status.Disabled, off);
     }
@@ -252,7 +259,7 @@ public static class Drives
     // ── what the slot and the hull bar say ─────────────────────────────────────────────────
     private static SlotState WarpShow(PlayerShip s)
     {
-        ref var sl = ref s.Sl(Warp.Id);
+        ref var sl = ref s.Sl(s.Drive.Id);
         if (s.Charging)
         {
             float reach = s.ChargeReach;
@@ -267,7 +274,7 @@ public static class Drives
     }
     private static SlotState SurgeShow(PlayerShip s)
     {
-        ref var sl = ref s.Sl(Boost.Id);
+        ref var sl = ref s.Sl(s.Drive.Id);
         if (sl.Left > 0) return new SlotState { Line = $"BOOST {sl.Left:0.0} s", Lit = true };
         if (sl.Cool > 0) return new SlotState { Line = $"BOOST {sl.Cool:0} s", Busy = (float)(sl.Cool / Math.Max(0.01, s.Stats["surge_cooldown"])) };
         return new SlotState { Line = "BOOST READY" };

@@ -3181,6 +3181,89 @@ public partial class _Test : Node
             foreach (var w in webs) if (GodotObject.IsInstanceValid(w)) w.TakeDamage(1e12);
             await Settle();
         }
+
+        // A BROADSIDE FIRES MID-CHARGE (kits_v31 §3.4, the drive against every class's moves): pressed
+        // 1.5 s into a hold, its wind-up runs and its volleys go out while the charge goes on growing,
+        // and the release still jumps the whole 3.5 s charge -- 2000 u along the bow. Seeded headings.
+        for (int k = 0; k < 3; k++)
+        {
+            H.ClearSelection();
+            me.Position = VaryNear(home, 200f); Ready(VaryAngle());
+            me.Sl("broadside").Cool = 0; me.Sl("broadside").Left = 0; me.Sl("broadside").N = 0; await Wait(0.2);
+            var bow = Vector2.Up.Rotated(me.Rotation);
+            bool pressed = false, windRan = false, firedCharging = false; double windAt = -1; float reachAt = -1f;
+            var (reach, moved, cancelled) = await WarpHold(me, 3.5, () =>
+            {
+                if (!pressed && me.ChargeHeld >= 1.5)
+                {
+                    pressed = true; me.UseAbility("broadside", 0);
+                    windAt = me.BroadsideWindupLeft; reachAt = me.ChargeReach;
+                }
+                else if (pressed && me.Charging)
+                {
+                    windRan |= me.BroadsideWindupLeft > 0 && me.BroadsideWindupLeft < windAt;
+                    firedCharging |= me.BroadsideVolleysLeft == 0 && me.BroadsideCooldownLeft > 0;
+                }
+            });
+            Check(pressed && windAt > 0 && windRan && firedCharging && reachAt < 500f && !cancelled && Math.Abs(reach - 2000f) < 20f
+                  && Math.Abs(moved.Length() - 2000f) < 20f && Mathf.Abs(bow.AngleTo(moved)) < 0.02f,
+                  $"a broadside pressed 1.5 s into a warp charge at {Mathf.RadToDeg(bow.Angle()):0} deg: its wind-up runs ({windAt:0.00} s, ran {windRan}) and it fires while the charge holds ({firedCharging}); the charge grows on from {reachAt:0} u to {reach:0} (want 2000) and jumps {moved.Length():0} u along the bow");
+            await Settle();
+        }
+
+        // THE HOST'S COOLDOWN ARRIVING MID-HOLD (a guest's predicted cooldown is overwritten by the
+        // host's reports until the host's own arrives): the release jumps nothing, and V says COOLING.
+        for (int k = 0; k < 3; k++)
+        {
+            H.ClearSelection();
+            me.Position = VaryNear(home, 200f); Ready(VaryAngle()); await Wait(0.2);
+            double arriveAt = Vary(1.3f, 2.6f), coolTo = Vary(5f, 18f); bool set = false;
+            var (_, moved, _) = await WarpHold(me, Vary(3f, 4.5f), () => { if (!set && me.ChargeHeld >= arriveAt) { me.Sl("warp").Cool = coolTo; set = true; } });
+            double cool = me.Sl("warp").Cool;
+            Check(set && moved.Length() < 1f && !me.Charging && me.FailNote("warp") == "COOLING" && !me.Disabled && cool < coolTo && cool > 0,
+                  $"the warp's cooldown ({coolTo:0.0} s) arriving {arriveAt:0.0} s into a hold: the release jumps {moved.Length():0.0} u, V says {me.FailNote("warp")}, and the cooldown is the one that arrived ({cool:0.0} s, never a fresh 20)");
+            Ready(me.Rotation);
+        }
+
+        // CRAFT ALREADY OUT FIGHT ON THROUGH A DISABLE (kits_v31 §3.4; decision 13): a carrier sends
+        // its fighters at a dummy and then jumps 600 u past its warp's safe ring. While the warp's
+        // DISABLED is on (4 s), the fighters out go on with their passes: shots land, and none of them
+        // turns for home. The ring is lowered to 1000 u here (a row override, as the title screen's
+        // warp_cooldown) so the 1600 u jump from 850-1000 u short of the dummy lands 600-750 u past it,
+        // inside the wing's 1500 u control range on both sides; the price is the overshoot's, whatever
+        // the ring. Watched from the frame it lands. Three seeded runs, each with a fresh wing (a class
+        // swap rebuilds it; the ship node is the same).
+        for (int k = 0; k < 3; k++)
+        {
+            await SetClass(ShipClass.Battleship); await SetClass(ShipClass.Carrier);
+            H.ClearSelection();
+            var dir = Vector2.Up.Rotated(VaryAngle());
+            me.Position = d2w.Position - dir * Vary(850f, 1000f); Ready(Aim.Along(dir));
+            me.Stats.SetBase("warp_safe", 1000);
+            await Wait(0.3);
+            me.OrderAttack(d2w);
+            var wing = Nodes<Wing>().Where(w => w.Carrier == me && w.Kind == WingKind.Fighter).ToList();
+            for (int i = 0; i < 60 * 12 && !wing.Any(w => w.ShotsThisPass > 0); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool firing = wing.Any(w => w.ShotsThisPass > 0);
+            var (_, moved, _) = await WarpHold(me, 3.0);                               // 1600 u: 600 over the 1000 u ring
+            double off = me.Statuses.Left(Status.Disabled);
+            float after = me.Position.DistanceTo(d2w.Position);
+            bool Fighting(Wing w) => w.FighterPhase is "Approach" or "Burst" or "Overshoot" or "Turn";
+            var outs = wing.Where(Fighting).ToList();
+            var seen = wing.ToDictionary(w => w, w => w.ShotsThisPass);
+            int shots = 0; bool quit = false; double t = 0;
+            while (t < 3.0 && me.Disabled)
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); t += GetProcessDeltaTime();
+                foreach (var w in wing) { int n = w.ShotsThisPass; shots += n >= seen[w] ? n - seen[w] : n; seen[w] = n; }
+                quit |= outs.Any(w => !Fighting(w));
+            }
+            Check(firing && Math.Abs(moved.Length() - 1600f) < 20f && Math.Abs(off - 4) < 0.15 && after < 1450f && outs.Count > 0 && t >= 2.9 && shots >= 2 && !quit,
+                  $"a carrier jumping 600 u over its ring with {outs.Count} fighters on a dummy (firing first {firing}): disabled {off:0.00} s (want 4), {after:0} u from the dummy after, and through {t:0.0} s of the disable its fighters fired {shots} shots and none turned for home ({!quit})");
+            await Settle();
+        }
+        await SetClass(ShipClass.Battleship);
+        H.ClearSelection();
         me.Position = home; Ready(0f); await Wait(0.2);
     }
 
@@ -3342,6 +3425,7 @@ public partial class _Test : Node
         relocWatch.QueueFree();
         Check(arrived && !relocDisabled && g.Sl("warp").Cool <= 0,
               $"arena host (lane B): the guest's destroyer put back 3000 u away by the host (a returning pilot's place) is never priced as a jump -- arrived {arrived}, disabled {relocDisabled}, warp cooling {g.Sl("warp").Cool:0.0} s");
+        LaneBWorldEntryChecks(g);                                           // snaps priced (this window); one frame, no real report between
         // THE REST OF THE GUEST'S DRIVES, watched every frame until it becomes a freighter
         double firstOff = -1, secondOff = -1; bool was = false, sawBoost = false;
         float fastest = 0, widest = 0, restOff = -1; int clamps0 = -1, clampsDart = 0;
@@ -3372,6 +3456,59 @@ public partial class _Test : Node
               $"arena host (lane B): a 3300 u snap with no charge bit at all is priced all the same: disabled {secondOff:0.00} s (want 6: 900 over, the cap)");
         Check(sawBoost && Math.Abs(fastest - 390) < 8 && Math.Abs(widest - 195) < 8 && clampsDart == 0 && restOff >= 0 && restOff < 20,
               $"arena host (lane B): the guest dart's boost and slide arrive -- the host's slot ran ({sawBoost}), its reports read {fastest:0} u/s ahead (390) and {widest:0} u/s across (195), the speed clamp cut none of them ({clampsDart}), and at rest the host holds it {restOff:0.0} u from its own report");
+    }
+
+    // ENTERING A WORLD OR RE-BOARDING IS NEVER A JUMP (kits_v31 §3.4, rung 5). Fed straight to the
+    // host's copy of the guest's warp hull inside ONE frame, so no real report falls between them, with
+    // bit-less snaps priced: (a) a late report from the world it left (Hub.EnterSector counts every peer
+    // in no sector until it reports again) -- one bit-less, one with the charge bit, and two far apart
+    // -- then, counted in this world again, its first report from the new spawn (the ship's own last
+    // real report); (b) a live report, the hull wrecked, the wreck's report, a re-board, and its next
+    // report from somewhere else. Neither may DISABLE it or start its warp's cooldown. Seeded spots
+    // 1500-4000 u off (never near the 600 u snap line); the hull's real report is restored after each.
+    void LaneBWorldEntryChecks(PlayerShip g)
+    {
+        var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+        var pos = (Vector2)typeof(PlayerShip).GetField("_netPos", nf).GetValue(g);
+        var vel = (Vector2)typeof(PlayerShip).GetField("_netVel", nf).GetValue(g);
+        float rot = (float)typeof(PlayerShip).GetField("_netRot", nf).GetValue(g);
+        var run = (DriveRun)typeof(PlayerShip).GetField("_drive", nf).GetValue(g);
+        void Report(Vector2 at, bool bit) => g.ApplyState(at.X, at.Y, vel.X, vel.Y, rot, g.AimPoint.X, g.AimPoint.Y, g.Trigger, g.Staggered, at.X, at.Y, rot, bit);
+        Vector2 Far() => pos + Vector2.Right.Rotated(VaryAngle()) * Vary(1500f, 4000f);
+        bool Priced() => g.Statuses.Has(Status.Disabled) || g.Sl("warp").Cool > 0;
+        var sector = Session.SectorOf(g.OwnerId);
+        bool clean = sector == Hub.Sector && Drives.PriceSnaps && g.Alive && !Priced();
+        for (int k = 0; k < 3; k++)
+        {
+            var old = Far();
+            Session.Sectors.Remove(g.OwnerId);                              // as EnterSector leaves it
+            Report(old, k == 1);                                            // k 1: it was charging when the world changed
+            if (k == 2) Report(old + Vector2.Right.Rotated(VaryAngle()) * Vary(1500f, 3000f), false);
+            if (sector is { } sk) Session.Sectors[g.OwnerId] = sk;          // its NetMySector: counted here again
+            Report(pos, false);                                             // its first report from the new spawn
+            bool priced = Priced();
+            Check(clean && !priced,
+                  $"arena host (lane B): a guest's late report from the world it left ({old.DistanceTo(pos):0} u off{(k == 1 ? ", charge bit set" : k == 2 ? ", two of them" : "")}), then its first from the new spawn, is never a jump -- disabled {g.Statuses.Has(Status.Disabled)}, warp cooling {g.Sl("warp").Cool:0.0} s (counted in this world first {clean})");
+            if (priced) { g.Statuses.Clear(Status.Disabled); g.Sl("warp").Cool = 0; }
+        }
+        double hp = g.Hp;
+        for (int k = 0; k < 3; k++)
+        {
+            var far = Far();
+            Report(pos, false);                                             // alive, where it is
+            Priv(g, "Die");                                                 // into stasis where it lies
+            Report(pos, false);                                             // the wreck's report
+            typeof(PlayerShip).GetField("_stasis", nf).SetValue(g, 0.0);
+            g.Reboard();
+            bool back = g.Alive;
+            Report(far, false);                                             // its next report, from elsewhere
+            bool priced = Priced();
+            Check(clean && back && !priced,
+                  $"arena host (lane B): a guest's warp hull re-boarded ({back}) and then reported {far.DistanceTo(pos):0} u from its wreck is never a jump -- disabled {g.Statuses.Has(Status.Disabled)}, warp cooling {g.Sl("warp").Cool:0.0} s");
+            if (priced) { g.Statuses.Clear(Status.Disabled); g.Sl("warp").Cool = 0; }
+            run.From = null; Report(pos, false);                            // back on its real reports
+            g.Hp = hp;
+        }
     }
 
     async Task LaneBGuestDrives()
