@@ -143,6 +143,10 @@ Agents (owner, 2026-09-25)
 - (2026-09-25) Kits slices build SIDE BY SIDE in their own worktrees; ITEMS build alongside slice 6, then a reconcile pass checks and
   corrects every item against the built kits. Never skip a review; be efficient wherever the outcome does not suffer.
 
+- (2026-09-25, later) FABLE ORCHESTRATES EVERYTHING: the coordinator runs on Fable 5.1 (the owner picks it in the model menu; a session
+  cannot switch its own model) and assigns each agent a model by its understanding of the task. Fable critiques the development process
+  and redesigns it, with a lean, economical CLAUDE.md; it reports to the owner first.
+
 Testing (owner, standing)
 - (2026-09-25) Once everything requested is built: 3+ tests IN THE ENGINE for every ability added through the class system (and
   every drive row), on top of typecheck, verify, the smoke and screens runs and the bar; an audit maps each ability to its checks.
