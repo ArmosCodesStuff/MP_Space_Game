@@ -932,3 +932,17 @@ POST:
   then FieldsLiveRowChecks).
 - Auto-merged: Hub.cs, PlayerShip.cs, Shots.cs and the rest; no stale ClassArt.PdRing reference.
 - Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. Engine rungs owed in the test phase.
+
+
+## K-merge 2 (slice 3) -- merge version-l 8dcc845 (lane B drives merged) into wt/kits
+
+PRE: tier merge; version-l moved after K-merge (lane B: drives, helm, strafe); the merge into version-l conflicted,
+so aborted and step 1 redone. HEAD e551e4c, MERGE_HEAD 8dcc845. Conflicted: docs/CHANGES.md, tools/smoketest/SmokeTest.cs.txt.
+
+POST:
+- docs/CHANGES.md: Handoff -- both kept (kits slice 3, then lane B drives); Unreleased -- both kept (kits slice 3
+  section, then lane B drives/helm/strafe section).
+- tools/smoketest/SmokeTest.cs.txt: both kept in the call list (LaneAShotStops .. LaneAChargeTableHashed, then
+  LaneBHelm / LaneBStrafe / LaneBBoost, then FieldsLiveRowChecks).
+- Auto-merged: DESIGN.md, Hub.cs, PlayerShip.cs.
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. Engine rungs owed in the test phase.

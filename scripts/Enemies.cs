@@ -27,7 +27,7 @@ public class EnemyDef : HullArt
     public double Hull = 25;
     public double Dps = 1.0;             // x -- the raider damage the whole game is scaled in
     public double ShotEvery = 1.0;       // 1 s: slower than a target's 0.52 s gap, so no shot is wasted
-    public float Cruise = 100f;          // under every capital ship's top speed (104 to 130)
+    public float Cruise = 100f;          // under the destroyer's 117 and every smaller hull's top; over the battleship's 88 and the carrier's 99 (F22), which cannot outrun it
     public float BoostMult = 5f;
     public double BoostTime = 3.0;
     public float Reach = 100f;           // how close it fights from; it holds station at 90% of it

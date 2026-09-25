@@ -71,7 +71,7 @@ public class ShipStats
     // The carrier's pace: every one of its helm figures is a fraction of its own top speed, so it
     // gets under way on its own clock. Named here because the class's row (Ships.cs) is written
     // in terms of it.
-    public const double CarrierTop = 116.48;
+    public const double CarrierTop = 99;
 
     public readonly ShipClass Class;
     public readonly ClassDef Def;
@@ -121,17 +121,25 @@ public class ShipStats
 
         // Capital ships handle like naval ships: thrust only along the keel, sideways drift
         // bleeds off fast, and they turn on a radius -- no strafing; almost stopped, the rudder
-        // pivots the hull slowly. The battleship sets the pace and is the default below: the
-        // carrier is 12% faster (116.48 u/s) and the destroyer, the fastest capital ship, 25%
-        // (130). Each class's own figures are in its row (Ships.cs).
-        Add("Helm", "thrust",         "Ahead acceleration",  56, "u/s²", 0);
-        Add("Helm", "reverse_thrust", "Astern acceleration", 24, "u/s²", 0);
-        Add("Helm", "max_speed",      "Top speed ahead",     104, "u/s", 0);
-        Add("Helm", "reverse_speed",  "Top speed astern",    36, "u/s", 0);
+        // pivots the hull slowly. The battleship sets the pace and is the default below: 88 u/s,
+        // the carrier 99 and the destroyer, the fastest capital ship, 117 (F22: the capitals are
+        // the slowest hulls in the water and rely on the warp; each thrust was cut with its top, so
+        // every hull takes as long to reach its top as before). Each class's own figures are in
+        // its row (Ships.cs).
+        Add("Helm", "thrust",         "Ahead acceleration",  47, "u/s²", 0);
+        Add("Helm", "reverse_thrust", "Astern acceleration", 20, "u/s²", 0);
+        Add("Helm", "max_speed",      "Top speed ahead",     88, "u/s", 0);
+        Add("Helm", "reverse_speed",  "Top speed astern",    30, "u/s", 0);
         Add("Helm", "turn_radius",    "Turning radius",      107, "u", 0, inverse: true);
         Add("Helm", "turn_rate",      "Rudder limit",        1.08, "rad/s", 2);
         Add("Helm", "water_drag",     "Drag",                0.35, "/s", 2);
         Add("Helm", "keel",           "Keel grip (drift loss)", 4.0, "/s", 1);
+        // THE SLIDE (F24): Shift + A/D push the hull sideways toward strafe_speed at strafe_thrust,
+        // the nose holding its heading. 0 on the sheet, so a hull that names no figure (the three
+        // capitals) never slides: that is read from the stat, never from the class. A speed lift
+        // lifts both (the boost's +50%), and a hold's share lands on the speed (PlayerShip.Steer).
+        Add("Helm", "strafe_speed",   "Strafe speed (Shift + A/D)", 0, "u/s", 1);
+        Add("Helm", "strafe_thrust",  "Strafe acceleration", 0, "u/s²", 0);
 
         if (Def.Has(Fit.Guns))
         {   // cursor-aimed turrets: the battleship's four, the destroyer's two
@@ -209,6 +217,8 @@ public class ShipStats
 
         // The class's OWN rows: whatever its abilities are made of (ClassDef.Rows).
         foreach (var r in Def.Rows) Add(r.Group, r.Id, r.Label, r.Base, r.Unit, r.Dec, r.Inverse);
+        // ...and its DRIVE's (Drives.cs): what V is made of, on the sheet so gear can move it.
+        if (Def.Drive != null) foreach (var r in Def.Drive.Rows) Add(r.Group, r.Id, r.Label, r.Base, r.Unit, r.Dec, r.Inverse);
 
         if (bonuses != null)
             foreach (var kv in bonuses)
