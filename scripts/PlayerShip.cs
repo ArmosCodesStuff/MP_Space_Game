@@ -581,6 +581,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (def.Refuse?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null) is { } why) { Fail(id, why); return; }
         var point = def.TakesPoint ? AimPoint : Vector2.Zero;
         var ids = def.TakesTargets && picks != null ? picks : System.Array.Empty<int>();
+        if (Mine && Alive) def.AtOnce?.Invoke(this, point);
         if (Net.Sim) DoAbility(id, targetId, point, ids);
         else Net.AskHost(this, nameof(RequestAbility), id, targetId, point, ids);
     }
@@ -828,6 +829,42 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private float _rampRot;
     // the next report's heading change is a snap, not a turn (set on the host by a row that snaps the heading)
     public bool SkipYaw;
+
+    // THE SNAP (the owner, AbilityDef.AtOnce): the nose and the whole velocity onto the bearing to `at`, the speed kept.
+    // The heading is SET, not turned: no yaw, so a Ramp keeps its total (the host's copy skips the report, Slung).
+    public void Snap(Vector2 at)
+    {
+        if (at.DistanceTo(Position) < 1f) return;
+        var (rot, v) = Snapped(Position, Velocity, at);
+        Rotation = rot; Velocity = v; _yawRate = 0f;
+    }
+    // pure: the heading whose nose points from `from` at `at`, and `v`'s size along it
+    public static (float rot, Vector2 v) Snapped(Vector2 from, Vector2 v, Vector2 at)
+    {
+        var dir = (at - from).Normalized();
+        return (dir.Angle() + Mathf.Pi / 2, dir * v.Length());
+    }
+    // ITS PRESS ON THE HOST: the cooldown, and the host's copy of a guest's ship told the next report is a snap
+    public void Slung(string id, string cool)
+    {
+        ref var sl = ref Sl(id);
+        if (!Net.Sim || !Alive || sl.Cool > 0) return;
+        sl.Cool = Cooling(Stats[cool]);
+        if (!Mine) SkipYaw = true;
+    }
+
+    // SLIPSTREAM (a stat row, the Dart's passive): a hull whose sheet names slip_speed takes slip_guard of every blow
+    // while its ACTUAL speed is at or past it; a sheet without it (every other class) reads 0 and takes x1. On the host a
+    // guest's speed is its report's, held to SlipSpeed's ceiling of the host's own lifts.
+    public double SlipShare()
+    {
+        double at = Stats["slip_speed"];
+        if (at <= 0) return 1;
+        float speed = Mine ? Velocity.Length() : SlipSpeed(_netVel, TopNow, StrafeNow);
+        return speed >= at ? Stats["slip_guard"] : 1;
+    }
+    // pure: a reported speed held to hypot(top, slide) x 1.1 -- the fastest the hull can honestly go, a margin over
+    public static float SlipSpeed(Vector2 reported, float top, float strafe) => Mathf.Min(reported.Length(), Mathf.Sqrt(top * top + strafe * strafe) * 1.1f);
 
     public void StartOverdrive()
     {
@@ -1164,6 +1201,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private double Guarded(double d)
     {
         d *= 1 - Math.Min(1, Items.Shares(Items.Door.Taken, Stats, BlowOn(null, d)));   // Ablative Skin: a small hit
+        d *= SlipShare();                                                                // Slipstream: fast, x0.7
         foreach (var g in StatusSet.Guards)
         {
             if (!_status.Has(g.Status)) continue;

@@ -7999,6 +7999,133 @@ public partial class _Test : Node
         Check(Math.Abs(own - 0.5) <= 0.005, $"arena guest: its ramjet flown flat out and straight on {Mathf.RadToDeg(rot):0}° builds its own total to +{own * 100:0.0}% (50)");
     }
 
+    // ── SLICE 6d, THE DART'S SLINGSHOT (kits_v2's card; v31 §3.4). From 3 varied situations each: the nose and the whole
+    // velocity (a slide included) onto the cursor's bearing at up to 180°, the size kept +- 1%, 6 s and a second press
+    // refused; a lit Ramjet keeps its total through the snap; a sprint slung mid-run fires its rod down the new nose.
+    async Task LaneA6dSlingChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightDart);
+        var dt = Me; bool demo = dt.Demo; dt.Demo = true; dt.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Check(Ab.Slingshot.TakesPoint && Ab.Slingshot.AtOnce != null && Classes.Of(ShipClass.LightDart).Abilities.Length >= 4
+              && Classes.Of(ShipClass.LightDart).Abilities[3] == Ab.Slingshot && dt.Stats["sling_cooldown"] == 6,
+              $"the slingshot: the Dart's ability 3 (E), it takes the cursor, snaps on the owner at once, {dt.Stats["sling_cooldown"]:0} s (6)");
+        // THE SNAP ON THE SHIP: forward, a slide, and nearly dead astern (170-179°), each onto a varied cursor
+        foreach (var (lo, hi, slide) in new[] { (20f, 80f, false), (90f, 150f, true), (170f, 179f, true) })
+        {
+            float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot); var side = new Vector2(-nose.Y, nose.X);
+            var at = VaryNear(yonder, 300f);
+            var v0 = nose * Vary(150f, 300f) + (slide ? side * Vary(-130f, 130f) : Vector2.Zero);
+            float off = Mathf.DegToRad(Vary(lo, hi)) * (Vary(0f, 1f) < 0.5f ? -1f : 1f);
+            var cursor = at + nose.Rotated(off) * Vary(200f, 600f);
+            dt.Position = at; dt.Rotation = rot; dt.Velocity = v0; dt.AimPoint = cursor; dt.Sl("slingshot").Cool = 0;
+            dt.UseAbility("slingshot", 0);
+            var bearing = (cursor - at).Normalized();
+            var noseNow = Vector2.Up.Rotated(dt.Rotation);
+            bool onIt = noseNow.Dot(bearing) > 0.9999f && dt.Velocity.Normalized().Dot(bearing) > 0.9999f
+                        && Mathf.Abs(dt.Velocity.Length() - v0.Length()) <= v0.Length() * 0.01f;
+            double cool = dt.Sl("slingshot").Cool; float rotWas = dt.Rotation;
+            dt.AimPoint = at + nose * 400f;
+            dt.UseAbility("slingshot", 0);
+            bool refused = Mathf.Abs(dt.Rotation - rotWas) < 1e-6f && dt.Sl("slingshot").Cool <= cool;
+            Check(onIt && Math.Abs(cool - 6) < 0.05 && refused,
+                  $"slung {Mathf.RadToDeg(off):0}° off the nose{(slide ? " while sliding" : "")}: nose and velocity on the cursor ({onIt}), {dt.Velocity.Length():0} u/s kept ({v0.Length():0}), cooldown {cool:0.0} (6), a second press refused ({refused})");
+            dt.Velocity = Vector2.Zero;
+            await Frame();
+        }
+        // THE RAMJET KEPT: lit at a varied total, slung 60-179° off, a frame on it holds what it had
+        for (int run = 0; run < 3; run++)
+        {
+            float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            var at = VaryNear(yonder, 300f);
+            dt.Position = at; dt.Rotation = rot; dt.Velocity = nose * Vary(250f, 350f); dt.Sl("slingshot").Cool = 0;
+            dt.Sl("ramjet").Left = Vary(3f, 6f); double own0 = Vary(0.2f, 0.5f); dt.Sl("ramjet").Own = own0;
+            dt.AimPoint = at + nose.Rotated(Mathf.DegToRad(Vary(60f, 179f)) * (run == 1 ? -1f : 1f)) * Vary(300f, 600f);
+            dt.UseAbility("slingshot", 0);
+            await Frame(); await Frame();
+            double own1 = dt.Sl("ramjet").Own;
+            Check(own1 >= own0 - 1e-6, $"a lit ramjet at +{own0 * 100:0.0}% slung {(run == 1 ? "to port" : "to starboard")}: +{own1 * 100:0.0}% after (kept: a snap is not a turn)");
+            dt.Sl("ramjet").Left = 0; dt.Sl("ramjet").Own = 0; dt.Velocity = Vector2.Zero;
+            await Frame();
+        }
+        // THE ROD RE-AIMED: slung in the sprint's last moments, the rod leaves down the new nose
+        for (int run = 0; run < 3; run++)
+        {
+            float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            var at = VaryNear(yonder, 300f);
+            dt.Position = at; dt.Rotation = rot; dt.Velocity = nose * Vary(300f, 360f); dt.Sl("slingshot").Cool = 0;
+            var was = Nodes<Shot>().Where(x => x.Kind == Shots.Rod).ToHashSet();
+            dt.Sl("rod").Left = Vary(0.15f, 0.3f);
+            var cursor = at + nose.Rotated(Mathf.DegToRad(Vary(60f, 170f)) * (run == 1 ? -1f : 1f)) * Vary(400f, 700f);
+            dt.AimPoint = cursor;
+            dt.UseAbility("slingshot", 0);
+            var newNose = Vector2.Up.Rotated(dt.Rotation);
+            Shot rod = null;
+            for (int i = 0; i < 40 && rod == null; i++) { await Frame(); rod = Nodes<Shot>().FirstOrDefault(x => x.Kind == Shots.Rod && !was.Contains(x)); }
+            bool down = rod != null && rod.Dir.Dot(newNose) > 0.999f;
+            Check(down, $"a sprint slung {Mathf.RadToDeg(nose.AngleTo(newNose)):0}° in its last moments: the rod leaves down the new nose ({(rod == null ? "no rod" : Mathf.RadToDeg(rod.Dir.AngleTo(newNose)).ToString("0.0") + "° off it")})");
+            dt.Velocity = Vector2.Zero;
+            await Wait(0.3);
+        }
+        dt.Demo = demo; dt.Velocity = Vector2.Zero; dt.Position = yonder; dt.Sl("slingshot").Cool = 0; dt.Sl("rod").Cool = 0;
+    }
+
+    // ── SLICE 6d, THE DART'S SLIPSTREAM (a stat row, never the class). The host's ceiling on a reported speed on literals
+    // (hypot(260, 130) x 1.1 = 319.8 u/s; a boosted slide's 436 is under its 479.6, from 3 varied boosted slides); then a
+    // blow from 3 sources (a hit with a side, a plain one, a boss's slug) at a speed varied just under 325 and just over:
+    // x1 and x0.7; an Echo past 325 takes x1.
+    async Task LaneA6dSlipChecks(Vector2 yonder)
+    {
+        bool litOk = Mathf.Abs(PlayerShip.SlipSpeed(new Vector2(500, 0), 260f, 130f) - 319.8f) < 0.1f
+                     && Mathf.Abs(PlayerShip.SlipSpeed(new Vector2(0, 436f), 390f, 195f) - 436f) < 1e-3f;
+        string ls = ""; bool boostedOk = true;
+        for (int k = 0; k < 3; k++)
+        {
+            float along = Vary(200f, 390f), across = Vary(-195f, 195f);
+            var v = new Vector2(across, -along).Rotated(VaryAngle());
+            float got = PlayerShip.SlipSpeed(v, 390f, 195f);
+            boostedOk &= Mathf.Abs(got - v.Length()) < 1e-3f; ls += $"{v.Length():0}->{got:0}; ";
+        }
+        Check(litOk && boostedOk, $"the host's ceiling on a reported speed: 500 -> 319.8 at 260 / 130; a boosted slide never clamped ({ls})");
+
+        await SetClass(ShipClass.LightDart);
+        var dt = Me; bool demo = dt.Demo; dt.Demo = true; dt.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Check(dt.Stats["slip_guard"] == 0.7 && dt.Stats["slip_speed"] == 325, $"the Dart's slipstream: x{dt.Stats["slip_guard"]:0.00} (0.7) at {dt.Stats["slip_speed"]:0} u/s (325)");
+        int n = 0;
+        for (int src = 0; src < 3; src++)
+        {
+            foreach (bool fast in new[] { false, true })
+            {
+                float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+                // a direct blow is judged at once; the slug a frame later, after the water's drag: a wider margin
+                float speed = src < 2 ? (fast ? Vary(325.5f, 326.5f) : Vary(323.5f, 324.5f)) : (fast ? Vary(335f, 350f) : Vary(295f, 315f));
+                var at = VaryNear(yonder, 300f);
+                dt.Position = at; dt.Rotation = rot; dt.Velocity = nose * speed; dt.Hp = dt.MaxHp;
+                double hp0 = dt.Hp, blow = Vary(8f, 20f);
+                if (src == 0) dt.Hit(blow, at + nose * 60f, $"test:6d_slip#{++n}");
+                else if (src == 1) dt.TakeDamage(blow);
+                else
+                {
+                    var from = at + nose.Rotated(Mathf.Pi / 2) * 40f;
+                    Combat.Fire(Shots.Slug, from, at - from, 300f, 200f, blow, hitSource: $"test:6d_slipslug#{++n}");
+                    for (int i = 0; i < 20 && dt.Hp == hp0; i++) { dt.Position = at; dt.Rotation = rot; dt.Velocity = nose * speed; await Frame(); }
+                }
+                double took = hp0 - dt.Hp, want = blow * (fast ? 0.7 : 1.0);
+                Check(Math.Abs(took - want) < 1e-6, $"a {(src == 0 ? "blow with a side" : src == 1 ? "plain blow" : "boss's slug")} of {blow:0.0} at {speed:0.0} u/s: {took:0.00} taken ({want:0.00}: x{(fast ? "0.7" : "1")})");
+            }
+        }
+        dt.Velocity = Vector2.Zero; dt.Demo = demo; dt.Hp = dt.MaxHp;
+        // BY THE STAT, NEVER THE CLASS: an Echo past 325 takes the whole blow
+        await SetClass(ShipClass.LightEcho);
+        var ec = Me; bool ecDemo = ec.Demo; ec.Demo = true;
+        float fastEcho = Vary(330f, 360f); double b2 = Vary(8f, 20f);
+        ec.Velocity = Vector2.Up.Rotated(ec.Rotation) * fastEcho; ec.Hp = ec.MaxHp;
+        double e0 = ec.Hp; ec.TakeDamage(b2);
+        Check(Math.Abs(e0 - ec.Hp - b2) < 1e-6, $"an Echo at {fastEcho:0} u/s takes {e0 - ec.Hp:0.00} of {b2:0.00} (x1: no slipstream row)");
+        ec.Velocity = Vector2.Zero; ec.Demo = ecDemo; ec.Hp = ec.MaxHp;
+    }
+
     // ── SLICE 6d, RUNG 5: A GUEST'S PEPPERBOX. The guest (LaneA6dPepperGuestChecks) flies a DART at rest, its cursor
     // on a varied point 400-600 u off the nose, and holds the trigger 2 s: its own world shows the host's darts
     // (cosmetic copies, Commanded onto ITS cursor) -- 12 +- 2 of them, each within 10° of the bearing to the cursor
@@ -14070,6 +14197,8 @@ public partial class _Test : Node
             await LaneA6dRodChecks(yonder);
             LaneA6dRamjetRowChecks();
             await LaneA6dRamjetChecks(yonder);
+            await LaneA6dSlingChecks(yonder);
+            await LaneA6dSlipChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -14446,6 +14575,7 @@ public partial class _Test : Node
                     ["pepperbox"] = sp => sp.Trigger && Abilities.Find(sp.Class, "pepperbox").State(sp, null).Lit,
                     ["rod"]       = sp => sp.Sl("rod").Left > sp.Stats["sprint_time"] - 0.1 && sp.Forced && sp.Sl("rod").Cool > sp.Stats["rod_cooldown"] - 0.1,
                     ["ramjet"]    = sp => sp.Sl("ramjet").Left > sp.Stats["ramjet_time"] - 0.1 && sp.Sl("ramjet").Cool > sp.Stats["ramjet_cooldown"] - 0.1,
+                    ["slingshot"] = sp => sp.Sl("slingshot").Cool > sp.Stats["sling_cooldown"] - 0.1,
                     ["echo"]      = sp => sp.Sl("echo").Left > sp.Stats["echo_time"] - 0.1,
                     ["stealth"]   = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("stealth").Left > sp.Stats["stealth_time"] - 0.1,
                     ["anchor"]    = sp => sp.Sl("anchor").Left > sp.Stats["anchor_time"] - 0.1 && sp.Held == 0f,

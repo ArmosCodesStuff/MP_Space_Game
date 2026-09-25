@@ -574,7 +574,7 @@ public static class Classes
             Art = new ClassArt {
                 Texture = "res://light_dart_hull.png", Length = 70f, HalfWidth = 16.78f,
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
-            Abilities = new[] { Ab.Pepperbox, Ab.Rod, Ab.Ramjet } },
+            Abilities = new[] { Ab.Pepperbox, Ab.Rod, Ab.Ramjet, Ab.Slingshot } },
         new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
             Blurb = "Its echo remembers the damage it deals, then detonates the lot where the last shot landed.",
             Hint = "ECHO  ·  mouse aims the main gun",

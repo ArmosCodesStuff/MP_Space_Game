@@ -264,3 +264,25 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
   the end of a lit sprint x3; the boost pauses the build x3); sweep witness ["ramjet"]; rung 5 LaneA6dRamjetHostWatch/
   HostChecks (host copy +50%, dart 11.25 within 1%) + LaneA6dRamjetGuestChecks.
 - next: kits6d-J4 (Slingshot + Slipstream).
+
+## kits6d-J4 · PRE
+- tier opus; intent: Slingshot (DL5: AbilityDef.AtOnce, the owner's snap at the press; host Press: cooldown + SkipYaw) + Slipstream (a stat row read in Guarded: x slip_guard at >= slip_speed of actual speed, the host reading a guest's reported speed clamped to hypot(top, strafe) x 1.1).
+- HEAD 2fe5f986a8e14a99ca6a973c13150f69d91bbc4e
+- scripts/Abilities.cs 7555e88f4a16f209989cf7a70b7a5ac7cf1b1f0b
+- scripts/PlayerShip.cs 6572c4771dc33d21a8f05dc9f4074179f0e42735
+- scripts/Ships.cs ed57a6db9a9f2a4b1dbd0877035461f2f19a190d
+- tools/smoketest/SmokeTest.cs.txt 8226d756ab2f56ca006660f2a6f39d525e1c2e0d
+
+## kits6d-J4 · POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- built: AbilityDef.AtOnce (the owner's own action at the press, UseAbility, Mine && Alive, before the ask), Ab.Slingshot (E,
+  ability 3, TakesPoint; AtOnce = PlayerShip.Snap: rotation set + whole velocity onto the bearing, size kept, _yawRate 0;
+  Press = Slung: cooldown, SkipYaw on the host's copy of a guest). Slipstream: PlayerShip.SlipShare in Guarded (stat
+  slip_speed > 0; Mine reads Velocity, the host's copy SlipSpeed(_netVel, TopNow, StrafeNow) = min(|v|, hypot x 1.1)).
+- DL10: the host's SkipYaw lands on the next report after the press RPC; a report that races ahead of the RPC is clamped
+  to the hull's turn rate over its age (at most 0.2 x 0.05 s = 1% of the total). Not provable in solo (no report age on the
+  owner); the rung-5 list in kits_v31 §8 does not name the Slingshot, so no rung-5 pair was written for it.
+- checks: LaneA6dSlingChecks (row; snap forward / sliding / 170-179° with size +-1%, cool 6, refused; ramjet kept x3; rod
+  re-aimed down the new nose x3), LaneA6dSlipChecks (ceiling literals + 3 boosted slides unclamped; 3 sources x {under,
+  over} 325 = x1 / x0.7; an Echo x1); sweep witness ["slingshot"].
+- next: kits6d-J5 (Echo row + repeater + Reverb).

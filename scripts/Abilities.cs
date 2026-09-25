@@ -60,6 +60,10 @@ public class AbilityDef
     public bool TakesTargets;
 
     public Action<PlayerShip, IHittable> Press;
+    // WHAT THE OWNER DOES AT ONCE, on its own machine, when its press passes the courtesy checks (PlayerShip.UseAbility),
+    // handed the point it pressed at: flight is the owner's, so a snap of the heading or the hull cannot wait a round
+    // trip for the host. The host's Press still resolves the rest (the cooldown). The Slingshot.
+    public Action<PlayerShip, Vector2> AtOnce;
     public Func<PlayerShip, IHittable, string> Refuse;
     public Func<PlayerShip, IHittable, SlotState> Show;
 
@@ -570,6 +574,19 @@ public static class Ab
         Show = (s, _) => s.Sl("ramjet").Left > 0
             ? new SlotState { Line = $"+{s.Sl("ramjet").Own * 100:0}% {s.Sl("ramjet").Left:0.0}s", Lit = true }
             : Timed(s, "ramjet", "ramjet_cooldown", "READY"),
+    };
+
+    // SLINGSHOT (the Dart's E, kits_v2's card): the heading AND the whole velocity (the slide included) snapped onto the
+    // cursor's bearing, up to 180°, the speed kept -- a snap, not a turn, so the Ramjet keeps what it built (the host's
+    // copy skips the report: SkipYaw). A sprint's rod leaves down the new nose. 6 s.
+    public static readonly AbilityDef Slingshot = new()
+    {
+        Id = "slingshot", Name = "Slingshot", Short = "SLING", Default = Key.E, TakesPoint = true,
+        Blurb = "Snaps your nose and all of your speed onto the cursor, even straight behind you. A snap, not a turn: the ramjet keeps what it built.",
+        AtOnce = (s, at) => s.Snap(at),
+        Press = (s, _) => s.Slung("slingshot", "sling_cooldown"),
+        Refuse = (s, _) => s.Sl("slingshot").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "slingshot", "sling_cooldown", "READY"),
     };
 
     public static readonly AbilityDef Echo = new()
