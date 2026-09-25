@@ -22,7 +22,7 @@
 # swap) is taken at the first step that is not quick, so a leading quick step never holds an engine lock.
 param([Parameter(Mandatory)][string]$Tree, [Parameter(Mandatory)][string]$Tag, [Parameter(Mandatory)][string[]]$Steps, [string]$Out, [int]$Slot = -1, [int]$Slots = 4)
 $ErrorActionPreference = 'Continue'
-# At most 4 slots: slot 4's fakeigd HTTP port 19080+400 = 19480 is slot 0's box --http port.
+# At most 4 slots (owner, 2026-09-25): each slot shifts every port by 100, and four bands are what was proven.
 $Slots = [Math]::Min($Slots, 4)
 if ($Slot -gt 3) { "slot $Slot is out of range 0..3"; exit 2 }
 

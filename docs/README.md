@@ -58,15 +58,33 @@ It picks the way that will work:
 - **The built game** otherwise, through `tools\install.ps1`. **Nothing needs to be installed for
   this** -- Windows PowerShell ships with Windows, and that is the whole requirement. It reads the
   release's own `BUILD.txt`, downloads the two zips, checks each against the checksum the release
-  published, unpacks 189 files into `play\` and starts the game. About 79 MB. Run it again and it
-  says it is already installed and just starts it.
+  published, unpacks the files it lists into `play\`, checks every one of them is there (an antivirus
+  that took the WebRTC library is named) and starts the game. About 79 MB before the WebRTC plugin
+  (the next release states its own size). Run it again and it says it is already installed and just
+  starts it.
 
 ```
 powershell -ExecutionPolicy Bypass -File play.ps1     # same thing, without the double-click
 ```
 
 `-Editor` opens the Godot editor. `-Two` opens two windows, to host in one and join `127.0.0.1`
-in the other -- give each its own character first, they share one save folder.
+in the other (or by an invite) -- give each its own character first, they share one save folder.
+
+## Playing with a friend
+
+- **Host:** MULTIPLAYER, HOST THIS WORLD, INVITE A FRIEND. The invite is copied: send it privately
+  (Discord is fine; it holds your IP addresses).
+- **Friend:** copy the whole message, paste it into JOIN. The reply is copied: send it back at once.
+- **Host:** copy the friend's message. The game takes it off the clipboard while the invite waits, or
+  paste it into the reply box -- within **30 s** of the friend making it.
+- **Same house, or Radmin VPN:** type the host's address (the panel lists them under INVITE A
+  FRIEND) into JOIN instead. No codes.
+- **It did not connect:** both press COPY NETWORK REPORT and send the text. Two strict home routers
+  cannot meet without a relay, and the game has none (no servers): Radmin VPN is the way then.
+- A dropped friend's place is held 90 s: by invite, the host's panel has a fresh invite for them
+  ready; by address, the game tries again by itself.
+- The only outside contact: making an invite or a reply asks Google's or Cloudflare's public STUN
+  server for this PC's internet address.
 
 **There is no runnable file in the repo itself and there is not meant to be** -- no `.exe`, no
 `.pck`, `dist\` gitignored. A release is an OUTPUT (see Releasing). Godot is found by
@@ -279,9 +297,11 @@ zips ship without `.godot/`, so the first open after extracting does a full asse
 
 ## Testing multiplayer
 
-Default port **27015**, ENet, peer-to-peer — one peer hosts, the rest join by address. Run two
-instances (Godot's Debug -> Run Multiple Instances, or a second exported copy) and join
-`127.0.0.1`. Offline is a host with zero peers: the same code path, not a separate mode.
+WebRTC, peer-to-peer -- one peer hosts, the rest join by invite code or by the host's typed address
+(the listener: TCP **27015**, then the nine after it). Run two instances (`play.ps1 -Two`) and join
+`127.0.0.1`, or paste an invite across. Offline is a host with zero peers: the same code path, not a
+separate mode. The harness: `run.ps1` (rung 5) runs a host, an invite guest through the courier and
+two address guests; `-Wan` puts the invite path through the box's delay and loss.
 
 ## Working style that has held up
 

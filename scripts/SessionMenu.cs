@@ -9,7 +9,6 @@ public partial class SessionMenu : CanvasLayer
 {
     private LineEdit _addr;
     private Label _status;
-    private Button _copy;
     private Button _toggle;
     private VBoxContainer _options;
 
@@ -38,7 +37,8 @@ public partial class SessionMenu : CanvasLayer
         _options.Visible = false;
         root.AddChild(_options);
 
-        _addr = new LineEdit { PlaceholderText = "host IP, or IP:port", CustomMinimumSize = new Vector2(300, 0) };
+        // THE JOIN BOX takes a friend's invite (the whole message is fine) or a host's typed address.
+        _addr = new LineEdit { Name = "JoinBox", PlaceholderText = "paste an invite, or type host IP:port", CustomMinimumSize = new Vector2(300, 0) };
         // Enter joins -- under the same one-press-a-second limit as the button -- and either way
         // the box lets go of the keyboard so the helm works again.
         _addr.TextSubmitted += t => { _addr.ReleaseFocus(); Limited(DoJoin); };
@@ -66,22 +66,32 @@ public partial class SessionMenu : CanvasLayer
         _status.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _status.CustomMinimumSize = new Vector2(320, 0);
         _options.AddChild(_status);
-        // the address friends should type, one click to the clipboard: the internet one if there
-        // is one, else a virtual network's, else IPv6, else the local network's
-        _copy = Ui.Btn("COPY ADDRESS", () =>
-        {
-            var n = Net.I;
-            if (n == null) return;
-            var a = new[] { n.InternetAddress, n.OverlayAddresses.Select(o => o.address).FirstOrDefault(), n.Ipv6Address, n.LanAddress }
-                    .FirstOrDefault(x => !string.IsNullOrEmpty(x));
-            if (a != null) DisplayServer.ClipboardSet(a);
-        });
-        _copy.Name = "CopyAddress";
-        _options.AddChild(_copy);
-        // the address friends in other cities need -- hidden until clicked
-        _reveal = Ui.Btn("", () => { _revealed = !_revealed; Refresh(); });
-        _reveal.Name = "RevealAddress";
-        _options.AddChild(_reveal);
+        // THE HOST'S SIDE (§6.1): INVITE A FRIEND, its code one COPY away, the box a friend's reply is pasted
+        // into (the clipboard pickup takes it by itself), and the addresses friends on this network or a
+        // virtual one type instead.
+        _invite = Ui.Btn("INVITE A FRIEND", () => Limited(() => Net.I?.Invite()), "Invite");
+        _options.AddChild(_invite);
+        // THE PENDING LIST: one line per invite not yet connected, its code one COPY away, and CANCEL,
+        // which frees its place (the full text sends the host here)
+        _pending = Ui.VBox(4, "PendingList");
+        _options.AddChild(_pending);
+        _reply = new LineEdit { Name = "ReplyBox", PlaceholderText = "paste a friend's reply here", CustomMinimumSize = new Vector2(300, 0) };
+        _reply.TextSubmitted += t => { _reply.ReleaseFocus(); Net.I?.TakeCode(t); _reply.Text = ""; };
+        _options.AddChild(_reply);
+        _addresses = Ui.Lbl("", Ui.Small, Ui.Dim);
+        _addresses.Name = "Addresses";
+        _options.AddChild(_addresses);
+        // THE GUEST'S SIDE (§6.2): the reply it made, with how long the host has to take it, and a fresh
+        // reply from the same invite once that ran out.
+        _replyShown = Ui.Lbl("", Ui.Small, Ui.Dim);
+        _replyShown.Name = "ReplyCode";
+        _replyShown.AutowrapMode = TextServer.AutowrapMode.Arbitrary;
+        _replyShown.CustomMinimumSize = new Vector2(320, 0);
+        _options.AddChild(_replyShown);
+        _fresh = Ui.Btn("MAKE A FRESH REPLY", () => Limited(() => Net.I?.FreshReply()), "FreshReply");
+        _options.AddChild(_fresh);
+        // what a player pastes to the developer when a join did not work (§6.3)
+        _options.AddChild(Ui.Btn("COPY NETWORK REPORT", () => { if (Net.I != null) Rendezvous.Copy(Net.I.Report()); }, "CopyReport"));
         if (Net.I != null) { Net.I.Status += OnStatus; Net.I.SessionChanged += Refresh; Net.I.PlayerJoined += OnPeers; Net.I.PlayerLeft += OnLeft; }
         Refresh();
     }
@@ -94,9 +104,29 @@ public partial class SessionMenu : CanvasLayer
     }
 
     private void OnStatus(string s) { _status.Text = s; Refresh(); }
+
+    // THE JOIN BOX FILLS ITSELF (§15 Q1, §3.3 A guest 1): while this panel is open, not hosting and not
+    // joining, and the box is empty, the clipboard is read at most every Rendezvous.PickupMs; an
+    // invite on it, not the text read last time (a box the pilot emptied stays empty), is put in the
+    // box. JOIN is still the pilot's to press. A reply or words are left alone.
+    private ulong _joinPickAt;
+    private string _joinSeen;
+    private void FillJoinBox(Net n)
+    {
+        if (!_options.Visible || n == null || n.Connecting || Net.IsHost && Net.IsOnline || _addr.Text.Length > 0) return;
+        ulong now = Time.GetTicksMsec();
+        if (now < _joinPickAt) return;
+        _joinPickAt = now + Rendezvous.PickupMs;
+        string text = Rendezvous.Clipboard() ?? "";
+        if (text == _joinSeen) return;
+        _joinSeen = text;
+        if (Rendezvous.Find(text, Rendezvous.Kind.Invite) != null) _addr.Text = text;
+    }
+
     public override void _Process(double delta)
     {
         _now += delta;
+        FillJoinBox(Net.I);
         bool locked = Locked;                                   // the 1 s rate limit, shown on the buttons
         foreach (var btn in _sessionBtns) btn.Disabled = locked;
         // HOST while hosting would drop every guest to start the same session again
@@ -108,18 +138,19 @@ public partial class SessionMenu : CanvasLayer
         _reconnect.Visible = n != null && n.CanReconnect;
         Refresh();
         bool hosting = n != null && Net.IsHost && Net.IsOnline;
-        _copy.Visible = hosting && n.Reachability != Net.Reach.Checking;
-        // The addresses friends elsewhere need, hidden until clicked: the internet one, and this
-        // PC's IPv6 one when it has one. Ui.SetText: only when changed -- MSDF glyphs re-shape.
-        bool shown = hosting && n.Reachability != Net.Reach.Checking && (n.InternetAddress.Length > 0 || n.Ipv6Address.Length > 0);
-        _reveal.Visible = shown;
-        if (!shown) _revealed = false;
-        else
+        _invite.Visible = hosting; _reply.Visible = hosting; _addresses.Visible = hosting;
+        _invite.Disabled = locked || !hosting;                 // pressed when full, it says how to free a place
+        _pending.Visible = hosting;
+        if (hosting) ListPending(n);
+        if (hosting) Ui.SetText(_addresses, string.Join("\n", n.Addresses));   // Ui.SetText: only when changed -- MSDF glyphs re-shape
+        bool replying = n != null && n.Connecting && n.ReplyCode.Length > 0;
+        _replyShown.Visible = replying;
+        if (replying)
         {
-            string both = string.Join("   ·   IPv6 ", new[] { n.InternetAddress, n.Ipv6Address }.Where(a => a.Length > 0));
-            Ui.SetText(_reveal, _revealed ? $"Friends elsewhere join: {both}   (click to hide)"
-                                          : "Friends elsewhere join: \u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022.\u2022\u2022\u2022   (click to reveal)");
+            double left = System.Math.Max(0, Link.ReplyWindowS - (Time.GetTicksMsec() - n.ReplyAt) / 1000.0);
+            Ui.SetText(_replyShown, $"{n.ReplyCode}\n{left:0} s left for the host to take it");
         }
+        _fresh.Visible = n != null && n.FreshFrom.Length > 0 && !n.Connecting && !Net.IsOnline;
     }
     private void OnPeers(int _) => Refresh();
     private void OnLeft(int _, Net.PlayerInfo __, bool ___) => Refresh();
@@ -137,10 +168,34 @@ public partial class SessionMenu : CanvasLayer
 
     private void DoJoin() { if (Link.Available) Net.I?.Join(_addr.Text); }
 
-    private Button _hostBtn, _joinBtn, _offBtn, _reveal, _reconnect;
+    // Rebuilt only when an entry comes, goes or changes stage.
+    private string _listed = "";
+    private void ListPending(Net n)
+    {
+        string now = string.Join(",", n.Pending.All.Select(e => $"{e.Id}:{e.Stage}:{e.Code.Length > 0}"));
+        if (now == _listed) return;
+        _listed = now;
+        foreach (var c in _pending.GetChildren()) c.QueueFree();
+        foreach (var e in n.Pending.All)
+        {
+            var row = Ui.HBox(6, $"Invite{e.Id}");
+            string who = e.Name.Length > 0 ? e.Name : e.Row == Rendezvous.Paste.Id ? "an invite" : "a typed address";
+            var what = Ui.Lbl($"{who} · {(e.Stage == Rendezvous.Stage.Waiting ? "waiting for a reply" : "joining…")}", Ui.Small, Ui.Dim);
+            what.CustomMinimumSize = new Vector2(190, 0);
+            what.ClipText = true;
+            row.AddChild(what);
+            int id = e.Id; string code = e.Code;
+            if (code.Length > 0) row.AddChild(Ui.Btn("COPY", () => Rendezvous.Copy(code), "Copy"));
+            row.AddChild(Ui.Btn("CANCEL", () => Net.I?.Hang(id), "Cancel"));
+            _pending.AddChild(row);
+        }
+    }
+
+    private Button _hostBtn, _joinBtn, _offBtn, _reconnect, _invite, _fresh;
+    private VBoxContainer _pending;
     private Button[] _sessionBtns;
-    private Label _missing;
-    private bool _revealed;
+    private Label _missing, _addresses, _replyShown;
+    private LineEdit _reply;
     public const double PressGap = 1.0;
     private double _now, _lockedUntil;                          // game time: in play, the same as real time
     public bool Locked => _now < _lockedUntil;

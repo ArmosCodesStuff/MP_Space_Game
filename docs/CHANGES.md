@@ -36,6 +36,21 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_net2`, branch `wt/net2`): WebRTC S2 + R2-R5 built -- the session is
+on WebRTC; compiles, rung 2 green. engine-unproven: every rung owed in the final test phase.** ENet,
+UPnP, the public-IP lookup (api.ipify.org), `Router.cs` (now `Adapters.cs`) and `fakeigd.py` are gone.
+A friend joins by an invite code (INVITE A FRIEND -> JOIN -> the reply back, taken off the host's
+clipboard) or by the host's typed address (the listener, TCP 27015+). Owed, in this order: rung 3 twice
+on two seeds (S2Checks, S2TokenChecks, R2BeatChecks, R2SwitchChecks, R3WordsChecks, GateFixRefitChecks,
+GateFixJoinBoxChecks, the rewritten join failures), rung 4 (frames 51_invite_ready, 52_reply_countdown,
+60_reply_expired, 61_join_failed, 20_base_refit_in_combat; LINT: 0), rung 5 `six,six` (the roles moved:
+the `guest` joins by invite through the courier, drops, returns by its rejoin token, and returns again
+past a live old link; `guest2` knocks as another build and never hears Guesty's token; the host reads
+the join's five times),
+rung 5 `-Wan` once (the blackhole watchdog), and once at `WARSHIPS_WAN=150,40,5` (the rate check);
+then `pack.ps1 -Dirty`, the one-machine check, rung 6. **Never call multiplayer working until the owner
+and a friend have played (network_webrtc.md §11).** Detail: `docs/plans/ledger_webrtc.md` (lane net2).
+
 **2026-09-25 (worktree `WarShips_wt_wings`, branch `wt/wings`): kits lane E (wings, F13 widened)
 built; compiles, rung 2 green; engine-unproven: rungs 3, 4 and 5 owed in the final test phase.**
 `Wings.All` rows `gunship` (2) and `patrol` (3), the Orbit way, the ring pick, `PlayerShip.Sortie`;
@@ -228,13 +243,14 @@ gear** -- 120 parts that each lean hard one way, fitted from the pilot's **hold*
 window (I). The **hauler** sells alone (DISPATCH, with the EVASION chance of getting through) or on
 an **ESCORT** (round four outposts, offloading at each, hunted by a raider wave every 20 s, 5x the pay);
 AUTO-SELL waits for the
-level-3 boss and 4462 cr. A guest that **drops** is retried and let back into its place; and a new
+level-3 boss and 4462 cr. A guest that **drops** keeps its place 90 s (by address it retries by itself,
+by invite the host's panel has a fresh invite ready); and a new
 pilot is shown **corner hints** the first time it meets each system. The **base** (B) runs an idle economy --
 miners in the belt, salvagers at the wreck, a hauler that sells the load -- and buys upgrades; the
-pilot levels up (L) and fits parts (I). **Multiplayer** is host-and-join over the internet: HOST
-opens the port by itself where the network allows it (UPnP, NAT-PMP, PCP, a router behind a
-router) and says in words what to forward where it cannot; a VPN or overlay address and IPv6 are
-offered too.
+pilot levels up (L) and fits parts (I). **Multiplayer** is host-and-join over WebRTC, with no server
+of ours: the host's INVITE A FRIEND makes a code, the friend pastes it into JOIN and sends back the
+reply it copies; on one network or Radmin VPN the friend types the host's address instead. Untested
+between two homes (see Unreleased, Known broken).
 
 ### Controls (hub) — fixed keys
 
@@ -553,6 +569,57 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### WebRTC S2 + R2-R5: the session on WebRTC, invite codes, the network report (2026-09-25, branch wt/net2)
+
+**What changed for a player.** MULTIPLAYER -> HOST THIS WORLD, then INVITE A FRIEND: the invite is
+copied, to send privately. The friend pastes the whole message into JOIN; its reply is copied, with a
+30 s countdown. The host copies the friend's message and the game takes it (or it goes in the reply
+box); a friend's JOIN box likewise fills itself from a copied invite. On one network or Radmin VPN the friend types the host's address instead (the panel lists them).
+The panel lists every invite not yet answered, with COPY and CANCEL; COPY NETWORK REPORT copies what a
+failed join should send the developer. A friend dropped from an invite is told to ask for a new code
+(its place held 90 s) and the host's panel has one ready; by address the game retries by itself. The
+only outside contact left is a STUN lookup (Google's, then Cloudflare's) when a code is made.
+
+**Built** (plan `docs/plans/network_webrtc.md`, ledger `docs/plans/ledger_webrtc.md`, jobs S2a-R5):
+- S2 (transport-free): the boss keeps sending while held (P4); a shockwave throws no structure or dummy
+  (P5); a class changes only at home out of a fight (P8: one rule, `Hub.RefitOpen`, read by the host and
+  by the pilot's REFIT, class picker and base menu, which reads IN A FIGHT: NO RESET), and a change keeps
+  the hull's fraction and every cooldown (`PlayerShip.FitClass`); a sector report carries its trip
+  and a stale one is ignored (P9); held turrets re-keyed to the returning pilot (P10); the rejoin token
+  (P10b), sent to the host alone, which also takes a place from a live old link.
+- R2, the switch: `Net` on `WebRtcMultiplayerPeer`, both rows in one session, the pending table, the
+  beat (`NetChannels.Beat` = 12) and its 8 s watchdog, the goodbye's WebRTC body, every hang-up through
+  `Link.Hang`, retries only by typed address, `PretendAt` = Code | Auth. Deleted: ENet, UPnP/NAT-PMP/PCP,
+  describe/reach/reveal, the public-IP lookup, `Router.cs` (-> `Adapters.cs`), `fakeigd.py`, the
+  router scenarios, S1's throttle and `server` flag.
+- R3: HOST's line says where the listener landed; `Net.Report()` and COPY NETWORK REPORT; the pending
+  list; the multiplayer hint; frames 51_invite_ready, 52_reply_countdown, 60_reply_expired,
+  61_join_failed (51_address_hidden gone: CLAUDE.md's rung-4 count of ~110 frames is 3 low).
+- R4: the watchdog through the box's blackhole under `-Wan`; the stream row's longest gap and each
+  end's peak backlog per row printed, not asserted (no literal exists for them yet).
+- R5: pack.ps1 registers the plugin before its export, refuses an export without the release DLL,
+  ships the seven licences, and writes NOTES [PLAYING WITH A FRIEND] and [THIRD-PARTY]; install.ps1
+  checks every listed file is there (step 2 and after unpacking); play.ps1 registers the plugin once
+  before a launch from source; the snapshot carries the `.gdextension`.
+
+**Checks written, none run** (the final test phase runs them): solo `S2Checks`, `S2TripChecks`,
+`S2TokenChecks`, `R2BeatChecks`, `R2SwitchChecks`, `R3WordsChecks`, the rewritten join failures
+("Nothing is hosting at" under 3 s; "No answer ... in 12 s" at 11.8-12.6 s); rung 5 the `ArenaMp` S2
+checks, `R2BeatGuest`, `R2cHostCourier`, `R2cRows`, `R2cHostReturns`, `R2cGuestReturns`, guest2's
+other-build knock, `JoinedBy` per role; rung 5 `-Wan` `R4GuestBlackhole` / `R4HostBlackhole`.
+
+**Known broken** (network_webrtc.md §10.5; true until the owner's two-machine test, §11):
+- Nothing here has run on the engine: every check above is unproven.
+- Real NATs between two homes, the owner's double NAT and the Windows Firewall Block-rule question.
+- The reply window over a real internet path, and whether real players make it inside 30 s.
+- Google's and Cloudflare's STUN from real homes (the spike reached Google's once).
+- Loss and delay on the typed rows' own datagrams (they run direct in every harness run).
+- The exported Warships.exe with the release DLL across two machines; antivirus and SmartScreen; the
+  editor's first open with the addon; a machine with no network adapter up; IPv6 between homes.
+- The "no port could be opened for typed addresses" text has no check (one process cannot take every
+  port the OS would pick).
+- Multiplayer has never worked between two machines: do not call it working until it has.
 
 ### Class kits, lane E: the carrier's gunships and patrol, F13 widened (2026-09-25, worktree wt/wings)
 

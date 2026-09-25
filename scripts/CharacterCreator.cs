@@ -159,7 +159,13 @@ public partial class CharacterCreator : CanvasLayer
             // not through a colour mixed here.
             if (Character.Class == e.Id && e.Ready) card.AddThemeColorOverride("font_color", Ui.Accent);
             var captured = e;
-            card.Pressed += () => { Character.Class = captured.Id; if (!IsNew) Character.Save(); Rebuild(); _preview?.QueueRedraw(); Changed?.Invoke(); };
+            // A REFIT'S CLASS by the host's own rule (Hub.Refit): a fight that started with this panel open
+            // keeps the class the pilot has, as the host would.
+            card.Pressed += () =>
+            {
+                if (!IsNew && Hub.I is { } hub && Hub.Refit(Character.Class, captured.Id, Hub.InArena, hub.MyShip?.InCombat == true) != captured.Id) return;
+                Character.Class = captured.Id; if (!IsNew) Character.Save(); Rebuild(); _preview?.QueueRedraw(); Changed?.Invoke();
+            };
             _cards.AddChild(card);
         }
     }

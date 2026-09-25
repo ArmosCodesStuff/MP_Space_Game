@@ -24,7 +24,7 @@ public partial class Hints : CanvasLayer
         ["tio"]         = ("THE TIO", "Left-click the building for boss missions. When every pilot is READY the portal opens and the party goes through."),
         ["equipment"]   = ("EQUIPMENT", "I. Bosses drop parts that lean hard one way; your hold keeps what you are not flying, and each class keeps its own. Level or scrap them on the EQUIPMENT BASE, right of the station, 10 s clear of combat."),
         ["loot"]        = ("LOOT", "Crates only you can see. Fly over one to take it; any you leave behind come home with you."),
-        ["multiplayer"] = ("MULTIPLAYER", "HOST THIS WORLD, then COPY ADDRESS for your friends. To join one, type their address and JOIN."),
+        ["multiplayer"] = ("MULTIPLAYER", "HOST THIS WORLD, then INVITE A FRIEND and send them the code. To join, paste an invite into JOIN and send back the reply it copies."),
         ["raid"]        = ("RAIDERS", "They come for your base after a failed mission, and for your hauler on an escort. The base's guns help; nothing else you own can fight back."),
         ["hauler"]      = ("THE HAULER", "DISPATCH sends it alone: past the portal it may be lost (EVASION lowers the risk). ESCORT flies it round the four outposts for five times the pay; keep the raiders off it."),
         ["pilot"]       = ("A LEVEL UP", "L spends your points on rudder, hull, engines and weapons, and names what your next level opens. Bosses give EXP; a level's first clear gives more."),

@@ -594,17 +594,25 @@ public partial class Hub : Node2D
     // empty space, and an open mission portal was invisible to the one pilot it waited for. And a
     // guest in the wrong world is brought into the host's: the party is wherever the host is.
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetMySector(int s)
+    private void NetMySector(int s, int trip)
     {
         if (!Net.FromPlayer(this, out int who)) return;
+        // A STALE REPORT IS IGNORED (audit P9): one sent just before its world heard NetSector lands
+        // in the host's NEW world claiming the old one, and recording it sent this pilot none of the
+        // world it was about to be in. A trip is the host's count of sector moves (Session.Trip);
+        // -1 is a pilot that has heard none yet, which is always news.
+        if (trip >= 0 && trip != Session.Trip) return;
         Session.Sectors[who] = (SectorKind)s;
-        if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Kind, Missions.Level); return; }
+        if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Kind, Missions.Level, Session.Trip); return; }
         // The place a pilot is owed goes first and is never metered: a reconnecting pilot's held
         // spot is delivered by whichever report first finds it in the host's world.
         if (_placeFor.Remove(who, out var owed)) { RpcId(who, nameof(NetPlace), owed.at, owed.rot); ShipOf(who)?.Relocated(); }
         // THE CATCH-UP, and only it, is rate-limited -- one ask, dozens of reliable packets. Half a
-        // second: the guest's own repeats are at 1 s and 3 s (ReportSector).
-        if (!Net.Metered(who, nameof(NetMySector), 0.5)) return;
+        // second: the guest's own repeats are at 1 s and 3 s (ReportSector). Never the FIRST report
+        // this world has from a pilot (audit P9): it is the only way that pilot learns of what was
+        // spawned before it arrived, and a meter stamped by its previous world's report skipped it.
+        bool first = _caughtUp.Add(who);
+        if (!Net.Metered(who, nameof(NetMySector), 0.5) && !first) return;
         RpcId(who, nameof(NetMission), MissionArgs());
         foreach (var v in _votes) RpcId(who, nameof(NetVote), v.Wire(this));
         // EVERY HOST-SPAWNED THING IN THIS WORLD, of every kind, down the one path. This was two
@@ -623,7 +631,8 @@ public partial class Hub : Node2D
         if (Sector == SectorKind.Arena) Missions.KindOf(Missions.Kind).CatchUp?.Invoke(this, who);
         if (MissionWon) RpcId(who, nameof(NetWon), _ships.Count);
     }
-    private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector); }
+    private void ReportSector() { if (!Net.IsHost) Net.AskHost(this, nameof(NetMySector), (int)Sector, Session.HeardTrip); }
+    private readonly HashSet<int> _caughtUp = new();           // the pilots this world has sent its catch-up
 
     private bool _guestBefore;
     private void OnSessionChanged()
@@ -705,16 +714,15 @@ public partial class Hub : Node2D
     {
         if (Net.IsHost && Net.IsOnline && info.CharacterId.Length > 0)
         {
-            var back = Net.I.Players.FirstOrDefault(kv => kv.Key != peer && kv.Value.CharacterId == info.CharacterId).Key;
             var h = onPurpose ? null : Session.Hold(peer, info, _world, ShipOf(peer));
             // a kill in the moments before the host noticed the drop: owed too (paid once, by serial)
             if (h != null) h.Owed.AddRange(Session.Owed(peer, _world));
-            if (h != null && back != 0) RestoreHeld(h, back);    // it is already back under a new id
-            else if (h != null) Session.Places[info.CharacterId] = h;
+            if (h != null) Session.Places[info.CharacterId] = h;
             else foreach (var v in _votes) v.Forget(peer);
         }
         Session.Sectors.Remove(peer);
         DespawnFor(peer);                        // which reports the roster, the ship already gone
+        if (_replacing.Remove(peer, out var heir)) TryRestoreHold(heir);   // its place, to the pilot back with its token
     }
     private void TryRestoreHold(int peer)
     {
@@ -726,6 +734,10 @@ public partial class Hub : Node2D
     private void RestoreHeld(Session.Held h, int peer)
     {
         foreach (var v in _votes) v.Rekey(h.OldPeer, peer);
+        // ITS TURRETS ARE ITS OWN AGAIN (audit P10): keyed to the old id, the returning pilot could
+        // not collect them, was not held to its cap, and they fired a spare sheet. Each finds its
+        // ship again by its owner (DeployedTurret.Ship).
+        foreach (var t in Deployed) if (t.OwnerId == h.OldPeer) { t.OwnerId = peer; t.Ship = null; }
         if (h.World == _world && _ships.TryGetValue(peer, out var s) && IsInstanceValid(s))
         {
             s.Restore(h.Hp, h.Alive, h.Stasis);
@@ -810,14 +822,20 @@ public partial class Hub : Node2D
         // THE LEVELS GO WITH THE GEAR, as two lists in step (one dictionary's keys and values, which
         // enumerate in the same order): every peer lifts this pilot's parts by this pilot's levels.
         var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level, Character.Peak,
-                                   Character.LoadoutFor(Character.Class), Character.GearLevel.Keys.ToArray(), Character.GearLevel.Values.ToArray(), Character.Id };
-        if (toPeer == 0) Rpc(nameof(NetIdentity), args);
-        else             RpcId(toPeer, nameof(NetIdentity), args);
+                                   Character.LoadoutFor(Character.Class), Character.GearLevel.Keys.ToArray(), Character.GearLevel.Values.ToArray(), Character.Id,
+                                   "" };
+        // THE REJOIN TOKEN GOES TO THE HOST ALONE (P10b). Every other peer hears the same identity with
+        // no token: a co-player that learnt it could claim this pilot's place (Session.MayClaim).
+        foreach (int to in toPeer != 0 ? new[] { toPeer } : Multiplayer.GetPeers())
+        {
+            args[^1] = to == 1 && !Net.IsHost ? Session.Rejoin : "";
+            RpcId(to, nameof(NetIdentity), args);
+        }
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, int peak, string[] equip,
-                             string[] gearIds, int[] gearLevels, string characterId)
+                             string[] gearIds, int[] gearLevels, string characterId, string token)
     {
         // a peer may only describe itself
         if (Net.SenderOf(this) != peer || Net.I == null) return;
@@ -833,23 +851,43 @@ public partial class Hub : Node2D
         bought = Progression.Afford(bought, level);
         characterId ??= "";
         if (characterId.Length > 64) characterId = "";
-        // A HELD PLACE IS NOT CLAIMABLE BY NAME. The character id is the guest's own word -- the
-        // host has no other way to know a returning pilot -- so a peer announcing the id of a
-        // pilot ALREADY in the party took its place the moment that pilot dropped: its party slot,
-        // its READY, its position, and every kill owed to it. An id another live peer is flying
-        // belongs to that peer; this one simply has no hold.
-        if (characterId.Length > 0 && Net.I.Players.Any(kv => kv.Key != peer && kv.Value.CharacterId == characterId))
-            characterId = "";
+        p.Token = token ?? "";
+        // A HELD PLACE IS NOT CLAIMABLE BY NAME. The character id is the guest's own word, so a
+        // peer announcing the id of a pilot ALREADY in the party took its place the moment that
+        // pilot dropped: its party slot, its READY, its position, and every kill owed to it. The
+        // place is the REJOIN TOKEN's (Session.MayClaim): an id another live peer is flying
+        // belongs to that peer unless this one holds its token -- the same pilot back before the
+        // host saw its old connection die, which is then let go and its place handed over (P10b).
+        int holder = characterId.Length == 0 ? 0 : Net.I.Players.FirstOrDefault(kv => kv.Key != peer && kv.Value.CharacterId == characterId).Key;
+        if (characterId.Length > 0 && !Session.MayClaim(characterId, token ?? "", holder != 0)) characterId = "";
+        else if (holder != 0 && Net.IsHost) { _replacing[holder] = peer; Net.I.Hang(holder); }
+        var cship = _ships.TryGetValue(peer, out var cs) && IsInstanceValid(cs) ? cs : null;
+        var klass = Refit(p.HasIdentity ? p.Class : null, Classes.Sanitize(cls), InArena, cship?.InCombat == true);
         (p.Name, p.Main, p.Accent, p.Class, p.Bought, p.Equip, p.CharacterId, p.HasIdentity) =
-            (name, main, accent, Classes.Sanitize(cls), bought, equip ?? System.Array.Empty<string>(), characterId, true);
+            (name, main, accent, klass, bought, equip ?? System.Array.Empty<string>(), characterId, true);
         // ITS OWN LEVELS, held to the ladder and to parts that exist, like the loadout: what this
         // peer's copy of its ship is lifted by. Never this host's -- those are the host's pilot's.
         p.GearLevel = Equipment.SanitizeLevels((gearIds ?? System.Array.Empty<string>()).Zip(gearLevels ?? System.Array.Empty<int>()));
         p.Level = System.Math.Max(1, level);                    // a claim; what it may SPEND is capped above
         p.Peak = Progression.Claim(System.Math.Max(peak, level));   // ...and what it OPENS (Unlocks), by the same cap
         if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) ApplyIdentity(s);
+        if (Net.IsHost && characterId.Length > 0 && holder == 0) RpcId(peer, nameof(NetToken), Session.TokenFor(characterId));
         TryRestoreHold(peer);
     }
+    // the pilot's rejoin token, from the host that issued it (Session.Rejoin)
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetToken(string token) { if (!Net.IsHost) Session.Rejoin = token ?? ""; }
+    private readonly Dictionary<int, int> _replacing = new();  // an old connection let go -> the peer its place goes to
+
+    // A CLASS IS CHANGED AT REFIT, never in a fight (audit P8): RefitOpen is the one rule, read by the
+    // host for every announcement (Refit) and by the pilot's own REFIT, class picker and base menu
+    // (MayRefit), so an honest pilot never flies a class the host refused. A peer announcing another
+    // class in the arena, or while its ship is in combat, keeps the one it had; a first announcement
+    // (had == null) is always taken. A change taken keeps the hull's fraction and every cooldown
+    // (PlayerShip.FitClass), so announcing B and then A heals nothing and resets nothing.
+    public static bool RefitOpen(bool arena, bool inCombat) => !arena && !inCombat;
+    public static ShipClass Refit(ShipClass? had, ShipClass want, bool arena, bool inCombat) =>
+        had is { } h && h != want && !RefitOpen(arena, inCombat) ? h : want;
 
     // ── missions: Threat Intelligence Operations (host-authoritative) ────────
     public enum MissionState { Idle, Opening, PortalOpen }
@@ -930,7 +968,8 @@ public partial class Hub : Node2D
     {
         if (!Net.IsHost) return;
         if (k == SectorKind.Arena) Yard?.SaveForTrip();
-        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k, Missions.Kind, Missions.Level);
+        Session.Trip++;
+        if (Net.IsOnline) Rpc(nameof(NetSector), (int)k, Missions.Kind, Missions.Level, Session.Trip);
         // NOBODY IS IN A SECTOR WHILE THEY ARE MOVING BETWEEN THEM. Every peer was left recorded
         // in the world it is LEAVING until its new world reported itself, so for a round trip plus
         // a scene load the host went on sending that world's traffic to peers that had already
@@ -945,7 +984,15 @@ public partial class Hub : Node2D
     // the mission report that follows. The KIND FIRST: a category owns its own ladder, so the
     // level being set has to land on the ladder the host meant.
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetSector(int k, int kind, int level) { Missions.Kind = kind; Missions.Level = level; GoTo((SectorKind)k); }
+    // A TRIP ALREADY MADE IS NOT MADE AGAIN (audit P9): the host answers a stale report with the
+    // world this pilot is already in, and reloading it rebuilt the arena without the spawns its
+    // first report had caught up on.
+    private void NetSector(int k, int kind, int level, int trip)
+    {
+        if (trip == Session.HeardTrip) return;
+        Session.HeardTrip = trip;
+        Missions.Kind = kind; Missions.Level = level; GoTo((SectorKind)k);
+    }
     private void GoTo(SectorKind k)
     {
         Sector = k;
@@ -1307,8 +1354,8 @@ public partial class Hub : Node2D
     }
 
     // In packets of at most 24 raiders. A full failed-mission raid is 40, and in one packet that
-    // was 1.5 KB -- past the internet's usual 1.2 KB, so ENet split it, and an unreliable packet
-    // with one piece lost is lost whole: every raider froze for that update. Each packet names its
+    // was 1.5 KB -- past the internet's usual 1.2 KB, so the transport split it, and a packet with
+    // one piece lost waits for that piece: every raider froze for that update. Each packet names its
     // raiders, so each stands alone.
     private const int RaidersPerPacket = 24;
     // EVERY HOST-OWNED THING THE WORLD CAN DAMAGE, on one clock. A raider's packet carries where
@@ -1857,10 +1904,12 @@ public partial class Hub : Node2D
     // A purchase: refit the ship now, and tell the host (it resolves hull and damage).
     public void PilotChanged() { ApplyLocalIdentity(); SendIdentity(); }
 
-    // REFIT: the only way into the ship menu (it costs 10%; see Yard.ResetCost).
+    // REFIT: the only way into the ship menu (it costs 10%; see Yard.ResetCost). At the base, out of a
+    // fight: the host would refuse the class it picks (Refit), and the pilot would fly one nobody else sees.
+    public bool MayRefit => RefitOpen(InArena, MyShip?.InCombat == true);
     public void ResetShip()
     {
-        if (IsInstanceValid(_creator) || InArena) return;            // REFIT is at the base
+        if (IsInstanceValid(_creator) || !MayRefit) return;
         Yard.ChargeReset();
         Progression.Refit();                                         // ...and a level, and the last point it spent
         if (SideIs<BasePanel>()) CloseSide();

@@ -101,6 +101,15 @@ public partial class _Shots : Node
 
     System.Collections.Generic.IEnumerable<T> N<T>(Node n = null) where T : Node { n ??= GetTree().Root;
         foreach (var c in n.GetChildren()) { if (c is T t) yield return t; foreach (var x in N<T>(c)) yield return x; } }
+    // GATE FIX (lane net2): the REFIT tab in a fight -- RESET shut, and saying why (Hub.MayRefit, P8)
+    async Task RefitInCombatFrame()
+    {
+        var combat = typeof(PlayerShip).GetField("_combatT", BindingFlags.NonPublic | BindingFlags.Instance);
+        var me = H.MyShip;
+        combat.SetValue(me, 8.0); await W(0.2);
+        await Snap("20_base_refit_in_combat");
+        combat.SetValue(me, 0.0); await W(0.1);
+    }
     void Key(Key k) { Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = true }); Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = false }); }
     object P(object o, string m, params object[] a) => o.GetType().GetMethod(m, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(o, a);
 
@@ -390,20 +399,32 @@ public partial class _Shots : Node
             await Snap("50_base_defence"); bs3.Visible = true;
             rz.TakeDamage(99999); zp.SetValue(H, z0); bs3.Position = keepB; bs3.Velocity = Vector2.Zero; await W(0.3);
         }
-        // hosting: the address friends in other cities need, hidden until clicked, then shown
+        // THE MULTIPLAYER PANEL (network_webrtc.md §6): the host's -- an invite ready, the pending list and
+        // the typed addresses -- then a guest's: its reply and countdown, the countdown run out with MAKE A
+        // FRESH REPLY, and a typed address nothing answers. A hermetic session: no STUN server is asked (the
+        // invite says so), and the codes go to a clipboard of this run's own.
         {
-            // never the real router: the game maps ports itself now, and a sweep must not open one
-            Router.Fake = (1, 1); Net.PublicIpService = "http://127.0.0.1:1/";
+            Link.Servers = System.Array.Empty<Link.StunRow>();
+            string clip = "";
+            Rendezvous.Copy = t => clip = t; Rendezvous.Clipboard = () => clip;
+            var toggle = N<Button>().First(b => b.Name == "NetToggle");
+            bool wasOpen = toggle.ButtonPressed;
+            toggle.ButtonPressed = true;
             // base 27140, not 27015: P(27015) on slot n is the smoketest host's port on slot n-1; 27140+100k is in no smoketest band (bound, never asserted)
             Net.I.Host(P(27140)); await W(0.5);
-            var d = Net.Describe("", false, "203.0.113.7", 27015, "192.168.1.5:27015", "no router answered");   // the game's own words
-            Net.I.Reachable(d.reach, d.address, d.message);
-            var sm = H.GetTree().Root.FindChild("SessionMenu", true, false) as SessionMenu;
-            await W(0.3); await Snap("51_address_hidden");
-            var rv = sm?.FindChild("RevealAddress", true, false) as Button;
-            rv?.EmitSignal(BaseButton.SignalName.Pressed); await W(0.2); await Snap("52_address_revealed");
-            rv?.EmitSignal(BaseButton.SignalName.Pressed);
+            Net.I.Invite(); await W(0.8);
+            await Snap("51_invite_ready");
+            string invite = Net.I.LastInvite;
             Net.I.GoOffline(); await W(0.5);
+            Net.I.Join(invite); await W(1.0);
+            await Snap("52_reply_countdown");
+            typeof(Net).GetField("_deadline", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(Net.I, Time.GetTicksMsec()); await W(0.5);
+            await Snap("60_reply_expired");
+            Net.I.GoOffline(); await W(0.3);
+            Net.I.Join($"127.0.0.1:{P(27140)}"); await W(1.0);   // the session above is closed: nothing listens there now
+            await Snap("61_join_failed");
+            Net.I.GoOffline(); await W(0.5);
+            toggle.ButtonPressed = wasOpen;
         }
         // a raid: two patrols in from the map's edge, and the HUD's count
         {
@@ -630,6 +651,7 @@ public partial class _Shots : Node
             }
             N<Button>(bp).First(b => b.Name == "Reset").EmitSignal(BaseButton.SignalName.Pressed); await W(0.2);
             await Snap("20_base_refit_armed");
+            await RefitInCombatFrame();
             Key(global::Godot.Key.B); await W(0.3);
 
             // K window: waiting for a key, then a reserved key refused

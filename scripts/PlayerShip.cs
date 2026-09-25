@@ -210,6 +210,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public struct Slot { public double Left, Cool, Own; public int N; public Vector2 At; }
     private Slot[] _slots = new Slot[1];                 // the spare alone, until the class is fitted
     private readonly Dictionary<string, int> _slotAt = new();
+    private readonly Dictionary<string, (Slot slot, double clock)> _slotsAway = new();   // every slot a class change put away, and when (FitClass)
     public ref Slot Sl(string id) => ref _slots[_slotAt.TryGetValue(id, out int i) ? i : 0];
 
     // Missiles (destroyer): a magazine of bursts, reloaded by hand.
@@ -317,10 +318,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _turrets.Clear(); _mains.Clear(); PdTurrets.Clear(); _wings.Clear();
         WingTarget = StrikeTarget = null; _strikesOut = 0; _attacking = false;
 
+        // A CLASS CHANGE IS A REFIT (audit P8): the hull keeps its FRACTION, as Restat does (a new ship's
+        // first fit, MaxHp 0, is a full one), and no slot is refreshed: each one's cooldown and count are
+        // kept by id through every class change, run down by the game seconds it was away, so flying B
+        // and then A again hands back A's bar as it would be now. What was running (Left, Own) ends.
+        double frac = MaxHp > 0 ? Hp / MaxHp : 1;
+        foreach (var (id, at) in _slotAt) _slotsAway[id] = (_slots[at], _clock);
         Stats = BuildSheet();
-        MaxHp = Hp = Stats["hull"];
-        _hullWatch = default;                      // a new hull, not damage
-        // The class's slots, fresh: every timer at zero, the magazine full. Index 0 is the spare.
+        MaxHp = Stats["hull"];
+        Hp = Alive ? Math.Max(1, frac * MaxHp) : MaxHp;
+        _hullWatch = default;                      // a refit, not damage
+        // The class's slots, index 0 the spare: a new one with every timer at zero and the magazine full.
         var list = Abilities.For(Class);
         _slots = new Slot[list.Length + 1];
         _slotAt.Clear();
@@ -328,6 +336,13 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _netSlotLeft = new float[_slots.Length]; _netSlotCool = new float[_slots.Length];
         _netSlotOwn = new float[_slots.Length]; _netSlotN = new int[_slots.Length];
         Sl("missile").N = (int)Stats["missile_mag"];
+        foreach (var (id, at) in _slotAt)
+            if (_slotsAway.Remove(id, out var kept))
+            {
+                ref var s = ref _slots[at];
+                s.Cool = Math.Max(0, kept.slot.Cool - (_clock - kept.clock));
+                s.N = kept.slot.N;                 // a magazine over the new sheet's is cut to it (FitWings)
+            }
 
         var art = MyArt;
         var tex = Assets.Load<Texture2D>(art.Texture);
