@@ -1147,3 +1147,7 @@ heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu on
 - Slip, undone: one PowerShell [IO.File] write with a relative path landed in WarShips_Version_L's
   tools/smoketest/run.ps1 (the same R4 edit); reverted there at once with git checkout (tree clean again).
 - LANE DONE (gate fix): nothing run on the engine.
+
+## JOB gate 2 comments (PRE)
+- tier opus; intent: fix two stale Router comments (invariant C); files tools/smoketest/SmokeTest.cs.txt (07cbc10ddc980f0d94c04a41a9397bec5ef83dfd); HEAD feacfc45b50c0bf43572b7b2ffcea1d807befd9e
+- POST: done; two comments/message reworded (line 5699 is a home router, kept); typecheck 0 errors, quick green; no engine run.

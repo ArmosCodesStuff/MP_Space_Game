@@ -6517,7 +6517,8 @@ public partial class _Test : Node
             Check(H.Raiders.Count == 0 && !Combat.Hostiles.OfType<Raider>().Any() && !me.Pinned, "shot down, they are gone -- and the pin lets go");
             // A miner OUT IN THE BELT, beyond the base's own guns (600 u): one caught docking had its
             // raider shot down by them before it could latch. Where the fleet is at this point depends
-            // on how long the router scenarios above took in real time, so it is waited for.
+            // on how long the network scenarios above took in real time (libjuice and the listener run on real
+            // time), so it is waited for.
             Gatherer mnr = null;
             for (int i = 0; i < 60 * 40 && mnr == null; i++)
             {
@@ -11737,7 +11738,7 @@ public partial class _Test : Node
             Net.I.GoOffline();   // drop the guest
             await Wait(2.0);
             for (int i = 0; i < 60 * 4 && !Net.I.NetworkIdle; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(Net.I.NetworkIdle && heldD.Count == 0, "back offline: no socket, no lookup, no router job left running, and no place still held");
+            Check(Net.I.NetworkIdle && heldD.Count == 0, "back offline: no peer, no connection still being let go, no listener, and no place still held");
         }
         else if (role == "guest2")
         {   // a third player: joins, sees everyone, leaves by hosting a world of its own
