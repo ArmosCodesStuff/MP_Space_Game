@@ -937,6 +937,14 @@ where the editor cannot delete it.*
 
 ## Traps that have already cost time
 
+- **A harness port literal that bypasses `P()` collides between engine slots.** `rungs.ps1` runs up to
+  `-Slots` chains at once; slot n gives its own TEMP/APPDATA and passes the user arg `port-shift=100n`, and every port
+  the harness binds, joins or asserts must go through `SmokeTest.P(port)` / `Shots.P(port)` (a bare
+  `Net.I.Host()` binds `Net.DefaultPort` unshifted). The one the first list missed: `wan.py`'s own box
+  (STUN 3478, silent 19481-19483, its `--http` port) runs on EVERY smoketest run, not only `-Wan`, so it
+  takes `--shift` too. Only text tests that bind nothing (`Net.Describe`, the `Net.DefaultPort` table
+  proof) keep literal ports.
+
 - **A file's C# object must not die while the engine can still hand the file out.** Godot 4.7.2 keeps
   only a WEAK handle to a resource's C# object while nothing but that object holds it -- a texture
   whose last sprite has gone. The collector can take the object, and until its finalizer runs the
