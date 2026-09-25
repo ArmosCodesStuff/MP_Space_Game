@@ -166,8 +166,10 @@ public partial class _Test : Node
     // other reports a second threw four in ten of this stream away AT THE RECEIVER: 5.8 a second
     // arrived with nothing dropped before sending. The throttle is the PEER's, on every channel, so
     // a channel of its own still measures it, and only it. (The game's own streams have one each
-    // now, NetChannels; this one sits well clear of that table, and a check says so.)
-    const int StreamChannel = 200;
+    // now, NetChannels; this one is the next number after that table's last row, never one of its
+    // rows, and a check says so. Not further out: a WebRTC session opens only the channels
+    // Link.Channels() lists, and a gap is a data channel that carries nothing.)
+    const int StreamChannel = NetChannels.BossSounds + 1;
     bool _streaming; double _streamClock; int _streamGot;
     public override void _Process(double delta)
     {
@@ -176,6 +178,196 @@ public partial class _Test : Node
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = StreamChannel)]
     void NetStream() => _streamGot++;
+
+    // ── WEBRTC, R0: THE PLUGIN INSIDE WARSHIPS (docs/plans/network_webrtc.md §10.4 R0) ─────────────
+    // Two WebRtcMultiplayerPeers in this one process, polled by hand: a host (server) and a guest
+    // (client), one connection each, THE HOST MAKING THE OFFER as in every spike run, and the bundles
+    // swapped whole -- sealed, not trickled -- as an invite and its reply will be. Timed on the WALL
+    // clock: libjuice's timers are real time, and --fixed-fps game time is not.
+    sealed class RtcPair
+    {
+        public readonly int Id;
+        public readonly long ApplyAfterMs;              // the host takes the reply this long after it was made
+        public readonly WebRtcMultiplayerPeer Host = new(), Guest = new();
+        public readonly WebRtcPeerConnection HostConn = new(), GuestConn = new();
+        public readonly Error Served;
+        public readonly bool ConnectedAtOnce;
+        string _offer, _answer;
+        readonly List<(string media, int index, string name)> _offerCands = new(), _answerCands = new();
+        public bool OfferSealed, Pasted, ReplySealed, Applied;
+        public ulong ReplyAt, AppliedAt, HostSawAt, GuestSawAt, HostLostAt, GuestLostAt;
+        public int Handlers, OffMain;                   // signal handlers run, and how many off the main thread
+        public RtcPair(int id, long applyAfterMs = 0)
+        {
+            Id = id; ApplyAfterMs = applyAfterMs;
+            var ice = new Godot.Collections.Dictionary { ["iceServers"] = new Godot.Collections.Array() };
+            Served = Host.CreateServer(Link.Channels());
+            ConnectedAtOnce = Host.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected;
+            Guest.CreateClient(id, Link.Channels());
+            HostConn.Initialize(ice); GuestConn.Initialize(ice);
+            HostConn.SessionDescriptionCreated += (type, sdp) => { Seen(); HostConn.SetLocalDescription(type, sdp); _offer = sdp; };
+            HostConn.IceCandidateCreated += (m, i, n) => { Seen(); _offerCands.Add((m, (int)i, n)); };
+            GuestConn.SessionDescriptionCreated += (type, sdp) => { Seen(); GuestConn.SetLocalDescription(type, sdp); _answer = sdp; };
+            GuestConn.IceCandidateCreated += (m, i, n) => { Seen(); _answerCands.Add((m, (int)i, n)); };
+            Host.PeerConnected += p => { Seen(); if (p == Id) HostSawAt = Now; };
+            Host.PeerDisconnected += p => { Seen(); if (p == Id) HostLostAt = Now; };
+            Guest.PeerConnected += p => { Seen(); if (p == 1) GuestSawAt = Now; };
+            Guest.PeerDisconnected += p => { Seen(); if (p == 1) GuestLostAt = Now; };
+            Host.AddPeer(HostConn, id);
+            HostConn.CreateOffer();
+        }
+        public static ulong Now => Time.GetTicksMsec();
+        void Seen() { Handlers++; if (OS.GetThreadCallerId() != OS.GetMainThreadId()) OffMain++; }
+        public bool Connected => HostSawAt > 0 && GuestSawAt > 0;
+        // One frame: poll both ends, then move the exchange on. The guest "pastes" the invite the
+        // frame it is sealed; the host takes the reply ApplyAfterMs after the guest sealed it.
+        public void Step()
+        {
+            Host.Poll(); Guest.Poll();
+            if (!OfferSealed && Link.Sealed(HostConn)) OfferSealed = true;
+            if (OfferSealed && !Pasted)
+            {
+                Pasted = true;
+                Guest.AddPeer(GuestConn, 1);
+                GuestConn.SetRemoteDescription("offer", _offer);
+                foreach (var c in _offerCands) GuestConn.AddIceCandidate(c.media, c.index, c.name);
+            }
+            if (Pasted && !ReplySealed && Link.Sealed(GuestConn)) { ReplySealed = true; ReplyAt = Now; }
+            if (ReplySealed && !Applied && Now >= ReplyAt + (ulong)ApplyAfterMs)
+            {
+                Applied = true; AppliedAt = Now;
+                HostConn.SetRemoteDescription("answer", _answer);
+                foreach (var c in _answerCands) HostConn.AddIceCandidate(c.media, c.index, c.name);
+            }
+        }
+        // Every object this pair made, let go of here and now -- not by the collector's finalizer
+        // thread (Assets.cs: a C# handle released there can turn into an engine ERROR).
+        public void Free()
+        {
+            Host.Close(); Guest.Close(); HostConn.Close(); GuestConn.Close();
+            Host.Dispose(); Guest.Dispose(); HostConn.Dispose(); GuestConn.Dispose();
+        }
+    }
+    async Task<bool> RtcUntil(Func<bool> done, int ms, params RtcPair[] pairs)
+    {
+        ulong end = RtcPair.Now + (ulong)ms;
+        while (!done() && RtcPair.Now < end)
+        {
+            foreach (var p in pairs) p.Step();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        return done();
+    }
+    // One side's data channels, read once and let go of at once (see Free).
+    static List<(int id, WebRtcDataChannel.ChannelState state, int life)> RtcChannels(WebRtcMultiplayerPeer mp, int id)
+    {
+        using var peer = mp.GetPeer(id);
+        var seen = new List<(int, WebRtcDataChannel.ChannelState, int)>();
+        foreach (var v in peer["channels"].AsGodotArray())
+            using (var ch = v.As<WebRtcDataChannel>()) seen.Add((ch.GetId(), ch.GetReadyState(), ch.GetMaxPacketLifeTime()));
+        return seen;
+    }
+
+    async Task WebRtcPairs()
+    {
+        // THE PLUGIN LOADED, asked by the literal names the spike read (SPIKE Q1), so the row is
+        // proved against them here and every other check reads the row.
+        bool loaded = GDExtensionManager.GetLoadedExtensions().Contains("res://addons/webrtc_native/webrtc_native.gdextension");
+        Check(loaded && ClassDB.ClassExists("WebRTCLibPeerConnection") && Link.Available && Link.Plugin.Extension == "res://addons/webrtc_native/webrtc_native.gdextension",
+              $"the WebRTC plugin loaded: webrtc_native.gdextension is registered and WebRTCLibPeerConnection exists ({string.Join(", ", GDExtensionManager.GetLoadedExtensions())})");
+        if (!loaded || !Link.Available) return;              // every check below would only wait out its time
+
+        // THE CHANNEL TABLE: every [Rpc] in the build, the harness's stream included (§3.2). S1's 11
+        // rows -- Cosmetic Reliable, ten ordered streams -- and the harness's stream on 12, the next
+        // number after the last row.
+        var modes = Link.Channels().Select(v => (MultiplayerPeer.TransferModeEnum)(int)v).ToList();
+        Check(StreamChannel == 12 && modes.Count == 12 && modes[0] == MultiplayerPeer.TransferModeEnum.Reliable
+              && modes.Skip(1).All(m => m == MultiplayerPeer.TransferModeEnum.UnreliableOrdered),
+              $"a session negotiates 12 channels above 0: Cosmetic Reliable, then 11 ordered ones, the harness's stream the last ({string.Join(",", modes.Select(m => m.ToString()[0]))}; stream on {StreamChannel})");
+
+        // A CONNECTED PAIR, the id drawn as the host will draw it (2 .. 2^31 - 1)
+        var a = new RtcPair(Rng.RandiRange(2, int.MaxValue));
+        Check(a.Served == Error.Ok && a.ConnectedAtOnce, $"CreateServer is Connected in the same call ({a.Served})");
+        ulong t0 = RtcPair.Now;
+        bool up = await RtcUntil(() => a.Connected, 5000, a);
+        Check(up, $"an in-process pair connects, the host offering, bundles sealed and swapped whole ({RtcPair.Now - t0} ms, id {a.Id})");
+        if (!up) { a.Free(); return; }
+        // every row's data channel open at both ends -- 15: channel 0's three and the 12 above -- and
+        // every one of them reliable whatever the row asked for (Godot writes maxPacketLifetime, the
+        // plugin reads maxPacketLifeTime: §2.1), which is why each row has its own
+        var hostCh = RtcChannels(a.Host, a.Id); var guestCh = RtcChannels(a.Guest, 1);
+        Check(hostCh.Count == 15 && guestCh.Count == 15 && hostCh.Concat(guestCh).All(c => c.state == WebRtcDataChannel.ChannelState.Open),
+              $"every row's data channel opens at both ends: 15 each ({hostCh.Count} host, {guestCh.Count} guest; ids {string.Join(",", hostCh.Select(c => c.id))})");
+        Check(hostCh.Concat(guestCh).All(c => c.life == -1),
+              $"every data channel is reliable: no packet lifetime on any of them ({string.Join(",", hostCh.Select(c => c.life).Distinct())})");
+        // a packet on the highest row arrives on that row, both ways
+        var got = new List<string>();
+        foreach (var (from, to, target) in new[] { (a.Host, a.Guest, a.Id), (a.Guest, a.Host, 1) })
+        {
+            from.TransferChannel = StreamChannel; from.TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered; from.SetTargetPeer(target);
+            from.PutPacket(BitConverter.GetBytes(a.Id ^ target));
+            await RtcUntil(() => to.GetAvailablePacketCount() > 0, 2000, a);
+            if (to.GetAvailablePacketCount() == 0) { got.Add("nothing"); continue; }
+            int peer = to.GetPacketPeer(), ch = to.GetPacketChannel();
+            byte[] body = to.GetPacket();
+            got.Add($"{peer}@{ch}:{(body.Length == 4 && BitConverter.ToInt32(body) == (a.Id ^ target) ? "ok" : "garbled")}");
+        }
+        Check(got.SequenceEqual(new[] { "1@12:ok", $"{a.Id}@12:ok" }),
+              $"a packet on the highest row (12) arrives on it, host to guest and guest to host ({string.Join("; ", got)})");
+        // a guest's Close() is seen by the host within 1 s
+        a.Guest.Close(); t0 = RtcPair.Now;
+        await RtcUntil(() => a.HostLostAt > 0, 3000, a);
+        Check(a.HostLostAt > 0 && a.HostLostAt - t0 <= 1000, $"a guest's Close() is seen by the host within 1 s ({(a.HostLostAt > 0 ? $"{a.HostLostAt - t0} ms" : "never")})");
+        // hanging up on an id that is gone, and one never known, prints nothing (an engine ERROR line
+        // would turn this run red)
+        Link.Hang(a.Host, a.Id); Link.Hang(a.Host, a.Id); Link.Hang(a.Host, Rng.RandiRange(2, int.MaxValue));
+        Check(!a.Host.HasPeer(a.Id), "Link.Hang on a gone id, twice, and on one never known: no peer left, and nothing printed");
+
+        // the host's DisconnectPeer is seen by the guest within 1 s
+        var b = new RtcPair(Rng.RandiRange(2, int.MaxValue));
+        bool bUp = await RtcUntil(() => b.Connected, 5000, b);
+        b.Host.DisconnectPeer(b.Id); t0 = RtcPair.Now;
+        await RtcUntil(() => b.GuestLostAt > 0, 3000, b);
+        Check(bUp && b.GuestLostAt > 0 && b.GuestLostAt - t0 <= 1000,
+              $"the host's DisconnectPeer is seen by the guest within 1 s ({(b.GuestLostAt > 0 ? $"{b.GuestLostAt - t0} ms" : "never")}, id {b.Id})");
+
+        // a pending entry -- an invite whose reply never came -- hung up through Link.Hang is gone
+        var c = new RtcPair(Rng.RandiRange(2, int.MaxValue), long.MaxValue / 2);
+        await RtcUntil(() => c.ReplySealed, 3000, c);
+        bool pending = c.Host.HasPeer(c.Id);
+        Link.Hang(c.Host, c.Id);
+        Check(c.ReplySealed && pending && !c.Host.HasPeer(c.Id), $"Link.Hang takes a pending entry off the host (pending {pending}, id {c.Id})");
+
+        // every signal handler ran on the main thread, inside a Poll()
+        var all = new[] { a, b, c };
+        Check(all.Sum(p => p.Handlers) >= 12 && all.Sum(p => p.OffMain) == 0,
+              $"every WebRTC signal handler runs on the main thread ({all.Sum(p => p.Handlers)} handlers, {all.Sum(p => p.OffMain)} off it)");
+        foreach (var p in all) p.Free();
+
+        // NOTHING LEAKS: three connect-and-close cycles, the first to warm up, the count after it
+        // against the count after the other two. A leaked pair is 34 objects (two peers, two
+        // connections, 15 channels a side); the 20 allowed is the hub's own churn, as below.
+        async Task<double> Objects()
+        {
+            for (int g = 0; g < 2; g++) { GC.Collect(); GC.WaitForPendingFinalizers(); }
+            for (int f = 0; f < 3; f++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            return Performance.GetMonitor(Performance.Monitor.ObjectCount);
+        }
+        double objA = 0;
+        var cycled = new List<string>();
+        for (int n = 0; n < 3; n++)
+        {
+            var p = new RtcPair(Rng.RandiRange(2, int.MaxValue));
+            bool ok = await RtcUntil(() => p.Connected, 5000, p);
+            Link.Hang(p.Host, p.Id);
+            p.Free();
+            cycled.Add(ok ? "up" : "DOWN");
+            if (n == 0) objA = await Objects();
+        }
+        double objB = await Objects();
+        Check(cycled.All(x => x == "up") && objB <= objA + 20,
+              $"three WebRTC connect-and-close cycles leave the object count flat ({objA:0} -> {objB:0}; {string.Join(",", cycled)})");
+    }
 
     // ── VARIED GEOMETRY, REPRODUCIBLE ──────────────────────────────────────
     // A check tied to one spot is a check that can only find the bug at that spot. Vary draws
@@ -7656,6 +7848,7 @@ public partial class _Test : Node
             Check(moved.Count == 0, $"...and no sound that is not a beam moved ({string.Join(",", moved)})");
         }
 
+        await WebRtcPairs();
         // leaks: leaving and re-entering the hub must not grow the orphan-node or object
         // counts (the first cycle warms caches; compare the next two against it)
         async Task Cycle()
