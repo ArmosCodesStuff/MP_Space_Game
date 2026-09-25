@@ -3,9 +3,12 @@
 Godot 4.7.2 (.NET / C#). Host owns the world; each player owns their ship; single player is a host with
 no peers. The repo is the only source of truth. Written for an instance with no memory of it.
 
-**Speed first (owner, 2026-09-25): build everything quickly, then test at the end.** Accuracy is kept by
-the checks, which are written with every change and run at the end of each batch, never skipped. Save
-tokens wherever it costs no speed. This file is loaded into every agent and every turn: keep it short,
+**Build everything, THEN test (owner, 2026-09-25). Two phases, never mixed.** BUILD: every planned lane is
+written and merged with NO engine run anywhere (not per job, not per batch, not per lane): per job
+`typecheck` + `verify -Quick` and a read of its own diff; per lane one opus code gate, then the merge. Every
+change still carries its check (section 6), written now and run later. TEST: only once everything planned
+is merged, the engine chains run (section 8), several at once, reds fixed at the lowest rung, then the bar.
+A build-phase script that starts the engine is a bug. Save tokens wherever it costs no speed. This file is loaded into every agent and every turn: keep it short,
 never paste it into a prompt.
 
 ## 1 · Roles
@@ -17,10 +20,9 @@ never paste it into a prompt.
   Lanes whose files do not overlap run at the same time.
 - **Batch** = a lane's next jobs, picked so they share files (read once, not once per job), launched as
   ONE workflow holding the whole chain: step 0 `git merge version-l` into the lane; each job (ledger PRE,
-  edit with its checks, `quick`, POST, commit); after the LAST job, the lane's engine chain once (section
-  8), its reds fixed then; a fresh agent from the ledger when one stops; one model-tier escalation on a
-  red; on the lane's final batch, its merge gate. The coordinator wakes once per batch, on "green" or
-  "stuck", so the rules for a red live in the workflow script, not in a later turn.
+  edit with its checks, `quick`, POST, commit); after the LAST job, `quick` at HEAD and NO engine (section
+  8); a fresh agent from the ledger when one stops; one escalation on a red; on the lane's final batch,
+  its code gate and its merge. The coordinator wakes once per batch, on "done" or "stuck", so the rules for a red live in the workflow script, not in a later turn.
 
 ## 2 · Session start (≤ 2 tool calls)
 
@@ -88,8 +90,8 @@ Every writer keeps `docs/plans/ledger_<lane>.md` in its lane; it is the record, 
 ## 6 · Build — every change carries its check
 
 Edit in batches. Compile checks (`typecheck.ps1`, `verify.ps1 -Quick`) run after every job; they are cheap
-and are not tests. The engine runs once at the end of a batch, never to explore, never while a compile
-check is red.
+and are not tests. The engine never runs in the build phase: not to explore, not to prove a job, not at a
+batch's or a lane's end. It runs only in the test phase, never while a compile check is red.
 
 **The harness is source.** `tools/smoketest/SmokeTest.cs.txt` and `tools/screens/Shots.cs.txt` compile
 INTO the game; a rename or deletion makes them callers to fix in the same edit (`typecheck.ps1` sees them).
@@ -117,7 +119,7 @@ The commit message ends with a `Checks:` line naming every check added or rewrit
 
 Positions and angles come from `Vary`/`VaryAngle`/`VaryNear` (a per-run `SEED n`; the steps `solo@<n>` and
 `six@<n>` replay it). Never vary a figure the check asserts. A new or rewritten check passes on **two seeds**
-at its rung before its lane merges (the merge chain runs it twice); a flaky one is fixed at rung 3 until
+at its rung in the test phase (its chain runs it twice); a flaky one is fixed at rung 3 until
 three seeds pass. Never re-run a higher
 rung hoping for a different draw. Prove numbers with literals from the request; where a check must read a
 table, prove the table against literals in one place. Mutants only for authority, save-format and
@@ -158,19 +160,21 @@ tested as version-l by mistake): it runs the chain in order, stops at the
 first red, waits for the engine to be free, and writes `%TEMP%\warships_rungs\<tag>\summary.txt` + one log
 per step. Read the summary, grep a log; never start a harness directly.
 
-Per job: `quick` only. At the end of a batch, ONE chain covering everything the batch touched:
+**Build phase: `quick` only, per job and at a lane's HEAD. No engine.** **Test phase** (everything planned is
+merged into `version-l`): the engine-slots proof first, then chains covering everything built, several at
+once on engine slots:
 
-| the batch touched | end-of-batch chain |
+| what was built | its chain in the test phase |
 |---|---|
 | renames, signatures only | `quick` |
 | a rename of anything reached by string (RPC, NodePath, `Call("x")`) | `quick,solo,six` |
 | numbers, behaviour, abilities, rows | `quick,solo,solo` |
 | anything drawn | add `screens` |
 | anything a guest sees, an RPC, authority | add `six,six` |
-| the lane's last batch before its merge | `quick,solo,solo,six,screens` (`six,six` with new guest checks) |
-| all merges done | `bar`, once |
+| all of it, before the bar | `quick,solo,solo,six,screens` (`six,six` with new guest checks) |
+| every test-phase chain green | `bar`, once |
 
-A red at the end is traced through the ledger's job list (which job's files the failing check touches;
+A red in the test phase is traced through the ledgers' job lists (which job's files the failing check touches;
 `git bisect` over the job commits if unclear), fixed, and the chain re-run once.
 
 Other steps: `solo@<n>`, `six@<n>` (replay a seed), `wan`. A tag is used once: the runner clears its folder.
@@ -190,9 +194,9 @@ covers it. Two bars in a row for one fix means the ladder was skipped.
 
 ## 10 · Merge and release
 
-- A lane merges when its merge chain is green at its HEAD and its gate passed: `git merge --no-ff wt/<lane>`
-  into `version-l`. Conflicts are resolved from the ledgers' intent (haiku only if the resolution is written).
-- After the merges, the bar once. Red: the lane its failing check traces to gets a fix batch (a new lane
+- A lane merges (build phase) when `quick` is green at its HEAD and its opus code gate passed:
+  `git merge --no-ff wt/<lane>` into `version-l`. Conflicts are resolved from the ledgers' intent.
+- After EVERY planned lane is merged: the test phase (section 8), then the bar once. Red: the lane its failing check traces to gets a fix batch (a new lane
   from `version-l` if it traces to the combination), proved low, then the bar once more. Green: a
   `VERIFIED:` commit, push to BOTH `version-l` and `main`. The owner
   has a standing OK for GitHub releases. Real two-machine play has never worked: never call multiplayer
