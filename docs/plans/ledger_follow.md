@@ -66,3 +66,6 @@ FollowHeavyRetargetLeadChecks, FollowWarpCooldownRuleChecks, plus the existing B
 LaneAHeavyRowsChecks missile sub-test (throws a frame later now) and LaneAChargeTableHashedChecks; rung 5 `six,six` --
 FollowWarpCooldownHostChecks and the LaneBHostDrives/LaneBGuestDrives pair (6 s snap now inside cooldown). No frames (rung 4 not needed).
 engine-unproven: rungs owed in the final test phase. Next: none (lane ready for its code gate).
+
+## MERGE version-l -> wt/follow
+PRE: merge commit 4d2cda543d20dd9c4abf70e10d9fa340615ffdea. POST: clean merge (docs/plans/README.md, ledger_main.md only), 0 conflicted files; typecheck + quick green.
