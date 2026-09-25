@@ -212,3 +212,27 @@ with [IO.File]::WriteAllText (PowerShell's utf8 adds a BOM to the subject).
   swings 0, then swings); frame 74c_warrior_whirlwind (LaneA6cBladeFrames); rewritten: EveryDamageStat (+whirl, ten),
   sweep witness ["whirlwind"].
 - Next: kits6c-J4 Prism stance.
+
+## Handover 2: agent 2 stops after J3 (context), at a job boundary. J4 is next; no PRE written for it.
+Conventions this agent used (keep them): checks are written in the scratchpad and spliced into SmokeTest.cs.txt with a
+python exact-match edit (assert count == 1), each LaneA6c method inserted after the previous LaneA6c method; solo calls
+go after `await LaneA6cWhirlChecks(yonder);` (the WARRIOR block, ~11200); the sweep's witness rows sit after
+["whirlwind"]; frames go in LaneA6cBladeFrames (Shots.cs.txt ~1019). All harness roles run at Peak = Unlocks.Top.
+Generic machinery built so far, for J4 on: AbilityDef.Swing (MeleeDef) + Stills (PlayerShip.Stilled holds the trigger's
+weapon while such a row's Left runs), AbilityDef.Dash (DashSpec; PlayerShip.StartDash / DashSweep / DashCarry),
+Abilities.TriggerOf, Melee.Draw / Running, Status.Unwebbed 512 (host-only).
+J4 pointers (Prism stance, D49): nothing draws the prism wedge yet (grep Prismatic: only PlayerShip:882 and Prism.cs).
+Prism.Catch (Prism.cs:116) splits every caught ray / beam with no cadence; D49's split tick (0.75 s, at most 3 a stance)
+belongs to the stance row: suggested shape -- IPrism gains `bool Split()` (PlayerShip: the running row with the stance's
+split stats counts N / the last split's clock in its slot; no running stance row = no cadence, so the slice-5
+LaneAPrism*Checks that ApplyStatus(Parrying) directly keep passing), and Catch strikes the children only when Split()
+says so (the catcher still takes 0). The stance row: Id "prism", Key.F, Hold = 0.5 (Held: share after the sum, boosted
+0.75), Stills = true (no blade), Press toggles (F again drops: Left = 0 and the cooldown 12 s from the END -- set Cool
+in the drop and in Elapsed/Expire, not at the press), Status.Parrying applied for prism_time 2.0 and cleared on the drop;
+StartDash("lunge") and Whirl() must end a running stance (read the stance by a row flag, e.g. AbilityDef.EndsOnPress /
+"Stance", never by id). Rows: prism_time 2, prism_cooldown 12, prism_hold 0.5 (or Hold literal), prism_split 0.75,
+prism_splits 3. Re-point the kit part warrior_prism (Ships.cs Warrior Kit) from blade_damage to prism_time. Warrior
+Abilities in learn order {Blade, Lunge, Whirlwind, Prism}; then the walls check at SmokeTest ~6922 (Learns lunge,
+whirlwind, prism) goes live once every class has 3. Fx `warn_beam` (appended at the END of Fx's ids) for the clip.
+Checks owed (ledger job list J4): LaneA6cPrismStanceChecks, LaneA6cPrismFrames (wedge, SQUARE clip, SLANT fan),
+rung 5 LaneA6cPrismHostChecks / LaneA6cPrismGuestChecks; sweep witness ["prism"]; the Stills witness.
