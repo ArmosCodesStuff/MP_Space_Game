@@ -141,7 +141,9 @@ public static class Zones
             foreach (var h in inside)
             {
                 if (!z.Next.TryGetValue(h, out double next)) { z.Next[h] = z.Age + z.Every; Dealt.Deal(h, z.FirstHit, by, d.Id); }
-                else if (z.Age >= next - 1e-6) { z.Next[h] = next + z.Every; Dealt.Deal(h, z.TickHit, by, d.Id); }
+                // the remainder carries while it stays inside; a body that was out a whole tick or more
+                // restarts its clock from now (one tick on its return, never the ticks it missed at once)
+                else if (z.Age >= next - 1e-6) { z.Next[h] = (z.Age - next >= z.Every ? z.Age : next) + z.Every; Dealt.Deal(h, z.TickHit, by, d.Id); }
             }
         }
     }
