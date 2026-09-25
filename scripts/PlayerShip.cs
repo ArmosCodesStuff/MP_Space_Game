@@ -125,7 +125,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // ── what this ship's own class brings ────────────────────────────────
 
     // WHAT LIFTS ITS RATE OF FIRE, and WHAT LIFTS ITS SPEED, right now -- the tender's overdrive,
-    // the warrior's rush, the dart's boost, the wraith's veil. Every running ability that names a
+    // the V boost, the dart's boost, the wraith's veil. Every running ability that names a
     // stat for one of them (AbilityDef.RateStat, AbilityDef.SpeedStat) lifts it by that figure,
     // and the row knows its own slot, so the next buff is a ROW rather than an `if` naming a slot
     // id and a stat id by string.
@@ -753,27 +753,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Sl("railgun").Cool = Cooling(Stats["rail_cooldown"]);
     }
 
-    public void StartRush()
-    {
-        if (Sl("rush").Cool > 0) return;
-        ref var r = ref Sl("rush");
-        r.Left = Stats["rush_time"]; r.Cool = Cooling(Stats["rush_cooldown"]);
-        ApplyStatus(Status.Hardened, r.Left, Stats["rush_guard"]);   // the rush says how hard, not the hit hull
-    }
-    // The rush ends in an EMP: everything close takes it, and everything small enough is held.
-    // (The Rush row's Expire, on the host.)
-    public void RushEmp()
-    {
-        float reach = (float)Stats["emp_range"];
-        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
-        {
-            if (h.Position.DistanceTo(Position) > reach) continue;
-            Dealt.Deal(h, Stats["emp_damage"], this, Dealt.Emp);
-            if (!TagExt.Is(h, Tag.Boss)) (h as IStatused)?.ApplyStatus(Status.Disabled, Stats["emp_stun"]);
-        }
-        Fx.Raise(Fx.Emp, Position, reach);
-    }
-
     // Six missiles, each on a target of its own while there are targets to go round; what is left
     // over goes at the nearest one.
     // WHAT THE CELL CAN SEE, in one place, because the slot has to say "NOTHING IN REACH" before
@@ -1055,7 +1034,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // WHAT THE STATUSES ON THIS SHIP LET THROUGH. Each status that changes a blow is a row of
     // StatusSet.Guards (Statuses.cs), walked in the order written there -- evasion first, because
     // it decides whether the blow happened at all, then the shares, then the bubbles. The share is
-    // the one its APPLIER named (the rush's rush_guard, a taunt's 0.67) and the row's default where
+    // the one its APPLIER named (a taunt's taunt_guard 0.67) and the row's default where
     // none was named -- never a row read off this hull's own sheet.
     private double Guarded(double d)
     {
@@ -1131,7 +1110,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
         TickAbilities(delta);
 
-        if (Net.Sim) FireControl(delta);
+        if (Net.Sim) { FireControl(delta); Swings(delta); }
         foreach (var t in _turrets) t.Tick(delta);
         for (int i = _wings.Count - 1; i >= 0; i--)
         {
@@ -1160,7 +1139,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // EVERY ABILITY THIS CLASS CARRIES, BY ITS OWN ROW. The cooldown runs down, a timer that is
     // up runs down, and on the frame it reaches zero the ROW says what happens: Elapsed on every
     // peer (the phase the bar must show at once), Expire on the host alone (what it resolves --
-    // the railgun's shot, the rush's EMP, the echo's blast, the magazine a reload refills). Every
+    // the railgun's shot, the echo's blast, the magazine a reload refills). Every
     // peer counts down so a guest's bars move smoothly between host packets, and the next packet
     // corrects any drift. A timed ability is a row and nothing else: this loop is the only expiry.
     private void TickAbilities(double delta)
@@ -1242,6 +1221,35 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         }
     }
 
+    // ── melee: every row that names a Swing (the blade, the whirlwind) ─────────
+    // A Hold row swings while the trigger holds and nothing Stills it; a Press row while its Left
+    // runs. Each keeps its own clock in its slot's Own (host-side; the wire's copy is only drawn),
+    // which CARRIES its remainder like the guns' reload, and a swing lands at once on the first frame.
+    public bool Stilled
+    {
+        get
+        {
+            foreach (var def in Abilities.For(Class)) if (def.Stills && Sl(def.Id).Left > 0) return true;
+            return false;
+        }
+    }
+    private void Swings(double delta)
+    {
+        foreach (var def in Abilities.For(Class))
+        {
+            if (def.Swing is not { } row) continue;
+            ref var sl = ref Sl(def.Id);
+            bool on = Alive && !_status.Has(Status.Disabled) && Melee.Running(this, def);
+            if (!on) { sl.Own = Math.Max(0, sl.Own - delta); continue; }
+            sl.Own -= delta;
+            for (int n = 0; sl.Own <= 0 && n < 8; n++)
+            {
+                Melee.Strike(row, this, Stats[row.Damage]);
+                sl.Own += Cadence(row.Every);
+            }
+        }
+    }
+
     // ── the owner steers it: naval handling ──────────────────────────────────
     private void LocalFlight(float dt)
     {
@@ -1278,7 +1286,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (!locked)
         {
             AimPoint = GetGlobalMousePosition();
-            Trigger = Stats.Def.Has(Fit.Guns) && Input.IsKeyPressed(Abilities.KeyFor(Class, "guns"));
+            Trigger = Abilities.TriggerOf(Class) is { } trig && Input.IsKeyPressed(Abilities.KeyFor(Class, trig.Id));
         }
 
         SendState(dt);
@@ -1333,9 +1341,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (disabled) { throttle = 0f; rudder = 0f; }
         float hold = Held;
         throttle *= hold; rudder *= hold;
-        // A SPEED LIFT (the rush, the boost, the veil) lifts the push ahead WITH the top speed. The
-        // water holds a hull to thrust / drag, so a lift on the cap alone would stop there: a warrior
-        // pushes 130 against 0.35, which is 371 u/s of the 475 its 2.5x rush promises. Astern is
+        // A SPEED LIFT (the boost, the veil) lifts the push ahead WITH the top speed. The water holds a
+        // hull to thrust / drag, so a lift on the cap alone would stop there: a heavy pushes 130
+        // against 0.35, which is 371 u/s where a 2.5x lift on its 190 promises 475. Astern is
         // not lifted, and neither is its cap.
         float lift = SpeedMult;
         if (throttle > 0) along += (float)Stats["thrust"] * lift * throttle * dt;
@@ -1540,6 +1548,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Alive)
             Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f - MyArt.EngineInset), Vector2.Down, MyArt.Length, Accent,
                        0.25f + 0.75f * Mathf.Abs(SpeedAhead) / (float)Stats["max_speed"], Thrusting || Mathf.Abs(SpeedAhead) > 2f);
+        Melee.Draw(this);                           // a blade or a spin swinging, on every peer
         foreach (var (p, t) in _signals)
         {
             bool yellow = (int)(t * 7) % 2 == 0;                           // flashing

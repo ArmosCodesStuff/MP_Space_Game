@@ -49,8 +49,8 @@ public struct OutGuard
 }
 
 // WHAT A STATUS DOES TO A BLOW, as a row. PlayerShip.Guarded walks this table. THE SHARE COMES
-// FROM WHOEVER APPLIED THE STATUS (StatusSet.Apply's share: the warrior's rush gives its own
-// rush_guard row, a taunt gives 0.67), and the row's Share is only the default for an applier
+// FROM WHOEVER APPLIED THE STATUS (StatusSet.Apply's share: a taunt gives its own taunt_guard
+// row, 0.67), and the row's Share is only the default for an applier
 // that named none, so a hardening from any class carries that class's own figure.
 // A NEW ROW: the status, and the share a blow is multiplied by when the applier named none.
 public struct StatusGuard

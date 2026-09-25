@@ -136,9 +136,35 @@ Outgoing 216 (the Taunt x1.5 row goes here), Slot 248, FitClass 352, DoAbility 5
 Disabled 887, Prismatic / GuardAngle 903-904, ApplyStatus 905, Incoming 1007, TickAbilities 1166, LocalFlight
 1246, Steer 1322, SendHostState 1447, _Draw 1533. Melee.cs (Pick / Guard / Nose / Strike, no rows yet),
 Prism.cs (GuardMax, Bands, Resolve, Catch, Walk), Decoys.cs + Hub.Flares, Squads.cs Call / CalledBy (146, 247),
-Statuses.cs enum 16-30 (Hardened 8 takes the applier's share), Fx.cs Fields rows 492-503 (	aunt field on slot
-"taunt", oost plume) and Fx.TauntRing = 10, Drives.cs:154-159 (ANCHORED = Held <= 0). Old-kit callers to
-delete in J1/J6/J11 (grep ush_|emp_damage|emp_range|emp_stun|Ab\.Rush|Ab\.Railgun|rail_cooldown|Dps\.Emp|Dps\.Railgun|heavy_main_gun|heavy_rush_drive|warrior_main_guns|heavy_railgun|HeavyCannon):
+Statuses.cs enum 16-30 (Hardened 8 takes the applier's share), Fx.cs Fields rows 492-503 (the taunt field on slot
+"taunt", the boost plume) and Fx.TauntRing = 10, Drives.cs:154-159 (ANCHORED = Held <= 0). Old-kit callers to
+delete in J1/J6/J11 (grep rush_|emp_damage|emp_range|emp_stun|Ab\.Rush|Ab\.Railgun|rail_cooldown|Dps\.Emp|Dps\.Railgun|heavy_main_gun|heavy_rush_drive|warrior_main_guns|heavy_railgun|HeavyCannon):
 Abilities 3, Items 3 (~100-104), PlayerShip 7, Ships 20, Stats 4 (~364-371), Statuses 1 (:53 rush_guard
 comment), SmokeTest.cs.txt 19 (~6459, 6899, 9483, 10768-10783, 11074, 11276 ...). Commit messages: write the file
 with [IO.File]::WriteAllText (PowerShell's utf8 adds a BOM to the subject).
+## kits6c-J1 · PRE (agent 2)
+- tier opus. Intent: Warrior row (hull 300, no guns) + Blade (Space, Melee row blade 160 u ±55°, 26 / 0.40 s) + the trigger generalised to the class's Weapon Hold row + Stills; Rush / twin cannons / EMP deleted with every caller (D40-D42, D48). HEAD 669af1e86831ae88c769e176d0666a164de33579
+- scripts/Ships.cs 5415309685219dbbec36724dfee2c526ed106413
+- scripts/Abilities.cs fdd4a423b516cbf1e187e372ec963810e197aea6
+- scripts/PlayerShip.cs d532201f0baf49377bba9c8b96018b6ddcf6eb88
+- scripts/Stats.cs 106a2e3fc29510501789cfdac653fac0a667557a
+- scripts/Statuses.cs e77870f6ce301940cf665789cca2ea2740c03586
+- scripts/Items.cs c35ab118e76ad338218307e8c446a0b7204cf3ad
+- scripts/Melee.cs 5f80c66ccb9e5369bbf5208d155288753a5da983
+- tools/smoketest/SmokeTest.cs.txt 59e7c40100d0ffc791c20a1e5a65601e740bb610
+## kits6c-J1 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- Built: Warrior row (Fit.None, hull 300, rows blade_damage 26 / blade_interval 0.40 / blade_reach 160, Dps.Blade 65,
+  kit warrior_blade + warrior_prism (utility; names blade_damage until J4 re-points it at prism_time)); Melee.Blade row
+  (+ MeleeDef.Damage / Every), Melee.Draw (the wedge + sweep on every peer), Melee.Running; AbilityDef.Swing + Stills,
+  PlayerShip.Swings (host) / Stilled; Abilities.TriggerOf (Trigger = the class's Weapon Hold row, not Fit.Guns + "guns");
+  Items roles: blade ids in @primary / @primary_rate / @primary_range, "blade" in PrimaryShots; rush_* / emp_* out.
+- Deleted: Ab.Rush, StartRush / RushEmp, Dps.Emp, twin cannons + FireMode + Guns on the Warrior, rush_/emp_ rows.
+- Kept (merge risk): Fx.Emp and Dealt.Emp now have no game raiser; the rung-5 wire check raises Fx.Emp by hand. 6d's
+  EMP (Echo) should use them; if it does not, delete both at the merge.
+- Checks: LaneA6cBladeChecks (new: sheet, 3 varied swings 78 in 1.0 s / 0 behind / past / off-arc, released + DISABLED);
+  rewritten: weapon-rows list (+blade), walls kit (Rush -> Hunters), Weapons-level rise (blade_damage), EveryDamageStat,
+  Warrior SustainedDps 65, rush speed-lift push -> the V boost's x1.5 push on the Warrior, EMP on a cruise missile ->
+  the blade on it, sweep witness ["blade"], reach case blade_reach (+pairs 31), rush_guard -> taunt_guard, arena host
+  Warrior (hull 300, own rows + 7, host-applied HARDENED + Fx.Emp ring); frame 74b_warrior_blade_swing (LaneA6cBladeFrames).
+- Checkpoint: the commit below. Next: kits6c-J2 Lunge.

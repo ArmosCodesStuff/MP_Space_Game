@@ -59,7 +59,7 @@ public class AbilityDef
     //   Elapsed -- on EVERY peer, the moment Left reaches zero: the phase the bar and the turrets
     //              must show at once, before the host's next report (the broadside leaving its
     //              wind-up for its volleys). Nothing that damages or spends belongs here.
-    //   Expire  -- on the HOST alone: what it resolves (the railgun's shot, the rush's EMP, the
+    //   Expire  -- on the HOST alone: what it resolves (the railgun's shot, the lunge's end, the
     //              echo's blast, the magazine a reload refills). The host gate is the LOOP's, so a new row is safe by default.
     // Each is handed the ship, and a row that stored a number reads it back from its own slot
     // (PlayerShip.Sl): the echo detonates Sl("echo").Own, so no number has to be carried here.
@@ -89,6 +89,13 @@ public class AbilityDef
     // (PlayerShip.Held), so no speed lift moves a held hull. 0 roots it, heading included; 0.5
     // halves it; 1, the default, holds nothing. `While` narrows it the same way.
     public double Hold = 1;
+
+    // A MELEE ROW IT SWINGS (Melee.cs): a Hold row swings it while the trigger holds, a Press row while
+    // its Left runs, once every that row's Every seconds at the ship's Cadence (PlayerShip.Swings).
+    public MeleeDef Swing;
+    // WHILE IT RUNS, THE TRIGGER'S WEAPON HOLDS (the whirlwind's spin, the prism stance): no swing and
+    // no shot off the trigger. Read by PlayerShip.Stilled, never by the row's id.
+    public bool Stills;
 
     // A FLAT TOP SPEED (F1's Add), on top of SpeedStat's multiplier, before the hold: the stat id
     // this row's ship sheet names for it (PlayerShip.SpeedAdds sums every running row's, added in
@@ -287,6 +294,16 @@ public static class Ab
     };
 
     // ── the heavy fighters ───────────────────────────────────────────────────
+    // THE BLADE (the Warrior's primary): held, it swings Melee.Blade every blade_interval at
+    // everything in its arc (PlayerShip.Swings, on the host).
+    public static readonly AbilityDef Blade = new()
+    {
+        Weapon = true, Id = "blade", Name = "Blade", Short = "BLADE", Kind = AbilityKind.Hold, Default = Key.Space,
+        Blurb = "Hold to swing. Everything within 160 u and 55° of the nose is cut, every swing.",
+        Swing = Melee.Blade,
+        Show = (s, _) => new SlotState { Line = s.Stilled ? "HELD" : "SWING", Lit = s.Trigger },
+    };
+
     public static readonly AbilityDef Railgun = new()
     {
         Id = "railgun", Name = "Railgun", Short = "RAIL", Default = Key.F,
@@ -299,17 +316,6 @@ public static class Ab
             ? new SlotState { Line = $"CHARGE {s.Sl("railgun").Left:0.0}s", Lit = true,
                               Busy = (float)(s.Sl("railgun").Left / s.Stats["rail_charge"]) }
             : Timed(s, "railgun", "rail_cooldown", "READY"),
-    };
-
-    public static readonly AbilityDef Rush = new()
-    {
-        Id = "rush", Name = "Rush", Short = "RUSH", Default = Key.F,
-        Blurb = "A burst of speed at a fraction of the damage taken. It ends in an EMP that stuns everything close.",
-        Press = (s, _) => s.StartRush(),
-        Expire = s => s.RushEmp(),
-        SpeedStat = "rush_mult",
-        Refuse = (s, _) => s.Sl("rush").Cool > 0 ? "COOLING" : null,
-        Show = (s, _) => Timed(s, "rush", "rush_cooldown", "RUSHING"),
     };
 
     public static readonly AbilityDef Hunters = new()
@@ -412,6 +418,10 @@ public static class Abilities
         if (_full.TryGetValue(c, out var f)) return f;
         return _full[c] = Classes.Of(c).Abilities.Concat(Drives.RowOf(c)).Concat(Open).ToArray();   // then V's drive, then the open keys
     }
+
+    // THE TRIGGER: the class's weapon row that is held (the guns, the blade). Space on every class that
+    // has one; a class without one (the carrier's wing orders are presses) has no trigger at all.
+    public static AbilityDef TriggerOf(ShipClass c) => For(c).FirstOrDefault(a => a.Weapon && a.Kind == AbilityKind.Hold);
 
     // An ability by id: one of this class's, or one every class has (reboard).
     public static AbilityDef Find(ShipClass c, string id)

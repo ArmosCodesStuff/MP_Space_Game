@@ -4897,6 +4897,65 @@ public partial class _Test : Node
         pm.Position = yonder; pm.Velocity = Vector2.Zero;
     }
 
+    // ── SLICE 6c: THE WARRIOR'S BLADE (kits_v2 Warrior card: 160 u, ±55°, 26 every 0.40 s = 65 DPS) ──
+    // 1 the sheet: the row's literals, hull 300, no guns, 65 DPS in the K window, the blade in the items'
+    //   primary roles. 2 the swing, held on Space, from 3 varied spots and headings: a gunship inside the
+    //   arc loses exactly 3 x 26 in the first 1.0 s after its first blow (timed from that blow), while one
+    //   behind, one past 160 u and one 65-80 deg off the nose lose nothing; DealtBy["blade"] grows the same.
+    // 3 the interactions: released, it swings no more; DISABLED, it swings no more.
+    async Task LaneA6cBladeChecks(Vector2 yonder)
+    {
+        var sh = new ShipStats(ShipClass.HeavyWarrior);
+        Check(sh["blade_damage"] == 26 && Math.Abs(sh["blade_interval"] - 0.40) < 1e-9 && sh["blade_reach"] == 160 && Melee.Blade.Arc == 55f
+              && Melee.Blade.Stops == 0 && Math.Abs(sh.SustainedDps - 65.0) < 1e-6 && sh["hull"] == 300 && !sh.Def.Has(Fit.Guns)
+              && !sh.All.Any(r => r.Id == "main_damage") && Abilities.TriggerOf(ShipClass.HeavyWarrior) == Ab.Blade
+              && Items.IdsOf("@primary", ShipClass.HeavyWarrior).Contains("blade_damage")
+              && Items.IdsOf("@primary_rate", ShipClass.HeavyWarrior).Contains("blade_interval")
+              && Items.IdsOf("@primary_range", ShipClass.HeavyWarrior).Contains("blade_reach"),
+              $"the Warrior's sheet: hull {sh["hull"]:0} (300), no guns, the blade {sh["blade_damage"]:0} every {sh["blade_interval"]:0.00} s inside {sh["blade_reach"]:0} u and ±{Melee.Blade.Arc:0} deg = {sh.SustainedDps:0.0} DPS (65), and the blade is the primary the items reach");
+        await SetClass(ShipClass.HeavyWarrior);
+        var w = Me; var key = Abilities.KeyFor(ShipClass.HeavyWarrior, "blade");
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            var nose = Vector2.Up.Rotated(rot);
+            float side = run % 2 == 0 ? 1f : -1f;
+            var spots = new[] {
+                at + nose.Rotated(Mathf.DegToRad(Vary(-40f, 40f))) * Vary(70f, 130f),               // in the arc
+                at - nose.Rotated(Mathf.DegToRad(Vary(-40f, 40f))) * Vary(70f, 130f),               // behind
+                at + nose.Rotated(Mathf.DegToRad(Vary(-20f, 20f))) * Vary(260f, 340f),              // past 160 u
+                at + nose.Rotated(side * Mathf.DegToRad(Vary(65f, 80f))) * Vary(70f, 110f) };       // off the arc
+            var foes = spots.Select(p => { var f = H.SpawnRaider(p, Enemies.Gunship); f.Hp = 1e9; return f; }).ToArray();
+            void Pose() { w.Position = at; w.Velocity = Vector2.Zero; w.Rotation = rot; for (int k = 0; k < 4; k++) foes[k].Position = spots[k]; }
+            Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); Pose();
+            var hp0 = foes.Select(f => f.Hp).ToArray();
+            double dealt0 = w.DealtBy.TryGetValue("blade", out var dv0) ? dv0 : 0;
+            KeyDown(key);
+            for (int i = 0; i < 60 && foes[0].Hp == hp0[0]; i++) { Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double first = w.Clock;                                   // timed from the first blow, not the key
+            while (w.Clock - first < 1.0) { Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            var lost = Enumerable.Range(0, 4).Select(k => hp0[k] - foes[k].Hp).ToArray();
+            double dealt = (w.DealtBy.TryGetValue("blade", out var dv1) ? dv1 : 0) - dealt0;
+            Check(Math.Abs(lost[0] - 78) < 1e-6 && lost[1] == 0 && lost[2] == 0 && lost[3] == 0 && Math.Abs(dealt - 78) < 1e-6,
+                  $"the blade held at heading {Mathf.RadToDeg(rot):0} deg: in its arc {spots[0].DistanceTo(at):0} u off loses {lost[0]:0.##} in the 1.0 s from the first blow (3 x 26 = 78); behind {lost[1]:0.##}, {spots[2].DistanceTo(at):0} u out {lost[2]:0.##}, {Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(nose.Angle(), (spots[3] - at).Angle()))):0} deg off {lost[3]:0.##} (all 0); DealtBy[blade] +{dealt:0.##}");
+            // released: nothing more lands
+            KeyUp(key);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double rel0 = foes[0].Hp;
+            for (int i = 0; i < 45; i++) { Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            // DISABLED: held again, and nothing lands while the status runs
+            w.ApplyStatus(Status.Disabled, 1.0);
+            KeyDown(key);
+            for (int i = 0; i < 40; i++) { Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            KeyUp(key);
+            Check(foes[0].Hp == rel0, $"the blade released, and then held while DISABLED, lands nothing more ({rel0 - foes[0].Hp:0.##})");
+            w.Statuses.Clear(Status.Disabled);
+            foreach (var f in foes) f.TakeDamage(1e12);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        w.Position = yonder; w.Velocity = Vector2.Zero;
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -6892,13 +6951,13 @@ public partial class _Test : Node
         // skipping a weapon's own actions and the open hotkeys. The weapon rows are exactly these six (point defence is passive: no row).
         var weaponRows = typeof(Ab).GetFields(BindingFlags.Public | BindingFlags.Static)
                                    .Select(f => f.GetValue(null)).OfType<AbilityDef>().Where(a => a.Weapon).Select(a => a.Id).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        Check(weaponRows.SequenceEqual(new[] { "attack", "deploy", "firemode", "guns", "recall", "reload" }),
-              $"never walled: the guns, fire mode, the missile's reload, the wing's attack and recall, the sentry's throw and recall ({string.Join(",", weaponRows)})");
+        Check(weaponRows.SequenceEqual(new[] { "attack", "blade", "deploy", "firemode", "guns", "recall", "reload" }),
+              $"never walled: the guns, the Warrior's blade, fire mode, the missile's reload, the wing's attack and recall, the sentry's throw and recall ({string.Join(",", weaponRows)})");
         // ...and the rule, on real rows in three orders: weapon rows first, walled rows first, the two interleaved
         foreach (var (kit, want) in new[] {
             (new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Missile, Ab.Reload, Ab.Railgun }, new[] { 1, 1, 1, 3, 1, 6 }),
             (new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Hunters, Ab.Bubble, Ab.Echo }, new[] { 1, 1, 1, 3, 6, int.MaxValue }),
-            (new[] { Ab.Echo, Ab.Guns, Ab.Stealth, Ab.Deploy, Ab.Rush, Ab.FireMode }, new[] { 1, 1, 3, 1, 6, 1 }) })
+            (new[] { Ab.Echo, Ab.Guns, Ab.Stealth, Ab.Deploy, Ab.Hunters, Ab.FireMode }, new[] { 1, 1, 3, 1, 6, 1 }) })
         {
             var got = kit.Select(a => Unlocks.AbilityAt(kit, a)).ToArray();
             Check(got.SequenceEqual(want) && Unlocks.AbilityAt(kit, Ab.Reboard) == 1,
@@ -10752,24 +10811,24 @@ public partial class _Test : Node
                 // ── A PILOT'S WEAPONS POINTS REACH WHAT THE CLASS CALLS ITS WEAPONS ──
                 // The damage upgrade used to name ONE stat for every class in the game -- torpedoes
                 // for a carrier, main guns for everything else -- so a sniper's railgun, a warden's
-                // hunters, a warrior's EMP and a freighter's deployed turrets took nothing from it.
+                // hunters, a warrior's melee and a freighter's deployed turrets took nothing from it.
                 {
                     var keepBought = (int[])Character.Bought.Clone();
                     int[] two = new int[Progression.All.Length];
                     two[System.Array.FindIndex(Progression.All, u => u.Id == "damage")] = 2;   // two Weapons levels
                     // A SHARE, so two levels is 6% of whatever that weapon is on that hull -- the
-                    // railgun's 150, the hunters' 45, the EMP's 60. The class still says WHICH
+                    // railgun's 150, the hunters' 45, the blade's 26. The class still says WHICH
                     // stats; what changed is that the figure compounds instead of being a step.
                     double Rise(ShipClass c, string stat)
                         => new ShipStats(c, Progression.Shares(two, c))[stat] - new ShipStats(c)[stat];
                     double Six(ShipClass c, string stat) => new ShipStats(c)[stat] * 0.06;
                     Check(Math.Abs(Rise(ShipClass.HeavySniper, "rail_damage") - Six(ShipClass.HeavySniper, "rail_damage")) < 1e-9
                           && Math.Abs(Rise(ShipClass.HeavyWarden, "hunter_damage") - Six(ShipClass.HeavyWarden, "hunter_damage")) < 1e-9
-                          && Math.Abs(Rise(ShipClass.HeavyWarrior, "emp_damage") - Six(ShipClass.HeavyWarrior, "emp_damage")) < 1e-9
+                          && Math.Abs(Rise(ShipClass.HeavyWarrior, "blade_damage") - Six(ShipClass.HeavyWarrior, "blade_damage")) < 1e-9
                           && Math.Abs(Rise(ShipClass.FreightHauler, "deploy_damage") - Six(ShipClass.FreightHauler, "deploy_damage")) < 1e-9
                           && Math.Abs(Rise(ShipClass.LightEcho, "main_damage") - Six(ShipClass.LightEcho, "main_damage")) < 1e-9
                           && Math.Abs(Rise(ShipClass.HeavySniper, "rail_damage") - 9) < 1e-9,
-                          $"two Weapons levels are 6% of each weapon the class declares: the sniper's railgun +{Rise(ShipClass.HeavySniper, "rail_damage"):0.0} of its 150, the warden's hunters +{Rise(ShipClass.HeavyWarden, "hunter_damage"):0.0}, the warrior's EMP +{Rise(ShipClass.HeavyWarrior, "emp_damage"):0.0}, a dropped turret +{Rise(ShipClass.FreightHauler, "deploy_damage"):0.00}");
+                          $"two Weapons levels are 6% of each weapon the class declares: the sniper's railgun +{Rise(ShipClass.HeavySniper, "rail_damage"):0.0} of its 150, the warden's hunters +{Rise(ShipClass.HeavyWarden, "hunter_damage"):0.0}, the warrior's blade +{Rise(ShipClass.HeavyWarrior, "blade_damage"):0.00} of its 26, a dropped turret +{Rise(ShipClass.FreightHauler, "deploy_damage"):0.00}");
                     // ...and change NOTHING a saved pilot already had on the three it could reach
                     Check(Math.Abs(Rise(ShipClass.Battleship, "main_damage") - Six(ShipClass.Battleship, "main_damage")) < 1e-9
                           && Rise(ShipClass.Battleship, "pd_damage") == 0
@@ -10780,7 +10839,7 @@ public partial class _Test : Node
                           $"and the three original hulls take it where they always did -- 6% of the gun or the torpedoes (+{Rise(ShipClass.Battleship, "main_damage"):0.0} on the battleship) -- and nothing at all on the fighters, the missiles or the point defence, whose rows are declared at zero and stay there");
                     // the gear that lifts "every weapon" reaches the same list, and nothing else
                     Check(string.Join(",", Classes.EveryDamageStat())
-                          == "deploy_damage,emp_damage,fighter_damage,hunter_damage,main_damage,missile_damage,rail_damage,torpedo_damage"
+                          == "blade_damage,deploy_damage,fighter_damage,hunter_damage,main_damage,missile_damage,rail_damage,torpedo_damage"
                           && Classes.All.Where(c => c.Ready).All(c => c.Damage.Count > 0)
                           && Classes.All.Where(c => c.Ready).All(c => c.Damage.Keys.All(k => new ShipStats(c.Id)[k] > 0)),
                           $"eight weapon stats in the whole game, every flyable class names at least one, and every one it names is a row on its own sheet");
@@ -10796,9 +10855,9 @@ public partial class _Test : Node
                           $"the sniper's total counts its railgun: the gun 6/0.8 = 7.5 and the rail 150/(3+1) = 37.5 -- 45 DPS, not 7.50, and no point-defence line on a hull that mounts none ({snL.SustainedDps:0.00})");
                     Check(Math.Abs(new ShipStats(ShipClass.HeavyWarden).SustainedDps - (12 / 0.6 + 6 * 45 / 14.0 + 5 / 0.5)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.FreightHauler).SustainedDps - 50.0) < 1e-6
-                          && Math.Abs(new ShipStats(ShipClass.HeavyWarrior).SustainedDps - (2 * 9 / 0.7 + 60 / 18.0)) < 1e-6
+                          && Math.Abs(new ShipStats(ShipClass.HeavyWarrior).SustainedDps - 26 / 0.40) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.LightEcho).SustainedDps - (5 / 0.35 + (5 / 0.35) * 5 / 15.0)) < 1e-6,
-                          $"...and every other signature weapon counts too: the warden 20 + 19.29 + 10, the freighter's gun 12 + three dropped turrets 36 + its always-on point defence 2 = 50, the warrior's EMP 60 every 18 s, the echo repeating five seconds of its own damage every 15");
+                          $"...and every other signature weapon counts too: the warden 20 + 19.29 + 10, the freighter's gun 12 + three dropped turrets 36 + its always-on point defence 2 = 50, the warrior's blade 26 every 0.40 s (65), the echo repeating five seconds of its own damage every 15");
                     Check(Math.Abs(new ShipStats(ShipClass.Carrier).SustainedDps - (3 * (2.5 / 0.35) * (15.0 / 18.0) + 4 * 2 * 137.5 / 27.5 + 3 * 0.5 / 0.5)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.Carrier).DamageLines.First(l => l.Label.StartsWith("Bomber")).Dps - 40.0) < 1e-6,
                           $"the carrier's torpedoes are in its total at last: 8 x 137.5 = 1100 over a 27.5 s run (20 s out and back, 1.5 s launching, 6 s rearming) = 40 DPS, beside 17.86 from the fighters and 3 from the point defence, always on ({new ShipStats(ShipClass.Carrier).SustainedDps:0.00})");
@@ -11056,60 +11115,42 @@ public partial class _Test : Node
             await FieldsLiveRowChecks(yonder);
             await ItemsDoorChecks(yonder);
 
-            // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
+            // ── WARRIOR: the blade (slice 6c) ──
+            await LaneA6cBladeChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
-            var e1 = H.SpawnRaider(VaryNear(yonder, 200f)); e1.Hp = 500;        // inside the EMP's 260 u
-            var e2 = H.SpawnRaider(yonder + Vector2.Right.Rotated(VaryAngle()) * Vary(800f, 1200f)); e2.Hp = 500;   // well outside its 260 u
-            var e2Home = e2.Position;
-            await Wait(0.1);
-            double top0 = wr.Stats["max_speed"];
-            wr.UseAbility("rush", 0); await Wait(0.1);
-            double wh0 = wr.Hp;
-            wr.Hit(100, wr.Position + new Vector2(0, -200), "test:rush");
-            Check(wr.Statuses.Has(Status.Hardened) && Math.Abs(wh0 - wr.Hp - 50) < 1e-6 && Math.Abs(wr.SpeedMult - 2.5f) < 1e-6,
-                  $"the rush: 2.5x top speed ({top0 * wr.SpeedMult:0} u/s) and a 100 blow lands for {wh0 - wr.Hp:0}");
-            double e10 = e1.Hp, e20 = e2.Hp;
-            for (int i = 0; i < 60 * 4 && e1.Hp == e10; i++) { e2.Position = e2Home; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-            Check(Math.Abs(e10 - e1.Hp - wr.Stats["emp_damage"]) < 0.01 && e1.Statuses.Has(Status.Disabled) && e2.Hp == e20
-                  && Math.Abs(new ShipStats(ShipClass.HeavyWarrior)["emp_damage"] - 60) < 1e-9,
-                  $"and it ends in an EMP: 60 to what is within 260 u ({e1.Position.DistanceTo(wr.Position):0} u) and it is held; nothing at {e2.Position.DistanceTo(wr.Position):0} u ({e10 - e1.Hp:0})");
-            e1.TakeDamage(99999); e2.TakeDamage(99999); await Wait(0.2);
-            // THE RUSH LIFTS THE PUSH AS WELL AS THE TOP SPEED. The water holds a hull to thrust /
-            // drag, so a lift on the cap alone stopped there: 130 against 0.35 is 371 u/s, and from
-            // rest the 2.5 s rush gathered about 214 of the 475 its 2.5x promises. Measured, not
-            // read: from rest, the same short spell on the throttle without the rush and with it,
-            // and then the whole rush on it.
+            // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
+            // hull to thrust / drag, so a lift on the cap alone stopped there: 130 against 0.35 is 371
+            // u/s. Measured, not read, on the V boost (x1.5 of 190): from rest, the same short spell on
+            // the throttle without the boost and with it, and then the whole boost on it.
             {
                 var runAt = VaryNear(yonder, 300f); float runHeading = VaryAngle();
                 double spell = Vary(0.4f, 0.8f);                       // short of either top speed
-                async Task<(double gathered, double top)> Gather(bool rushing)
+                async Task<(double gathered, double top)> Gather(bool boosting)
                 {
-                    wr.Sl("rush").Left = 0; wr.Sl("rush").Cool = 0; wr.Statuses.Clear(Status.Hardened);
+                    wr.Sl("boost").Left = 0; wr.Sl("boost").Cool = 0; wr.DriveHeld = false;
                     wr.Position = runAt; wr.Velocity = Vector2.Zero; wr.Rotation = runHeading;
-                    if (rushing) wr.UseAbility("rush", 0);
-                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    if (boosting) { wr.DriveHeld = true; wr.PressDrive(); }
+                    for (int i = 0; boosting && i < 30 && wr.Sl("boost").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     wr.Position = runAt; wr.Velocity = Vector2.Zero; wr.Rotation = runHeading;
-                    // TIMED FROM THE FIRST FRAME THE HULL MOVES, not from the key: the press lands on
-                    // the next frame or the one after, and a frame of thrust the clock did not count
-                    // is 3% of a 0.6 s spell -- enough to read 2.42 for an exact 2.5.
-                    double rushTop = 0;
+                    // TIMED FROM THE FIRST FRAME THE HULL MOVES, not from the key.
+                    double boostTop = 0;
                     KeyDown(global::Godot.Key.W);
                     for (int i = 0; i < 30 && wr.SpeedAhead <= 0.01f; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     double heldFrom = wr.Clock, v0 = wr.SpeedAhead;
                     while (wr.Clock - heldFrom < spell) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     double gathered = (wr.SpeedAhead - v0) / (wr.Clock - heldFrom);        // u/s gathered a second
-                    while (rushing && wr.Sl("rush").Left > 0)
-                    { rushTop = Math.Max(rushTop, wr.SpeedAhead); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-                    KeyUp(global::Godot.Key.W); wr.Velocity = Vector2.Zero;
-                    return (gathered, rushTop);
+                    while (boosting && wr.Sl("boost").Left > 0)
+                    { boostTop = Math.Max(boostTop, wr.SpeedAhead); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                    KeyUp(global::Godot.Key.W); wr.Velocity = Vector2.Zero; wr.DriveHeld = false;
+                    return (gathered, boostTop);
                 }
-                var unrushed = await Gather(false);
-                var rushRun = await Gather(true);
-                Check(Math.Abs(wr.Stats["max_speed"] - 190) < 1e-6 && Math.Abs(rushRun.gathered / unrushed.gathered - 2.5) < 0.05
-                      && rushRun.top >= 0.98 * 2.5 * 190,
-                      $"the rush lifts the push with the top speed: from rest it gathers way 2.5x as fast ({unrushed.gathered:0} -> {rushRun.gathered:0} u/s a second), and before it ends it reaches its whole 2.5x of 190 ({rushRun.top:0} of 475 u/s)");
-                wr.Statuses.Clear(Status.Hardened);
+                var plain = await Gather(false);
+                var boosted = await Gather(true);
+                Check(Math.Abs(wr.Stats["max_speed"] - 190) < 1e-6 && Math.Abs(boosted.gathered / plain.gathered - 1.5) < 0.05
+                      && boosted.top >= 0.98 * 1.5 * 190,
+                      $"a speed lift lifts the push with the top speed: from rest a Warrior gathers way 1.5x as fast on the boost ({plain.gathered:0} -> {boosted.gathered:0} u/s a second), and before it ends it reaches its whole 1.5x of 190 ({boosted.top:0} of 285 u/s)");
+                wr.Sl("boost").Cool = 0;
             }
 
             // ── WARDEN: point defence that hits hard, and six hunters on six targets ──
@@ -11264,17 +11305,21 @@ public partial class _Test : Node
                           $"the railgun brings a cruise missile down: {xrDrop:0.0} off its 30 hull, the rail's own {xrShip.Stats["rail_damage"]:0}, {xrCm.Position.DistanceTo(xrAt):0} u down its line");
                     xrCm.Intercept();
                 }
-                // THE EMP at the end of the warrior's rush: inside its 260 u, clear of the 120 u hull
+                // THE BLADE: a cruise missile in its arc, 70-140 u off the nose's line, takes the blade's own
+                // 26 as its first blow (4 of its 30 hull left), and the next swing brings it down
                 await SetClass(ShipClass.HeavyWarrior);
                 {
-                    var xeShip = Me; var xeAt = VaryNear(yonder, 300f);
-                    void XeHold() { xeShip.Position = xeAt; xeShip.Velocity = Vector2.Zero; }
+                    var xeShip = Me; var xeAt = VaryNear(yonder, 300f); float xeHead = VaryAngle();
+                    void XeHold() { xeShip.Position = xeAt; xeShip.Velocity = Vector2.Zero; xeShip.Rotation = xeHead; }
                     XeHold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); XeHold();
-                    var xeCm = XCruise(xeAt + Vector2.Right.Rotated(VaryAngle()) * Vary(110f, 220f));
-                    xeShip.UseAbility("rush", 0);
-                    double xeDrop = await XFirstBlow(xeCm, 5, XeHold);
-                    Check(Math.Abs(xeDrop - xeShip.Stats["emp_damage"]) < 1e-6 && !xeCm.Alive && !typeof(IStatused).IsAssignableFrom(typeof(Shot)),
-                          $"the warrior's EMP lands on a cruise missile {xeCm.Position.DistanceTo(xeAt):0} u off for its own {xeShip.Stats["emp_damage"]:0}: {xeDrop:0.0} off its 30 hull, and down -- its hold has nothing to hold, a body in flight carrying no statuses");
+                    var xeCm = XCruise(xeAt + Vector2.Up.Rotated(xeHead + Mathf.DegToRad(Vary(-40f, 40f))) * Vary(70f, 140f));
+                    var xeKey = Abilities.KeyFor(ShipClass.HeavyWarrior, "blade");
+                    KeyDown(xeKey);
+                    double xeDrop = await XFirstBlow(xeCm, 3, XeHold);
+                    for (int i = 0; i < 60 && xeCm.Alive; i++) { XeHold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                    KeyUp(xeKey);
+                    Check(Math.Abs(xeDrop - xeShip.Stats["blade_damage"]) < 1e-6 && !xeCm.Alive,
+                          $"the warrior's blade cuts a cruise missile {xeCm.Position.DistanceTo(xeAt):0} u off for its own {xeShip.Stats["blade_damage"]:0}: {xeDrop:0.0} off its 30 hull, then down on the next swing");
                     xeCm.Intercept();
                 }
                 // THE ECHO: what it remembers, put down where the last of it landed -- on the missile
@@ -11455,7 +11500,7 @@ public partial class _Test : Node
                     ["overdrive"] = sp => Math.Abs(sp.FireRate - (float)sp.Stats["overdrive_mult"]) < 1e-3f,
                     ["shockwave"] = sp => sp.Sl("shockwave").Cool > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Wave),
                     ["railgun"]   = sp => sp.Held == 0f && sp.Sl("railgun").Left > sp.Stats["rail_charge"] - 0.1,
-                    ["rush"]      = sp => sp.Statuses.Has(Status.Hardened) && Math.Abs(sp.SpeedMult - (float)sp.Stats["rush_mult"]) < 1e-3f,
+                    ["blade"]     = sp => sp.Trigger && Abilities.Find(sp.Class, "blade").State(sp, null).Lit,
                     ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && InFlight().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
                     ["roll"]      = sp => sp.Statuses.Has(Status.Evading) && sp.Sl("roll").Left > sp.Stats["roll_time"] + sp.Stats["boost_time"] - 0.1,
                     ["echo"]      = sp => sp.Sl("echo").Left > sp.Stats["echo_time"] - 0.1,
@@ -11804,20 +11849,21 @@ public partial class _Test : Node
                             pilot.Sl("hunters").Cool = 0;
                             break;
                         }
-                        case "emp_range":
+                        case "blade_reach":
                         {
-                            var mkIn = await Marker(pilot.Position + way * (float)(reach * Vary(0.45f, 0.90f)));
-                            var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.20f, 1.60f)));
+                            // the blade held, the nose on `way`: a mark inside the reach loses a swing,
+                            // one well past it on the same line nothing
+                            pilot.Rotation = way.Angle() + Mathf.Pi / 2f;
+                            var mkIn = await Marker(pilot.Position + way * (float)(reach * Vary(0.45f, 0.80f)));
+                            var mkOut = await Marker(pilot.Position + way * (float)(reach * Vary(1.8f, 2.4f)));
                             double inWas = mkIn.Hp, outWas = mkOut.Hp;
-                            pilot.Sl("rush").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "rush", 0 });
-                            pilot.Sl("rush").Left = 0.001;             // the rush cut short: the EMP is what reaches
-                            await Wait(0.12);
-                            proved = Math.Abs(inWas - mkIn.Hp - pilot.Stats["emp_damage"]) < 0.01 && mkOut.Hp == outWas;
+                            var bladeKey = Abilities.KeyFor(pilot.Class, "blade");
+                            KeyDown(bladeKey);
+                            for (int i = 0; i < 40 && mkIn.Hp == inWas; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                            KeyUp(bladeKey);
+                            proved = Math.Abs(inWas - mkIn.Hp - pilot.Stats["blade_damage"]) < 0.01 && mkOut.Hp == outWas;
                             told = $"{inWas - mkIn.Hp:0} at {pilot.Position.DistanceTo(mkIn.Position):0} u and {outWas - mkOut.Hp:0} at {pilot.Position.DistanceTo(mkOut.Position):0} u";
                             Sink(mkIn); Sink(mkOut);
-                            pilot.Statuses.Clear(Status.Hardened);
-                            pilot.Sl("rush").Left = 0; pilot.Sl("rush").Cool = 0;
                             break;
                         }
                         case "echo_radius":
@@ -11927,19 +11973,19 @@ public partial class _Test : Node
                 }
                 Check(skipped.Count == flownNotFired.Length && skipped.All(sk2 => flownNotFired.Any(fn2 => sk2.EndsWith(fn2)))
                       && Classes.All.Where(cd2 => cd2.Ready).SelectMany(cd2 => cd2.Reach.Keys).Distinct().Count() == 14
-                      && Classes.All.Where(cd2 => cd2.Ready).Sum(cd2 => cd2.Reach.Count) == 32,
-                      $"fourteen reach ids over 32 class-and-id pairs (the patrol's ring the fourteenth), and every one of them measured above except the three that are FLOWN rather than fired "
+                      && Classes.All.Where(cd2 => cd2.Ready).Sum(cd2 => cd2.Reach.Count) == 31,
+                      $"fourteen reach ids over 31 class-and-id pairs (the patrol's ring the fourteenth), and every one of them measured above except the three that are FLOWN rather than fired "
                       + $"-- the fighters' approach, the bombers' run out and the torpedo's own run ({string.Join(", ", skipped)})");
             }
 
             await SetClass(ShipClass.Battleship);
 
             {   // ── A STATUS'S SHARE IS A ROW, AND ITS GAP IS SWEPT ─────────────────
-                // Guarded read Stats["rush_guard"] -- a row only the warrior carries -- out of
-                // the one path every class's damage goes through, so Hardened on any other hull
-                // was a status that did nothing at all.
+                // Guarded read a hardening row one class carries (then the rush's, now the taunt's
+                // taunt_guard) off the hit hull's own sheet, so Hardened on any other hull was a
+                // status that did nothing at all. The share is the applier's now.
                 var gd = Me; gd.Position = yonder; gd.Velocity = Vector2.Zero; await Wait(0.3);
-                Check(gd.Stats["rush_guard"] == 0, "a battleship's sheet has no rush_guard row of its own at all");
+                Check(gd.Stats["taunt_guard"] == 0, "a battleship's sheet has no taunt_guard row of its own at all");
 
                 // The per-source gap kept one entry per attacker that had EVER touched the hull,
                 // for the life of the world. Forty in one frame, and none of them a second later.
@@ -11959,12 +12005,12 @@ public partial class _Test : Node
                       $"...and the gap itself still holds: the same source twice inside 0.52 s lands once, for 10 ({gap0 - gd.Hp:0})");
 
                 // HARDENED on a hull with no row of its own: half of it, which is what Hardened
-                // has always meant. (The warrior's own rush_guard row is 0.5, checked above.)
+                // has always meant.
                 gd.ApplyStatus(Status.Hardened, 0.4); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 double hd0 = gd.Hp;
                 gd.Hit(100, gd.Position + new Vector2(0, -200), "test:hardrow");
                 Check(gd.Statuses.Has(Status.Hardened) && Math.Abs(hd0 - gd.Hp - 50) < 1e-6,
-                      $"a 100 blow on a HARDENED battleship -- a class with no rush_guard row -- lands for 50 ({hd0 - gd.Hp:0})");
+                      $"a 100 blow on a HARDENED battleship -- a class with no taunt_guard row -- lands for 50 ({hd0 - gd.Hp:0})");
                 await Wait(0.6);
                 await LaneAHardenedShareChecks(gd);
                 // and EVADING, the same table's other row, on a hull that cannot roll
@@ -14673,8 +14719,9 @@ public partial class _Test : Node
             var mpSpot = Hub.BasePos + new Vector2(2400, 2400);   // clear of the belt, the wreck, the dummies and the lane
             await SetClass(ShipClass.HeavyWarrior);
             var hw = Me; hw.AutopilotTo = null;
-            Check(hw.Class == ShipClass.HeavyWarrior && Math.Abs(hw.MaxHp - 140) < 1e-6 && Abilities.For(ShipClass.HeavyWarrior).Length == 10,
-                  $"arena host: hosting as a WARRIOR -- its stock 140 hull, no chips, three abilities and six open slots ({hw.MaxHp:0})");
+            Check(hw.Class == ShipClass.HeavyWarrior && Math.Abs(hw.MaxHp - 300) < 1e-6
+                  && Abilities.For(ShipClass.HeavyWarrior).Length == Classes.Of(ShipClass.HeavyWarrior).Abilities.Length + 7,
+                  $"arena host: hosting as a WARRIOR -- its stock 300 hull, no chips, its own rows, the drive and six open slots ({hw.MaxHp:0})");
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
                                  && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
             var fg = H.Ships.FirstOrDefault(s => !s.Mine);
@@ -14722,12 +14769,16 @@ public partial class _Test : Node
             hw.Hit(150, hw.Position + new Vector2(0, -200), "test:mpbubble");
             Check(Math.Abs(hw.Hp - hwHull0) < 1e-6 && Math.Abs(fg.BubbleLeft - 250) < 1e-6,
                   $"...and a 150 blow on the HOST's hull comes out of the GUEST's pool ({fg.BubbleLeft:0} of 400 left, hull {hw.Hp:0} of {hwHull0:0})");
-            // THE RUSH: a status only the host decides, and an EMP whose ring is an Fx row.
-            hw.UseAbility("rush", 0);
-            double rushLeft = hw.Sl("rush").Left, rushCool = hw.Sl("rush").Cool;
-            Check(hw.Statuses.Has(Status.Hardened) && Math.Abs(rushLeft - 2.5) < 1e-9 && Math.Abs(rushCool - 18) < 1e-9
-                  && Math.Abs(hw.SpeedMult - 2.5f) < 1e-6,
-                  $"arena host: the warrior's rush -- hardened, 2.5 s up, 18 s cooling, 2.5x top speed ({rushLeft:0.0} s, {rushCool:0.0} s)");
+            // A STATUS ONLY THE HOST DECIDES, AND A RING THAT IS AN Fx ROW: the host hardens its warrior
+            // for 2.5 s at a 0.5 share and raises the EMP row's ring over it, the wire's two doors for a
+            // status bit and an effect (each ability's own guest check proves its own press).
+            hw.ApplyStatus(Status.Hardened, 2.5, 0.5);
+            Fx.Raise(Fx.Emp, hw.Position, 260f);
+            double hwHard0 = hw.Hp, hwPool0 = fg.BubbleUp ? fg.BubbleLeft : 0;   // the guest's bubble may still take it
+            hw.Hit(40, hw.Position + new Vector2(0, -200), "test:mphard");
+            double hwTook = hwHard0 - hw.Hp + (hwPool0 - (fg.BubbleUp ? fg.BubbleLeft : 0));
+            Check(hw.Statuses.Has(Status.Hardened) && Math.Abs(hwTook - 20) < 1e-6,
+                  $"arena host: the warrior HARDENED for 2.5 s at 0.5 -- a 40 blow lands for {hwTook:0.#} (20), hull and the guest's pool together");
             // ...and one of the guest's turrets shot off its base, for the guest to see the gap and the burst
             var doomed = H.Deployed.First(t => t.OwnerId == fg.OwnerId);
             int doomedId = doomed.NetId;
@@ -14737,10 +14788,10 @@ public partial class _Test : Node
             await RealTime(() => fg.TurretsOut == 1, Wan ? 20 : 12);
             Check(fg.TurretsOut == 1 && H.Deployed.Count == 1,
                   $"arena host: the guest's R recalled one -- one of its three left standing ({fg.TurretsOut})");
-            // THE RUSH MUST LAND BEFORE THE REFIT. A refit rebuilds the ship's slots, so a rush
-            // still running is discarded with them and its EMP never fires -- which is right (it is
-            // a different ship now), but it would leave the guest waiting for a ring that never came.
-            await RealTime(() => !hw.Statuses.Has(Status.Hardened) && hw.Sl("rush").Left <= 0, Wan ? 12 : 6);
+            // THE HARDENING MUST RUN OUT BEFORE THE REFIT. A refit rebuilds the ship, so a status
+            // still running is discarded with it -- which is right (it is a different ship now), but the
+            // guest would be left waiting for a HARDENED bit that never came.
+            await RealTime(() => !hw.Statuses.Has(Status.Hardened), Wan ? 12 : 6);
             await Wait(0.4);
             foreach (var dpl in H.Deployed.ToList()) H.DeployedTaken(dpl);   // the world clear for the arena
             await Wait(0.3);
@@ -15035,7 +15086,7 @@ public partial class _Test : Node
             await RealTime(() => hardWatch.Seen && sawEmp && sawBurst, Wan ? 20 : 12);
             Check(hardWatch.Seen, "arena guest: the host's warrior reads HARDENED here -- a status bit is the host's word, counted down on no other peer");
             Check(sawEmp && sawBurst && mostBursts == 1,
-                  $"arena guest: the rush's EMP ring and the turret's burst both reached this peer, each drawn ONCE (emp {sawEmp}, burst {sawBurst}, most bursts at once {mostBursts})");
+                  $"arena guest: the host's EMP ring and the turret's burst both reached this peer, each drawn ONCE (emp {sawEmp}, burst {sawBurst}, most bursts at once {mostBursts})");
             fxWatch.QueueFree(); hardWatch.QueueFree();
             await RealTime(() => H.Deployed.Count == 0, Wan ? 15 : 8);
             await SetClass(ShipClass.Destroyer);               // back to the hull and the rack the rest of this scenario flies

@@ -365,10 +365,10 @@ public static class Dps
         Note = s => $"{s["rail_damage"]:0} damage every {s["rail_charge"] + s["rail_cooldown"]:0.0} s, the charge and the cooldown",
     };
 
-    public static readonly DpsSource Emp = new()
+    public static readonly DpsSource Blade = new()
     {
-        Label = "Rush EMP, averaged over its cooldown", Rate = s => s["emp_damage"] / s["rush_cooldown"],
-        Note = s => $"{s["emp_damage"]:0} inside {s["emp_range"]:0} u, every {s["rush_cooldown"]:0.0} s",
+        Label = "Blade, held", Rate = s => s["blade_damage"] / s["blade_interval"],
+        Note = s => $"{s["blade_damage"]:0} to each body in its arc every {s["blade_interval"]:0.00} s",
     };
 
     public static readonly DpsSource Hunters = new()
