@@ -9,8 +9,8 @@ using System.Reflection;
 // WebRtc* classes that core GodotSharp declares; this file owns what the game needs to know about it:
 // the plugin row and the presence test, the channel table (and which channel an RPC rides, and how
 // much waits on it), the sealing rule, the one way to hang up, the STUN rows and the walk over them,
-// and the transport's timings. R2 moves the session onto it and deletes ENet's SetTimeout,
-// ThrottleConfigure, RoundTripTime and PeerDisconnectLater; the beat's QuietMs and BeatMs come with it.
+// and the transport's timings, the beat's included (QuietMs, BeatMs: they replace ENet's SetTimeout
+// and RoundTripTime). R2 moves the session onto it and deletes ENet's ThrottleConfigure and PeerDisconnectLater.
 //
 // A PLUGIN UPGRADE IS A ROW: `Plugin` names the library, its version, the native class it registers
 // and its files; nothing else in the game names them. It is a readonly record, so it is part of the
@@ -111,6 +111,34 @@ public static class Link
     public const int GatherMs = 2000;               // a STUN row that has not answered by then is passed over (§5.2)
     public const int LinkMs = 12000;                // a reply taken has this long to connect (§3.3 A6)
     public const int InviteLifeS = 900;             // an invite nobody answers is hung up after this (§3.3 A5)
+
+    // ── the beat and the watchdog (§3.6) ─────────────────────────────────────
+    // EVERY LINK BEATS: each end sends NetBeat every BeatMs on NetChannels.Beat, and the other echoes it.
+    // A peer silent -- no beat and no echo -- for longer than QuietMs is dropped (the host hangs it up,
+    // a guest takes its host as gone). Without it a hard-killed peer is noticed after 25-26 s (SPIKE F3).
+    // QuietMs is S1's 8 s: what a stall on either machine (a first scene load, a collection pause, a
+    // Wi-Fi roam) has to outlast.
+    public const int BeatMs = 500;
+    public const int QuietMs = 8000;
+    // SILENCE IS COUNTED IN CAPPED FRAMES: a frame adds at most FrameCapS, so this machine's own stall
+    // (one 5 s frame) is not the other end's silence. The watchdog judges the link, not the frame rate.
+    public const double FrameCapS = 0.25;
+    public static double Quiet(double silence, double delta) => silence + Math.Min(Math.Max(delta, 0), FrameCapS);
+    public static bool Overdue(double silence) => silence * 1000 > QuietMs;
+    // THE ROUND TRIP: the least of the last Echoes beats' echoes, in seconds (0 before the first). The
+    // least, not the mean: a beat that waited behind a resend says nothing about the path.
+    public const int Echoes = 8;
+    public sealed class Trip
+    {
+        private readonly Queue<double> _last = new();
+        public double Least => _last.Count == 0 ? 0 : _last.Min();
+        public void Echo(double seconds)
+        {
+            if (seconds < 0) return;                        // a clock that ran backwards: nothing learned
+            _last.Enqueue(seconds);
+            while (_last.Count > Echoes) _last.Dequeue();
+        }
+    }
 
     // ONE STUN ROW PER CONNECTION (§5.2): libdatachannel shuffles its server list and uses the first STUN
     // entry, so two rows in one configuration would be a coin toss, not a fallback. A row outside the

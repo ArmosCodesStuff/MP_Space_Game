@@ -143,6 +143,7 @@ public partial class Net : Node
     {
         Character.TickSave(delta);
         PumpLetGo();
+        Beat(delta);
         // Every attempt has a hard deadline. ENet looks at its own timeout only when a resend falls
         // due, and its resends double: a JOIN set to give up in 12 s gave up after 15, a retry
         // set to 5 after 7.5.
@@ -330,6 +331,54 @@ public partial class Net : Node
             if (peer != except) node.RpcId(peer, method, args);
     }
 
+    // ── the beat and the watchdog (plan §3.6; Link's constants) ──────────────
+    // Every Link.BeatMs each end of a live link sends NetBeat (the host to each guest that answered its
+    // welcome, a guest to its host), and the other end echoes it. Anything heard from a peer -- a beat or
+    // an echo -- ends its silence; a silence over Link.QuietMs, counted in capped frames (Link.Quiet),
+    // drops it: the host hangs the guest up, a guest takes its host as gone (OnHostGone: the retries).
+    // Its own row, NetChannels.Beat, so a beat never waits behind the game's reliable words.
+    private readonly Dictionary<int, double> _silence = new();
+    private global::Link.Trip _trip = new();
+    private double _beatClock;
+    private void Beat(double delta)
+    {
+        if (!IsOnline || _peerGone) return;
+        var peers = _isHost ? _heard.ToList() : new List<int> { 1 };
+        foreach (int p in peers) _silence[p] = global::Link.Quiet(_silence.GetValueOrDefault(p), delta);
+        _beatClock += delta;
+        if (_beatClock * 1000 >= global::Link.BeatMs)
+        {
+            _beatClock = 0;
+            foreach (int p in peers) RpcId(p, nameof(NetBeat), (long)Time.GetTicksMsec());
+        }
+        foreach (int p in peers)
+        {
+            if (!global::Link.Overdue(_silence[p])) continue;
+            _silence.Remove(p);
+            if (!_isHost) { OnHostGone(); return; }
+            _heard.Remove(p);                              // nothing more is sent to it while it is let go
+            Hang(p);
+        }
+    }
+    // Heard from this peer on a live link: the host's guests that answered the welcome, a guest's host.
+    private bool Beating(int from) => IsOnline && (_isHost ? _heard.Contains(from) : from == 1);
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = NetChannels.Beat)]
+    private void NetBeat(long sentMs)
+    {
+        int from = Multiplayer.GetRemoteSenderId();
+        if (!Beating(from)) return;
+        _silence[from] = 0;
+        RpcId(from, nameof(NetBeatBack), sentMs);
+    }
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = NetChannels.Beat)]
+    private void NetBeatBack(long sentMs)
+    {
+        int from = Multiplayer.GetRemoteSenderId();
+        if (!Beating(from)) return;
+        _silence[from] = 0;
+        if (!_isHost) _trip.Echo(((long)Time.GetTicksMsec() - sentMs) / 1000.0);
+    }
+
     // A LIVE LINK, set up the same at both ends (a guest's to its host, the host's to each guest).
     //   How long a silent peer is kept: ENet gives one up once its resends have run out (the
     //   limit, 32) AND QuietMs has passed -- or at `maxMs`, whichever comes first. On a fast link
@@ -340,10 +389,9 @@ public partial class Net : Node
     //   are sent whenever a round trip comes back slower than the last few -- every jitter spike on
     //   the internet, and worst right after a burst of reliable sends -- and those are every ship,
     //   raider, boss and base report a player draws from. Deceleration 0 keeps every one.
-    private const int QuietMs = 8000;
     private static void Link(ENetPacketPeer p, int maxMs)
     {
-        p.SetTimeout(32, Math.Min(QuietMs, maxMs), maxMs);
+        p.SetTimeout(32, Math.Min(global::Link.QuietMs, maxMs), maxMs);
         p.ThrottleConfigure(5000, 2, 0);
     }
 
@@ -779,7 +827,7 @@ public partial class Net : Node
         }
         // ENet's own timeout as well, so it never keeps its default 30 s (the deadline is _Process's)
         int deadline = BackIn ? RetryTimeoutMs : JoinTimeoutMs;
-        foreach (var server in p.Host.GetPeers()) server.SetTimeout(32, Math.Min(QuietMs, deadline), deadline);
+        foreach (var server in p.Host.GetPeers()) server.SetTimeout(32, Math.Min(global::Link.QuietMs, deadline), deadline);
         _peer = p; Multiplayer.MultiplayerPeer = p;
     }
 
@@ -828,6 +876,7 @@ public partial class Net : Node
         Multiplayer.MultiplayerPeer = new OfflineMultiplayerPeer();
         Players.Clear(); _asked.Clear(); _heard.Clear();
         _hostSaidBye = false; _leaving.Clear(); _peerGone = false;
+        _silence.Clear(); _trip = new(); _beatClock = 0;
     }
 
     private void OnPeer(int id, bool joined)
@@ -851,7 +900,7 @@ public partial class Net : Node
         }
         else
         {
-            Players.Remove(id, out var info); ForgetAsks(id); _heard.Remove(id);
+            Players.Remove(id, out var info); ForgetAsks(id); _heard.Remove(id); _silence.Remove(id);
             bool onPurpose = _leaving.Remove(id);
             Say(onPurpose || !_isHost ? $"Player {id} left." : $"Player {id} dropped.");   // only the host hears goodbyes
             PlayerLeft?.Invoke(id, info ?? new PlayerInfo(), onPurpose);
@@ -875,10 +924,9 @@ public partial class Net : Node
     // full round trip before the end the host sent: this is that end. Never below 40% of the
     // warning, whatever the connection. The host (and single player) sees it as sent.
     public static double Arriving(double warning) => System.Math.Max(warning * 0.4, warning - RoundTrip);
-    // a guest's round trip to the host, in seconds (0 on the host and offline)
-    public static double RoundTrip =>
-        IsHost || I?._peer is not ENetMultiplayerPeer e || e.GetPeer(1) is not { } host
-            ? 0 : host.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) / 1000.0;
+    // a guest's round trip to the host, in seconds (0 on the host, offline, and before the first echo):
+    // the least of the beat's last echoes (Link.Trip)
+    public static double RoundTrip => IsHost || I == null ? 0 : I._trip.Least;
 
     // A guest's request to the host: the one way a guest asks for anything. Offline, or still
     // connecting, there is no host to ask -- and an RPC then is an engine error.
@@ -953,6 +1001,10 @@ public static class NetChannels
     public const int Base = 9;          // Hub.NetBase: the gatherers and the hauler, 10 Hz, for the Yard
     public const int Boss = 10;         // Hub.NetBoss: the boss, 10-30 Hz
     public const int BossSounds = 11;   // Hub.NetBossSound: a special's sound
+    // RELIABLE, on Net (the autoload that outlives every world): the beat and its echo (Net.NetBeat,
+    // NetBeatBack). Its own row, so a beat never queues behind channel 0's reliable words; reliable, so
+    // the Hub-only and one-RPC-a-row rules for ordered streams leave its two RPCs alone.
+    public const int Beat = 12;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

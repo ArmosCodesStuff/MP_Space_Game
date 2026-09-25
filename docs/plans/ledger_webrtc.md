@@ -759,3 +759,38 @@ replacement check (S2b POST) is owed with R2's paste-guest drop.
 Env: typecheck and `verify.ps1 -Quick` only (no engine). Write `-Quick`'s output to a NEW log name each
 run (a previous log can stay locked). Python edits: write the script to the scratchpad and run it (a
 bash heredoc holding C# `$"..."` text failed to parse once); read/write with newline='' kept LF.
+
+#### R2a PRE
+- job R2a, tier opus (fresh agent from the handoff). Intent (narrowed from JOB 0 to what has a caller
+  before the switch; the Pending entry's conn/name/made, `PretendAt` and GodotStub's WebRtc members move
+  to R2b, whose edit first uses them -- `UNUSED ANYWHERE: 0` would refuse them here): `NetChannels.Beat`
+  = 12, `NetBeat`/`NetBeatBack` on Net (Reliable, row 12), sent every `Link.BeatMs`; `Net.RoundTrip` =
+  the least of the last 8 echoes (ENet's RoundTripTime read deleted); the watchdog (frame-capped
+  silence per peer over `Link.QuietMs` 8000: the host `Hang`s, a guest takes `OnHostGone`); `Net.QuietMs`
+  moves to `Link.QuietMs` (one constant); the harness's `StreamChannel` -> `NetChannels.Beat + 1` and
+  every check asserting 12 channels / row 12 rewritten to 13.
+- files: scripts/Net.cs 819f6e03, scripts/Link.cs 67b37be6, tools/smoketest/SmokeTest.cs.txt 8097b89d,
+  ledger b9f545e9. HEAD 36d2cc3.
+- checks planned: solo `R2BeatChecks` (the silence rule at 3 frame shapes: one 5 s stall, 60 short
+  frames, a mix; the round trip as the least of the last 8 echoes, an older low one aged out; the beat's
+  two RPCs ride row 12 Reliable); rewritten R0 channel checks (13 channels, Beat Reliable, stream 13,
+  16 data channels); rung 5 guest: `Net.RoundTrip` above 0 and under 2 s once online a few beats.
+
+#### R2a POST
+- verdict: done; typecheck 0 errors (real GodotSharp.dll), `verify.ps1 -Quick` ALL CHECKS PASSED (0
+  warnings, UNUSED ANYWHERE: 0). engine-unproven: rungs owed in the final test phase.
+- Link.cs: `BeatMs` 500, `QuietMs` 8000 (Net's own deleted: one constant), `FrameCapS` 0.25, `Quiet`,
+  `Overdue`, `Echoes` 8, `Trip` (least of the last 8). Net.cs: `NetChannels.Beat` = 12; `NetBeat` /
+  `NetBeatBack` (AnyPeer, Reliable, row 12); `Beat(delta)` in `_Process` (host to each heard guest, a
+  guest to its host; silence per peer; over QuietMs the host `Hang`s and stops sending to it, a guest
+  takes `OnHostGone`); `RoundTrip` = `_trip.Least` (ENet's RoundTripTime read gone); cleared in
+  `Shutdown`, a peer's silence forgotten in `OnPeer(left)`. Inside Net the class is named
+  `global::Link` until R2b deletes Net's `Link(ENetPacketPeer,int)` (the CS0119 trap).
+- Interim (ENet still under it until R2b): the watchdog runs beside ENet's own timeouts; the host's
+  `Hang` is still ENet's PeerDisconnectLater. Both go with R2b.
+- checks written (not run): solo `R2BeatChecks` (4: capped-frame silence at 3 shapes; the 8 s drop at
+  3 silences; the least of the last 8 echoes; the beat's row), rung 5 `R2BeatGuest` (guest's round trip
+  > 0 and < 2 s once let in, called in `Mp`'s guest after "guest sees the host"); rewritten R0 checks
+  (13 channels with Beat Reliable on 12 and the stream on 13; 16 data channels each end; the highest
+  row 13; ChannelOf with the beat's two RPCs on 12 and the stream on 13; the backlog text row 13).
+- next: R2b, the switch.

@@ -176,7 +176,7 @@ public partial class _Test : Node
     // now, NetChannels; this one is the next number after that table's last row, never one of its
     // rows, and a check says so. Not further out: a WebRTC session opens only the channels
     // Link.Channels() lists, and a gap is a data channel that carries nothing.)
-    const int StreamChannel = NetChannels.BossSounds + 1;
+    const int StreamChannel = NetChannels.Beat + 1;
     bool _streaming; double _streamClock; int _streamGot;
     public override void _Process(double delta)
     {
@@ -1063,12 +1063,13 @@ public partial class _Test : Node
         if (!loaded || !Link.Available) return;              // every check below would only wait out its time
 
         // THE CHANNEL TABLE: every [Rpc] in the build, the harness's stream included (§3.2). S1's 11
-        // rows -- Cosmetic Reliable, ten ordered streams -- and the harness's stream on 12, the next
-        // number after the last row.
+        // rows -- Cosmetic Reliable, ten ordered streams -- then R2's Beat on 12, Reliable, and the
+        // harness's stream on 13, the next number after the last row.
         var modes = Link.Channels().Select(v => (MultiplayerPeer.TransferModeEnum)(int)v).ToList();
-        Check(StreamChannel == 12 && modes.Count == 12 && modes[0] == MultiplayerPeer.TransferModeEnum.Reliable
-              && modes.Skip(1).All(m => m == MultiplayerPeer.TransferModeEnum.UnreliableOrdered),
-              $"a session negotiates 12 channels above 0: Cosmetic Reliable, then 11 ordered ones, the harness's stream the last ({string.Join(",", modes.Select(m => m.ToString()[0]))}; stream on {StreamChannel})");
+        Check(StreamChannel == 13 && modes.Count == 13 && modes[0] == MultiplayerPeer.TransferModeEnum.Reliable
+              && modes.Skip(1).Take(10).All(m => m == MultiplayerPeer.TransferModeEnum.UnreliableOrdered)
+              && modes[11] == MultiplayerPeer.TransferModeEnum.Reliable && modes[12] == MultiplayerPeer.TransferModeEnum.UnreliableOrdered,
+              $"a session negotiates 13 channels above 0: Cosmetic Reliable, 10 ordered ones, the beat Reliable on 12, the harness's stream the last ({string.Join(",", modes.Select(m => m.ToString()[0]))}; stream on {StreamChannel})");
 
         // A CONNECTED PAIR, the id drawn as the host will draw it (2 .. 2^31 - 1)
         var a = new RtcPair(Rng.RandiRange(2, int.MaxValue));
@@ -1088,8 +1089,8 @@ public partial class _Test : Node
         // every one of them reliable whatever the row asked for (Godot writes maxPacketLifetime, the
         // plugin reads maxPacketLifeTime: §2.1), which is why each row has its own
         var hostCh = RtcChannels(a.Host, a.Id); var guestCh = RtcChannels(a.Guest, 1);
-        Check(hostCh.Count == 15 && guestCh.Count == 15 && hostCh.Concat(guestCh).All(c => c.state == WebRtcDataChannel.ChannelState.Open),
-              $"every row's data channel opens at both ends: 15 each ({hostCh.Count} host, {guestCh.Count} guest; ids {string.Join(",", hostCh.Select(c => c.id))})");
+        Check(hostCh.Count == 16 && guestCh.Count == 16 && hostCh.Concat(guestCh).All(c => c.state == WebRtcDataChannel.ChannelState.Open),
+              $"every row's data channel opens at both ends: 16 each ({hostCh.Count} host, {guestCh.Count} guest; ids {string.Join(",", hostCh.Select(c => c.id))})");
         Check(hostCh.Concat(guestCh).All(c => c.life == -1),
               $"every data channel is reliable: no packet lifetime on any of them ({string.Join(",", hostCh.Select(c => c.life).Distinct())})");
         // a packet on the highest row arrives on that row, both ways
@@ -1104,11 +1105,11 @@ public partial class _Test : Node
             byte[] body = to.GetPacket();
             got.Add($"{peer}@{ch}:{(body.Length == 4 && BitConverter.ToInt32(body) == (a.Id ^ target) ? "ok" : "garbled")}");
         }
-        Check(got.SequenceEqual(new[] { "1@12:ok", $"{a.Id}@12:ok" }),
-              $"a packet on the highest row (12) arrives on it, host to guest and guest to host ({string.Join("; ", got)})");
-        // WHICH ROW AN RPC RIDES, by name (§3.2's rows: Ships 2, Raiders 5, Boss 10; the harness's stream 12)
-        int[] rode = { Link.ChannelOf("NetShipState"), Link.ChannelOf("NetRaiders"), Link.ChannelOf("NetBoss"), Link.ChannelOf(nameof(NetStream)), Link.ChannelOf("NoSuchRpc") };
-        Check(rode.SequenceEqual(new[] { 2, 5, 10, 12, -1 }), $"Link.ChannelOf names the row an RPC rides: ships 2, raiders 5, boss 10, the harness's stream 12, none -1 ({string.Join(", ", rode)})");
+        Check(got.SequenceEqual(new[] { "1@13:ok", $"{a.Id}@13:ok" }),
+              $"a packet on the highest row (13) arrives on it, host to guest and guest to host ({string.Join("; ", got)})");
+        // WHICH ROW AN RPC RIDES, by name (§3.2's rows: Ships 2, Raiders 5, Boss 10, the beat and its echo 12; the harness's stream 13)
+        int[] rode = { Link.ChannelOf("NetShipState"), Link.ChannelOf("NetRaiders"), Link.ChannelOf("NetBoss"), Link.ChannelOf("NetBeat"), Link.ChannelOf("NetBeatBack"), Link.ChannelOf(nameof(NetStream)), Link.ChannelOf("NoSuchRpc") };
+        Check(rode.SequenceEqual(new[] { 2, 5, 10, 12, 12, 13, -1 }), $"Link.ChannelOf names the row an RPC rides: ships 2, raiders 5, boss 10, the beat and its echo 12, the harness's stream 13, none -1 ({string.Join(", ", rode)})");
         // THE BACKLOG (§3.8): what waits on a row's data channel beyond the SCTP socket's own send buffer,
         // which Link.Backlog cannot see (R1's first run put 1 MB, all of it inside that buffer, and read
         // 0). So 200,000 B at a time, in one frame with no poll between, until the row backs up (8 MB at
@@ -1124,7 +1125,7 @@ public partial class _Test : Node
             return taken == put && Link.Backlog(a.Host, a.Id, StreamChannel) == 0;
         }, 10000, a);
         Check(waiting > 0 && drained && Link.Backlog(a.Host, a.Id, NetChannels.Ships) == 0 && Link.Backlog(a.Host, Rng.RandiRange(2, int.MaxValue), StreamChannel) == 0,
-              $"Link.Backlog reads a burst waiting on row 12 once it outgrows the SCTP send buffer ({waiting} B after {put} packets of 200,000 B), and nothing once the guest has taken all {put} ({(drained ? "drained" : $"{taken} taken, {Link.Backlog(a.Host, a.Id, StreamChannel)} B still waiting")}); an idle row and an unknown peer read 0");
+              $"Link.Backlog reads a burst waiting on row 13 once it outgrows the SCTP send buffer ({waiting} B after {put} packets of 200,000 B), and nothing once the guest has taken all {put} ({(drained ? "drained" : $"{taken} taken, {Link.Backlog(a.Host, a.Id, StreamChannel)} B still waiting")}); an idle row and an unknown peer read 0");
         // a guest's Close() is seen by the host within 1 s
         a.Guest.Close(); t0 = RtcPair.Now;
         await RtcUntil(() => a.HostLostAt > 0, 3000, a);
@@ -10058,6 +10059,7 @@ public partial class _Test : Node
             Check(lvSet == 7 && H != null && !Hub.InArena, $"a peer sent into a world is told the level with it, before the world is built ({lvSet})");
         }
         await S2TripChecks();
+        R2BeatChecks();
 
         // ── LAST, because it ends a session and that resets the fleet ────────────────────
         // A session can end without anything else moving. Quitting to the menu changes scene and
@@ -10231,6 +10233,51 @@ public partial class _Test : Node
         await Wait(1.0);
         Check(H == h0 && GodotObject.IsInstanceValid(h0) && Session.HeardTrip == trip,
               $"a peer told of a trip it has already made stays in its world: no reload (trip {trip}; P9)");
+    }
+
+    // ── WEBRTC, R2a: THE BEAT AND THE WATCHDOG (plan §3.6) ───────────────────────────────────
+    // Solo: the rules the watchdog and the round trip are made of, each from three situations, none on
+    // the 8 s edge. Rung 5 (R2BeatGuest): a guest's round trip is measured by the beat's echoes.
+    void R2BeatChecks()
+    {
+        // SILENCE IS COUNTED IN CAPPED FRAMES (Link.FrameCapS 0.25): this machine's own stall is not the
+        // other end's silence
+        double stall = Vary(3.0f, 20.0f);
+        int frames = Rng.RandiRange(30, 90);
+        double shortSum = 0; for (int i = 0; i < frames; i++) shortSum = Link.Quiet(shortSum, 1.0 / 60);
+        double calm = Vary(7.0f, 7.5f), mixed = Link.Quiet(Link.Quiet(calm, stall), 1.0 / 60);
+        Check(Math.Abs(Link.Quiet(0, stall) - 0.25) < 1e-9 && Math.Abs(shortSum - frames / 60.0) < 1e-9
+              && Math.Abs(mixed - calm - 0.25 - 1.0 / 60) < 1e-9 && !Link.Overdue(mixed),
+              $"the watchdog counts silence in frames of at most 0.25 s: one {stall:0.0} s stall adds 0.25, {frames} frames of 1/60 s add {frames / 60.0:0.000} ({shortSum:0.000}), and 7-7.5 s of silence with a {stall:0.0} s stall on top is still no drop ({mixed:0.00} s)");
+        // OVER LINK.QUIETMS (8000) IS A DROP: 33 capped frames (8.25 s) are, 7-7.8 s are not, 8.2-9 s are
+        double capped = 0; for (int i = 0; i < 33; i++) capped = Link.Quiet(capped, Vary(0.3f, 2.0f));
+        double under = Vary(7.0f, 7.8f), over = Vary(8.2f, 9.0f);
+        Check(Link.QuietMs == 8000 && Link.BeatMs == 500 && Link.Overdue(capped) && !Link.Overdue(under) && Link.Overdue(over),
+              $"a peer silent past 8 s is dropped, one silent under it is not: 33 long frames {capped:0.00} s dropped, {under:0.00} s kept, {over:0.00} s dropped (QuietMs {Link.QuietMs}, beat every {Link.BeatMs} ms)");
+        // THE ROUND TRIP is the least of the LAST 8 echoes: an older, lower one ages out; a backwards clock
+        // teaches nothing; none yet reads 0
+        var trip = new Link.Trip();
+        bool none = trip.Least == 0;
+        double old = Vary(0.005f, 0.02f);
+        trip.Echo(old);
+        var last = Enumerable.Range(0, 8).Select(_ => Vary(0.05f, 0.3f)).ToList();
+        foreach (var e in last) trip.Echo(e);
+        trip.Echo(-Vary(0.01f, 1.0f));
+        Check(none && Math.Abs(trip.Least - last.Min()) < 1e-12 && Link.Echoes == 8,
+              $"the round trip is the least of the last 8 echoes: {trip.Least * 1000:0.0} ms (least of the 8: {last.Min() * 1000:0.0}; the older {old * 1000:0.0} ms aged out; a negative echo ignored; none at all read 0)");
+        // THE BEAT HAS ITS OWN ROW, reliable, on Net
+        var beat = typeof(Net).GetMethod("NetBeat", BindingFlags.NonPublic | BindingFlags.Instance)?.GetCustomAttribute<RpcAttribute>();
+        var back = typeof(Net).GetMethod("NetBeatBack", BindingFlags.NonPublic | BindingFlags.Instance)?.GetCustomAttribute<RpcAttribute>();
+        Check(NetChannels.Beat == 12 && beat != null && back != null && beat.TransferChannel == 12 && back.TransferChannel == 12
+              && beat.TransferMode == MultiplayerPeer.TransferModeEnum.Reliable && back.TransferMode == MultiplayerPeer.TransferModeEnum.Reliable,
+              $"the beat and its echo ride NetChannels.Beat (12), reliable, on Net ({beat?.TransferChannel}/{beat?.TransferMode}, {back?.TransferChannel}/{back?.TransferMode})");
+    }
+    // Rung 5, the guest: its round trip is the beat's, measured within a few beats of being let in.
+    async Task R2BeatGuest()
+    {
+        for (int i = 0; i < 60 * 4 && Net.RoundTrip <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double rt = Net.RoundTrip;
+        Check(Net.IsOnline && rt > 0 && rt < 2.0, $"guest: the beat measures its round trip to the host once let in ({rt * 1000:0.0} ms, above 0 and under 2 s)");
     }
     // P4 (host half): a boss held by a shockwave is still being shot. Its hull steps to 0.80, 0.75,
     // 0.70 and 0.65 of its max INSIDE one 3 s hold, 0.6 s apart, for the guest to see every step.
@@ -11387,6 +11434,7 @@ public partial class _Test : Node
             Check(ownThrottle == (5000, 2, 0),
                   $"guest: the moment the host lets it in, its own end of the link keeps every unreliable packet -- ENet's throttle falls by 0 (interval 5000 ms, up 2, down 0; {ownThrottle?.ToString() ?? "never read"})");
             Check(Nodes<PlayerShip>().Count() >= 2, $"guest sees the host ({Nodes<PlayerShip>().Count()} ships)");
+            await R2BeatGuest();
             for (int i = 0; i < 60 * 3 && !H.Raiders.Any(r => r.Position.DistanceTo(new Vector2(-6000, -6000)) < 2500); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.Raiders.Any(r => r.Position.DistanceTo(new Vector2(-6000, -6000)) < 2500),
                   "a raider that existed before this guest joined reached it (the catch-up a joining guest is sent)");
