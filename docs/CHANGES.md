@@ -36,6 +36,12 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A J1-J7 + K1 built,
+version-l merged in (K2), and merge gate 1's seven problems fixed (K3); compiles, rung 2 green.
+engine-unproven: rungs 3-5 owed in the final test phase** (owner: build first, test once at the
+end). J6/J7's earlier solo runs (kits_j67a/b) FAILED and the J7 check was rewritten (COORDINATOR
+NOTE 2); nothing J3-K3 added is proven on the engine yet. Detail: `docs/plans/ledger_kits.md` (K3 POST).
+
 **2026-09-25 (worktree `WarShips_wt_art`, branch `wt/art`): every entity wears the pack** -- raiders,
 bosses (2x, the Rusty Bucket's shockwave scaled), fleet, siege (J4) and the 12 player hulls (J5); the
 Drake is framed by moving the camera, never past the wheel's own zoom-out (owner ruling). `version-l`
@@ -222,20 +228,21 @@ offered too.
 
 ### Abilities — default keys, all remappable in K
 
-Every class carries Space and G (main guns, salvo ↔ staggered) unless it flies craft instead, Q
-for point defence if it has any, F for what the class is FOR, and six open hotkeys.
+Every class carries Space and G (main guns, salvo ↔ staggered) unless it flies craft instead, F
+for what the class is FOR, and six open hotkeys. Point defence has no key: it is passive, firing
+whenever the ship is alive, on every hull that mounts it.
 
 | Class | Space | G | F | Other |
 |---|---|---|---|---|
-| Battleship | main guns | fire mode | broadside (3 volleys, 14 s cooldown) | Q point defence |
-| Destroyer | main guns | fire mode | missile burst (magazine of 3) | R reload (9 s), Q point defence |
-| Carrier | fighters: attack | — | bomber strike | R recall, Q point defence |
-| Freighter | main gun | fire mode | bubble (400 soaked, 8 s) | T deploy, C collect, Q point defence |
-| Tender | main gun | fire mode | overdrive (x2 rate of fire, 8 s) | T deploy, C collect, Q point defence |
-| Bastion | main gun | fire mode | shockwave (1000 u, or a boss held 3 s) | T deploy, C collect, Q point defence |
+| Battleship | main guns | fire mode | broadside (3 volleys, 14 s cooldown) | point defence (passive) |
+| Destroyer | main guns | fire mode | missile burst (magazine of 3) | R reload (9 s), point defence (passive) |
+| Carrier | fighters: attack | — | bomber strike | R recall, point defence (passive) |
+| Freighter | main gun | fire mode | bubble (400 soaked, 8 s) | T deploy, C collect, point defence (passive) |
+| Tender | main gun | fire mode | overdrive (x2 rate of fire, 8 s) | T deploy, C collect, point defence (passive) |
+| Bastion | main gun | fire mode | shockwave (1000 u, or a boss held 3 s) | T deploy, C collect, point defence (passive) |
 | Sniper | main gun | fire mode | railgun (3 s charge, locked, 150 at 2500 u) | |
 | Warrior | main guns | fire mode | rush (2.5 s, then an EMP) | |
-| Warden | main gun | fire mode | six hunter-seekers | point defence is always on |
+| Warden | main gun | fire mode | six hunter-seekers | point defence (passive), 10 DPS |
 | Dart | main gun | fire mode | barrel roll (1.2 s untouchable, then a boost) | |
 | Echo | main gun | fire mode | echo (5 s remembered, then detonated) | |
 | Wraith | main gun | fire mode | stealth (5 s unseen) | |
@@ -514,6 +521,278 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Class kits, lane A K3: merge gate 1's fixes (2026-09-25, worktree wt/kits)
+
+A ramp row (F1's Ramp) is **owner-stepped**: only the peer at the helm steps its running total, and
+the host's report no longer overwrites it on the owner's own ship (a guest's ramp was reset to the
+host's never-moving copy 10 times a second). The base's laser and a shot whose shooter has gone now
+land through the damage door (`Dealt.Deal`, weapon `base`); the door announces every blow
+(`Dealt.Landed`). The outposts' missile does what the gunship's row says (35, was a copy at 42).
+The heavy-laser DPS checks start their clock on the first volley (a knife edge); screens frame 49
+pins its ship so the heavy's missile shows, and frame 49b shows a latched heavy's two barrels.
+
+### Class kits, lane A J7: heavy rows, F20 (2026-09-25, worktree wt/kits)
+
+Every heavy carries **two barrels** now (`EnemyDef.Barrels`), each doing 1.29 damage (`Dps`), so
+2.58 total on the gunship, the cross and the lancerkin alike (they carried 2.0 / 2.6 / 1.8 before,
+unequal for no reason the numbers ever gave). One `Strike` per volley carries `Dps x Barrels x
+ShotEvery x Strength` -- two separate Strikes, 0.52 s apart or not, would be eaten by the target's
+own hit gap and undercount -- drawn as that many flashes from barrel offsets either side of the
+turret. `EnemyDef.MissileFlight` (10 s) replaces the shared `Raider.MissileFlight` const (12 s,
+deleted): the Lancerkin's own point is standing further off than the gunship, so its flight need
+not match the gunship's any more than its range or its cadence do. `MissileDamage` 42 -> 35 (the
+signed-off number). **The missile throw only fires at a PINNED target now** -- before, a heavy
+waiting at the map's edge could already be lobbing missiles at a target that had never been pinned
+at all. `EnemyDef.Cc` (a `Status?`) is what a Pin-way row's latch applies to what it holds -- every
+light sets `Cc = Status.Pinned`, generalising what the shared latch code used to hardcode; a
+Standoff row (every heavy) leaves it null, since it never latches this way. `EnemyDef.Exp` (6 a
+light, 18 a heavy) is new data only -- lane G pays it, not built here.
+
+**Checks:** the ENEMY TABLE block (already the one place these literals lived) extended with
+`Barrels`, and a new paragraph proving 2.58 on every heavy, 35/10 on the missile, `Cc` and `Exp` all
+in that one place. New `LaneAHeavyRowsChecks`: from 3 varied spots, an unpinned target inside a
+gunship's 500 u missile reach draws nothing at all (a separate loop, run first, so no run's pin
+outlives into the next run's unpinned head); from 3 more varied spots, a pinned target's gunship
+lands 2.58 +- 0.15 DPS (both barrels) and its missile's flight is 10 s (read off the warning ring's
+own `.Time`) and lands 35. Every old-truth literal in the existing heavy-raider narrative and the
+Lancerkin-row-independence test rewritten to the new numbers; the narrative's missile sub-test now
+pins its target directly first, since the throw it used to test unpinned no longer happens.
+**Rungs:** 1 and 2 in the worktree; rung 3 proved together with J6 (below) on two seeds.
+
+**Known broken:** nothing known.
+
+### Class kits, lane A J6: F1's Add and Ramp (2026-09-25, worktree wt/kits)
+
+Two new kinds of lift, neither carried by a class yet (6d, the Dart's Ramjet, is the first). **Add**
+(`AbilityDef.SpeedAdd`, a stat id): a flat top speed on top of the lift's own multiplier, before the
+hold -- `PlayerShip.TopSpeed(sheet, lift, add, hold)`, pure and static, is the one place the
+arithmetic lives. **Ramp** (`AbilityDef.Ramp`, a new `RampSpec`: `Build`/`Cap`/`Bleed` stat ids + a
+condition): a lift whose size is a running total kept in the row's own slot (`Sl(id).Own`) -- builds
+while it runs and the condition holds, bleeds with the turn regardless, caps, and once the row stops
+running drains toward 0 at the cap's own rate a second (so a value at the ceiling empties in exactly
+1.0 s). `RampSpec.Step` is the one place ITS arithmetic lives too: pure, no ship, no Godot frame, so
+both are provable before any row exists to carry them -- proved here with the SAME numbers 6d's
+Ramjet will actually use (`ramjet_build 0.10 / ramjet_cap 0.50 / ramjet_bleed 0.20`, kits_v3 3.6).
+
+**Checks:** new `LaneARampChecks` (the pure step, varied by frame rate -- 1/30, 1/60, 1/144 s -- on
+a 260 u/s sheet: top after 1/3/5/7 s straight at full throttle 286/338/390/390, 1 s of full rudder
+390 -> 364, then released, ~0 by 9.0 s total) and `LaneASpeedAddChecks` (the pure formula, 3 varied
+tuples, one of them the plan's own 260 x 1.5 + 100 = 490). One bug found at rung 3 while proving
+this, in a J5 check, not in J6: see the note in J7's entry above (folded in since the same rung 3
+run touches SmokeTest.cs.txt's shared file). **Rungs:** 1 and 2 in the worktree; rung 3 proved
+together with J7 on two seeds (both jobs' checks were in the same file before either was first
+proved green, so one chain, tag `kits_j67a`, proves both and they land in one commit).
+
+**Fixed in passing (found by J6's own rung-3 run, in J5's check):** `LaneADamageDoorChecks`'s
+main-gun and point-defence sub-tests spawned their two targets at independent random angles with no
+guaranteed separation -- a stray main-gun shell could reach the point-defence target (or the
+reverse) on an unlucky draw, which J5's own two proving seeds never happened to hit. Fixed by
+running the two sub-tests one target at a time (the main-gun target is spawned, fired on and cleared
+before the point-defence target is ever spawned), removing the chance of it rather than dodging it.
+
+**Known broken:** nothing known.
+
+### Class kits, lane A J5: the hostile damage door, F4 + F18 (2026-09-25, worktree wt/kits)
+
+One static function every player-side blow on a hostile now goes through: `Dealt.Deal(IHittable
+target, double d, ITurretHost by, string weapon)` (new `scripts/Dealt.cs`) does `target.TakeDamage`
+then credits the shooter. `ITurretHost.NoteDealt` gains the target and a weapon id in place of a
+position; `PlayerShip.NoteDealt` keeps `NoteCombat`, adds `DealtBy[weapon]` (host: damage dealt, by
+weapon id) and runs **F18**: every RUNNING ability row's `AbilityDef.OnDealt(ship, target, d,
+weapon)` hears it (`Sl(id).Left > 0`, `While` narrows it). Weapon ids: a blow that already carries a
+row uses the row's own id ("shell", "torpedo", "cruise"); everything else names a `Dealt.*` const
+(Pd, Turret, Rail, Emp, Echo, Fighter, Outpost). Sites: the main-gun / PD turret tick (Turrets.cs), a
+shot's own Strike (Shots.cs), the railgun / EMP / echo blasts (PlayerShip.cs), the wing's fighter
+strafe (ShipClasses.cs), a friendly missile's Land (Missiles.cs). The base's own laser
+(BaseDefense.cs) is NOT this door -- nobody's ship, no credit. The echo's arm in `NoteDealt` is
+deleted: the Echo row's `OnDealt` stores what it dealt and where in a new `Slot.At` (replaces the
+ship's own `_echoAt` field), read back by `Detonate`.
+
+**Checks:** new `LaneADamageDoorChecks` (D17): from three varied spots each, `DealtBy[weapon]`
+grown equals the hull the target lost, over one window -- a battleship's main guns ("shell") and its
+own point defence ("pd") together, a freighter's dropped turret ("turret", credited to its OWNER,
+never the turret itself), the sniper's railgun ("rail"), a warden hunter's torpedo ("torpedo"). One
+bug found at rung 3 and fixed in the check, not the door: the main-gun block set `Trigger` and
+`AimPoint` directly, which `PlayerShip.LocalFlight` (polling the real keyboard every `_Process`)
+overwrote back to false on the very next frame -- fixed with a real `AimWorld` + `KeyDown(Space)`
+hold, the same pattern the destroyer's own main-gun check already uses. Every existing echo check
+(what it remembers, where it puts it down) is unchanged at its old truth, now proved through the
+door. **Rungs:** 1 and 2 in the worktree; rung 3 green on two seeds (11400714819323521943,
+11400714819323500130).
+
+**Known broken:** nothing known.
+
+### Class kits, lane A Job P: J4 and job 1c proved at rung 3; a stale wire-count literal fixed (2026-09-25, worktree wt/kits)
+
+Nothing had run in the engine since 606201f. The chain quick, solo@11400714819323522083, solo found
+one red: "five statuses and no sixth" asserted `Enum.GetValues(typeof(Status)).Length == 6`, a literal
+left over from before F17 added three more members (Suppressed/Dazzled/Jammed). They are host-only
+(`StatusSet.HostOnly`) and `StatusSet.Bits` already masks them off the wire, so the wire format itself
+is unchanged (still exactly 5 members pack into it) -- only the raw enum-length trip wire was stale.
+The check now counts non-host-only members (5) apart from the enum's total (9), so a future host-only
+addition will not re-break it -- only a sixth WIRE status would.
+
+**Checks:** rewritten "five statuses and no sixth" (now "five wire statuses and no sixth": total == 9,
+wire-eligible == 5, its wire-format assertions unchanged). **Rungs:** 1 and 2 green; rung 3 green on
+two seeds (11400714819323522083, 11400714819323472548) -- J4's OutGuards checks and job 1c's
+DISABLED-rate fix both proved by the same runs.
+
+**Known broken:** nothing known.
+
+### Class kits, lane A job 1c: the DISABLED warden's turn is read off the hull (2026-09-25, worktree wt/kits)
+
+Rung 3 at 606201f failed "a DISABLED warden at N deg, turning at 0 deg/s" on all three headings: the
+game held the heading (0.00 deg), but the check's own setup read the yaw the hull carried in as 0. It
+read the turn from just after a `Wait` (which resumes at the END of a frame) to the next frame's start
+(before any `_process`): across no frame of the hull at all. The rate is now read each frame from one
+frame's start to the next's, across exactly one `_process`, with W and the rudder held for a seeded
+0.4-0.8 s and until the hull turns faster than 25 deg/s; the keys come up and Disabled goes on before
+its next frame. The assertion (> 20 deg/s carried in, 0.00 deg turned) is unchanged.
+
+**Checks:** rewritten "a DISABLED warden at N deg, turning at N deg/s on A/D when it is disabled" (its
+setup only). **Rungs:** 2 in the worktree; rung 3 green on two seeds (Job P, above).
+
+**Known broken:** nothing known.
+
+### Class kits, lane A J4: the outgoing door, F17 (2026-09-25, worktree wt/kits)
+
+Every hostile blow now leaves through one door: `StatusSet.Out(d, OutKind)` multiplies it by the
+`StatusSet.OutGuards` row of each status on whatever deals it (Statuses.cs). Three rows, the sign-off's
+(kits_v2 §5): **Suppressed** x0.5 guns, x0.7 a boss's move, x1.0 its super; **Dazzled** x1.0;
+**Jammed** x0. All three hold a launcher's throw (`HoldsThrow`: the clock keeps its zero and it throws
+the frame the status lapses); Dazzled and Jammed spare bosses (`Spares = Tag.Boss`: `StatusSet.Reaches`
+refuses them on a boss, a raider or a structure whose tags a row spares).
+- The statuses: `Suppressed = 64`, `Dazzled = 128`, `Jammed = 256`, host-only (`StatusSet.HostOnly`,
+  masked out of `Bits`). Nothing in the game applies them yet: DD Suppress (6a), SN Flares (6c) and EC
+  EMP (6d) will. The latch half of the table (no new latch / web dropped) is slice 5's.
+- The door's users: `Boss.Out(move)` replaces the six `m.Damage * DamageMult` sites (bolt, fired body,
+  ring, beam, dash, thrown body); `Raider.Strike` (the light's and the heavy's laser; a blow the door
+  takes to nothing is not struck); `Emplacement.Spec` (its gun, read as each round leaves); the heavy's
+  missile throw is held.
+
+**Checks:** new `LaneAOutDoorChecks` (the table against its literals, the bits; from three seeded spots
+three webifiers latched on one pilot, each given a different status the frame after a blow of 1, land
+1.5 / 0 / 3 over their next three blows; from three seeded edge bearings a gunship's due throw held for
+a seeded 0.6-1.4 s of Suppressed and thrown the frame it lapses), `LaneAOutDoorBossChecks` (Lancer
+arena, three seeded spots: a Suppressed shockwave 31.5, a Suppressed beam judgement 50, Dazzled and
+Jammed refused and the next shockwave 45), `LaneAOutDoorBaseChecks` (siege, three seeded bearings: a
+Suppressed base's round carries 126 x the level-3 scale x 0.5).
+**Rungs:** 1 and 2 in the worktree (ledger_kits.md J4); rung 3 green on two seeds (Job P, above).
+Host-only: no rung 5.
+
+**Known broken:** nothing known.
+
+### Class kits, lane A job 1b: rung 3's four fails at ad19fd8 (2026-09-25, worktree wt/kits)
+
+Rung 3 at ad19fd8 (seed 11400714819323522083) failed four checks. Two were bugs in the game, one
+was the check's geometry.
+- **Disabled holds the heading at any speed.** Steer zeroed a Disabled hull's yaw only on the turning
+  circle; at pivot speed (at or below 5% of top) the rate it carried in coasted down at the rudder's
+  2.5 rad/s² bite. A warden disabled 0.3 s after a W+A turn (about 0.85 rad/s left) turned 7.92 deg
+  on (the check's 2nd and 3rd headings; the 1st carried no turn). The yaw is zeroed wherever the hull
+  is Disabled or held at x0.
+- **A point-defence mount re-picks while it holds.** It kept what it held for as long as that lived;
+  with no window there is no fresh pick, so the carrier's mount that doubled up on a practice fighter
+  never spread to the third light, and a mount on a light would have let a missile through. It now
+  gives way to something FREE that betters its target: a lower rank, or the same rank while a sibling
+  shares it (never down the ranks, never to a fallback; no flicking by distance).
+- **The lights' DPS** ("three lights, 1 DPS each") read 1.40 of 3: the carrier's passive mounts shoot
+  them while they strike. The check takes its point defence out of reach until the DPS is read.
+- DESIGN's "point defence is an active ability" (missed by F16) now says passive, with the re-pick.
+
+**Checks:** new `LaneAPdRepickChecks` (a battleship, a carrier and a destroyer at seeded spots,
+headings and sides: every mount on one light, a second light abeam spreads them, a standing cruise
+missile is taken over a light, none idle); rewritten "a DISABLED warden at N deg" (turning at a
+seeded 0.4-0.8 s of W and a seeded rudder when it is disabled: the carried yaw must not turn it);
+"three lights, 1 DPS each" (point defence out of reach for the window). "carrier PD: three turrets on
+three different LIGHT targets" unchanged: it is the spread's reproduction.
+**Rungs:** 1 and 2 in the worktree (ledger_kits.md J3b); rung 3 at 606201f (seed
+11400714819323522083): the four fails above pass.
+
+**Known broken:** at 606201f the rewritten "a DISABLED warden" check failed on its own setup, all three
+headings ("turning at 0 deg/s"; the warden turned 0.00 deg, as it should): fixed in job 1c.
+
+### Class kits, lane A: point defence is passive (F16) (2026-09-25, worktree wt/kits)
+
+- Every hull that mounts point defence fires it whenever the ship is alive: no key, no 15 s window,
+  no 15 s recharge (a wreck's mounts are quiet). The `pd` ability is gone from the six bars that
+  carried it (Q is free on them), with `Fit.AlwaysPd`, the rows `pd_active` / `pd_reload`, the
+  window's members on PlayerShip, the ring a turret drew round itself (`ITurretHost.PdRing`,
+  `TurretSpec.Ring`, `ClassArt.PdRing`) and the duty share on the sheet (`PdDps` is what it holds).
+- Per-hull numbers are unchanged (1 DPS a mount; the carrier 3 mounts, the warden 10 DPS): their
+  cuts go with the 6a / 6c cards. The sheet's point-defence line doubles (a battleship 1.00 -> 2.00
+  DPS, sustained total 63.65 -> 64.65; the freighter 49 -> 50; the carrier's 1.5 -> 3).
+- The two frames that moved the window now move point-defence stats: Endurance Frame a shorter
+  reload and quicker turrets (+30% / +30%); Armoured Frame more hull and a slower reload (-20%). Every
+  hull wears the same count of hull parts as before.
+- Checks that need a hull's point defence out of the way (the Lancer's "left alone" escorts, the
+  siege's main-gun kill, the bastion's wave, the carrier's wing, the freighter's dropped turret, the
+  hauler's own mount, the session host) take its reach to 0 for the while: it cannot be switched off.
+
+**Checks:** new `LaneAPassivePdChecks` (all 7 PD hulls at seeded spots, headings and reaches: every
+mount on a light raider with nothing pressed, 0.5 every 0.5 s = 1 DPS a mount, the warden 5 = 10 DPS,
+over 1.9 s from the first shot; no pd key) and the table-coverage check beside it; rung 5: host "a
+guest's point defence fires on the host with nothing pressed", guest "guest sees its own point
+defence fire with nothing pressed". Rewritten: the battleship's PD block (fires unpressed; still
+firing 15.5-17.5 s on), the K window's DPS lines / key count / Esc capture, the battleship and
+destroyer bars, the fittings sweep, the ability-witness table, the pd_range reach case, the warden's
+figures, the sustained totals (freighter 50, carrier +3), the hauler's mount, the siege's "point
+defence out of reach". Shots: the dead Q presses dropped; frame 23 is `23_bar_battleship_cooldown`.
+**Rungs:** 1 and 2 in the worktree (see the ledger); 3, 4 and 5 owed.
+
+**Known broken:** rung 3 at ad19fd8: this entry's new and rewritten checks passed except "carrier PD:
+three turrets on three different LIGHT targets" and "three lights, 1 DPS each" (1.40 of 3), both
+fixed in job 1b above. Rungs 4 and 5 not run.
+
+### Class kits, lane A: a burn counts its judgements (2026-09-25, worktree wt/kits)
+
+- The burn's 13th judgement and its end both fell AT 3 s on two accumulated clocks, so which came
+  first was the float's call: 250 at the harness's fixed 60 fps, 200 on another rounding. The burn
+  now counts them (`BossMove.Judgements`: Live / Tick + 1, both ends included) and its last one ends
+  it; `Slot.T` no longer times a beam.
+- The Lancer arena's own beam: its pilot sidestepped at 2.2 s, two frames before the added clock's
+  4th hit (2.233 s), and the check still took the old clock's 5-7 hits. It sidesteps at 1.9 s now.
+
+**Checks:** rewritten `LaneABurnClockChecks` (5 hits, 0.75 s apart, 250, over a window that runs
+0.4 s past the burn with nothing in it; the burn 3 s from its first hit); rewritten "the beam,
+judged every 0.25 s ... 3 hits ... 150" (was 200-350) with the 1.9 s sidestep.
+**Rungs:** 1 and 2 green in the worktree; rung 3 green on one seed at ad19fd8, a second owed
+(ledger_kits.md).
+
+**Known broken:** nothing known.
+
+### Class kits, lane A slice 1a: the burn clock, a hold on the helm, Disabled on a pilot, Hardened from its applier (2026-09-25, worktree wt/kits)
+
+kits_v31 §8 lane A slice 1, less F16 (passive point defence, its own commit next).
+- **The burn clock (fix B).** A beam's judgement clock was set back to its Tick, throwing the
+  overshoot away, so at 60 fps every judgement came a frame late: 12 in the Rusty Bucket's 3 s burn,
+  and a pilot in the line took 6 hits 0.53 s apart (300). It is added now: 13 judgements, 5 hits
+  0.75 s apart, 250 -- the figure the design and the 240 / 250 hull witnesses were written for.
+- **A hold on the helm** (the hold half of F1's share rule, landed early because the railgun needs
+  it). `AbilityDef.Hold` is a share a running row puts on the whole helm AFTER the lifts are summed:
+  both thrusts, both speed caps and the rudder, so x0 roots the hull, heading included, whatever
+  lift runs. The railgun's charge is `Hold = 0`, no longer Status.Disabled.
+- **Disabled on a pilot** now means what the capitals' warp overshoot will need: no helm, no main
+  guns (they keep reloading), no ability presses (the slot says DISABLED; the host drops a press
+  that arrives anyway), no warp. Point defence, the wing and turrets already out fight on. Nothing
+  in the game disables a pilot yet; lane B's overshoot will be the first.
+- **Hardened takes its share from whoever applied it** (`ApplyStatus(status, seconds, share)`), the
+  row's half when none is named; two at once keep the harder. The rush gives its own rush_guard; the
+  Taunt will give 0.67. `StatusGuard.Stat` is gone.
+- Stale comments: a raider missile flies 12 s, not 7; raid strength is 1.025^(L-1), not 1.1^(L-1).
+
+**Checks:** new `LaneABurnClockChecks` (3 hand-started beams at seeded bearings, reaches and
+offsets: 5 hits, 0.75 s apart, 250), `LaneAHoldChecks` (3 headings x 3 key pairs: the charging
+hull moves < 1 u and turns < 0.005 rad; free again after), `LaneADisabledChecks` (a warden disabled
+3 times: no move, no turn, no shell, hunters refused, PD still takes a raider; cleared, it fires and
+moves), `LaneAHardenedShareChecks` (0.67 -> 67, 0.67 then 0.5 -> 50, none -> 50). Rewritten: the
+sniper's "charges with the hull locked" (now `Held == 0`), its "hull is free again" (`Held == 1`),
+the ability sweep's railgun row, and the stat-reach sweep's railgun case (no Disabled to clear).
+**Rungs:** 1 and 2 green in the worktree; rung 3 owed on two seeds (ledger_kits.md).
+
+**Known broken:** rung 3 at ad19fd8 (one seed): this entry's checks passed except "a DISABLED
+warden" on 2 of its 3 headings (a carried yaw turned it 7.92 deg), fixed in job 1b above.
 
 ### A bare bell table is part of the build's fingerprint (2026-09-25, branch wt/art)
 - `Nozzle` is a readonly struct with public `X`/`Y`/`Bell` fields (was a positional record struct,

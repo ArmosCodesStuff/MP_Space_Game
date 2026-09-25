@@ -168,15 +168,14 @@ public class ShipStats
         }
 
         if (Def.Has(Fit.Pd))
-        {   // An active ability: activating opens the firing window; the reload runs after
-            // it closes. Battleship and destroyer mounts are heavier and swing slower than the carrier's.
+        {   // PASSIVE: every mount fires whenever the ship is alive, with no key, no window and no
+            // recharge -- 1 DPS a mount. Battleship and destroyer mounts are heavier and swing slower
+            // than the carrier's.
             Add("Point defence", "pd_count",    "Turrets",           2, "", 0);
             Add("Point defence", "pd_damage",   "Damage per shot",   0.5, "", 2);
             Add("Point defence", "pd_interval", "Reload",            0.5, "s", 2, inverse: true);
             Add("Point defence", "pd_range",    "Range",             460, "u", 0);
             Add("Point defence", "pd_turn",     "Turret turn rate",  Mathf.Tau / 3f, "rad/s", 2);
-            Add("Point defence", "pd_active",   "Firing window",     15, "s", 0);
-            Add("Point defence", "pd_reload",   "Recharge after",    15, "s", 0, inverse: true);
         }
 
         if (Def.Has(Fit.Wing))
@@ -232,14 +231,8 @@ public class ShipStats
     public double MainDpsPerBarrel => Def.Has(Fit.Guns) ? this["main_damage"] / this["main_interval"] : 0;
     public double MainDps          => MainDpsPerBarrel * this["main_count"];
     public double PdDpsPerTurret   => Def.Has(Fit.Pd) ? this["pd_damage"] / this["pd_interval"] : 0;
-    // PD only fires during its window, so its sustained rate is scaled by the duty fraction.
-    // A window's share of the time. A mount that never switches off (Fit.AlwaysPd) has no
-    // window and no recharge: its duty is the whole of it.
-    public double PdDuty           => !Def.Has(Fit.Pd) ? 0
-                                    : Def.Has(Fit.AlwaysPd) ? 1
-                                    : this["pd_active"] / (this["pd_active"] + this["pd_reload"]);
-    private double PdDps            => PdDpsPerTurret * this["pd_count"];
-    public double PdSustainedDps   => PdDps * PdDuty;
+    // Passive, so what it deals while firing is what it sustains: there is no window to share.
+    public double PdDps            => PdDpsPerTurret * this["pd_count"];
     // A full magazine of bursts, fired as fast as it allows, then reloaded: damage per cycle over cycle time.
     public double MissileDps => Def.Has(Fit.Missiles)
         ? this["missile_mag"] * PlayerShip.BurstSides.Length * this["missile_damage"]
@@ -252,8 +245,8 @@ public class ShipStats
     public double FighterDpsEach   => Def.Has(Fit.Wing) ? this["fighter_damage"] / this["fighter_interval"] : 0;
     public double FighterDps       => FighterDpsEach * this["fighter_count"];
     // Fighters strafe and then dock to rest, so the rate they HOLD is their firing rate over the
-    // share of the time they are out -- the sheet's own two figures, worked out exactly as the
-    // point-defence window's duty is above.
+    // share of the time they are out -- the burst over the whole burst-and-rest cycle, the
+    // sheet's own two figures.
     public double FighterDuty      => Def.Has(Fit.Wing) && this["fighter_burst"] + this["fighter_rest"] > 0
                                     ? this["fighter_burst"] / (this["fighter_burst"] + this["fighter_rest"]) : 0;
     public double FighterSustainedDps => FighterDps * FighterDuty;
@@ -276,7 +269,7 @@ public class ShipStats
         get { foreach (var w in Def.Weapons) yield return new DpsLine(w.Label, w.Rate(this), !w.Burst, w.Note?.Invoke(this) ?? ""); }
     }
     // The rate it can hold forever: every line that is not a burst. The window added MainDps,
-    // MissileDps, BroadsideDps and PdSustainedDps, which is nine of the twelve classes short.
+    // MissileDps, BroadsideDps and PdDps, which is nine of the twelve classes short.
     public double SustainedDps
     {
         get { double t = 0; foreach (var l in DamageLines) if (l.Sustained) t += l.Dps; return t; }
@@ -312,8 +305,8 @@ public static class Dps
 
     public static readonly DpsSource Pd = new()
     {
-        Label = "Point defence", Rate = s => s.PdSustainedDps,
-        Note = s => $"{s["pd_count"]:0} turrets at {s.PdDpsPerTurret:0.00} DPS while firing, {s.PdDuty * 100:0}% of the time",
+        Label = "Point defence", Rate = s => s.PdDps,
+        Note = s => $"{s["pd_count"]:0} turrets at {s.PdDpsPerTurret:0.00} DPS, always on",
     };
 
     public static readonly DpsSource Fighters = new()

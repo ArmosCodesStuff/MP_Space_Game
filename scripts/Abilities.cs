@@ -60,11 +60,18 @@ public class AbilityDef
     //              must show at once, before the host's next report (the broadside leaving its
     //              wind-up for its volleys). Nothing that damages or spends belongs here.
     //   Expire  -- on the HOST alone: what it resolves (the railgun's shot, the rush's EMP, the
-    //              echo's blast, the recharge after a point-defence window, the magazine a reload
-    //              refills). The host gate is the LOOP's, so a new row is safe by default.
+    //              echo's blast, the magazine a reload refills). The host gate is the LOOP's, so a new row is safe by default.
     // Each is handed the ship, and a row that stored a number reads it back from its own slot
     // (PlayerShip.Sl): the echo detonates Sl("echo").Own, so no number has to be carried here.
     public Action<PlayerShip> Elapsed, Expire;
+
+    // WHAT THIS ROW HEARS OF ITS OWN SHIP'S BLOWS, WHILE IT RUNS (F18): every weapon's hit comes
+    // through PlayerShip.NoteDealt (the hostile damage door, Dealt.Deal), which calls this on every
+    // row whose Left > 0 (and While, if it narrows the run) -- the target, how much, and the
+    // weapon's id (Dealt.*, or a shot row's own). The echo is the one row that uses it today: it
+    // stores the damage and where it landed in its own slot (PlayerShip.Sl("echo").Own / .At)
+    // rather than NoteDealt knowing the echo by name.
+    public Action<PlayerShip, IHittable, double, string> OnDealt;
 
     // WHILE IT RUNS, what it lifts. A row that speeds a ship's guns or its hull up names the stat
     // id that says by how much (x2: twice as fast); PlayerShip.FireRate and PlayerShip.SpeedMult
@@ -75,13 +82,51 @@ public class AbilityDef
     // untouchable part of it is over.
     public string RateStat, SpeedStat;
     public Func<PlayerShip, bool> While;
+    // WHILE IT RUNS, what it HOLDS the helm to: a share taken after the lifts are summed
+    // (PlayerShip.Held), so no speed lift moves a held hull. 0 roots it, heading included; 0.5
+    // halves it; 1, the default, holds nothing. `While` narrows it the same way.
+    public double Hold = 1;
+
+    // A FLAT TOP SPEED (F1's Add), on top of SpeedStat's multiplier, before the hold: the stat id
+    // this row's ship sheet names for it (PlayerShip.SpeedAdds sums every running row's, added in
+    // PlayerShip.TopSpeed -- see D18). No row uses it yet.
+    public string SpeedAdd;
+    // A LIFT WHOSE SIZE IS A RUNNING TOTAL (F1's Ramp, D18): builds while it runs and Condition
+    // holds, bleeds with the turn (whether or not Condition holds), caps, and drains once the row
+    // stops. See RampSpec below -- the row names three stat ids and a condition; the math is not
+    // its own. No row uses it yet (6d, the Dart's Ramjet).
+    public RampSpec Ramp;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
 }
 
+// F1'S RAMP: a lift that is a RUNNING TOTAL instead of a fixed multiplier -- the Dart's Ramjet
+// rewards flying straight and bleeds it into a turn. A row is nothing but three stat ids (how fast
+// it builds, its ceiling, how hard turning costs it) and a condition; the number itself lives in
+// the ship's own slot (PlayerShip.Sl(id).Own -- per-ability state is how it reaches the wire, same
+// as the echo's stored damage). Step is the ONE place the arithmetic lives: pure, no ship and no
+// Godot frame, so it is provable (LaneARampChecks) before any row exists to carry it.
+public class RampSpec
+{
+    public string Build, Cap, Bleed;          // stat ids: gain/second, ceiling, bleed/second at a full turn
+    public Func<PlayerShip, bool> Condition;  // gates Build only; null = always holds
+
+    // ADVANCES the running total by dt seconds. Holding (the row still running): +build a second
+    // while Condition holds (nothing, if it does not), minus bleed x yawShare a second regardless
+    // (yawShare is |yaw| / the hull's turn rate, 0..1) -- clamped to [0, cap]. Not holding (the row
+    // has stopped): drains toward 0 at cap a second, so a value at the ceiling empties in exactly
+    // 1.0 s and anything less empties sooner.
+    public static double Step(double own, double build, double cap, double bleed,
+                               bool holding, bool condHolds, double yawShare, double dt)
+        => holding
+            ? Math.Clamp(own + ((condHolds ? build : 0) - bleed * yawShare) * dt, 0, cap)
+            : Math.Max(0, own - cap * dt);
+}
+
 // THE CATALOGUE. Every ability in the game, once. A class's row (Ships.cs) lists the ones it
-// carries, so two classes with point defence share this one entry rather than a copy each.
+// carries, so two classes with main guns share this one entry rather than a copy each. (Point
+// defence is no entry at all: it is passive, and fires whenever its ship is alive.)
 public static class Ab
 {
     public static readonly AbilityDef Guns = new()
@@ -115,20 +160,6 @@ public static class Ab
             if (s.BroadsideCooldownLeft > 0)
                 return new SlotState { Line = $"{s.BroadsideCooldownLeft:0}s",
                                        Busy = (float)(s.BroadsideCooldownLeft / s.Stats["broadside_cooldown"]) };
-            return new SlotState { Line = "READY" };
-        },
-    };
-
-    public static readonly AbilityDef Pd = new()
-    {
-        Weapon = true, Id = "pd", Name = "Point defence", Short = "PD", Default = Key.Q,
-        Blurb = "Opens a firing window: each turret picks its own target. Recharges after.",
-        Press = (s, _) => s.StartPd(),
-        Expire = s => s.Sl("pd").Cool = s.Stats["pd_reload"],      // the window closed: the recharge
-        Show = (s, _) =>
-        {
-            if (s.PdActive) return new SlotState { Line = $"ACTIVE {s.PdLeft:0}s", Lit = true };
-            if (!s.PdReady) return new SlotState { Line = $"{s.PdRechargeLeft:0}s", Busy = s.PdRechargeFrac };
             return new SlotState { Line = "READY" };
         },
     };
@@ -265,6 +296,7 @@ public static class Ab
         Id = "railgun", Name = "Railgun", Short = "RAIL", Default = Key.F,
         Blurb = "A charge you cannot turn or thrust through, then a straight blue line through everything on it.",
         Press = (s, _) => s.ChargeRail(),
+        Hold = 0,                                           // the charge: rooted, heading and all
         Expire = s => s.FireRail(),
         Refuse = (s, _) => s.Sl("railgun").Left > 0 ? "CHARGING" : s.Sl("railgun").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => s.Sl("railgun").Left > 0
@@ -313,6 +345,7 @@ public static class Ab
         Id = "echo", Name = "Bullet echo", Short = "ECHO", Default = Key.F,
         Blurb = "The echo remembers the damage you deal, then detonates all of it where your last shot landed.",
         Press = (s, _) => s.StartEcho(),
+        OnDealt = (s, t, d, w) => { ref var e = ref s.Sl("echo"); e.Own += d; e.At = t.Position; },
         Expire = s => s.Detonate(),
         Refuse = (s, _) => s.Sl("echo").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => s.Sl("echo").Left > 0

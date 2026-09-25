@@ -7,7 +7,7 @@ using System.Collections.Generic;
 // The turret was a part of PlayerShip: it read the ship's stat sheet, the ship's art, the ship's
 // point-defence window and the ship's accent colour. So the only thing in the game that could
 // mount one was a pilot's ship -- and a freighter's deployed turret, a hauler's own mount, the
-// base's gun and a class whose point defence never switches off all wanted the same swing, the
+// base's gun and a warden's heavy point defence all wanted the same swing, the
 // same claim-sharing acquisition and the same reload that carries its remainder.
 //
 // A turret now asks its HOST two things: what gun this is (TurretSpec -- numbers, art, the row
@@ -45,7 +45,7 @@ public struct TurretSpec
     public float ShellSpeed;             // main guns: the shell's speed
     public string Texture;               // the sprite (barrels up, pivot at the sheet's centre)
     public float TexScale;               // world units per turret-texture pixel
-    public float Barrel, Ring;           // muzzle from the pivot; the radius of the ring it draws
+    public float Barrel;                 // muzzle from the pivot
     public Color Tint;
     // WHAT ITS FLASH IS, when it is point defence: a row of Beam.All -- the line's colour and the
     // note it is heard at. Beam.Point is 0, so a gun that says nothing is a warship's point
@@ -70,12 +70,11 @@ public interface ITurretHost
 {
     Node2D AsNode { get; }                      // what the turret is a child of, and turns with
     TurretSpec Spec(bool pd);
-    bool PdOnline { get; }                      // point defence may fire now (a window, or always)
-    float PdRing { get; }                       // 0..1 the PD ring shows, 0 for no ring at all
+    bool PdOnline { get; }                      // point defence may fire now
     Vector2 AimAt { get; }                      // where the main guns point
     float FastSwing { get; }                    // 0, or a turn rate that overrides the spec's
     IReadOnlyList<Turret> Siblings { get; }     // PD turrets that may have claimed a target
-    void NoteDealt(double d, Vector2 at);       // what this gun just did, and where it landed
+    void NoteDealt(double d, IHittable target, string weapon);  // what this gun just did, and to what
     PlayerShip Credit { get; }                  // whose shell it is, for the tally (may be null)
 }
 
@@ -136,24 +135,25 @@ public partial class Turret : Node2D
             // aim point it last sent. On guests this is cosmetic; the host's copy is
             // the one whose barrel direction decides where shots go.
             Swing((Host.AimAt - GlobalPosition).Angle(), delta);
-            QueueRedraw();
             return;
         }
 
         float rest = Host.AsNode.Rotation - Mathf.Pi / 2f;
-        if (!Online) { Target = null; _cd = 0; Swing(rest, delta); QueueRedraw(); return; }
+        if (!Online) { Target = null; _cd = 0; Swing(rest, delta); return; }
 
         // Acquire. Runs on guests too, as cosmetics: the same rule on the same
         // positions picks the same targets, so a guest sees its turrets track what
         // the host's are shooting. Only the host's copy deals damage. A FALLBACK (a practice
         // dummy, to a turret left standing) is never HELD: it is picked again every tick, so the
-        // first thing that can die to come into reach takes the gun off it.
+        // first thing that can die to come into reach takes the gun off it. What it does hold, it
+        // keeps only until something free betters it (Acquire's `held`).
         Vector2 wp = GlobalPosition;
-        if (!StillThere(Target) || S.Prey.IsFallback(Target) || wp.DistanceTo(Target.Position) > Range * 1.15f) Target = Acquire(wp);
+        Target = !StillThere(Target) || S.Prey.IsFallback(Target) || wp.DistanceTo(Target.Position) > Range * 1.15f
+            ? Acquire(wp, null) : Acquire(wp, Target);
 
         float desired = Target != null ? (Target.Position - wp).Angle() : rest;
         float diff = Swing(desired, delta);
-        if (!Net.Sim) { QueueRedraw(); return; }
+        if (!Net.Sim) return;
 
         // An 8-degree cone, so a turret still swinging does not fire. The reload
         // CARRIES its remainder rather than resetting: resetting rounds every shot up
@@ -168,10 +168,9 @@ public partial class Turret : Node2D
             if (!StillThere(tgt)) { Target = null; break; }
             var spec = S;
             _cd += spec.Interval;
-            tgt.TakeDamage(spec.Damage); Host.NoteDealt(spec.Damage, tgt.Position);
+            Dealt.Deal(tgt, spec.Damage, Host, Host is PlayerShip ? Dealt.Pd : Dealt.Turret);
             Combat.Flash(wp + Vector2.Right.Rotated(GlobalRotation) * spec.Barrel, tgt.Position, spec.Beam);
         }
-        QueueRedraw();
     }
 
     // WHAT A GUN THAT PICKS FOR ITSELF TAKES FIRST: what is in flight -- a missile, or a body with
@@ -181,14 +180,24 @@ public partial class Turret : Node2D
     // turret left standing takes them all (Targeting.Sentry). Below every rank, what its filter
     // takes only as a FALLBACK. Within a rank, the nearest one no sibling turret has claimed (if
     // all are claimed, the nearest regardless).
+    // HELD, it is not re-picked by distance (no flicking between two in reach), but it gives way
+    // to something FREE that betters it: a lower rank (a missile over the light it is on), or the
+    // same rank while a sibling shares what it holds (the spare that doubled up spreads to the
+    // first new one in reach) -- never down the ranks, and never to a fallback. Point defence is
+    // passive, so no window starts a fresh pick: without this a doubled-up mount would stay
+    // doubled up, and one on a light would let a missile through.
     public static int Rank(IHittable h) => TagExt.Is(h, Tag.Missile | Tag.Hulled) ? 0 : TagExt.Is(h, Tag.Light | Tag.Fighter) ? 1 : 2;
     private const int FallbackRank = 3;
+    private bool Claimed(IHittable h)
+    {
+        foreach (var t in Host.Siblings) if (t != this && t.Target == h) return true;
+        return false;
+    }
     // Best by (rank, then distance), preferring one no sibling turret has claimed, falling
-    // back to the best claimed one -- in a single pass with no allocation. This used to be a LINQ
-    // chain with two lists built and sorted, and Tick calls it EVERY FRAME FOR EVERY PD TURRET
-    // while point defence is active with nothing in range, because a null Target never satisfies
-    // the guard -- and every frame a turret holds a fallback.
-    private IHittable Acquire(Vector2 from)
+    // back to the best claimed one -- in a single pass with no allocation. Tick calls it EVERY
+    // FRAME FOR EVERY TURRET THAT PICKS FOR ITSELF: to pick, and, holding (`held`), to see whether
+    // something free betters what it holds.
+    private IHittable Acquire(Vector2 from, IHittable held)
     {
         IHittable bestFree = null, bestAny = null;
         int freePri = 0, anyPri = 0; float freeDist = 0, anyDist = 0;
@@ -201,12 +210,13 @@ public partial class Turret : Node2D
             if (d > range) continue;
             int p = spec.Prey.IsFallback(h) ? FallbackRank : Rank(h);
             if (bestAny == null || p < anyPri || (p == anyPri && d < anyDist)) { bestAny = h; anyPri = p; anyDist = d; }
-            bool claimed = false;
-            foreach (var t in Host.Siblings) if (t != this && t.Target == h) { claimed = true; break; }
-            if (claimed) continue;
+            if (Claimed(h)) continue;
             if (bestFree == null || p < freePri || (p == freePri && d < freeDist)) { bestFree = h; freePri = p; freeDist = d; }
         }
-        return bestFree ?? bestAny;
+        if (held == null) return bestFree ?? bestAny;
+        if (bestFree == null || ReferenceEquals(bestFree, held)) return held;
+        int heldPri = Rank(held);
+        return freePri < heldPri || (freePri == heldPri && Claimed(held)) ? bestFree : held;
     }
 
     // One main-gun shot, along the barrel as it points RIGHT NOW: whatever the gun's row FIRES
@@ -259,26 +269,10 @@ public partial class Turret : Node2D
         return diff;
     }
 
-    // The turret takes the host's accent (turrets, engines, trim) over its hull colour.
+    // The turret takes the host's accent (turrets, engines, trim) over its hull colour. It draws
+    // nothing of its own: its sprite is the whole of it (point defence has no window to show).
     public void Recolor()
     {
         if (_sprite != null) _sprite.Modulate = S.Tint;
-        QueueRedraw();
-    }
-
-    public override void _Draw()
-    {
-        // PD shows the host's cycle, just outside its ring: the firing window running down, or
-        // the recharge. Main guns draw nothing here, and a host whose PD never switches off shows
-        // no ring at all (PdRing 0), so leave before doing any of the work -- this runs per
-        // turret, per frame.
-        if (!PointDefense) return;
-        float frac = Host.PdRing;
-        if (frac <= 0) return;
-        var spec = S;
-        var lit = Online ? spec.Tint : new Color(0.35f, 0.35f, 0.40f);
-        float r = spec.Ring + 1.6f;
-        DrawArc(Vector2.Zero, r, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * frac, 16,
-                Online ? new Color(lit.R, lit.G, lit.B, 0.9f) : new Color(1f, 0.5f, 0.3f, 0.6f), 1.2f);
     }
 }

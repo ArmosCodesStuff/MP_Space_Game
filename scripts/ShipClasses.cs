@@ -320,7 +320,7 @@ public partial class Wing : Node2D
                 if (_cd <= 0 && _shots < Def.Shots)
                 {
                     _cd += Carrier.Cadence(Def.IntervalStat); _shots++;
-                    t.TakeDamage(S[Def.DamageStat]); Carrier.NoteCombat();
+                    Dealt.Deal(t, S[Def.DamageStat], Carrier, Dealt.Fighter);
                     Combat.Flash(Position, t.Position, Def.Beam);
                 }
                 if (_shots >= Def.Shots) _f = FSt.Overshoot;

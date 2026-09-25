@@ -26,7 +26,7 @@ public abstract partial class UtilityShip : Node2D, IRaidTarget, ITagged
     // what is being done to it (Statuses): a raider's web today, the host's to decide
     private StatusSet _status;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
+    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(s, seconds, share); }
     public bool Pinned => _status.Has(Status.Pinned);
     protected void TickStatus(float dt) { if (Net.Sim) _status.Tick(dt); }
 

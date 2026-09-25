@@ -103,7 +103,7 @@ receiving end stops any peer shoving another's ship around.
 **Guests ask; the host acts.** A guest's ability key is one RPC to the host (`RequestAbility(id,
 target NetId)`); the host checks the sender owns that ship before doing anything. The owner's aim
 point, guns key and fire mode ride along with its position at 20 Hz; the host fires the guns from
-them. The host sends back, at 10 Hz per ship: hull, PD window and recharge, missile magazine and
+them. The host sends back, at 10 Hz per ship: hull, every ability slot's timers, missile magazine and
 reload, the broadside's wind-up, volleys left and cooldown, the fighters' target, and every wing
 craft's position and state. It also sends hit flashes,
 the dummies' readouts, and each torpedo launch — guests fly a cosmetic copy of a torpedo, since its
@@ -124,6 +124,15 @@ away and respawns from `Net.Players`.
 
 **Offline is not a separate mode.** Single player is a host with no peers, so there is exactly one
 code path and offline can never drift from online.
+
+**A ramp (F1's Ramp, `AbilityDef.Ramp`) is owner-stepped: the one slot field the host does not
+speak for.** Its running total (`Sl(id).Own`) builds on the throttle and bleeds on the yaw, and
+only the owner's peer has either: on the host a guest's ship follows its reports (`RemoteFollow`),
+never `Steer`, so its yaw never moves and there is no helm to read. So `TickAbilities` steps a
+ramp only where `Mine`, and `ApplyHostState` keeps a ramp row's `Own` on the owner's own ship while
+it takes every other slot field from the host. Nothing the host decides reads it: the ramp lifts
+the owner's own top speed and thrust, and the host sees the result as the owner's replicated
+position and speed, as it sees any helm input.
 
 ### What the host must never take on trust (2026-09-22)
 
@@ -569,8 +578,8 @@ saved per character; nothing grants them yet.
 
 **A class is asked what it is FITTED with, never "is it the battleship".** `Fit.Guns`
 (cursor-aimed main turrets), `Fit.Broadside`, `Fit.Missiles` (a magazine of bursts), `Fit.Wing`
-(fighters and bombers), `Fit.Pd`, `Fit.Deploy` (turrets it drops and collects), `Fit.AlwaysPd`
-(point defence with no window). The stat sheet grows each group only for a class that carries it
+(fighters and bombers), `Fit.Pd` (point defence: passive, no key, firing whenever the ship is
+alive), `Fit.Deploy` (turrets it drops and collects). The stat sheet grows each group only for a class that carries it
 (a row a class lacks reads 0), the ship builds the matching hardware from the same flag, and the K
 window prints the matching figures.
 
@@ -578,6 +587,22 @@ window prints the matching figures.
 and 25% larger: 378 u and a 43.875 u half-beam. The carrier is 25% smaller (283.5 u) and the destroyer
 25% smaller again (212.6 u). The hit capsule is the drawn hull. New ships spawn half the longest
 class below the pad (`Hub.SpawnClear`), so any class starts clear of the base.
+
+### The class kits: the signed spec lives in docs/plans (2026-09-24)
+
+The twelve kits the class batch builds (one primary and three abilities a class, the capitals' warp,
+the V drive, strafe, the foundations F1-F24) are signed off in three layers, each amending the one
+before, and are NOT copied here:
+
+- `docs/plans/kits_v2.md`: every class card in full, the foundation table (§5) and the OutGuards rows.
+- `docs/plans/kits_v3.md`: the owner's v2 changes (Supercarrier, Grapnel pull and rip, Taunt, Ramjet,
+  the enemy heavies' twin laser, chips, capital warp); foundations as changes to v2 §5.
+- `docs/plans/kits_v31.md`: every later ruling folded in; foundations as changes to v3 §5; the build
+  order (§8, nine lanes) the batch follows. **Where the three disagree, the newest wins**, and the
+  owner's rulings in `docs/plans/README.md` win over all three.
+
+Numbers for the curve, bosses, raids, chips and items are `numbers_curve_raids_items.md`'s, not the
+kits'. Progress, decisions taken where the spec is silent, and the engine rungs owed: `docs/plans/ledger_kits.md`.
 
 ### The helm: capital ships handle like naval ships
 
@@ -624,10 +649,14 @@ fire mode onto F never finds two abilities on it, and its `reload`, which is gon
   **staggered** fires one every reload ÷ barrels. Same rate: reloads **carry their remainder**
   (`cd += step`); resetting instead rounds each step up to a whole frame and staggered falls behind
   (measured 4.50 against 6.00).
-- **Point defence is an active ability**: activation opens a 15 s firing window, then 15 s of
-  recharge. While active, **each turret picks and tracks its own target** — the nearest in range
-  that no sibling turret has claimed, else the nearest — so a group gets spread across. Battleship
-  mounts swing slowly (τ/3); the carrier's fast (τ/1.2). 460 u reach, 8° firing cone.
+- **Point defence is passive**: no key, no window, no recharge; it fires whenever its ship is alive.
+  **Each turret picks and tracks its own target** — by rank (what is in flight, then small craft),
+  then the nearest in range that no sibling turret has claimed, else the nearest — so a group gets
+  spread across. What it holds it keeps (no flicking between two in reach) until something FREE
+  betters it: a lower rank (a missile over the light it is on), or the same rank while a sibling
+  shares its target (`Turret.Acquire`'s `held`). With no window there is no fresh pick, so without
+  that rule a doubled-up mount stayed doubled up and a mount on a light let a missile through.
+  Battleship mounts swing slowly (τ/3); the carrier's fast (τ/1.2). 460 u reach, 8° firing cone.
 - **The broadside (battleship, F).** A **0.5 s wind-up** in which every main turret swings onto the
   cursor — fast enough to come round from anywhere in time (half a turn in the wind-up, or their own
   τ/4 if that is faster) — then **three volleys of every main gun, 0.25 s apart**, each shell a normal
@@ -1524,6 +1553,7 @@ produced, and what each one replaced.
 | `Turrets.cs` → `ITurretHost` | what a gun is bolted to | a turret that could only belong to a `PlayerShip` |
 | `Tags.cs` | what a thing IS | `h is Torpedo`, `h is Raider r && !r.Heavy`, `HitRadius < 20f` |
 | `Statuses.cs` | what is being DONE to a thing | a bool and a timer per class, per effect |
+| `Statuses.cs` → `StatusSet.OutGuards` | what a status does to what its holder DEALS (a share per kind of blow, a held throw, the tags it spares), read by one door, `StatusSet.Out` | three "weaken what shoots" gates planned for three weapons; `m.Damage * DamageMult` written out at six boss sites |
 | `Ids.cs` | an id space per kind | six hardcoded bases with six private counters |
 | `Shots.cs` → `Shots.All` | a projectile: who it hits, how its path is tested, how it ends, how it looks | `Shell.cs`, `Slug.cs`, `Torpedo.cs` — three classes, one copy each of the same sweep, lifetime and hit, and three launch RPCs |
 | `Fx.cs` → `Fx.All` | an effect: a shape, a colour, a life | one `Explosion` node, and everything else drawn as spokes of laser flashes because that was the only drawing a guest ever saw |

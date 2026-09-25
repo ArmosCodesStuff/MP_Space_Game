@@ -77,7 +77,7 @@ public static class Emplacements
                 Gun = new TurretSpec { Kind = Shots.Cruise, Damage = 126, Interval = 15, Range = 4500f,
                                        Turn = Mathf.Tau / 2.5f, ShellSpeed = 120f,
                                        Homing = 1.2f, Size = 3f, Hull = 30, Windup = 1.5,
-                                       Texture = "res://turret_main.png", TexScale = 0.26f, Barrel = 34f, Ring = 0f,
+                                       Texture = "res://turret_main.png", TexScale = 0.26f, Barrel = 34f,
                                        Tint = new Color(0.90f, 0.40f, 0.34f), Source = DamageSource.BaseMissile } },
 
         // ITS FOUR SHIELD PYLONS. 400 hull to start, on the same ladder above that; nothing shields
@@ -141,7 +141,7 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
 
     private StatusSet _status;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
+    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim && StatusSet.Reaches(s, Tags)) _status.Apply(s, seconds, share); }
     private bool Held => _status.Has(Status.Disabled);
 
     // UP WHILE ANYTHING OF ITS SHIELDING ROW STILL STANDS. Every peer works this out from the
@@ -163,16 +163,17 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
     // besieging it.
     public Node2D AsNode => this;
     public bool PdOnline => false;
-    public float PdRing => 0f;
     public Vector2 AimAt => _aim;
     public float FastSwing => 0f;
     public System.Collections.Generic.IReadOnlyList<Turret> Siblings => _mounts;
-    public void NoteDealt(double d, Vector2 at) { }
+    public void NoteDealt(double d, IHittable target, string weapon) { }
     public PlayerShip Credit => null;
+    // read as each round leaves (Turret.Shoot), so its damage goes out through the door
+    // (StatusSet.Out) with whatever is on this hull at that moment
     public TurretSpec Spec(bool pd)
     {
         var s = Def.Gun.GetValueOrDefault();
-        s.Damage *= _dmg;
+        s.Damage = _status.Out(s.Damage * _dmg, OutKind.Gun);
         s.Hull *= _hull;
         return s;
     }

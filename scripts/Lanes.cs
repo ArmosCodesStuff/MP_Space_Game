@@ -107,7 +107,7 @@ public static class Lanes
     public const float  GunRange = 1200f;      // u -- it covers its own stand from the first day
     public const double GunRate = 6.0;         // missiles a MINUTE: one every 10 s
     public const float  GunSpeed = 300f;       // u/s -- the flight is the gap over this
-    public const double GunDamage = 42.0;      // what the blast does: the gunship's own figure
+    public static double GunDamage => Enemies.Of(Enemies.Gunship).MissileDamage;   // what the blast does: the gunship row's own missile
     public const float  GunBlast = 90f;        // ...and how wide it is where it lands
     public const double GunMinFlight = 0.6;    // never less than this in the air, however close
     public static readonly float GunTurn = Mathf.Tau / 6f;
@@ -281,11 +281,10 @@ public partial class LaneGun : Node2D, ITurretHost
     // ── what carries the mount (ITurretHost) ────────────────────────────────
     public Node2D AsNode => this;
     public bool PdOnline => false;                      // a MAIN mount: it never fires by itself
-    public float PdRing => 0f;
     public Vector2 AimAt => _aim;
     public float FastSwing => 0f;
     public IReadOnlyList<Turret> Siblings => _mounts;
-    public void NoteDealt(double d, Vector2 at) { }     // it keeps no tally: it is nobody's ship
+    public void NoteDealt(double d, IHittable target, string weapon) { }  // no tally: nobody's ship
     public PlayerShip Credit => null;
     // THE MOUNT, NOT THE ROUND. This gun's shot is a missile and never leaves the barrel as a
     // shell, so the spec is its art, its swing and its reach; nothing ever calls Turret.Shoot on
@@ -293,7 +292,7 @@ public partial class LaneGun : Node2D, ITurretHost
     public TurretSpec Spec(bool pd) => new()
     {
         Kind = Shots.Shell, Damage = 0, Interval = Interval, Range = Range, Turn = Lanes.GunTurn,
-        ShellSpeed = 0f, Texture = "res://turret_main.png", TexScale = 0.30f, Barrel = 30f, Ring = 0f,
+        ShellSpeed = 0f, Texture = "res://turret_main.png", TexScale = 0.30f, Barrel = 30f,
         Tint = Lanes.GunTint,
     };
 

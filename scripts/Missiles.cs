@@ -13,7 +13,7 @@ using System.Linq;
 //             pair recomputed inline every frame
 //   Hub       a `_blasts` tuple whose third field was a RAIDER id, a blast resolved against
 //             Hub.RaiderTargets() and nothing else, landing through IRaidTarget.Hit and nothing
-//             else, at Raider.BlastRadius over Raider.MissileFlight
+//             else, at Raider.BlastRadius over the row's own MissileFlight
 //   HubNodes  HeavyMissileVisual, with the raiders' red painted into its _Draw
 // The outposts answer a blockade with the SAME missile from the other side (Lanes.cs), so WHOSE
 // it is is a row and the launcher's numbers are a struct. Nothing below this comment names a
@@ -91,7 +91,7 @@ public static class Missiles
                 Body = new Color(0.28f, 0.34f, 0.42f), Nose = new Color(0.45f, 0.85f, 1f),
                 Glow = new Color(0.70f, 0.95f, 1f),
                 Pool = _ => Combat.Hostiles.OfType<Node2D>(), Prey = Targeting.Craft,
-                Land = (n, d, at, src) => (n as IHittable)?.TakeDamage(d) },
+                Land = (n, d, at, src) => { if (n is IHittable h) Dealt.Deal(h, d, null, Dealt.Outpost); } },
     };
 
     public static MissileSide Of(int side) => All[side >= 0 && side < All.Length ? side : Raid];

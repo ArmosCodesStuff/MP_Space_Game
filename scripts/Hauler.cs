@@ -93,11 +93,10 @@ public partial class Hauler : UtilityShip, ITurretHost
     private static readonly Vector2 PdMount = new(0f, -85.94f);   // on the bow's round dome (make_ships' pd mark)
     public Node2D AsNode => this;
     public bool PdOnline => InReach && !Lost;
-    public float PdRing => 0f;                       // no window, so no ring to run down
     public Vector2 AimAt => Position;                // it has no main guns
     public float FastSwing => 0f;
     public IReadOnlyList<Turret> Siblings => _pdMounts;
-    public void NoteDealt(double d, Vector2 at) { }  // it keeps no combat clock and no echo
+    public void NoteDealt(double d, IHittable target, string weapon) { }  // no combat clock, no echo
     public PlayerShip Credit => null;                // its shots are the base's, not a pilot's
     public TurretSpec Spec(bool pd) => new()
     {
@@ -107,7 +106,7 @@ public partial class Hauler : UtilityShip, ITurretHost
         Range = (float)Economy.HaulerPdRange,
         Turn = (float)Economy.HaulerPdTurn,
         Texture = "res://turret_pd.png",
-        TexScale = 1.3085f / 5.5f, Barrel = 7.2f, Ring = 3.93f,
+        TexScale = 1.3085f / 5.5f, Barrel = 7.2f,
         Beam = Beam.Hauler,              // its flash: its own note, above a warship's point defence
         Tint = new Color(0.78f, 0.82f, 0.9f),
     };

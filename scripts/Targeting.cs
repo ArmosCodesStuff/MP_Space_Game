@@ -99,5 +99,6 @@ public static class Targeting
 public interface IStatused
 {
     StatusSet Statuses { get; }
-    void ApplyStatus(Status s, double seconds);
+    // share: what a blow is multiplied by while it lasts (Hardened), NaN for the row's own default
+    void ApplyStatus(Status s, double seconds, double share = double.NaN);
 }

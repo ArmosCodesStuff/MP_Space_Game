@@ -12,7 +12,7 @@
 
 ---
 
-This file starts from `signoff_v3.md` and applies every ruling that v3 did not yet reflect. Where v3 is unchanged, this file says "v3 §x" and does not copy it.
+This file starts from `kits_v3.md` (the scratchpad's `signoff_v3.md`; v2 is `kits_v2.md`) and applies every ruling that v3 did not yet reflect. Where v3 is unchanged, this file says "v3 §x" and does not copy it.
 
 **Design only.** Nothing in the repo was edited, built or run.
 - The numbers come from `power_v31.py` in this folder (`python power_v31.py`). It is `power_v3.py`, copied and edited. It imports `../curve.py` read-only.
@@ -36,7 +36,7 @@ This file starts from `signoff_v3.md` and applies every ruling that v3 did not y
 | Heavies' twin laser 2.58; heavies never own CC | v3 §3.7 unchanged | — |
 | Supers unchanged (250 / 250) | The burn and the rock stay 250. The curve's cut (Lancer ×0.744, Drake ×0.787) takes every other move, including the ram and the scrap shotgun, which the code flags `Super` | 5 |
 | Player respawn 24 s; the whole party down at once fails the mission | **Already in the working tree** (uncommitted, with its rung-3 check). The kits add nothing | 3.7 |
-| Raids: beam escorts become squad wave 1 from L1; any add's web may start the beam; 0.6 s escape floor; H,L,L,L growth; 30 s refills with no EXP | The raids lane (G), unchanged from `raids_v2.md` plus these rulings. With no chips the fight with adds runs longer; decision 15 holds the 60 s | 5, 8 |
+| Raids: beam escorts become squad wave 1 from L1; any add's web may start the beam; 0.6 s escape floor; H,L,L,L growth; 30 s refills with no EXP | The raids lane (G), unchanged from `raids_squads_adds.md` (raids v2) plus these rulings. With no chips the fight with adds runs longer; decision 15 holds the 60 s | 5, 8 |
 | Curve defaults; salvage levels live on the slot, per pilot | The curve lane (F) | 8 |
 | Items by hull category, 8-12 lines each; +10% compounding a tier, 10 tiers; saves disregarded | The items lane (I), last. `Game.Version` goes 2 → 3 with the kits release and 3 → 4 with the items release, since each changes what a save holds | 8 |
 | Drake silent during its throw | Already built (242b1aa). No work | — |
@@ -498,7 +498,7 @@ The method is v2's. **Stock with no chips** is what the realistic column always 
    - **Friends need nothing extra:** the plugin DLL ships in the runtime part PLAY.bat already downloads, and it imports only Windows system DLLs.
    - It proves itself at rung 5 and `-Wan`.
    - **It goes first because it changes the transport under every later rung-5 run.** A kit proved on the old transport would have to be proved again.
-3. **Lane A's first commit copies the signed kits into `docs/DESIGN.md`:** the v2 cards, the v3 changes and this file's changes. The scratchpad is session-scoped, and the kits are the spec for the batch.
+3. **Lane A's first commit copies the signed kits into the repo:** the v2 cards (`kits_v2.md`), the v3 changes (`kits_v3.md`) and this file, with a `docs/DESIGN.md` section pointing at the three. The scratchpad was session-scoped, and the kits are the spec for the batch.
 
 ### The lanes
 
@@ -510,7 +510,7 @@ The method is v2's. **Stock with no chips** is what the realistic column always 
 | **D · fields and effects** | F9 | slice 1 | Fx.cs, FxNode, the slot-drawn fields in `PlayerShip._Draw` | 2 · 3 |
 | **E · wings** | F13 (gunships, patrol with missiles) | slice 2 (F4 credits wing hits) | ShipClasses.cs (Wing), the fighter and patrol rows in Stats | 2 · 3 · 5 at A's first run |
 | **F · curve** | `Par.cs`, boss rows 3222 / 2968, every move but the two 250s at ×0.744 / ×0.787 (numbers §8), no hull trim for adds, siege rows, the salvage ladder 500 × 1.10 capped at highest boss cleared + 1, **salvage levels on the slot, per pilot**, levels on the identity, skip +2, raider Strength as a level | slice 2 for Par, Missions and the boss rows (DamageScale goes in `Boss.Out`); its Equipment / Character part (ladder, slot levels, identity) waits for lane C's merge (one writer on those two files) | Par.cs, Missions, Lancer / Drake move rows, Emplacements, Waves, TioWindow, the Equipment ladder, Character's slot levels | 2 · 3 · 5 at A's second run |
-| **G · raids** | `Squads.cs` and raids_v2, plus the rulings: beam escorts become squad wave 1 from L1; any add's web may start the beam; the 0.6 s escape floor; H,L,L,L growth; 30 s refills that pay no EXP | slice 2 (F17 + F20) | Squads.cs, Raids, Waves rows, Raider (its turn in the order below), Boss's beam start (the `s.Target.Pinned` test, Boss.cs:413 today) | 2 · 3 · 5 at A's first run |
+| **G · raids** | `Squads.cs` and raids v2 (`raids_squads_adds.md`), plus the rulings: beam escorts become squad wave 1 from L1; any add's web may start the beam; the 0.6 s escape floor; H,L,L,L growth; 30 s refills that pay no EXP | slice 2 (F17 + F20) | Squads.cs, Raids, Waves rows, Raider (its turn in the order below), Boss's beam start (the `s.Target.Pinned` test, Boss.cs:413 today) | 2 · 3 · 5 at A's first run |
 | **H · sprites** | the 12 player ships: hit sizes unchanged, BB mains on the 4 flanking twins; `finish_ships.ps1` and old art deleted if unused (CLAUDE.md §7's command list edited in the same commit) | step 0 | art, `ClassArt` in Ships.cs, tools/make_ships | its frames ride the one rung-4 sweep |
 | **I · items** | hull-category lines (8-12 each), +10% compounding over 10 tiers, **the chip budget (decision 6)** | the kits' rung 6 is green and lane F has merged (Par reads item rows) | Equipment rows, Loot, the item generator | 3 per slice · 4 once · 5 once · **6 once** |
 

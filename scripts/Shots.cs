@@ -220,10 +220,10 @@ public partial class Shot : Node2D, IHittable, ITagged
             if (!Cosmetic && Net.Sim)
             {
                 if (!d.MarkEveryPeer && h is Node2D struck) Popups.NoteImpact(struck, p);
-                // a ship is told where the blow came from, for its shield
+                // a ship is told where the blow came from, for its shield; a hostile is dealt with
+                // through the door (Dealt.Deal), the shot's own row naming the weapon
                 if (h is PlayerShip ps) ps.Hit(Damage, p - Dir * 10f, HitSource);
-                else h.TakeDamage(Damage);
-                if (IsInstanceValid(Source)) Source.NoteDealt(Damage, h.Position);
+                else Dealt.Deal(h, Damage, IsInstanceValid(Source) ? Source : null, d.Id);
             }
             GlobalPosition = p;
             End();

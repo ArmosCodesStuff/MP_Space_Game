@@ -67,7 +67,10 @@ public class BossMove
     public int Count = 1;              // bodies in one firing
     public float Spread;               // degrees between them, fanned about the aim
     public double Live, Tick;          // a beam's burn, and how often that burn is judged
-    public double Flight;              // a thrown body's flight down its lane
+    // A burn is judged at both ends and every Tick between: 3 s every 0.25 s is 13, the last AT 3 s.
+    // COUNTED, and the last one ends the burn, so no two clocks race over which comes first.
+    public int Judgements => Mathf.FloorToInt(Live / Tick + 1e-6) + 1;
+    public double Flight;             // a thrown body's flight down its lane
     public float Turn;                 // a guided body's turn rate (rad/s)
     public float Size = 1f;            // a fired body's drawn size
     public string Source;              // DamageSource: what the blow is called on a hull
@@ -118,11 +121,14 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     public Tag Tags => Tag.Boss;
     // A bastion's shockwave cannot throw a boss, so it holds it still instead (Status.Disabled):
     // it neither moves nor acts while it lasts. The host decides; guests simply stop being told
-    // to move it.
+    // to move it. A status an OutGuards row spares a boss (Dazzled, Jammed) is never put on it.
     private StatusSet _status;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
+    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim && StatusSet.Reaches(s, Tags)) _status.Apply(s, seconds, share); }
     public bool Held => _status.Has(Status.Disabled);
+    // WHAT A MOVE LANDS FOR: its row's damage on the level's and the party's scale, through the
+    // outgoing door (StatusSet.Out) as a super or not. Every blow a move deals is this, once.
+    private double Out(BossMove m) => _status.Out(m.Damage * DamageMult, m.Super ? OutKind.Super : OutKind.Move);
     public double Hp { get; set; }              // a property, not a field: IQuarry asks for it
     public bool Alive => Hp > 0;
     public int NetId => Id;
@@ -141,6 +147,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         public Phase At;
         public double T;                   // the phase's clock: down, except an escort wait
         public double Next;                // a beam's next judgement
+        public int Left;                   // a beam's judgements still to come (BossMove.Judgements)
         public int Fired;                  // how many times it has committed
         public float Aim;                  // the world angle it points down, frozen with the warning
         public Vector2 From, To;           // a dash's end, a warp's landing, a ring's centre, a lane
@@ -480,7 +487,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         {
             case MoveWay.Bolt:
                 if (!Sees(s.Target)) break;
-                s.Target.Hit(m.Damage * DamageMult, Position, m.Source);
+                s.Target.Hit(Out(m), Position, m.Source);
                 Combat.Flash(nose, s.Target.Position, m.Beam);
                 break;
             case MoveWay.Shoot:
@@ -489,17 +496,17 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                 foreach (float a in Fan(s.Aim, m))
                 {
                     var dir = Vector2.Right.Rotated(a);
-                    Combat.Fire(m.Shot, nose + dir * m.Muzzle, dir, m.Speed, m.Range, m.Damage * DamageMult, m.Radius,
+                    Combat.Fire(m.Shot, nose + dir * m.Muzzle, dir, m.Speed, m.Range, Out(m), m.Radius,
                                 Shots.Of(m.Shot).Guided && Sees(s.Target) ? s.Target.NetId : 0, m.Turn,
                                 hitSource: m.Source, size: m.Size, variant: k++);
                 }
                 break;
             }
-            case MoveWay.Beam: s.At = Phase.Firing; s.T = m.Live; s.Next = 0; break;
+            case MoveWay.Beam: s.At = Phase.Firing; s.Left = m.Judgements; s.Next = 0; break;
             case MoveWay.Dash: s.At = Phase.Firing; break;
             case MoveWay.Ring:
                 foreach (var p in _hittable)                              // the hit matches the drawn ring: Type.Size, same as Warn
-                    if (p.Position.DistanceTo(s.To) <= m.Reach * Type.Size + p.HitRadius) p.Hit(m.Damage * DamageMult, s.To, m.Source);
+                    if (p.Position.DistanceTo(s.To) <= m.Reach * Type.Size + p.HitRadius) p.Hit(Out(m), s.To, m.Source);
                 break;
             case MoveWay.Throw: s.At = Phase.Firing; break;
         }
@@ -514,14 +521,16 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         {
             case MoveWay.Beam:
                 if ((s.Next -= delta) <= 0)
-                {   // judged every Tick, down the nose -- which has not moved since the wind-up began
-                    s.Next = m.Tick;
+                {   // judged every Tick, down the nose -- which has not moved since the wind-up began.
+                    // ADDED, not set: the overshoot carries, so at 60 fps a judgement lands every 15
+                    // frames and a full burn is all 13 of them.
+                    s.Next += m.Tick;
                     var (la, lb) = Segment(m.Id);
                     foreach (var p in _hittable)
                         if (Combat.DistToSegment(p.Position, la, lb) <= m.Width / 2f + p.HitRadius)
-                            p.Hit(m.Damage * DamageMult, Position, m.Source);
+                            p.Hit(Out(m), Position, m.Source);
+                    if (--s.Left <= 0) s.At = Phase.Idle;   // its last judgement ends it (Judgements)
                 }
-                if ((s.T -= delta) < 0) s.At = Phase.Idle;
                 break;
             case MoveWay.Dash:
                 // ONE RAM A PASS: a hull longer than Speed x PlayerShip's hit gap is over a point
@@ -530,7 +539,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                 // the hull takes to go by.
                 Position = Position.MoveToward(s.To, m.Speed * (float)delta);
                 foreach (var p in _hittable)
-                    if (Covers(p.Position, p.HitRadius) && s.Struck.Add(p)) p.Hit(m.Damage * DamageMult, Position, m.Source);
+                    if (Covers(p.Position, p.HitRadius) && s.Struck.Add(p)) p.Hit(Out(m), Position, m.Source);
                 if (Position.DistanceTo(s.To) < 1f) s.At = Phase.Idle;
                 break;
             case MoveWay.Throw:
@@ -607,7 +616,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         s.To = s.From + (s.Spot - s.From).Normalized() * m.Reach;
         int variant = s.Fired % 2;                                            // the two bodies ThrownRock draws
         _rock = new ThrownRock { Boss = this, From = s.From, To = s.To, Hold = m.Windup, Flight = m.Flight,
-                                 Damage = m.Damage * DamageMult, Radius = m.Radius, Variant = variant };
+                                 Damage = Out(m), Radius = m.Radius, Variant = variant };
         GetParent().AddChild(_rock);
         if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetRock), s.From, s.To, m.Windup, m.Flight, m.Radius, variant);
     }

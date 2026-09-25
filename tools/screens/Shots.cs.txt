@@ -103,7 +103,7 @@ public partial class _Shots : Node
         await W(2.5);
         H.SelectTarget(range1);
         Input.ParseInputEvent(new InputEventMouseMotion { Position = GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * (range1.Position + new Vector2(0, -250))) });
-        Key(global::Godot.Key.Q); await W(2.0);
+        await W(2.0);                                  // point defence is passive: nothing to press
         Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = true });
         await W(2.3); await Snap("4_hub_battleship");
         Input.ParseInputEvent(new InputEventKey { Keycode = global::Godot.Key.Space, PhysicalKeycode = global::Godot.Key.Space, Pressed = false });
@@ -134,7 +134,7 @@ public partial class _Shots : Node
         me = H.GetNode<PlayerShip>("Ship_1");
         me.Position = range1.Position + new Vector2(-180, 90); me.Rotation = 0.3f;
         await W(2.0);
-        Key(global::Godot.Key.Q); Key(global::Godot.Key.Space); Key(global::Godot.Key.F);
+        Key(global::Godot.Key.Space); Key(global::Godot.Key.F);
         await W(4.2); await Snap("7_hub_carrier_strike");
         await W(1.0); await Snap("8_hub_carrier_strike_later");
         // close-ups: zoom in, lock the controls (a focused text box) so the mouse stops
@@ -148,7 +148,6 @@ public partial class _Shots : Node
             N<LineEdit>().First().GrabFocus();
             GetViewport().GetCamera2D().Zoom = new Vector2(3.2f, 3.2f);
             s.AimPoint = s.Position + new Vector2(400, -300);
-            Key(global::Godot.Key.Q);
             await W(4.0); await Snap(name);
         }
         // the idle economy: base menu, beams and cargo bars, arms and the queue, the hauler
@@ -288,16 +287,36 @@ public partial class _Shots : Node
             foreach (var r in raid) if (GodotObject.IsInstanceValid(r)) r.TakeDamage(999);
             zp.SetValue(H, z0); rs.Position = keepR; rs.Velocity = Vector2.Zero; await W(0.3);
         }
-        // a heavy raider waiting astern, its missile flying at the ship's predicted spot (the red circle)
+        // a heavy raider at the map's edge, its missile flying at a PINNED ship's predicted spot (the
+        // red circle): a heavy throws only at a pinned target, so the ship is pinned and held still
+        // (Pinned forces thrust), and the heavy's missile clock is forced ready
         {
             var hs2 = H.GetNode<PlayerShip>("Ship_1"); var keepH2 = hs2.Position;
             // the heavy waits at the map's edge nearest the ship (3200 u out, east of the base);
             // the ship 400 u inside it, so the heavy's missile is in range
-            hs2.Position = Hub.BasePos + new Vector2(2800, 0); hs2.Velocity = Vector2.Zero; hs2.Rotation = 0f; await W(0.3);
+            var spot = Hub.BasePos + new Vector2(2800, 0);
+            hs2.Position = spot; hs2.Velocity = Vector2.Zero; hs2.Rotation = 0f; await W(0.3);
+            hs2.ApplyStatus(Status.Pinned, 30.0);
             var hv = H.SpawnRaider(Hub.BasePos + new Vector2(3200, 60), Enemies.Gunship);
+            typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(hv, 0.0);
             var zp = typeof(Hub).GetProperty("ZoomLevel"); float z0 = (float)zp.GetValue(H); zp.SetValue(H, 0.85f);   // ship and heavy both in view
-            await W(4.5); await Snap("49_heavy_waiting_missile");
+            for (int i = 0; i < 60 * 3 && !N<FxNode>().Any(t => t.Id == Fx.WarnZone); i++)
+            { hs2.Position = spot; hs2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            for (int i = 0; i < 12; i++) { hs2.Position = spot; hs2.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            await Snap("49_heavy_waiting_missile");
+            // the same heavy latched on the pinned ship, firing BOTH barrels in one volley: two flashes
+            // from either side of its turret; snapped on the frame a volley lands (a flash lasts 0.1 s)
+            zp.SetValue(H, 2.0f);
+            double hit0 = hs2.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value);
+            for (int i = 0; i < 60 * 8; i++)
+            {
+                hs2.Position = spot; hs2.Velocity = Vector2.Zero;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                if (hv.Latched && hs2.DamageBySource.Where(kv => kv.Key == $"raider:{hv.NetId}").Sum(kv => kv.Value) > hit0) break;
+            }
+            await Snap("49b_heavy_both_barrels");
             if (GodotObject.IsInstanceValid(hv)) hv.TakeDamage(9999);
+            hs2.Statuses.Clear(Status.Pinned); hs2.Hp = hs2.MaxHp;
             zp.SetValue(H, z0); hs2.Position = keepH2; hs2.Velocity = Vector2.Zero; await W(0.3);
         }
         // the base's own weapons: its turret burning a raider inside 300 u
@@ -554,7 +573,7 @@ public partial class _Shots : Node
             Key(global::Godot.Key.K); await W(0.2);
 
             // battleship: the broadside -- the turrets swinging onto the cursor, then a volley in flight;
-            // the bar with the broadside cooling down and PD on
+            // the bar with the broadside cooling down (point defence is passive: no slot)
             hub.SelectTarget(d1);
             await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);
             void Cursor(Vector2 w) => Input.WarpMouse(GetViewport().GetFinalTransform() * (GetViewport().GetCanvasTransform() * w));
@@ -562,8 +581,8 @@ public partial class _Shots : Node
             Cursor(d1.Position);
             Key(global::Godot.Key.F); await W(0.25); await Snap("22_broadside_aiming");
             await W(0.45); await Snap("22b_broadside_volley");
-            await W(0.8); Key(global::Godot.Key.Q); await W(0.4);
-            await Snap("23_bar_battleship_cooldown_pd");
+            await W(1.2);
+            await Snap("23_bar_battleship_cooldown");
             // destroyer: the magazine spent, then reloading
             await Class(ShipClass.Destroyer);
             await Frame(d1.Position + new Vector2(-120, 520), 1.3f, false);

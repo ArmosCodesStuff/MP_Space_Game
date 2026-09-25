@@ -36,11 +36,10 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
 
     public Node2D AsNode => this;
     public bool PdOnline => Alive;                 // no window: it fires whenever it is standing
-    public float PdRing => 0f;
     public Vector2 AimAt => Position;
     public float FastSwing => 0f;
     public IReadOnlyList<Turret> Siblings => _mounts;
-    public void NoteDealt(double d, Vector2 at) => Ship?.NoteDealt(d, at);
+    public void NoteDealt(double d, IHittable target, string weapon) => Ship?.NoteDealt(d, target, weapon);
     public PlayerShip Credit => Ship;
 
     public TurretSpec Spec(bool pd) => new()
@@ -53,14 +52,14 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
         Range    = Ship != null ? (float)Ship.Stats["deploy_range"] : SpareRange,
         Turn     = Mathf.Tau / 2f,
         Texture  = "res://turret_deploy.png",
-        TexScale = 0.16f, Barrel = 20f, Ring = 0f,
+        TexScale = 0.16f, Barrel = 20f,
         Tint     = Ship?.Accent ?? new Color(0.8f, 0.82f, 0.86f),
     };
 
     // ── as something a raider can go after ──────────────────────────────────
     public bool InReach => Alive;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status s, double seconds) { if (Net.Sim) _status.Apply(s, seconds); }
+    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(s, seconds, share); }
     public (float halfLength, float halfWidth) Extent => (Radius, Radius);
     // what the scope and the HUD call it: its owner's, because three of them stand together
     public string Label => Ship != null ? $"{Ship.Pilot}'S TURRET" : "TURRET";
