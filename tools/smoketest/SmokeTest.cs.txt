@@ -219,8 +219,15 @@ public partial class _Test : Node
             HostConn.CreateOffer();
         }
         public static ulong Now => Time.GetTicksMsec();
+        readonly ulong _born = Now;
         void Seen() { Handlers++; if (OS.GetThreadCallerId() != OS.GetMainThreadId()) OffMain++; }
         public bool Connected => HostSawAt > 0 && GuestSawAt > 0;
+        // How far a pair got, for the message of a check it failed: a pair that did not connect once
+        // in three bars said only "5000 ms", and nothing of which step it stopped at.
+        public string Stage() =>
+            $"offer sealed {OfferSealed}, pasted {Pasted}, reply sealed {ReplySealed} at {(ReplySealed ? ReplyAt - _born : 0)} ms, "
+            + $"applied {Applied} at {(Applied ? AppliedAt - _born : 0)} ms; host {HostConn.GetConnectionState()} with {_offerCands.Count} candidates, "
+            + $"guest {GuestConn.GetConnectionState()} with {_answerCands.Count}; host saw {HostSawAt > 0}, guest saw {GuestSawAt > 0}";
         // One frame: poll both ends, then move the exchange on. The guest "pastes" the invite the
         // frame it is sealed; the host takes the reply ApplyAfterMs after the guest sealed it.
         public void Step()
@@ -325,7 +332,7 @@ public partial class _Test : Node
         Check(a.Served == Error.Ok && a.ConnectedAtOnce, $"CreateServer is Connected in the same call ({a.Served})");
         ulong t0 = RtcPair.Now;
         bool up = await RtcUntil(() => a.Connected, 5000, a);
-        Check(up, $"an in-process pair connects, the host offering, bundles sealed and swapped whole ({RtcPair.Now - t0} ms, id {a.Id})");
+        Check(up, $"an in-process pair connects, the host offering, bundles sealed and swapped whole ({RtcPair.Now - t0} ms, id {a.Id}{(up ? "" : "; " + a.Stage())})");
         if (!up) { a.Free(); return; }
         // every row's data channel open at both ends -- 15: channel 0's three and the 12 above -- and
         // every one of them reliable whatever the row asked for (Godot writes maxPacketLifetime, the
@@ -364,7 +371,7 @@ public partial class _Test : Node
         b.Host.DisconnectPeer(b.Id); t0 = RtcPair.Now;
         await RtcUntil(() => b.GuestLostAt > 0, 3000, b);
         Check(bUp && b.GuestLostAt > 0 && b.GuestLostAt - t0 <= 1000,
-              $"the host's DisconnectPeer is seen by the guest within 1 s ({(b.GuestLostAt > 0 ? $"{b.GuestLostAt - t0} ms" : "never")}, id {b.Id})");
+              $"the host's DisconnectPeer is seen by the guest within 1 s ({(b.GuestLostAt > 0 ? $"{b.GuestLostAt - t0} ms" : "never")}, id {b.Id}{(bUp ? "" : "; " + b.Stage())})");
 
         // a pending entry -- an invite whose reply never came -- hung up through Link.Hang is gone.
         // THE INVITE NEVER REACHES THE GUEST: a guest holding it reaches the host before any reply is
@@ -398,9 +405,9 @@ public partial class _Test : Node
         {
             var p = new RtcPair(Rng.RandiRange(2, int.MaxValue));
             bool ok = await RtcUntil(() => p.Connected, 5000, p);
+            cycled.Add(ok ? "up" : $"DOWN ({p.Stage()})");
             Link.Hang(p.Host, p.Id);
             p.Free();
-            cycled.Add(ok ? "up" : "DOWN");
             if (n == 0) objA = await Objects();
         }
         double objB = await Objects();
