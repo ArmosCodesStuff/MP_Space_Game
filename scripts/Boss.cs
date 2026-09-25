@@ -452,11 +452,9 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         double floor = pins > 0 ? m.React + m.StripShare * hull / m.StripDps + m.Escape : 0;
         if (floor <= s.T) return;
         s.T = floor;
-        if (!stretch) return;
-        // the lane already up would end -- and sound its strike -- early: it is replaced by one
-        // for what is left (this peer's; a guest keeps its first lane to the old end: Known broken)
-        foreach (var n in Fx.Warnings.Where(n => n.Id == Fx.WarnLane && n.Anchor == NetId).ToList()) n.QueueFree();
-        Warn(s);
+        // the lane already up would end -- and sound its strike -- early: raised again for what is
+        // left, it replaces that lane on every peer (Hub.AddFx)
+        if (stretch) Warn(s);
     }
     public double WindupLeft(string id) => S(id) is { At: Phase.Winding } s ? s.T : 0;
 

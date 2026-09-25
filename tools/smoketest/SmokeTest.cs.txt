@@ -11177,29 +11177,75 @@ public partial class _Test : Node
         Check(pinned && boss.S("beam").At == Boss.Phase.Winding && boss.S("beam").Cause == "pinned" && ReferenceEquals(boss.S("beam").Target, guest)
               && paying.Count == 2 && paying.All(r => r.Worth == 6 && ((r.NetFlags >> 8) & 0xFFFF) == paying[0].Squad.Id),
               $"arena host: an add's web on the GUEST starts the beam ({boss.S("beam").Cause}, aimed at the guest {ReferenceEquals(boss.S("beam").Target, guest)}); squad wave 1 is two paying webifiers ({paying.Count})");
+        // THE LIVE FLOOR ON THE WIRE: four more webs latch on the guest in the wind-up, so what is
+        // left is stretched to their floor and the lane is raised again -- on the guest it must
+        // REPLACE the lane it had (Hub.AddFx), not stand beside it and strike at the old end
+        double leftAtWeb = boss.WindupLeft("beam");
+        var more = Enumerable.Range(0, 4).Select(_ => H.SpawnRaider(guest.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 320f))).ToList();
+        await RealTime(() => more.All(r => r.Latched) || boss.S("beam").At != Boss.Phase.Winding, 5);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double stretched = boss.WindupLeft("beam");
+        var hostLanes = Nodes<FxNode>(boss).Where(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 70f) < 0.1f && !t.IsQueuedForDeletion()).ToList();
+        Check(more.All(r => r.Latched) && boss.S("beam").At == Boss.Phase.Winding && stretched > leftAtWeb + 0.5
+              && hostLanes.Count == 1 && Math.Abs(hostLanes[0].Time - hostLanes[0].Elapsed - stretched) < 0.1,
+              $"arena host: four more webs latching on the guest stretch the wind-up ({leftAtWeb:0.00} s at the first web -> {stretched:0.00} s left), and the host holds one lane for it ({hostLanes.Count}) ending at the stretched time");
         await Wait(1.0);                                           // the guest sees the lane while it is webbed
         if (GodotObject.IsInstanceValid(web)) web.TakeDamage(9999);
+        foreach (var r in more) if (GodotObject.IsInstanceValid(r)) r.TakeDamage(9999);
         var one = paying.FirstOrDefault(r => GodotObject.IsInstanceValid(r) && r.Alive);
         one?.TakeDamage(1e9);
         await Wait(1.0);
     }
 
     // ...and the guest's half: the squad's id bits and its one lead, this ship webbed by an add while
-    // the beam's lane is up at it, and the add's kill paid here at this pilot's own level
+    // the beam's lane is up at it, the lane REPLACED when the host stretches the wind-up (one lane,
+    // ending later, and no strike heard before its end), and the add's kill paid here at this
+    // pilot's own level
     async Task RaidsGuestAddsWire()
     {
         int lv0 = Character.Level, exp0 = Character.Exp;
         bool squadSeen = false, beamOnWeb = false; int gained = 0;
+        // the beam's lanes on this peer: the first seen while webbed, the one that replaced it, the
+        // most standing at once after the replacement, and strikes heard before the live lane's end
+        FxNode firstLane = null, lastLane = null; double clock = 0, firstEnd = 0, lastEnd = 0;
+        int mostAfter = 0, earlyStrikes = 0; string strike = null; int struck0 = 0;
+        List<FxNode> BeamLanes() => H.Boss == null ? new List<FxNode>()
+            : Nodes<FxNode>(H.Boss).Where(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 70f) < 0.1f && !t.IsQueuedForDeletion()).ToList();
+        void Watch()
+        {
+            var lanes = BeamLanes();
+            if (firstLane == null && Me != null && Me.Pinned && lanes.Count > 0)
+            {
+                firstLane = lanes[0]; firstEnd = clock + firstLane.Time - firstLane.Elapsed;
+                strike = firstLane.Strike; struck0 = strike == null ? 0 : Sfx.Played.GetValueOrDefault(strike);
+            }
+            if (firstLane == null) return;
+            var fresh = lanes.FirstOrDefault(t => t != firstLane && t != lastLane);
+            if (fresh != null) { lastLane = fresh; lastEnd = clock + fresh.Time - fresh.Elapsed; }
+            if (lastLane == null) return;
+            mostAfter = Math.Max(mostAfter, lanes.Count);
+            if (GodotObject.IsInstanceValid(lastLane) && clock < lastEnd - 0.05 && strike != null
+                && Sfx.Played.GetValueOrDefault(strike) > struck0) earlyStrikes = Sfx.Played.GetValueOrDefault(strike) - struck0;
+        }
         for (int i = 0; i < 60 * 14 && !H.MissionWon && gained == 0; i++)
         {
             var two = H.Raiders.Where(r => r.SquadId != 0).GroupBy(r => r.SquadId).FirstOrDefault(g => g.Count() == 2);
             squadSeen |= two != null && two.Count(r => r.Leads) == 1;
             beamOnWeb |= Me != null && Me.Pinned && Nodes<FxNode>().Any(t => t.Id == Fx.WarnLane && Math.Abs(t.Radius - 70f) < 0.1f);
             if (!H.MissionWon && (Character.Level != lv0 || Character.Exp != exp0)) gained = Character.Exp - exp0 + 1000 * (Character.Level - lv0);
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Watch();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); clock += GetProcessDeltaTime();
+        }
+        // the stretched lane is watched out to its end (or until the fight is won and it is cleared)
+        for (int i = 0; i < 60 * 10 && !H.MissionWon && lastLane != null && GodotObject.IsInstanceValid(lastLane) && clock < lastEnd + 0.2; i++)
+        {
+            Watch();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); clock += GetProcessDeltaTime();
         }
         Check(squadSeen, "arena guest: the adds' squad arrives on the wire as one -- both members under one squad id, exactly one of them its lead");
         Check(beamOnWeb, "arena guest: webbed by an add, this ship sees the beam's lane go up at it (the host charged on an add's web)");
+        Check(firstLane != null && lastLane != null && mostAfter == 1 && lastEnd > firstEnd + 0.5 && earlyStrikes == 0,
+              $"arena guest: the host's stretched wind-up REPLACES this peer's lane -- one Radius-70 lane standing ({mostAfter}), ending at the stretched time ({firstEnd:0.00} -> {lastEnd:0.00} s), no strike heard before it ({earlyStrikes})");
         Check(gained == Missions.ExpFor(6, 1, lv0),
               $"arena guest: an add shot down on the host pays this pilot at its own level, by NetKillExp ({gained} EXP; {Missions.ExpFor(6, 1, lv0)} due at level {lv0})");
     }

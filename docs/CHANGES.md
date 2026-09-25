@@ -547,8 +547,7 @@ N14), RaidsArenaAddsChecks (N12 live, N13, N15, N16), RaidsHostAddsWire + RaidsG
 49b_squad_lock_lines, 49_heavy_astern_missile; rewritten: the escort checks, the mission wave clock, patrol
 and raid squad ids, blockade Station/Circuit.
 
-**Known broken:** engine-unproven (rungs 3-5 owed). A wind-up stretched by the live floor replaces the
-host's lane; a GUEST keeps its first lane, which ends -- and sounds its strike -- at the old time.
+**Known broken:** engine-unproven (rungs 3-5 owed).
 
 ### Class kits, lane A J7: heavy rows, F20 (2026-09-25, worktree wt/kits)
 

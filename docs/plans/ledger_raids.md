@@ -100,3 +100,16 @@ LevelStep text, Waves LevelStep text.
 - rung 4 `screens`: 49a_squad_inbound, 49b_squad_lock_lines, 49_heavy_astern_missile (read by eye once), LINT: 0.
 - Risks to watch at rung 3: the Solo arena now holds its adds (Raids.Held) until RaidsArenaAddsChecks and
   frees them before the kill; the lane-A burn/out-door clears use RaiderDown.
+## GATE FIX (opus merge gate, 2 findings) -- split GFa (wire) + GFb (readability), each PRE/POST/commit
+- D-e REVERSED by the gate: the readability scope (radar diamond/bracket/chevron, GANK HUD line, row names
+  + web glyph, Hints pilot/boss, TIO EXP line) is built in this lane (GFb), with frames.
+## GFa PRE -- tier opus -- a stretched wind-up's lane replaced on EVERY peer: Hub.AddFx frees a live warning under
+`rides` with the same Id/Anchor/Cue before a hull-anchored one goes up; Boss.Floor's host-only QueueFree loop
+deleted; rung-5 guest check (one Radius-70 lane after a stretch, ending later, no early strike); CHANGES Known
+broken line dropped. HEAD fb57a6e. Files: Hub 2b421e23, Boss b905f664, SmokeTest 7abd15e5, CHANGES ff0f4be0.
+## GFa POST -- done. typecheck 0 errors; quick ALL PASSED. Hub.AddFx: a hull-anchored warning frees the live one
+under the same parent with the same Id/Anchor/Cue (host and every guest via NetFx/FxTo); Boss.Floor's host-only
+QueueFree loop deleted (a stretch just raises Warn again). Checks: RaidsHostAddsWire (4 more webs latch on the
+guest mid-wind-up: stretched > left at the first web + 0.5, host holds ONE Radius-70 lane ending at the stretched
+time) + RaidsGuestAddsWire (after the replacement one lane standing, ending > first end + 0.5, no strike heard
+before it). CHANGES Known broken line dropped. engine-unproven: rungs owed in the final test phase (six x2).

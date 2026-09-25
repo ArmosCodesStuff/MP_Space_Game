@@ -1773,6 +1773,13 @@ public partial class Hub : Node2D
         // WHAT IT RIDES: the world, or the thing with that NetId -- a boss whose beam must swing
         // with its hull. Anything the world simulates and gives an id to can carry a warning.
         var rides = r.Anchor == Fx.World ? this : Combat.ById(r.Anchor) as Node2D;
+        // A HULL'S WARNING RAISED AGAIN REPLACES ITS LANE, on every peer (a beam's wind-up stretched
+        // by the live escape floor, Boss.Floor): the lane it had would run out, and sound its strike,
+        // at the old time. The same move's warning on the same hull: same row, anchor and cue.
+        if (r.Anchor != Fx.World)
+            foreach (var n in Fx.Warnings.Where(n => n.Id == r.Id && n.Anchor == r.Anchor && n.Cue == r.Cue
+                                                     && n.GetParent() == (rides ?? this)).ToList())
+                n.QueueFree();
         (rides ?? this).AddChild(new FxNode { Id = r.Id, Position = r.At, To = r.To, Radius = r.Size, Time = r.Time,
                                               Hold = r.Hold, Since = r.Since, Anchor = r.Anchor, Cue = r.Cue, Strike = r.Strike });
     }
