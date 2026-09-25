@@ -242,3 +242,22 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   60-hull webifier down < 2.5 s); frame LaneA6aBbFrames (85a_bb_brace, 85b_bb_ciws); witness "ciws". REWRITTEN: the
   battleship bar order line (+ "ciws").
 - Owed: rung 3 the three checks; rung 4 the two frames. Next: kits6a-J4 (CV row).
+
+### kits6a-J4 · PRE · CV row (A6a-4) -- tier opus
+- Intent: Carrier Nums hull 425, turn_radius 140, pd_count 2 (Art.Pds loses the stern mount, D8), fighter_damage 3.5,
+  torpedo_damage 60 (bomber_ammo 4 already); harness literals for 200 hull / 3 PD / 137.5 / 2.5 / the sheet and measured
+  DPS rewritten. Checks: NEW LaneA6aCarrierRowChecks.
+- Files: scripts/Ships.cs, tools/smoketest/SmokeTest.cs.txt.
+- HEAD 16e01d85f722411406ea9c992af0cc8298a3afb4 · Ships.cs 160dcd39b846a85f2cf0ad0fdc2b3763cac2f95a · SmokeTest.cs.txt 011ce70c6fe21923f841812f285bfd274416ee10
+### kits6a-J4 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase.
+- Built: Carrier hull 425, turn_radius 140, pd_count 2 + Art.Pds without the stern mount; fighter_damage 3.5 and
+  torpedo_damage 60 as the SHEET's defaults in Stats.cs (the carrier is the only Wing hull; one truth, not a Nums
+  override -- Stats.cs was touched beyond the PRE's list for that).
+- Checks NEW: LaneA6aCarrierRowChecks (sheet 425/140/2/3.5/60 x 4 x 2, 25.0 fighter DPS, sustained 44.45; 3 live runs:
+  hull 425, two mounts abreast amidships, both on a light). REWRITTEN (6.3): the PD table's carrier (2 mounts), "carrier
+  has two PD turrets", the stock torpedo 60, the measured carrier DPS reference 93.6 -> 61.5 (scaled by the two
+  ratios: re-measure at rung 3 if it misses the +-35%), the kit literal (425 / 3.5 / 60), the sustained / Bomber line
+  (480 / 27.5 = 17.45, fighters 25, PD 2), the Heavy Battery T2 fighter 3.5 x 1.275.
+- Next: kits6a-J5 (warp gunships E).

@@ -206,10 +206,10 @@ public static class Classes
             Hint = "CARRIER",
             Drive = Drives.Warp,
             Nums = new() {
-                ["hull"] = 200,
+                ["hull"] = 425,
                 ["thrust"] = ShipStats.CarrierTop / 2, ["reverse_thrust"] = ShipStats.CarrierTop * 5 / 24, ["max_speed"] = ShipStats.CarrierTop, ["reverse_speed"] = ShipStats.CarrierTop / 3,
-                ["turn_radius"] = 127, ["turn_rate"] = 0.9,
-                ["pd_count"] = 3, ["pd_turn"] = Mathf.Tau / 1.2f,
+                ["turn_radius"] = 140, ["turn_rate"] = 0.9,
+                ["pd_count"] = 2, ["pd_turn"] = Mathf.Tau / 1.2f,
             },
                 // the 0: gear reaches the fighters, the pilot's points do not -- as it was
             Damage = new() { ["torpedo_damage"] = 1, ["fighter_damage"] = 0 },
@@ -221,12 +221,12 @@ public static class Classes
                 ItemDef.Own(GearSlot.Utility, "cv_bomber_bay", "Bomber Bay", "the bomber wing", "bomber_count"),
             },
             Art = new ClassArt {
-                // carrier_a (the pack, J5): a PD pair on the flanks amidships and one on the stern
-                // centreline; the deck (Bay*/RunwayBow/EngineInset) is the bays abreast amidships,
+                // carrier_a (the pack, J5): a PD pair on the flanks amidships (v1: the stern mount
+                // went, D8); the deck (Bay*/RunwayBow/EngineInset) is the bays abreast amidships,
                 // the runway run from the bow and the engines inset at the stern
                 Texture = "res://carrier_player.png", Length = 283.5f, HalfWidth = 40.02f,
                 BayX = 25.01f, BayY = 8.34f, BaySpacing = 46.69f, RunwayBow = 110.06f, EngineInset = 8f,
-                Pds = new Vector2[] { new(-30.01f, -0.21f), new(30.01f, -0.21f), new(0f, 134.22f) },
+                Pds = new Vector2[] { new(-30.01f, -0.21f), new(30.01f, -0.21f) },
                 TurretTexScale = 1.9178f / 5.5f, PdBarrel = 10.51f },
             Abilities = new[] { Ab.Attack, Ab.Recall, Ab.Bombers } },
 

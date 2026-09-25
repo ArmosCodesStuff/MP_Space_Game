@@ -190,7 +190,7 @@ public class ShipStats
         {
             Add("Fighters", "fighter_count",    "Craft",            3, "", 0);
 
-            Add("Fighters", "fighter_damage",   "Damage per shot",  2.5, "", 1);   // 3 x 2.5 / 0.35 s, ~70% of the time: 15 DPS
+            Add("Fighters", "fighter_damage",   "Damage per shot",  3.5, "", 1);   // v1: 3 x 3.5 / 0.35 s, 15 s of every 18: 25.0 DPS
             Add("Fighters", "fighter_interval", "Reload",           0.35, "s", 2, inverse: true);
             Add("Fighters", "fighter_range",    "Weapon range",     300, "u", 0);
             Add("Fighters", "fighter_speed",    "Top speed",        352, "u/s", 0);
@@ -201,10 +201,10 @@ public class ShipStats
 
             // An active ability, and the carrier's long-range burst. Torpedoes run straight and steady:
             // no tracking, so from 1900 u (about twice the others' reach) a moving target often steps out
-            // of the way. 8 torpedoes of 137.5 a ~14 s strike: 78.6 DPS if every one lands, about 39 at half.
+            // of the way. v1: 8 torpedoes of 60 (480) a 27.5 s run: 17.45 DPS if every one lands.
             Add("Bombers", "bomber_count",    "Craft",              2, "", 0);
 
-            Add("Bombers", "torpedo_damage",  "Torpedo damage",     137.5, "", 0);
+            Add("Bombers", "torpedo_damage",  "Torpedo damage",     60, "", 0);
             Add("Bombers", "bomber_ammo",     "Torpedoes per run",  4, "", 0);
             Add("Bombers", "torpedo_interval","Between launches",   0.5, "s", 2, inverse: true);
             Add("Bombers", "torpedo_speed",   "Torpedo speed",      300, "u/s", 1);

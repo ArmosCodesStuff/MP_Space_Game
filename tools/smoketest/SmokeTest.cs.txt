@@ -2468,7 +2468,7 @@ public partial class _Test : Node
     async Task LaneAPassivePdChecks(Vector2 yonder)
     {
         var want = new Dictionary<ShipClass, (int mounts, double shot, float reach)> {
-            [ShipClass.Battleship] = (2, 0.5, 460f), [ShipClass.Carrier] = (3, 0.5, 460f), [ShipClass.Destroyer] = (2, 0.5, 460f),
+            [ShipClass.Battleship] = (2, 0.5, 460f), [ShipClass.Carrier] = (2, 0.5, 460f), [ShipClass.Destroyer] = (2, 0.5, 460f),
             [ShipClass.FreightHauler] = (2, 0.5, 460f), [ShipClass.FreightTender] = (2, 0.5, 460f), [ShipClass.FreightBastion] = (2, 0.5, 460f),
             [ShipClass.HeavyWarden] = (1, 5.0, 420f),
         };
@@ -5241,6 +5241,40 @@ public partial class _Test : Node
                   $"CIWS prey run {run}: a gunship {heavyAt.DistanceTo(at):0} u off never taken ({!onHeavy}, lost {9000 - heavy.Hp:0.0}); a 60-hull webifier {lightAt.DistanceTo(at):0} u off down at {diedAt:0.00} s (< 2.5)");
             heavy.TakeDamage(1e12);
             s.Sl("ciws").Left = 0; s.Sl("ciws").Cool = 0;
+            await Wait(0.2);
+        }
+    }
+
+    // ── SLICE 6a: THE CARRIER'S ROW (v1: hull 425, turn radius 140, two PD mounts -- the stern one gone, D8 --, fighters
+    // 3.5 a shot = 25.0 DPS on the sheet, bombers 2 x 4 torpedoes of 60). The sheet, then three varied live runs
+    // (VaryNear spot, VaryAngle heading, a light raider at a VaryAngle bearing 150-300 u off): the hull at 425, exactly
+    // two PD mounts, both abreast amidships (|local y| < 5, |local x| 25-35), and both take the raider.
+    async Task LaneA6aCarrierRowChecks(Vector2 yonder)
+    {
+        var cv = new ShipStats(ShipClass.Carrier);
+        double sustained = 3 * (3.5 / 0.35) * (15.0 / 18.0) + 4 * 2 * 60 / 27.5 + 2 * 0.5 / 0.5;
+        Check(cv["hull"] == 425 && cv["turn_radius"] == 140 && cv["turn_rate"] == 0.9 && cv["pd_count"] == 2 && cv["fighter_damage"] == 3.5
+              && cv["torpedo_damage"] == 60 && cv["bomber_ammo"] == 4 && cv["bomber_count"] == 2 && Classes.Of(ShipClass.Carrier).Art.Pds.Length == 2
+              && Math.Abs(3 * cv.FighterDpsEach * 15.0 / 18.0 - 25.0) < 1e-9 && Math.Abs(cv.SustainedDps - sustained) < 1e-6,
+              $"the carrier's sheet (v1): hull {cv["hull"]:0} (425), turn radius {cv["turn_radius"]:0} (140), {cv["pd_count"]:0} PD mounts (2), fighters {cv["fighter_damage"]:0.0} a shot = {3 * cv.FighterDpsEach * 15.0 / 18.0:0.00} DPS (25), "
+              + $"{cv["bomber_count"]:0} bombers x {cv["bomber_ammo"]:0} torpedoes of {cv["torpedo_damage"]:0} (60); sustained {cv.SustainedDps:0.00} ({sustained:0.00})");
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Carrier);
+        var s = Me;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float head = VaryAngle();
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = head; }
+            Hold(); await Wait(0.2); Hold();
+            var prey = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 300f));
+            prey.Hp = 9000; prey.ApplyStatus(Status.Disabled, 30);
+            for (int i = 0; i < 240 && !s.PdTurrets.All(t => ReferenceEquals(t.Target, prey)); i++) { Hold(); await Frame(); }
+            var locals = s.PdTurrets.Select(t => s.ToLocal(t.GlobalPosition)).ToList();
+            bool abreast = locals.All(l => Mathf.Abs(l.Y) < 5f && Mathf.Abs(l.X) > 25f && Mathf.Abs(l.X) < 35f);
+            Check(s.MaxHp == 425 && s.PdTurrets.Count == 2 && abreast && s.PdTurrets.All(t => ReferenceEquals(t.Target, prey)),
+                  $"carrier run {run} at heading {Mathf.RadToDeg(head):0} deg: hull {s.MaxHp:0} (425), {s.PdTurrets.Count} PD mounts (2) at {string.Join(", ", locals.Select(l => $"({l.X:0},{l.Y:0})"))} (abreast amidships: {abreast}), both on a raider {prey.Position.DistanceTo(at):0} u off");
+            prey.TakeDamage(1e12);
             await Wait(0.2);
         }
     }
@@ -11509,7 +11543,7 @@ public partial class _Test : Node
 
         // ── carrier ──
         await SetClass(ShipClass.Carrier); ship = Me;
-        Check(ship.PdTurrets.Count == 3, "carrier has three PD turrets");
+        Check(ship.PdTurrets.Count == 2, "carrier has two PD turrets (v1: the stern mount went)");
 
         // bombers park in bays on the deck, half each side of the runway, and stay put as the carrier moves
         Wing[] Bombers() => Nodes<Wing>().Where(w => w.Carrier == ship && w.Def.Parks).ToArray();
@@ -11838,8 +11872,8 @@ public partial class _Test : Node
             }
         }
         for (int fr = 0; fr < 240; fr++) { SampleDeck(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-        Check(d1.Total >= 137.5 && Math.Abs(ship.Stats["torpedo_damage"] - 137.5) < 1e-6,
-              $"a torpedo lands for the stock 137.5, on top of the fighters' hits ({d1.Total:0})");
+        Check(d1.Total >= 60 && Math.Abs(ship.Stats["torpedo_damage"] - 60) < 1e-6,
+              $"a torpedo lands for the stock 60, on top of the fighters' hits ({d1.Total:0})");
         Check(AbilityBar.StateOf(ship, "bombers", H.Selected).Line.StartsWith("REARM") || AbilityBar.StateOf(ship, "bombers", H.Selected).Line == "RETURNING",
               $"bomber slot shows the return / rearm ({AbilityBar.StateOf(ship, "bombers", H.Selected).Line})");
         // HOME: each comes in over the carrier's centre and settles onto the runway there, shrinking
@@ -11880,10 +11914,10 @@ public partial class _Test : Node
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             }
             double carrierDps = md.Total / 40.0;
-            // (the stock sheet, no chips: fighters 3 x 2.5 / 0.35 s and 8 torpedoes of 137.5 a strike,
-            //  about 93.6 DPS -- the 117 once measured with five +5% chips, / 1.25)
-            GD.Print($"  carrier measured: {carrierDps:0.00} DPS over 40 s (reference 93.6)");
-            Check(Math.Abs(carrierDps / 93.6 - 1) < 0.35, $"the carrier delivers about the 93.6 DPS its stock sheet says ({carrierDps:0.00})");
+            // (the stock sheet, no chips: fighters 3 x 3.5 / 0.35 s and 8 torpedoes of 60 a strike (v1). The 93.6 once
+            //  measured on 2.5 / 137.5 was ~21.4 from the fighters and ~72.2 from torpedoes: x1.4 and x60/137.5 = ~61.5)
+            GD.Print($"  carrier measured: {carrierDps:0.00} DPS over 40 s (reference 61.5)");
+            Check(Math.Abs(carrierDps / 61.5 - 1) < 0.35, $"the carrier delivers about the 61.5 DPS its stock sheet says ({carrierDps:0.00})");
             Key(global::Godot.Key.R); await Wait(12.0);                       // recall the wing for what follows
         }
 
@@ -12133,9 +12167,9 @@ public partial class _Test : Node
                   "the defaults: common parts in five slots, every one of the twelve classes starts with mounts it can actually wear -- a carrier's Fighter Hangars, a sniper's Railgun Mount, a wraith's Stealth Veil -- and six empty chip slots");
             var bsE = new ShipStats(ShipClass.Battleship, Equipment.Bonuses(ShipClass.Battleship, Equipment.Default(ShipClass.Battleship), 14, NoLevels));
             var cvE = new ShipStats(ShipClass.Carrier, Equipment.Bonuses(ShipClass.Carrier, Equipment.Default(ShipClass.Carrier), 14, NoLevels));
-            Check(Math.Abs(bsE["hull"] - 500) < 1e-6 && Math.Abs(bsE["main_damage"] - 12.5) < 1e-6 && Math.Abs(cvE["hull"] - 200) < 1e-6
-                  && Math.Abs(cvE["fighter_damage"] - 2.5) < 1e-6 && Math.Abs(cvE["torpedo_damage"] - 137.5) < 1e-6,
-                  $"the kit is the class, with no chips: battleship 500 hull, 12.5 a shell; carrier 200 hull, fighters 2.5, torpedoes 137.5 ({bsE["hull"]:0.###}, {bsE["main_damage"]:0.###}; {cvE["hull"]:0.###}, {cvE["fighter_damage"]:0.###}, {cvE["torpedo_damage"]:0.###})");
+            Check(Math.Abs(bsE["hull"] - 500) < 1e-6 && Math.Abs(bsE["main_damage"] - 12.5) < 1e-6 && Math.Abs(cvE["hull"] - 425) < 1e-6
+                  && Math.Abs(cvE["fighter_damage"] - 3.5) < 1e-6 && Math.Abs(cvE["torpedo_damage"] - 60) < 1e-6,
+                  $"the kit is the class, with no chips: battleship 500 hull, 12.5 a shell; carrier 425 hull, fighters 3.5, torpedoes 60 ({bsE["hull"]:0.###}, {bsE["main_damage"]:0.###}; {cvE["hull"]:0.###}, {cvE["fighter_damage"]:0.###}, {cvE["torpedo_damage"]:0.###})");
             var cls0 = Me.Class;
             Character.GearHold.Remove("chip_armour_t1"); Character.Stow("chip_armour_t1");     // one Armour Chip I in the hold
             Key(global::Godot.Key.I); await Wait(0.2);
@@ -12273,7 +12307,7 @@ public partial class _Test : Node
             lineRow?.GetChildren().OfType<Button>().FirstOrDefault(b => b.Name == "Fit")?.EmitSignal(BaseButton.SignalName.Pressed);
             await Wait(0.2);
             Check(Character.LoadoutFor(ShipClass.Carrier)[0] == "heavy_battery_t2" && Character.GearHold.GetValueOrDefault("cv_fighter_hangars") == 1
-                  && !Character.GearHold.ContainsKey("heavy_battery_t2") && Math.Abs(Me.Stats["fighter_damage"] - 2.5 * 1.275) < 1e-9,
+                  && !Character.GearHold.ContainsKey("heavy_battery_t2") && Math.Abs(Me.Stats["fighter_damage"] - 3.5 * 1.275) < 1e-9,
                   $"a Heavy Battery T2 from the hold fits the weapon slot, the kit's goes into the hold, and the carrier's fighters hit 27.5% harder ({Me.Stats["fighter_damage"]:0.000})");
             // THE K WINDOW shows what gear adds: Magazine Core's torpedo, and its top-speed price in red
             Character.LoadoutFor(ShipClass.Carrier)[4] = "magazine_core_t1"; H.PilotChanged();
@@ -13445,9 +13479,9 @@ public partial class _Test : Node
                           && Math.Abs(new ShipStats(ShipClass.HeavyWarrior).SustainedDps - 26 / 0.40) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.LightEcho).SustainedDps - (5 / 0.35 + (5 / 0.35) * 5 / 15.0)) < 1e-6,
                           $"...and every other signature weapon counts too: the warden's flak 45 + 19.29 + 10, the freighter's gun 12 + three dropped turrets 36 + its always-on point defence 2 = 50, the warrior's blade 26 every 0.40 s (65), the echo repeating five seconds of its own damage every 15");
-                    Check(Math.Abs(new ShipStats(ShipClass.Carrier).SustainedDps - (3 * (2.5 / 0.35) * (15.0 / 18.0) + 4 * 2 * 137.5 / 27.5 + 3 * 0.5 / 0.5)) < 1e-6
-                          && Math.Abs(new ShipStats(ShipClass.Carrier).DamageLines.First(l => l.Label.StartsWith("Bomber")).Dps - 40.0) < 1e-6,
-                          $"the carrier's torpedoes are in its total at last: 8 x 137.5 = 1100 over a 27.5 s run (20 s out and back, 1.5 s launching, 6 s rearming) = 40 DPS, beside 17.86 from the fighters and 3 from the point defence, always on ({new ShipStats(ShipClass.Carrier).SustainedDps:0.00})");
+                    Check(Math.Abs(new ShipStats(ShipClass.Carrier).SustainedDps - (3 * (3.5 / 0.35) * (15.0 / 18.0) + 4 * 2 * 60 / 27.5 + 2 * 0.5 / 0.5)) < 1e-6
+                          && Math.Abs(new ShipStats(ShipClass.Carrier).DamageLines.First(l => l.Label.StartsWith("Bomber")).Dps - 480 / 27.5) < 1e-6,
+                          $"the carrier's torpedoes are in its total at last: 8 x 60 = 480 over a 27.5 s run (20 s out and back, 1.5 s launching, 6 s rearming) = 17.45 DPS, beside 25.00 from the fighters and 2 from the point defence, always on ({new ShipStats(ShipClass.Carrier).SustainedDps:0.00})");
                     Check(Classes.All.Where(c => c.Ready).All(c => c.Weapons.Length > 0)
                           && Classes.All.Where(c => c.Ready).All(c => new ShipStats(c.Id).DamageLines.All(l => l.Dps > 0 && l.Sustained)),
                           "every flyable class declares what it kills with, and every line it declares is a rate above zero");
@@ -13726,6 +13760,7 @@ public partial class _Test : Node
             await LaneA6aCiwsChecks(yonder);
             await LaneA6aCiwsDisableChecks(yonder);
             await LaneA6aCiwsPreyChecks(yonder);
+            await LaneA6aCarrierRowChecks(yonder);
 
             // ── WARRIOR: the blade (slice 6c) ──
             await LaneA6cBladeChecks(yonder);
