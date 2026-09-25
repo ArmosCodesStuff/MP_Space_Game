@@ -5183,6 +5183,168 @@ public partial class _Test : Node
               $"arena guest: its own E -- the hull carried {moved.Dot(nose):0.0} u along its nose (420), {Mathf.Abs(moved.Dot(side)):0.0} sideways; the host's HARDENED bit read here ({sawHard}); the host's cooldown on its slot {coolHere:0.0} s");
     }
 
+    // ── SLICE 6c: THE WARRIOR'S PRISM STANCE (kits_v2 Warrior card: 2.0 s, F again drops it, Q or E ends
+    // it, the cooldown 12 s from its END, top speed x0.5 (boosted x0.75), no swings, a split every 0.75 s
+    // at most 3 a stance). The bands, the children and the reflections are slice 5's (LaneAPrism*Checks);
+    // these are the stance's own. Three varied runs (VaryNear spot, VaryAngle heading, the guard on the nose):
+    // 1 the whole stance, a SQUARE 50 tick caught every frame of it: the catcher takes 0 of every one, the
+    //   gunship on the guard loses exactly 3 x 37.5 = 112.5 (one stance's worth), the tick at 1.85-1.9 s is
+    //   still caught and one walked through at 2.1-2.2 s lands 50; the cooldown reads 12.0 on the frame it
+    //   ends; held x0.5 all through (x1.5 x 0.5 = x0.75 on the boost, run 2); the blade held through it
+    //   lands nothing on a gunship in its arc.
+    // 2 the end: at Vary 0.3-1.7 s, F again (run 0), E the lunge (run 1) or Q the whirlwind (run 2) ends it
+    //   on the next frame -- no guard, the cooldown 12.0 from then, the other ability running -- and F is
+    //   refused COOLING.
+    async Task LaneA6cPrismStanceChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.HeavyWarrior);
+        var w = Me;
+        var sh = new ShipStats(ShipClass.HeavyWarrior);
+        Check(sh["prism_time"] == 2 && sh["prism_cooldown"] == 12 && Math.Abs(sh["prism_split"] - 0.75) < 1e-9 && sh["prism_splits"] == 3
+              && Ab.PrismStance.Hold == 0.5 && Ab.PrismStance.Stills && Ab.PrismStance.Stance?.Holds == Status.Parrying
+              && Unlocks.Nth(ShipClass.HeavyWarrior, 3) == Ab.PrismStance && Ab.PrismStance.Default == global::Godot.Key.F,
+              $"the prism stance's rows: {sh["prism_time"]:0.0} s, a split every {sh["prism_split"]:0.00} s at most {sh["prism_splits"]:0}, {sh["prism_cooldown"]:0} s from its end, held x{Ab.PrismStance.Hold:0.0}, no blade; the Warrior's ability 3, on F");
+        var bladeKey = Abilities.KeyFor(ShipClass.HeavyWarrior, "blade");
+        for (int run = 0; run < 3; run++)
+        {
+            foreach (var id in new[] { "prism", "lunge", "whirlwind", "boost" }) { w.Sl(id).Left = 0; w.Sl(id).Cool = 0; }
+            w.Statuses.Clear(Status.Parrying); w.Statuses.Clear(Status.Hardened);
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            w.Position = at; w.Rotation = rot; w.Velocity = Vector2.Zero; w.Hp = w.MaxHp;
+            if (run == 2)
+            {
+                w.DriveHeld = true; w.PressDrive();
+                for (int i = 0; i < 30 && w.Sl("boost").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                w.DriveHeld = false;
+            }
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            at = w.Position; rot = w.Rotation;                                            // re-taken after the wait
+            var g = Vector2.Up.Rotated(rot);
+            float sign = run % 2 == 0 ? 1f : -1f;
+            var uSq = -g.Rotated(sign * Mathf.DegToRad(Vary(1f, 12f)));
+            var guardSpot = at + g * Vary(300f, 900f);
+            var armSpot = at + g.Rotated(-sign * Mathf.DegToRad(Vary(40f, 50f))) * Vary(90f, 130f);   // in the blade's arc, off the guard's line
+            var onGuard = H.SpawnRaider(guardSpot, Enemies.Gunship); onGuard.Hp = 1e9;
+            var inArc = H.SpawnRaider(armSpot, Enemies.Gunship); inArc.Hp = 1e9;
+            void Pose() { w.Position = at; w.Rotation = rot; w.Velocity = Vector2.Zero; w.AimPoint = at + g * 600f; onGuard.Position = guardSpot; inArc.Position = armSpot; }
+            Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); Pose();
+
+            // 1 -- the whole stance
+            double guard0 = onGuard.Hp, arc0 = inArc.Hp;
+            double blade0 = w.DealtBy.TryGetValue("blade", out var bv0) ? bv0 : 0;
+            w.UseAbility("prism", 0);
+            for (int i = 0; i < 30 && !w.Prismatic; i++) { Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double t0 = w.Clock;                                                           // timed from the first frame the guard is up
+            float heldMin = 1f, heldMax = 0f, liftHeld = w.SpeedMult * w.Held;
+            bool boosted = w.Sl("boost").Left > 0;
+            bool tookNone = true;
+            double late = Vary(1.85f, 1.9f), after = Vary(2.1f, 2.2f), coolAtEnd = -1;
+            KeyDown(bladeKey);
+            while (w.Clock - t0 < late)
+            {
+                Pose();
+                heldMin = Mathf.Min(heldMin, w.Held); heldMax = Mathf.Max(heldMax, w.Held);
+                double hull = w.Hp;
+                bool caught = Prism.Catch(w, BlowKind.Beam, at - uSq * 800f, at + uSq * 500f, 50, $"test:stance#{run}");
+                tookNone &= caught && w.Hp == hull;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            Pose();
+            double hullLate = w.Hp;
+            bool lateCaught = Prism.Catch(w, BlowKind.Beam, at - uSq * 800f, at + uSq * 500f, 50, $"test:stance#{run}late") && w.Hp == hullLate;
+            while (w.Clock - t0 < after)
+            {
+                Pose();
+                if (coolAtEnd < 0 && w.Sl("prism").Left <= 0) coolAtEnd = w.Sl("prism").Cool;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            KeyUp(bladeKey);
+            Pose();
+            double hullAfter = w.Hp;
+            Prism.Walk(at - uSq * 800f, at + uSq * 500f, 30f, 50, at - uSq * 800f, $"test:stance#{run}after", new[] { w });
+            double landed = hullAfter - w.Hp;
+            double guardLost = guard0 - onGuard.Hp, arcLost = arc0 - inArc.Hp;
+            double bladeIn = (w.DealtBy.TryGetValue("blade", out var bv1) ? bv1 : 0) - blade0;
+            Check(tookNone && Math.Abs(guardLost - 112.5) < 1e-6,
+                  $"a stance at heading {Mathf.RadToDeg(rot):0} deg catching a SQUARE 50 tick every frame: the Warrior takes none of them ({tookNone}), the gunship on the guard {guardSpot.DistanceTo(at):0} u out loses {guardLost:0.##} (3 splits x 37.5 = 112.5: one every 0.75 s, at most 3)");
+            Check(lateCaught && Math.Abs(landed - 50) < 1e-6 && Math.Abs(coolAtEnd - 12.0) < 0.05,
+                  $"...a tick at {late:0.00} s is caught ({lateCaught}), one at {after:0.00} s lands {landed:0.##} (50); the cooldown on the frame it ends reads {coolAtEnd:0.00} s (12.0, from the end)");
+            Check(Math.Abs(heldMin - 0.5f) < 1e-3f && Math.Abs(heldMax - 0.5f) < 1e-3f && (!boosted || Math.Abs(liftHeld - 0.75f) < 1e-3f)
+                  && (run != 2 || boosted) && arcLost == 0 && bladeIn == 0,
+                  $"...held x{heldMin:0.00}-x{heldMax:0.00} all through (0.5){(boosted ? $", x{liftHeld:0.00} on the boost (1.5 x 0.5 = 0.75)" : "")}; the blade held through it lands {bladeIn:0} and the gunship in its arc loses {arcLost:0.##} (0)");
+
+            // 2 -- the end, by F, E or Q
+            w.Sl("prism").Cool = 0; w.Sl("lunge").Cool = 0; w.Sl("whirlwind").Cool = 0;
+            Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            w.UseAbility("prism", 0);
+            for (int i = 0; i < 30 && !w.Prismatic; i++) { Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            t0 = w.Clock;
+            double dropAt = Vary(0.3f, 1.7f);
+            while (w.Clock - t0 < dropAt) { Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            string how = run == 0 ? "prism" : run == 1 ? "lunge" : "whirlwind";
+            w.UseAbility(how, 0);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double coolDrop = w.Sl("prism").Cool;
+            bool otherRan = run == 0 || w.Sl(how).Left > 0;
+            string refused = Abilities.Find(w.Class, "prism").Refuse?.Invoke(w, null);
+            Check(!w.Prismatic && w.Sl("prism").Left == 0 && Math.Abs(coolDrop - 12.0) < 0.05 && otherRan && refused == "COOLING",
+                  $"...{(run == 0 ? "F again" : run == 1 ? "E (the lunge)" : "Q (the whirlwind)")} at {dropAt:0.00} s ends the stance: guard {(w.Prismatic ? "STILL UP" : "down")}, cooldown {coolDrop:0.00} s (12.0 from the end){(run == 0 ? "" : $", the {how} running {otherRan}")}; F then says {refused ?? "nothing"} (COOLING)");
+            onGuard.TakeDamage(1e12); inArc.TakeDamage(1e12);
+            for (int i = 0; i < 60 && (w.Sl("lunge").Left > 0 || w.Sl("whirlwind").Left > 0); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            foreach (var id in new[] { "prism", "lunge", "whirlwind", "boost" }) { w.Sl(id).Left = 0; w.Sl(id).Cool = 0; }
+            w.Hp = w.MaxHp;
+        }
+        w.Position = yonder; w.Velocity = Vector2.Zero;
+    }
+
+    // ── SLICE 6c, RUNG 5: A GUEST'S PRISM STANCE. The guest (LaneA6cPrismGuestChecks, right after its lunge)
+    // presses F at a varied heading: it reads the host's PARRYING bit and holds its own hull x0.5; at Vary
+    // 0.4-1.0 s it presses F again, the bit goes and its slot cools 12 s from the drop; F is then refused
+    // COOLING. The host (LaneA6cPrismHostWatch, beside the lunge's watch) sees its copy of the guest Parrying
+    // with the stance's slot up and held x0.5, then dropped with its cooldown at 12: the host decides, the
+    // guest draws it from the same slot and bit.
+    sealed class LaneA6cPrismSeen { public bool Up, Held, Dropped; public double Cool; }
+    LateSampler LaneA6cPrismHostWatch(LaneA6cPrismSeen seen)
+    {
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.HeavyWarrior } g || seen.Dropped) return false;
+            if (g.Prismatic && g.Sl("prism").Left > 0)
+            {
+                seen.Up = true; seen.Held |= Math.Abs(g.Held - 0.5f) < 1e-3f;
+                return false;
+            }
+            if (!seen.Up || g.Sl("prism").Cool <= 0) return false;
+            seen.Dropped = true; seen.Cool = g.Sl("prism").Cool;
+            return true;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6cPrismHostChecks(LateSampler watch, LaneA6cPrismSeen seen)
+    {
+        await RealTime(() => seen.Dropped, Wan ? 10 : 5);
+        watch.QueueFree();
+        Check(seen.Up && seen.Held && seen.Dropped && seen.Cool > 11.5 && seen.Cool <= 12.0 + 1e-6,
+              $"arena host: the guest's prism stance -- Parrying here with its slot up ({seen.Up}), held x0.5 ({seen.Held}), then dropped with its cooldown at {seen.Cool:0.00} s (12, from the drop)");
+    }
+    async Task LaneA6cPrismGuestChecks()
+    {
+        var me = Me; me.AutopilotTo = null;
+        me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+        await Wait(0.3);
+        me.UseAbility("prism", 0);
+        await RealTime(() => me.Prismatic, Wan ? 4 : 2);
+        bool up = me.Prismatic; float held = me.Held; double left = me.Sl("prism").Left;
+        await Wait(Vary(0.4f, 1.0f));
+        me.UseAbility("prism", 0);
+        await RealTime(() => !me.Prismatic && me.Sl("prism").Cool > 0, Wan ? 4 : 2);
+        double cool = me.Sl("prism").Cool;
+        string refused = Abilities.Find(me.Class, "prism").Refuse?.Invoke(me, null);
+        Check(up && Math.Abs(held - 0.5f) < 1e-3f && left > 0 && !me.Prismatic && cool > 11.0 && cool <= 12.0 + 1e-6 && refused == "COOLING",
+              $"arena guest: its own F -- the host's PARRYING bit read here ({up}), its hull held x{held:0.00} (0.5) with the slot up {left:0.0} s; F again drops it (guard {(me.Prismatic ? "STILL UP" : "down")}), cooling {cool:0.0} s (12 from the drop), and F then says {refused ?? "nothing"}");
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -11346,6 +11508,7 @@ public partial class _Test : Node
             await LaneA6cBladeChecks(yonder);
             await LaneA6cLungeChecks(yonder);
             await LaneA6cWhirlChecks(yonder);
+            await LaneA6cPrismStanceChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -11733,6 +11896,7 @@ public partial class _Test : Node
                     ["lunge"]     = sp => sp.Sl("lunge").Left > sp.Stats["lunge_time"] - 0.1 && sp.Statuses.Has(Status.Hardened)
                                           && sp.Sl("lunge").Cool > sp.Stats["lunge_cooldown"] - 0.1,
                     ["whirlwind"] = sp => sp.Sl("whirlwind").Left > sp.Stats["whirl_time"] - 0.1 && sp.Stilled && sp.Statuses.Has(Status.Unwebbed),
+                    ["prism"]     = sp => sp.Sl("prism").Left > sp.Stats["prism_time"] - 0.1 && sp.Prismatic && sp.Stilled && Math.Abs(sp.Held - 0.5f) < 1e-3f,
                     ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && InFlight().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
                     ["roll"]      = sp => sp.Statuses.Has(Status.Evading) && sp.Sl("roll").Left > sp.Stats["roll_time"] + sp.Stats["boost_time"] - 0.1,
                     ["echo"]      = sp => sp.Sl("echo").Left > sp.Stats["echo_time"] - 0.1,
@@ -11813,7 +11977,8 @@ public partial class _Test : Node
                         if (isHold) { KeyUp(abKey); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
 
                         // THE SECOND PRESS. A row that engaged its slot must refuse it: neither
-                        // the time it has left nor its cooldown may go UP. (A row that engages no
+                        // the time it has left nor its cooldown may go UP -- except a STANCE, whose
+                        // second press drops it: nothing left, and its cooldown from then. (A row that engages no
                         // slot -- the carrier's attack and recall -- has
                         // nothing to refuse, and its witness is the whole of it; the bombers'
                         // refusal of a second strike is measured with strike_range below.)
@@ -11825,7 +11990,9 @@ public partial class _Test : Node
                             doAbility.Invoke(sweepShip, new object[] { abil.Id, sweepMark.NetId });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             var slotNow = sweepShip.Sl(abil.Id);
-                            refusedAgain = slotNow.Left <= slotWas.Left + 1e-9 && slotNow.Cool <= slotWas.Cool + 1e-9;
+                            refusedAgain = abil.Stance != null
+                                ? slotNow.Left == 0 && Math.Abs(slotNow.Cool - sweepShip.Stats[abil.Stance.Cooldown]) < 0.1
+                                : slotNow.Left <= slotWas.Left + 1e-9 && slotNow.Cool <= slotWas.Cool + 1e-9;
                         }
                         string told = engaged
                             ? refusedAgain ? $"a second press while it is engaged is refused ({slotWas.Left:0.0} s up, {slotWas.Cool:0.0} s cooling)"
@@ -11848,7 +12015,7 @@ public partial class _Test : Node
                         sweepShip.Sl(abil.Id).Own = 0; sweepShip.Sl(abil.Id).N = 0;
                     }
                     sweepShip.Sl("missile").N = (int)sweepShip.Stats["missile_mag"];
-                    foreach (var flag in new[] { Status.Disabled, Status.Evading, Status.Hardened, Status.Untargetable })
+                    foreach (var flag in new[] { Status.Disabled, Status.Evading, Status.Hardened, Status.Untargetable, Status.Parrying })
                         sweepShip.Statuses.Clear(flag);
                     sweepShip.RecallWing();
                     sweepShip.Forget(sweepMark);
@@ -12199,7 +12366,7 @@ public partial class _Test : Node
                         await ProveReach(reachShip, cls, reachId);
                         reachShip.Position = VaryNear(afield, 700f); reachShip.Velocity = Vector2.Zero;
                     }
-                    foreach (var flag in new[] { Status.Disabled, Status.Evading, Status.Hardened, Status.Untargetable })
+                    foreach (var flag in new[] { Status.Disabled, Status.Evading, Status.Hardened, Status.Untargetable, Status.Parrying })
                         reachShip.Statuses.Clear(flag);
                     reachShip.RecallWing();
                 }
@@ -14942,8 +15109,11 @@ public partial class _Test : Node
             await Wait(1.0);
             var lungeSeen = new LaneA6cLungeSeen();
             var lungeWatch = LaneA6cLungeHostWatch(lungeSeen);             // slice 6c: the guest lunges inside lane B's window
+            var prismSeen = new LaneA6cPrismSeen();
+            var prismWatch = LaneA6cPrismHostWatch(prismSeen);             // slice 6c: ...and then takes a prism stance
             await LaneBHostDrives();                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
             await LaneA6cLungeHostChecks(lungeWatch, lungeSeen);
+            await LaneA6cPrismHostChecks(prismWatch, prismSeen);
             // ── TWO OF THE NINE, IN A SESSION ─────────────────────────────────────
             // Everything the nine classes put on the wire had only ever flown alone: the status
             // bits, the slot array a class names itself, a turret dropped into the world, an
@@ -15238,6 +15408,7 @@ public partial class _Test : Node
             Check(Net.IsOnline && Net.LocalId != 1 && Net.I.JoinedBy == "address", $"arena guest: joined, by the typed address ({Net.I.JoinedBy})");
             await LaneBGuestDrives();                                       // lane B: the drives across peers (its host half: LaneBHostDrives)
             await LaneA6cLungeGuestChecks();                                // slice 6c: a guest's lunge (its host half: LaneA6cLungeHostChecks)
+            await LaneA6cPrismGuestChecks();                                // slice 6c: a guest's prism stance (its host half: LaneA6cPrismHostChecks)
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.

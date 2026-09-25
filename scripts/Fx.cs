@@ -471,6 +471,7 @@ public enum FieldLook
     Dashed,    // a dashed ring, turning slowly: a reach something patrols (the Supercarrier's patrol)
     Shimmer,   // hex plates over the hull, pulsing, and the row's tag under it (the Taunt's guard)
     Plume,     // a long hot plume out of the stern over the engine's own (a drive's boost)
+    Wedge,     // a fan on the ship's guard (IPrism.GuardAngle), one shade a band of Prism.Bands (the prism stance)
 }
 
 public class FieldDef
@@ -500,6 +501,8 @@ public static class Fields
         new() { Id = "taunt", Slot = "taunt", Look = FieldLook.Shimmer, HullShare = 0.55f, TagStat = "taunt_guard", Tint = new(1f, 0.62f, 0.25f) },
         // the boost (the nine's drive, kits_v31 §3.4): the engine burning hot while it runs
         new() { Id = "boost", Slot = "boost", Look = FieldLook.Plume, HullShare = 1.8f, Tint = new(1f, 0.85f, 0.55f) },
+        // the prism stance (kits_v2 Warrior card): the guard's wedge, SQUARE bright and SLANT faint, on every peer
+        new() { Id = "prism", Slot = "prism", Look = FieldLook.Wedge, HullShare = 1.1f, Tint = new(0.75f, 0.95f, 1f) },
     };
 
     public static FieldDef Of(string id) => System.Array.Find(All, f => f.Id == id);
@@ -579,6 +582,20 @@ public static class Fields
                         Txt.Centre(s, ThemeDB.FallbackFont, new Vector2(0, art.Length * 0.5f + 22f), f.Tag, Txt.Size(14), c);
                         s.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                     }
+                    break;
+                }
+                case FieldLook.Wedge:
+                {   // widest band first, so the square one draws over it; the guard itself a hard line
+                    float g = s.GuardAngle - s.Rotation;
+                    for (int b = Prism.Bands.Length - 1; b >= 0; b--)
+                    {
+                        float half = Mathf.DegToRad(Prism.Bands[b].MaxAngle);
+                        var fan = new Vector2[18];
+                        fan[0] = Vector2.Zero;
+                        for (int k = 0; k < 17; k++) fan[k + 1] = Vector2.Right.Rotated(g - half + 2f * half * k / 16f) * f.Radius;
+                        s.DrawColoredPolygon(fan, new Color(c.R, c.G, c.B, b == 0 ? 0.32f : 0.14f));
+                    }
+                    s.DrawLine(Vector2.Zero, Vector2.Right.Rotated(g) * f.Radius * 1.15f, c, 2.5f);
                     break;
                 }
                 case FieldLook.Plume:

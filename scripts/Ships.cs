@@ -414,7 +414,7 @@ public static class Classes
             Weapons = new[] { Dps.Blade },
             Kit = new[] {
                 ItemDef.Own(GearSlot.Weapon, "warrior_blade", "Mk I Blade", "the blade: everything in its arc, every swing", "blade_damage"),
-                ItemDef.Own(GearSlot.Utility, "warrior_prism", "Prism Emitter", "the prism stance, and the blade it guards", "blade_damage"),
+                ItemDef.Own(GearSlot.Utility, "warrior_prism", "Prism Emitter", "the prism stance: how long it holds", "prism_time"),
             },
             Rows = new StatRow[] {
                 // the blade (kits_v2 Warrior card): 160 u, ±55° (Melee.Blade), 26 every 0.40 s = 65 DPS
@@ -433,12 +433,17 @@ public static class Classes
                 new() { Group = "Whirlwind", Id = "whirl_reach",    Label = "Reach (all round)",  Base = 210, Unit = "u", Dec = 0 },
                 new() { Group = "Whirlwind", Id = "whirl_time",     Label = "Spin",               Base = 2, Unit = "s", Dec = 1 },
                 new() { Group = "Whirlwind", Id = "whirl_cooldown", Label = "Cooldown",           Base = 14, Unit = "s", Dec = 1, Inverse = true },
+                // the prism stance (kits_v2 card): 2 s, a split every 0.75 s at most 3 a stance, 12 s from its end
+                new() { Group = "Prism stance", Id = "prism_time",     Label = "Stance",          Base = 2, Unit = "s", Dec = 1 },
+                new() { Group = "Prism stance", Id = "prism_split",    Label = "Between splits",  Base = 0.75, Unit = "s", Dec = 2, Inverse = true },
+                new() { Group = "Prism stance", Id = "prism_splits",   Label = "Splits a stance", Base = 3, Dec = 0 },
+                new() { Group = "Prism stance", Id = "prism_cooldown", Label = "Cooldown",        Base = 12, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://heavy_warrior_hull.png", Length = 120f, HalfWidth = 31.54f,
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
             // the weapon row, then the three it learns in this order (the walls read it: kits_v31 §3.6)
-            Abilities = new[] { Ab.Blade, Ab.Lunge, Ab.Whirlwind } },
+            Abilities = new[] { Ab.Blade, Ab.Lunge, Ab.Whirlwind, Ab.PrismStance } },
         new() { Id = ShipClass.HeavyWarden, Name = "WARDEN", Ready = true, Fit = Fit.Guns | Fit.Pd,
             Blurb = "Fast. Point defence that hits ten times as hard as a warship's, a modest main gun, and hunter-seekers that each take a target of their own.",
             Hint = "WARDEN  ·  mouse aims the main gun",

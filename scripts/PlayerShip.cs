@@ -591,7 +591,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var def = Abilities.Find(Class, id);
         if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked) || PressHeld(def)
             || Unlocks.LockedAt(Class, Peak, def) != null) return;
-        def.Press?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null);
+        var target = targetId != 0 ? Combat.ById(targetId) : null;
+        // ANY OTHER OF THE CLASS'S ABILITIES ends a running stance (the lunge and the whirlwind end the
+        // prism's): read by the row's Stance, never by an id. The drive (V) and the weapon's own rows do not.
+        if (def.Stance == null && !def.Weapon && Array.IndexOf(Classes.Of(Class).Abilities, def) >= 0
+            && def.Refuse?.Invoke(this, target) == null)
+            foreach (var st in Abilities.For(Class))
+                if (st.Stance != null && Sl(st.Id).Left > 0) EndStance(st.Id);
+        def.Press?.Invoke(this, target);
     }
 
     // ── what the abilities do. The catalogue (Abilities.cs) points at these, and each one
@@ -1260,6 +1267,49 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         sl.Left = Stats["whirl_time"]; sl.Cool = Cooling(Stats["whirl_cooldown"]); sl.Own = 0;
         _webAsked = 0; _webPhase = 0; _status.Clear(Status.Pinned);
         _status.Apply(Status.Unwebbed, sl.Left);
+    }
+
+    // ── a stance (AbilityDef.Stance: the prism) ─────────────────────────────
+    // THE PRESS, on the host: up (its Time, its Status for that Time, no split yet), or, pressed while it
+    // runs, dropped. Its cooldown is set where it ENDS (EndStance), never here.
+    public void Stance(string id)
+    {
+        var st = Abilities.Find(Class, id)?.Stance;
+        ref var sl = ref Sl(id);
+        if (st == null) return;
+        if (sl.Left > 0) { EndStance(id); return; }
+        if (sl.Cool > 0) return;
+        sl.Left = Stats[st.Time]; sl.N = 0; sl.Own = 0;
+        _status.Apply(st.Holds, sl.Left);
+    }
+    // IT ENDS: dropped, ended by another press, or run out (the row's Elapsed, on every peer, so every bar
+    // shows the cooldown at once). The cooldown runs from here; the host lets the Status go.
+    public void EndStance(string id)
+    {
+        var st = Abilities.Find(Class, id)?.Stance;
+        if (st == null) return;
+        ref var sl = ref Sl(id);
+        sl.Left = 0; sl.Cool = Cooling(Stats[st.Cooldown]);
+        if (Net.Sim) _status.Clear(st.Holds);
+    }
+    // THE SPLIT TICK (IPrism.Split, the host's Prism.Catch): a running stance splits at most its Splits
+    // catches, Every seconds apart (a hair early is on time: a burn's own tick is the same 0.75 s); its
+    // slot counts them (N) and keeps when the last one fell, in seconds into the stance (Own). A catch in
+    // between still takes the catcher nothing. With no stance running (the status put on by hand) every
+    // catch splits.
+    public const double SplitEarly = 0.05;
+    public bool Split()
+    {
+        foreach (var def in Abilities.For(Class))
+        {
+            if (def.Stance is not { } st || Sl(def.Id).Left <= 0) continue;
+            ref var sl = ref Sl(def.Id);
+            double into = Stats[st.Time] - sl.Left;
+            if (sl.N >= (int)Stats[st.Splits] || (sl.N > 0 && into - sl.Own < Stats[st.Every] - SplitEarly)) return false;
+            sl.N++; sl.Own = into;
+            return true;
+        }
+        return true;
     }
 
     // ── a dash (AbilityDef.Dash: the lunge) ─────────────────────────────────

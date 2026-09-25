@@ -109,6 +109,9 @@ public class AbilityDef
     // A DASH (DashSpec below): pressed, it carries the hull a fixed distance along its nose, and the
     // host strikes what lies on that line. The Warrior's lunge is the first row.
     public DashSpec Dash;
+    // A STANCE (StanceSpec below): pressed it holds a Status for its Time, pressed again it drops, and any
+    // other of the class's abilities pressed ends it; its cooldown runs from the END. The prism stance.
+    public StanceSpec Stance;
 
     public SlotState State(PlayerShip s, IHittable selected) =>
         Show != null ? Show(s, selected) : new SlotState { Line = "READY" };
@@ -146,6 +149,16 @@ public class RampSpec
 public class DashSpec
 {
     public string Reach, Time, Damage, Guard, Cooldown;   // u, s, per body, x damage taken, s
+}
+
+// A STANCE: a Status held for Time (PlayerShip.Stance), dropped by a second press or by any other of the
+// class's three abilities (PlayerShip.DoAbility), its Cooldown from the moment it ends (PlayerShip.EndStance,
+// on every peer through the row's Elapsed). Split names the split tick of a prism stance: at most Splits
+// catches split in one stance, Every seconds apart (PlayerShip.Split, read by Prism.Catch). Stat ids:
+public class StanceSpec
+{
+    public string Time, Cooldown, Every, Splits;
+    public Status Holds;
 }
 
 // THE CATALOGUE. Every ability in the game, once. A class's row (Ships.cs) lists the ones it
@@ -355,6 +368,22 @@ public static class Ab
         Press = (s, _) => s.Whirl(),
         Refuse = (s, _) => s.Sl("whirlwind").Left > 0 ? "SPINNING" : s.Sl("whirlwind").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => Timed(s, "whirlwind", "whirl_cooldown", "SPIN"),
+    };
+
+    // THE PRISM STANCE (the Warrior's F): 2 s catching light off the guard (Prism.cs), at half speed and
+    // with no blade; F again drops it, Q or E ends it; the cooldown runs 12 s from its end.
+    public static readonly AbilityDef PrismStance = new()
+    {
+        Id = "prism", Name = "Prism stance", Short = "PRISM", Default = Key.F,
+        Blurb = "2 s with the guard on the cursor: light that strikes it square goes back along it, light that strikes it slant is split. Half speed, no blade. F again drops it.",
+        Stance = new StanceSpec { Time = "prism_time", Cooldown = "prism_cooldown", Every = "prism_split", Splits = "prism_splits", Holds = Status.Parrying },
+        Hold = 0.5, Stills = true,
+        Press = (s, _) => s.Stance("prism"),
+        Elapsed = s => s.EndStance("prism"),
+        Refuse = (s, _) => s.Sl("prism").Left <= 0 && s.Sl("prism").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => s.Sl("prism").Left > 0
+            ? new SlotState { Line = $"GUARD {s.Sl("prism").Left:0.0}s", Lit = true }
+            : Timed(s, "prism", "prism_cooldown", "READY"),
     };
 
     public static readonly AbilityDef Hunters = new()

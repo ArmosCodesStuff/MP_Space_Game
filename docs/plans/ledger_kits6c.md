@@ -236,3 +236,33 @@ Abilities in learn order {Blade, Lunge, Whirlwind, Prism}; then the walls check 
 whirlwind, prism) goes live once every class has 3. Fx `warn_beam` (appended at the END of Fx's ids) for the clip.
 Checks owed (ledger job list J4): LaneA6cPrismStanceChecks, LaneA6cPrismFrames (wedge, SQUARE clip, SLANT fan),
 rung 5 LaneA6cPrismHostChecks / LaneA6cPrismGuestChecks; sweep witness ["prism"]; the Stills witness.
+
+## kits6c-J4 · PRE (agent 3)
+- tier opus. Intent: Prism stance (F, ability 3, D49): AbilityDef.Stance (StanceSpec: Time / Cooldown / Every / Splits stat ids + the Status it holds), PlayerShip.Stance / EndStance, any other ability 1-3 press ends a running stance, IPrism.Split (the stance's split tick 0.75 s, at most 3 a stance; no running stance row = every catch splits), Hold 0.5, Stills; Field row prism (FieldLook.Wedge) drawn on every peer; kit part warrior_prism -> prism_time. HEAD 0f19074d1188a66af716bac8ac1690e297a38bd8
+- scripts/Abilities.cs 26a59cdcf242bd39a1d91a6b94fc00c6f3b0e648
+- scripts/PlayerShip.cs a640e05f711cdadbc0213ce839db6540ceb53bb2
+- scripts/Ships.cs 29ab7bdbd3aa4f6620029fb4f7f009c2053f41c1
+- scripts/Prism.cs 858fa2c677b534b11e58f6a21f5f97eff52d0bf5
+- scripts/Fx.cs a44e9429b3c6e0609b246a43fa48afc061f27f27
+- scripts/Items.cs 9401325a16e5aebe715f4cf89daee1ccb10e94e6
+- tools/smoketest/SmokeTest.cs.txt 77513606092ca43d127322e5a1d52e925397ff63
+- tools/screens/Shots.cs.txt 705e8d6693817b55be7f325829a4955bc1391e4c
+## kits6c-J4 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- Built: StanceSpec (AbilityDef.Stance: Time / Cooldown / Every / Splits stat ids, Holds a Status); Ab.PrismStance (F,
+  Hold 0.5, Stills, Press toggles, Elapsed = EndStance on every peer); PlayerShip.Stance / EndStance (cooldown from the
+  end) / Split (IPrism.Split: at most prism_splits a stance, prism_split apart, 0.05 s early allowed; no stance running =
+  every catch splits); DoAbility: any other of the class's abilities (not Weapon, not the drive) ends a running stance;
+  Prism.Catch strikes children only when Split says so (the catcher still takes 0). FieldLook.Wedge + Fields row
+  "prism" (the wedge on every peer from the slot). Rows prism_time 2 / prism_split 0.75 / prism_splits 3 /
+  prism_cooldown 12; kit part warrior_prism -> prism_time; Items @duration + prism_time. Warrior Abilities in learn order
+  {Blade, Lunge, Whirlwind, PrismStance}.
+- Defaults (D53): no warn_beam Fx row -- the clip and the fan are the children's own Lines lines (slice 5) and the
+  wedge; nothing would read the row. The slot's N counts splits (Own = when the last fell), not the band: every peer
+  draws the band from the children's lines.
+- Checks: LaneA6cPrismStanceChecks (new: rows; 3 runs: every-frame SQUARE ticks -> 0 taken, 112.5 on the guard;
+  1.85-1.9 s caught, 2.1-2.2 s lands 50; cooldown 12.0 at the end; held 0.5 / 0.75 boosted; blade 0; F / E / Q at
+  0.3-1.7 s ends it, cooldown 12, COOLING); rung 5 LaneA6cPrismHostWatch / HostChecks / GuestChecks (new); frames
+  74d_warrior_prism_wedge, 74e_warrior_prism_square, 74f_warrior_prism_slant (LaneA6cPrismFrames); rewritten: sweep
+  witness ["prism"] + a stance's second press drops it (cooldown = its row), Parrying cleared after the sweeps.
+- Next: kits6c-J5 ActiveReload foundation.

@@ -394,6 +394,7 @@ public partial class _Shots : Node
         await LaneBDriveFrames();
         await LaneADecoyFrames();
         await LaneA6cBladeFrames();
+        await LaneA6cPrismFrames();
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -1032,6 +1033,37 @@ public partial class _Shots : Node
         ws.Sl("whirlwind").Cool = 0; ws.UseAbility("whirlwind", 0);                  // the spin: the whole 210 u ring
         await W(0.6); await Snap("74c_warrior_whirlwind");
         await W(1.6);
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
+    }
+
+    // SLICE 6c: the Warrior's prism stance -- the wedge on its guard (SQUARE bright, SLANT faint), then a
+    // 50 beam tick caught SQUARE (the friendly child back along the guard into a gunship, the quarter
+    // going on), then one caught SLANT at 40 deg (the mirrored child and the bent one fanning apart).
+    async Task LaneA6cPrismFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        Character.Class = ShipClass.HeavyWarrior; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var ws = H.GetNode<PlayerShip>("Ship_1");
+        var at = new Vector2(-900, 1100);
+        ws.Position = at; ws.Rotation = 0.4f; ws.Velocity = Vector2.Zero;
+        var g = Vector2.Up.Rotated(ws.Rotation);
+        var foe = H.SpawnRaider(at + g * 420f, Enemies.Gunship); foe.Hp = 1e9;
+        cam.Zoom = new Vector2(0.9f, 0.9f);
+        ws.Sl("prism").Cool = 0; ws.UseAbility("prism", 0);
+        await W(0.3); await Snap("74d_warrior_prism_wedge");
+        ws.AimPoint = at + g * 600f; foe.Position = at + g * 420f;
+        var uSq = -g.Rotated(Mathf.DegToRad(6f));
+        Prism.Catch(ws, BlowKind.Beam, at - uSq * 900f, at + uSq * 500f, 50, "shots:square");
+        await W(0.1); await Snap("74e_warrior_prism_square");
+        await W(0.7);
+        ws.AimPoint = at + g * 600f;
+        var uSl = -g.Rotated(Mathf.DegToRad(40f));
+        Prism.Catch(ws, BlowKind.Beam, at - uSl * 900f, at + uSl * 500f, 50, "shots:slant");
+        await W(0.1); await Snap("74f_warrior_prism_slant");
+        foe.TakeDamage(1e12);
+        await W(1.5);
         Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
         cam.Zoom = z0;
     }
