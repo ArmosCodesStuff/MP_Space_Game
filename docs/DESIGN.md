@@ -262,6 +262,11 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   (`Net.Arriving`) so they end when the guest's own position is judged. Cosmetic reliable traffic
   (shells, torpedoes) rides its own ENet channel so a lost one does not hold up the rest; raider
   updates go in packets of 24, under the internet's ~1.2 KB.
+- **The WebRTC reply window** (R0, measured 2026-09-24, `run.ps1 -ReplyWindow`, an in-process pair
+  over the LAN host candidate): a host applying the reply 5, 10, 15, 25, 35, 45 or 60 s after the
+  guest made it connected every time, 4-6 ms after the reply, the guest `Connecting` at each. Every
+  delay up to 60 s connected, so `Link.ReplyWindowS` = min(60 - 10, 30) = **30 s**. A real internet
+  path is unmeasured (network_webrtc.md §3.4, the owner's two-machine test).
 
 ## The batch after the review began (signed off by the player), in chunks
 
@@ -1313,6 +1318,18 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   every `GD.Print` from a headless run vanishes and the harness sees an empty log. Use the
   `_console.exe` beside it; both Windows runners swap to it automatically and refuse to run if it
   is missing.
+- **Binary is a property of the bytes, not the name.** verify's text step skipped images and sounds
+  by extension, so the first vendored DLLs were read as text and `-Quick` hung for half an hour on
+  their millions of matches. A NUL in the first 8000 bytes is binary; git's `w/-text` is not the
+  test, because it also calls a lone carriage return binary -- the very thing the step looks for.
+- **A seeker whose mark is gone flies on and strikes what it meets** (`Shot`: homing is choosing,
+  and there is nothing left to choose). A check that sinks its mark and leaves its missiles up
+  poisons whatever check stands in their path seconds later: the Warden's twelve hunters hit the
+  Echo's blast marks three cases on. A check downs what it launched (`Shot.Intercept`) before it ends.
+- **A WebRTC connection freed mid-DTLS-handshake prints two plugin ERROR lines** (libdatachannel:
+  "DTLS handshake failed", EOF). A guest holding an invite reaches the host before any reply is
+  applied (SPIKE P2) and starts its handshake, so hanging up a pending invite does it whenever the
+  timing lands. R0's pending-entry check never delivers its invite; a real guest will still print it.
 
 ## Smoke test
 

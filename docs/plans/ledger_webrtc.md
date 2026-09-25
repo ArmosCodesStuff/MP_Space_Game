@@ -132,3 +132,19 @@ Then: `tools\smoketest\run.ps1 -Solo` (rung 3), `-Solo -OneDll` once, `-ReplyWin
 - checkpoint: the J5 commit (records)
 - next: the owner vendors the plugin, then rung 2, rung 3 x2 seeds, -OneDll, -ReplyWindow;
   DESIGN.md gets the measured window; then R1.
+
+#### J6 PRE (local session, 2026-09-24)
+- intent: the R0 engine rungs on the owner's PC, fixing what they find.
+- files: verify.ps1, tools/smoketest/SmokeTest.cs.txt, docs/CHANGES.md, docs/DESIGN.md, this ledger
+- from: 2abb715
+
+#### J6 POST
+- verdict: done, R0 green. `-Quick` green; `-Solo` seeds 90331 and 4127 green; `-Solo -OneDll` green;
+  `-ReplyWindow` green: every delay 5-60 s connected 4-6 ms after the reply, guest Connecting at
+  each, so `Link.ReplyWindowS` = 30.
+- found and fixed on the way: verify's text step read the DLLs as text (hung 28 min; 21c538c);
+  the pending-entry check freed a guest mid-DTLS-handshake (two plugin ERROR lines, 1 run in 2; its
+  invite is no longer delivered); the Warden's hunters flew on into the Echo blast check (seed 90331,
+  136 where 80; the hunters case intercepts its own now).
+- next: the bar (rung 6), a push to both branches, then R1 (plan §13). R1's first edit adds
+  `Link.ReplyWindowS = 30` and turns the one-time measurement into the permanent check (§3.4).

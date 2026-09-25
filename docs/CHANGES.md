@@ -36,18 +36,22 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
-**2026-09-25 (cloud session): WebRTC slice R0's code landed; it compiles (rung 1 green), untested.**
-Ledger: `docs/plans/ledger_webrtc.md` (jobs J1-J5, decisions D1-D7, v1 of the plan is not in the repo).
+**2026-09-24 (local session): R0 is green** -- rung 2, rung 3 on seeds 90331 and 4127, `-OneDll`,
+`-ReplyWindow` (every delay to 60 s connected: `Link.ReplyWindowS` = 30, DESIGN.md). Three harness
+faults fixed on the way (ledger J6). Owner rulings since: the Echo's Rewind goes back 8 s with hull,
+from a 0.5 s snapshot ring; no boss-hull trim for adds (docs/plans/README.md). **Next:** the bar
+(`verify.ps1 -Update`), a push to both branches, then R1 (network_webrtc.md §13), whose first edit
+adds `Link.ReplyWindowS = 30` and the permanent reply-window check.
+
+**2026-09-25 (cloud session): WebRTC slice R0's code landed** (tested since: above).
+Ledger: `docs/plans/ledger_webrtc.md` (jobs J1-J6, decisions D1-D7, v1 of the plan is not in the repo).
 `scripts/Link.cs` (plugin row, `Available`, `Channels()`, `Sealed`, `Hang`), SessionMenu's
 plugin-missing gate, the harness's stream on channel 12, the R0 pair checks in the solo run, the
 reply-window measurement (opt-in), `tools/import.ps1` and both runners calling it. The session is
 still ENet: R2 switches it. The plugin is vendored in `addons/webrtc_native/` (9474f91: the
 `.gdextension` trimmed to the two `windows.*.x86_64` lines and both DLLs, byte-identical to the
 spike's); with all 7 `LICENSE.*` files: the plugin is fully vendored.
-**Then, in order:** `verify.ps1 -Quick` (rung 2), `tools\smoketest\run.ps1 -Solo` (rung 3) twice on
-different seeds, `run.ps1 -Solo -OneDll` once, `run.ps1 -ReplyWindow` once -- its `reply window:` line
-goes into DESIGN.md, and a window under 15 s stops the batch before R1 (plan §3.4). The runners also
-refuse a `.gdextension` that names a file not vendored. NEXT after that: R1 (plan §13).
+The runners refuse a `.gdextension` that names a file not vendored.
 
 **2026-09-25 (cloud session, design only, no game code touched):** step 1 of `docs/plans/README.md` is
 done. `kits_v31.md` and `numbers_curve_raids_items.md` are reconciled in the numbers file's §8: it owns
@@ -499,12 +503,16 @@ connects, the host offering; 15 data channels open at each end, none with a pack
 packet on channel 12 arrives on it both ways; Close and DisconnectPeer seen within 1 s; `Link.Hang`
 on a gone id and on a pending entry; every handler on the main thread; three connect-and-close cycles
 leave the object count flat; the plugin-missing gate shuts HOST, JOIN and Enter and opens again; with
-`-ReplyWindow`, the measured window is at least 15 s. Compiles (rung 1); rungs 2-3 owed, and need the
-plugin vendored first (Handoff).
+`-ReplyWindow`, the measured window is at least 15 s (it is 30: DESIGN.md). Rewritten on the way:
+the pending-entry check never hands its guest the invite (freed mid-DTLS-handshake, the plugin
+printed two ERROR lines in one run of two); the Warden's Hunters case downs its own seekers, and the
+Echo's blast check reads the marks after its wait and prints the missiles in flight (seed 90331 read
+136 where 80 was stored). Rung 2 green; rung 3 green on seeds 90331 and 4127, `-OneDll` and
+`-ReplyWindow`.
 
 **Known broken (R0):**
-- **Nothing here has run.** The plugin is not vendored yet (the cloud session could not download it),
-  so every engine run refuses at the import until the owner drops it in (Handoff).
+- **A real guest freed mid-handshake prints two plugin ERROR lines** (DESIGN.md traps): the harness
+  sidesteps it; R2's guest role will meet it when an invite is hung up.
 - **The plugin-missing text is this batch's own** (plan v1 §6.1's literal was not in the repo); the
   one-DLL experiment is read as "the editor loads the release DLL" (v1 §8.1 unread). Ledger D1-D3.
 - **The Linux runners** (`run.sh`) have no plugin (it is vendored for Windows x86_64 only), so the

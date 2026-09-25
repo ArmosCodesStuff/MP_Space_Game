@@ -188,6 +188,7 @@ public partial class _Test : Node
     {
         public readonly int Id;
         public readonly long ApplyAfterMs;              // the host takes the reply this long after it was made
+        public readonly bool Delivered;                 // the guest is handed the invite at all
         public readonly WebRtcMultiplayerPeer Host = new(), Guest = new();
         public readonly WebRtcPeerConnection HostConn = new(), GuestConn = new();
         public readonly Error Served;
@@ -198,9 +199,9 @@ public partial class _Test : Node
         public ulong ReplyAt, AppliedAt, HostSawAt, GuestSawAt, HostLostAt, GuestLostAt;
         public WebRtcPeerConnection.ConnectionState GuestAtApply;   // had the guest's side got through alone (P2)?
         public int Handlers, OffMain;                   // signal handlers run, and how many off the main thread
-        public RtcPair(int id, long applyAfterMs = 0)
+        public RtcPair(int id, long applyAfterMs = 0, bool delivered = true)
         {
-            Id = id; ApplyAfterMs = applyAfterMs;
+            Id = id; ApplyAfterMs = applyAfterMs; Delivered = delivered;
             var ice = new Godot.Collections.Dictionary { ["iceServers"] = new Godot.Collections.Array() };
             Served = Host.CreateServer(Link.Channels());
             ConnectedAtOnce = Host.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected;
@@ -226,7 +227,7 @@ public partial class _Test : Node
         {
             Host.Poll(); Guest.Poll();
             if (!OfferSealed && Link.Sealed(HostConn)) OfferSealed = true;
-            if (OfferSealed && !Pasted)
+            if (OfferSealed && !Pasted && Delivered)
             {
                 Pasted = true;
                 Guest.AddPeer(GuestConn, 1);
@@ -365,12 +366,16 @@ public partial class _Test : Node
         Check(bUp && b.GuestLostAt > 0 && b.GuestLostAt - t0 <= 1000,
               $"the host's DisconnectPeer is seen by the guest within 1 s ({(b.GuestLostAt > 0 ? $"{b.GuestLostAt - t0} ms" : "never")}, id {b.Id})");
 
-        // a pending entry -- an invite whose reply never came -- hung up through Link.Hang is gone
-        var c = new RtcPair(Rng.RandiRange(2, int.MaxValue), long.MaxValue / 2);
-        await RtcUntil(() => c.ReplySealed, 3000, c);
+        // a pending entry -- an invite whose reply never came -- hung up through Link.Hang is gone.
+        // THE INVITE NEVER REACHES THE GUEST: a guest holding it reaches the host before any reply is
+        // applied (P2) and starts its DTLS handshake, and freeing it mid-handshake has the plugin
+        // print two ERROR lines ("DTLS handshake failed") that turn the run red when the timing
+        // lands (seen once in two runs). The host's side, the one Link.Hang acts on, is the same.
+        var c = new RtcPair(Rng.RandiRange(2, int.MaxValue), delivered: false);
+        await RtcUntil(() => c.OfferSealed, 3000, c);
         bool pending = c.Host.HasPeer(c.Id);
         Link.Hang(c.Host, c.Id);
-        Check(c.ReplySealed && pending && !c.Host.HasPeer(c.Id), $"Link.Hang takes a pending entry off the host (pending {pending}, id {c.Id})");
+        Check(c.OfferSealed && !c.Pasted && pending && !c.Host.HasPeer(c.Id), $"Link.Hang takes a pending entry off the host (pending {pending}, id {c.Id})");
 
         // every signal handler ran on the main thread, inside a Poll()
         var all = new[] { a, b, c };
@@ -6272,6 +6277,10 @@ public partial class _Test : Node
                             told = $"empty sky: {flewNone} away, cooldown kept ({keptCool}), slot says {emptySays ?? "nothing"}; "
                                  + $"a dummy at hand: {flewDummy} away; a hostile at {pilot.Position.DistanceTo(mkIn.Position):0} u: {flew} away and the cooldown spent ({spentCool})";
                             Sink(mkIn);
+                            // ITS OWN SEEKERS DOWN before the next case: one whose mark is gone flies on
+                            // down its heading and strikes whatever it meets, and these twelve crossed the
+                            // Echo's blast marks three cases later (136 where 80 was stored, twice).
+                            foreach (var m in InFlight().Where(x => x.Source == pilot).ToList()) m.Intercept();
                             pilot.Sl("hunters").Cool = 0;
                             break;
                         }
@@ -6298,13 +6307,15 @@ public partial class _Test : Node
                             var landedAt = pilot.Position + way * Vary(60f, 140f);
                             var mkIn = await Marker(landedAt + way.Rotated(1f) * (float)(reach * Vary(0.40f, 0.85f)));
                             var mkOut = await Marker(landedAt + way.Rotated(-1f) * (float)(reach * Vary(1.20f, 1.60f)));
-                            double inWas = mkIn.Hp, outWas = mkOut.Hp;
-                            // NOTHING ELSE IN FLIGHT FIRST: an echo round from an earlier check lands
-                            // 0.6 s after its shot, and one landing inside this window is stored and
-                            // blasted too (read once: 136 where 80 was stored). Guns off, and past the
-                            // repeat's own delay before the window opens.
+                            // NOTHING ELSE LANDS ON THE MARKS: a hit while the echo is up is stored and
+                            // blasted too, and one before it would read as blast. Twice this read 136
+                            // where 80 was stored -- the Warden's seekers, flying on after their mark was
+                            // sunk (the hunters case downs its own now). Guns off, a beat for this ship's
+                            // own shells, and the hulls read AFTER it, never before the wait.
                             pilot.Trigger = false;
                             await Wait(0.8);
+                            double inWas = mkIn.Hp, outWas = mkOut.Hp;
+                            int strays = InFlight().Count();
                             pilot.Sl("echo").Cool = 0;
                             doAbility.Invoke(pilot, new object[] { "echo", 0 });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -6313,7 +6324,7 @@ public partial class _Test : Node
                             await Wait(0.12);
                             double blastWas = 80 * pilot.Stats["echo_share"];
                             proved = Math.Abs(inWas - mkIn.Hp - blastWas) < 0.01 && mkOut.Hp == outWas;
-                            told = $"{blastWas:0} stored puts {inWas - mkIn.Hp:0} on what stands {landedAt.DistanceTo(mkIn.Position):0} u from where it landed and {outWas - mkOut.Hp:0} on what stands {landedAt.DistanceTo(mkOut.Position):0} u from it";
+                            told = $"{blastWas:0} stored puts {inWas - mkIn.Hp:0} on what stands {landedAt.DistanceTo(mkIn.Position):0} u from where it landed and {outWas - mkOut.Hp:0} on what stands {landedAt.DistanceTo(mkOut.Position):0} u from it ({strays} missiles in flight at the press)";
                             Sink(mkIn); Sink(mkOut);
                             pilot.Sl("echo").Left = 0; pilot.Sl("echo").Cool = 0; pilot.Sl("echo").Own = 0;
                             break;
