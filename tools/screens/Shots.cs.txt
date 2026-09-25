@@ -437,6 +437,7 @@ public partial class _Shots : Node
         await LaneA6cPrismFrames();
         await LaneA6dPepperFrames();
         await LaneA6dRodFrames();
+        await LaneA6dEchoFrames();
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -1105,6 +1106,39 @@ public partial class _Shots : Node
         await Snap("76c_dart_sprint_rod");
         ds.Demo = demo; ds.Velocity = Vector2.Zero;
         await W(5.0);
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
+    }
+
+    // SLICE 6d: the Echo firing while it slides sideways, each round's pale echo leaving where its round left 0.6 s
+    // before (76d), then the reverb's burst of 220 u where its last hit landed (76e).
+    async Task LaneA6dEchoFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        Character.Class = ShipClass.LightEcho; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var es = H.GetNode<PlayerShip>("Ship_1");
+        bool demo = es.Demo; es.Demo = true;
+        var at = new Vector2(-900, 1100); const float rot = 0.4f;
+        var aim = at + Vector2.Up.Rotated(rot) * 450f;
+        cam.Zoom = new Vector2(1.4f, 1.4f);
+        es.Position = at; es.Rotation = rot; es.Velocity = Vector2.Zero; es.AimPoint = aim;
+        await W(0.8);
+        es.Trigger = true;
+        for (double t = 0; t < 1.4; t += GetProcessDeltaTime())
+        {
+            es.Position = at + Vector2.Right.Rotated(rot) * (float)(t * 90); es.Rotation = rot; es.Velocity = Vector2.Zero; es.AimPoint = aim;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        await Snap("76d_echo_repeater");
+        es.Trigger = false;
+        await W(1.2);
+        es.Sl("reverb").Cool = 0; es.UseAbility("reverb", 0); await W(0.1);
+        es.Sl("reverb").Own = 200; es.Sl("reverb").At = aim; es.Sl("reverb").Left = 0.05;
+        await W(0.2);
+        await Snap("76e_echo_reverb");
+        es.Demo = demo; es.Position = at; es.Velocity = Vector2.Zero; es.Sl("reverb").Cool = 0;
+        await W(0.8);
         Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
         cam.Zoom = z0;
     }

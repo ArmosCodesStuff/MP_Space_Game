@@ -300,3 +300,34 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
 - J5 pointers: Echo row Ships.cs (grep `ShipClass.LightEcho, Name`), Ab.Echo + StartEcho/Detonate in PlayerShip (grep
   `public void StartEcho`), Dps.Echo in Stats.cs, Items.cs @-lists hold echo_* ids, SmokeTest has ~42 echo_*/StartEcho/Detonate
   callers (grep `"echo"` and `echo_`), the sweep witness ["echo"]. LightCannon kit part still used by Echo and Wraith.
+
+## kits6d-J5 · PRE
+- tier opus; intent: the Echo (DL1 hull 180, DL2 Reverb F first, DL4): repeater 22 / 0.5 s / 500 u + its echo round (TurretSpec.RepeatShare/RepeatDelay: the turret records muzzle + bearing, fires Shots row `echo` = 11 at 0.5 x 0.6 s later, straight, ShotLook.Ghost), Ab.Echo -> Ab.Reverb (reverb_time 5, reverb_rate 1.2, reverb_share 0.35, reverb_radius 220, reverb_cooldown 18), Dealt.Echo -> Dealt.Reverb, Fx.Echo -> Fx.Reverb, Dps.Echo -> Dps.Repeat + Dps.Reverb; harness callers rewritten.
+- HEAD 5d4c59cb85f04350158c88c8bfd15e21a12c5298
+- scripts/Shots.cs fb71bfa693a68a67c20f6ceb1a952ae39cae6259
+- scripts/Turrets.cs 471d84e4463dbde1f3fd779b4001e3a59af8de63
+- scripts/PlayerShip.cs 2edf5a52d65a34bc947363a0dabe0a1cb983464e
+- scripts/Abilities.cs afb09b82b5cbc69f98b54e2a4bf2df03540b97c5
+- scripts/Ships.cs 1b83010da6ae5fda94aec5bb6129aa2ffa843587
+- scripts/Stats.cs af113b280a136df201deaf68e3c7bd92760c762a
+- scripts/Items.cs ea0c98576437a0659370a2eee14841655bd60af0
+- scripts/Dealt.cs 055f7437d37ece17f634b81388c61e424ca01b2a
+- scripts/Fx.cs a25d422d218d95daacfddc128f68432cf86c0a02
+- tools/smoketest/SmokeTest.cs.txt e9130f06fb1c97f93fd59531cc513d2371aa9e18
+- tools/screens/Shots.cs.txt dfaa3b325a48f0601c53ddcd1d2603b2ff93ebd3
+
+## kits6d-J5 · POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- built: Echo row (hull 180, repeater 22 / 0.5 s / 500 u / 620, Damage level 1.1, learn order guns, firemode, reverb);
+  TurretSpec.RepeatShare/RepeatDelay + Turret.Repeat (the turret records muzzle, bearing, speed, reach at Shoot, fires Shots
+  row `echo` = 11 (ShotLook.Ghost appended) on its own clock; host only); rows echo_share 0.5, echo_delay 0.6;
+  Ab.Echo -> Ab.Reverb (id "reverb", RateStat reverb_rate 1.2, reverb_time 5 / share 0.35 / radius 220 / cooldown 18);
+  StartEcho -> StartReverb; Dealt.Echo -> Dealt.Reverb ("reverb"); Fx.Echo -> Fx.Reverb (same index 5); Dps.Echo -> Dps.Repeat +
+  Dps.Reverb; Items: role lists moved to reverb_*, Repeats {Dealt.Reverb}, PrimaryShots gains "echo" (A10); kit Echo Core ->
+  "Reverb Core" (id kept, Needs reverb_time).
+- checks: LaneA6dRepeaterRowChecks, LaneA6dRepeaterChecks (396 +-3% in 6.25 s x3; echo from the recorded muzzle/bearing at
+  0.6 s, 11 of 22, straight past a jinking raider after the Echo slid and turned x3), LaneA6dReverbChecks (row; 6 vs 5 rounds in
+  2.3 s x3; 35% at mark + 219 u, 0 at 221 u, cool 18, refused x3; stores rounds + echoes, blast 35% x3); frames 76d_echo_repeater,
+  76e_echo_reverb (LaneA6dEchoFrames). Rewritten: every Sl("echo")/UseAbility("echo")/echo_* harness caller -> reverb; Echo
+  SustainedDps literal 66 + 7.7; chip hull literal 90 -> 180; the Echo blast 90 -> 31.5 (35%); sweep witness ["reverb"].
+- next: kits6d-J6 (Rewind).

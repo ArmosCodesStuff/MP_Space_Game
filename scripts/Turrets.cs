@@ -63,6 +63,11 @@ public struct TurretSpec
     // shot (Turret.Warn).
     public float Homing, Size;
     public double Hull, Windup;
+    // A ROUND'S ECHO (the Echo's repeater, kits_v2's card): every main-gun round leaves an echo of RepeatShare of its
+    // damage (Shots row "echo") from the muzzle it left and along the bearing it took, RepeatDelay seconds later -- the
+    // turret records both at the shot (Turret.Shoot), so a ship that has moved or turned since fires it from where it
+    // was. 0: no echo, every gun but the Echo's.
+    public double RepeatShare, RepeatDelay;
     public readonly float RoundSize => Size > 0 ? Size : 1f;
 }
 
@@ -139,6 +144,7 @@ public partial class Turret : Node2D
             // aim point it last sent. On guests this is cosmetic; the host's copy is
             // the one whose barrel direction decides where shots go.
             Swing((Host.AimAt - GlobalPosition).Angle(), delta);
+            Repeat(delta);
             return;
         }
 
@@ -252,9 +258,31 @@ public partial class Turret : Node2D
         if (!Net.Sim) return;
         var spec = S;
         var dir = Vector2.Right.Rotated(GlobalRotation);
-        Combat.Fire(spec.Kind, GlobalPosition + dir * spec.Barrel, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult,
+        var muzzle = GlobalPosition + dir * spec.Barrel;
+        Combat.Fire(spec.Kind, muzzle, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult,
                     targetId: spec.Homing > 0 ? target : 0, turnRate: spec.Homing, source: Host.Credit, hitSource: spec.Source,
                     size: spec.RoundSize, hull: spec.Hull);
+        if (spec.RepeatShare > 0)
+            _echoes.Add(new Echoed(muzzle, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult * spec.RepeatShare, _clock + spec.RepeatDelay));
+    }
+
+    // THE ECHOES STILL TO GO (TurretSpec.RepeatShare), each as its round left: muzzle, bearing, speed, reach and its
+    // share of the damage, and when it is due on this turret's own clock. Host only (Shoot is); the turret's own list,
+    // so they go with it.
+    private readonly record struct Echoed(Vector2 At, Vector2 Dir, float Speed, float Range, double Damage, double Due);
+    private readonly List<Echoed> _echoes = new();
+    private double _clock;
+    private void Repeat(double delta)
+    {
+        _clock += delta;
+        if (!Net.Sim) { _echoes.Clear(); return; }
+        for (int i = 0; i < _echoes.Count; i++)
+        {
+            var e = _echoes[i];
+            if (e.Due > _clock) continue;
+            Combat.Fire(Shots.Echo, e.At, e.Dir, e.Speed, e.Range, e.Damage, source: Host.Credit, hitSource: S.Source);
+            _echoes.RemoveAt(i--);
+        }
     }
 
     // THE WARNING BEFORE A SHOT (TurretSpec.Windup): a red lane from where the round will leave this

@@ -2893,7 +2893,7 @@ public partial class _Test : Node
 
         // THE ECHO STORES EXACTLY WHAT WAS DEALT WHILE IT RUNS, AND NOTHING AFTER (D17): a real hit
         // through the door while it runs is stored; the frame its Left ends it detonates, and that
-        // blast (DealtBy["echo"]) stores nothing; a real hit after it is credited (DealtBy["shell"])
+        // blast (DealtBy["reverb"]) stores nothing; a real hit after it is credited (DealtBy["shell"])
         // and stores nothing either. From three varied spots, a heavy held still (never point
         // defence's pick).
         await SetClass(ShipClass.LightEcho);
@@ -2905,26 +2905,26 @@ public partial class _Test : Node
                 ec.Position = at; ec.Velocity = Vector2.Zero;
                 var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(120f, 200f);
                 var tgt = H.SpawnRaider(spot, Enemies.Gunship); tgt.Hp = 1e9;
-                ec.Sl("echo").Left = 0; ec.Sl("echo").Cool = 0; ec.Sl("echo").Own = 0;
+                ec.Sl("reverb").Left = 0; ec.Sl("reverb").Cool = 0; ec.Sl("reverb").Own = 0;
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                ec.UseAbility("echo", 0);
-                for (int i = 0; i < 30 && ec.Sl("echo").Left <= 0; i++) { tgt.Position = spot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                ec.UseAbility("reverb", 0);
+                for (int i = 0; i < 30 && ec.Sl("reverb").Left <= 0; i++) { tgt.Position = spot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                 Dealt.Deal(tgt, 40, ec, "shell");
-                double stored = ec.Sl("echo").Own;
-                ec.Sl("echo").Left = 0.3;
-                double echo0 = ec.DealtBy.GetValueOrDefault(Dealt.Echo);
-                for (int i = 0; i < 60 && ec.Sl("echo").Left > 0; i++) { tgt.Position = spot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-                double ownAtEnd = ec.Sl("echo").Own, blast = ec.DealtBy.GetValueOrDefault(Dealt.Echo) - echo0;
+                double stored = ec.Sl("reverb").Own;
+                ec.Sl("reverb").Left = 0.3;
+                double echo0 = ec.DealtBy.GetValueOrDefault(Dealt.Reverb);
+                for (int i = 0; i < 60 && ec.Sl("reverb").Left > 0; i++) { tgt.Position = spot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                double ownAtEnd = ec.Sl("reverb").Own, blast = ec.DealtBy.GetValueOrDefault(Dealt.Reverb) - echo0;
                 double shell0 = ec.DealtBy.GetValueOrDefault("shell");
                 Dealt.Deal(tgt, 25, ec, "shell");
-                double ownAfterHit = ec.Sl("echo").Own;
+                double ownAfterHit = ec.Sl("reverb").Own;
                 for (int i = 0; i < 30; i++) { tgt.Position = spot; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                 Dealt.Deal(tgt, 25, ec, "shell");
-                double ownLater = ec.Sl("echo").Own, shellAfter = ec.DealtBy.GetValueOrDefault("shell") - shell0;
-                Check(Math.Abs(stored - 40) < 1e-9 && ec.Sl("echo").Left <= 0 && blast > 0 && ownAtEnd == 0 && ownAfterHit == 0 && ownLater == 0 && Math.Abs(shellAfter - 50) < 1e-9,
+                double ownLater = ec.Sl("reverb").Own, shellAfter = ec.DealtBy.GetValueOrDefault("shell") - shell0;
+                Check(Math.Abs(stored - 40) < 1e-9 && ec.Sl("reverb").Left <= 0 && blast > 0 && ownAtEnd == 0 && ownAfterHit == 0 && ownLater == 0 && Math.Abs(shellAfter - 50) < 1e-9,
                       $"the echo, a heavy {at.DistanceTo(spot):0} u off: stores the 40 dealt while it runs ({stored:0}); its end and its own {blast:0.0} blast store {ownAtEnd:0}; two 25 hits after it are credited ({shellAfter:0}) and store {ownAfterHit:0} / {ownLater:0}");
                 tgt.TakeDamage(1e12);
-                ec.Sl("echo").Cool = 0;
+                ec.Sl("reverb").Cool = 0;
             }
         }
     }
@@ -8126,6 +8126,193 @@ public partial class _Test : Node
         ec.Velocity = Vector2.Zero; ec.Demo = ecDemo; ec.Hp = ec.MaxHp;
     }
 
+    // ── SLICE 6d: THE ECHO'S REPEATER (kits_v2's card): 22 every 0.5 s, and each round again at 11 from the muzzle it
+    // left, along its bearing, 0.6 s later, straight (Shots row "echo") = 66 DPS; hull 180; Reverb learned first.
+    void LaneA6dRepeaterRowChecks()
+    {
+        var st = new ShipStats(ShipClass.LightEcho);
+        var row = Shots.Of(Shots.Echo);
+        var kit = Classes.Of(ShipClass.LightEcho).Abilities.Select(a => a.Id).ToArray();
+        Check(st["hull"] == 180 && st["main_damage"] == 22 && st["main_interval"] == 0.5 && st["main_range"] == 500 && st["shell_speed"] == 620
+              && st["echo_share"] == 0.5 && st["echo_delay"] == 0.6 && Math.Abs(st.MainDps - 44) < 1e-9
+              && Math.Abs(Dps.Repeat.Rate(st) - 22) < 1e-9 && Math.Abs(Dps.Main.Rate(st) + Dps.Repeat.Rate(st) - 66) < 1e-9
+              && row.Id == "echo" && !row.Guided && row.Stops == 1 && row.Command == 0 && !row.AtPlayers && row.Look == ShotLook.Ghost
+              && kit.SequenceEqual(new[] { "guns", "firemode", "reverb" }),
+              $"the Echo row: hull {st["hull"]:0} (180), 22 every 0.5 s to 500 u at 620 u/s, its echo x{st["echo_share"]:0.00} after {st["echo_delay"]:0.00} s = 44 + {Dps.Repeat.Rate(st):0} = 66 DPS; row echo straight, one body, a ghost; learns {string.Join(",", kit)}");
+    }
+
+    async Task LaneA6dRepeaterChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightEcho);
+        var ec = Me; bool demo = ec.Demo; ec.Demo = true; ec.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double Landed() => ec.DealtBy.GetValueOrDefault("shell") + ec.DealtBy.GetValueOrDefault("echo");
+        bool Mine(Shot x, int kind) => x.Kind == kind && x.Source == ec;
+
+        // 66 DPS LANDED on a still hostile 200-450 u off at a varied bearing: the 6.25 s from the first round to land
+        // hold 12 rounds (22) and 12 echoes (11) = 396, a quarter second clear of every edge
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 450f);
+            var foe = HeldI(spot, Enemies.Gunship);
+            ec.Position = at; ec.Rotation = rot; ec.Velocity = Vector2.Zero; ec.AimPoint = spot;
+            for (double t = 0; t < 1.2; t += GetProcessDeltaTime()) { ec.Position = at; ec.Velocity = Vector2.Zero; foe.Position = spot; await Frame(); }
+            double d0 = Landed(), tFirst = -1, landed0 = 0, clock = 0;
+            ec.Trigger = true;
+            for (int i = 0; i < 60 * 12 && (tFirst < 0 || clock - tFirst < 6.25); i++)
+            {
+                ec.Position = at; ec.Rotation = rot; ec.Velocity = Vector2.Zero; ec.AimPoint = foe.Position = spot;
+                await Frame();
+                clock += GetProcessDeltaTime();
+                if (tFirst < 0 && Landed() > d0) { tFirst = clock; landed0 = Landed(); }
+            }
+            ec.Trigger = false;
+            double got = Landed() - landed0, echoes = ec.DealtBy.GetValueOrDefault("echo");
+            Check(tFirst >= 0 && Math.Abs(got - 396) <= 396 * 0.03 && echoes > 0,
+                  $"the repeater at a still hostile {spot.DistanceTo(at):0} u off: {got:0.0} landed in the 6.25 s after the first round (396 = 12 x 22 + 12 x 11: 66 DPS, +-3%), echoes among it");
+            foe.TakeDamage(1e12);
+            await Wait(1.0);
+        }
+
+        // THE ECHO LEAVES THE RECORDED MUZZLE ALONG THE RECORDED BEARING, 0.6 s after its round, at 11 of its 22 -- the
+        // Echo having slid 150-250 u and turned since, a raider jinking across its path: the echo does not curve
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            var aim = at + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 450f);
+            ec.Position = at; ec.Rotation = rot; ec.Velocity = Vector2.Zero; ec.AimPoint = aim;
+            for (double t = 0; t < 1.2; t += GetProcessDeltaTime()) { ec.Position = at; ec.Velocity = Vector2.Zero; await Frame(); }
+            var before = Nodes<Shot>().ToHashSet();
+            ec.Trigger = true; await Frame(); ec.Trigger = false;
+            var shell = Nodes<Shot>().FirstOrDefault(x => Mine(x, Shots.Shell) && !before.Contains(x));
+            Vector2 shellAt = shell?.Position ?? Vector2.Zero, shellDir = shell?.Dir ?? Vector2.Zero; double shellDmg = shell?.Damage ?? 0;
+            var side = new Vector2(-(aim - at).Y, (aim - at).X).Normalized();
+            var jinker = HeldI(at + (aim - at) * 0.5f + side * 120f, Enemies.Gunship);
+            var moveTo = at + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 250f); float turnTo = rot + Vary(0.6f, 2.4f);
+            Shot echo = null; double clock = 0, echoT = -1;
+            for (int i = 0; i < 90 && echo == null; i++)
+            {
+                ec.Position = at.Lerp(moveTo, (float)Math.Min(1, clock / 0.3)); ec.Rotation = turnTo; ec.Velocity = Vector2.Zero;
+                jinker.Position += side * (clock > 0.3 ? -6f : 6f);
+                await Frame(); clock += GetProcessDeltaTime();
+                echo = Nodes<Shot>().FirstOrDefault(x => Mine(x, Shots.Echo) && !before.Contains(x));
+                if (echo != null) echoT = clock;
+            }
+            var eDir0 = echo?.Dir ?? Vector2.Zero; var eAt = echo?.Position ?? Vector2.Zero; double eDmg = echo?.Damage ?? 0;
+            for (double t = 0; t < 0.3 && echo != null && IsInstanceValid(echo); t += GetProcessDeltaTime())
+            { jinker.Position += side * 5f; await Frame(); }
+            var eDir1 = echo != null && IsInstanceValid(echo) ? echo.Dir : eDir0;
+            float across = Mathf.Abs((eAt - shellAt).Cross(shellDir)), along = (eAt - shellAt).Dot(shellDir);
+            Check(shell != null && echo != null && Math.Abs(echoT - 0.6) <= 0.035 && across < 1f && along > -1f && along < 14f
+                  && eDir0.DistanceTo(shellDir) < 1e-3f && eDir1.DistanceTo(eDir0) < 1e-4f && Math.Abs(eDmg - 11) < 1e-9 && Math.Abs(shellDmg - 22) < 1e-9
+                  && eAt.DistanceTo(ec.Position) > 100f,
+                  $"an echo after the Echo slid {at.DistanceTo(moveTo):0} u and turned: {echoT:0.000} s after its round (0.6), {across:0.00} u off the round's line and {along:0.0} u along it from where the round was first seen, on the round's bearing ({Mathf.RadToDeg(eDir0.AngleTo(shellDir)):0.00}°), straight past a jinking raider ({Mathf.RadToDeg(eDir1.AngleTo(eDir0)):0.000}°), {eDmg:0.0} of the round's {shellDmg:0} (11 of 22)");
+            jinker.TakeDamage(1e12);
+            await Wait(1.2);
+        }
+        ec.Demo = demo; ec.Velocity = Vector2.Zero;
+    }
+
+    // ── SLICE 6d: THE ECHO'S REVERB (kits_v2's card): 5 s of guns at x1.2 while it stores what they deal (their echoes
+    // included), then 35% of the store on every hostile within 220 u of the last hit; 18 s from the press.
+    async Task LaneA6dReverbChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightEcho);
+        var ec = Me; bool demo = ec.Demo; ec.Demo = true; ec.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        void Ready() { ec.Sl("reverb").Left = 0; ec.Sl("reverb").Cool = 0; ec.Sl("reverb").Own = 0; }
+        var st = new ShipStats(ShipClass.LightEcho);
+        var rv = Abilities.Find(ShipClass.LightEcho, "reverb");
+        Check(st["reverb_time"] == 5 && st["reverb_rate"] == 1.2 && st["reverb_share"] == 0.35 && st["reverb_radius"] == 220 && st["reverb_cooldown"] == 18
+              && rv?.RateStat == "reverb_rate" && rv?.Default == global::Godot.Key.F,
+              $"the Reverb row: {st["reverb_time"]:0} s (5), x{st["reverb_rate"]:0.0} rate (1.2), {st["reverb_share"]:0.00} of the store (0.35) in {st["reverb_radius"]:0} u (220), {st["reverb_cooldown"]:0} s (18), on F");
+
+        // THE RATE: 6 rounds in the 2.3 s from the first while it runs (every 0.4167 s), 5 with it down (every 0.5 s)
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); var aim = at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 450f);
+            int[] got = new int[2];
+            foreach (bool lit in new[] { true, false })
+            {
+                Ready();
+                ec.Position = at; ec.Velocity = Vector2.Zero; ec.AimPoint = aim;
+                await Wait(0.8);
+                if (lit) { ec.UseAbility("reverb", 0); for (int i = 0; i < 30 && ec.Sl("reverb").Left <= 0; i++) await Frame(); }
+                var seen = Nodes<Shot>().ToHashSet(); double clock = 0, tFirst = -1;
+                ec.Trigger = true;
+                for (int i = 0; i < 60 * 5 && (tFirst < 0 || clock - tFirst < 2.3); i++)
+                {
+                    ec.Position = at; ec.Velocity = Vector2.Zero;
+                    await Frame(); clock += GetProcessDeltaTime();
+                    foreach (var x in Nodes<Shot>().Where(x => x.Kind == Shots.Shell && x.Source == ec && seen.Add(x)).ToList())
+                    { if (tFirst < 0) tFirst = clock; if (clock - tFirst < 2.3) got[lit ? 0 : 1]++; }
+                }
+                ec.Trigger = false;
+            }
+            Check(got[0] == 6 && got[1] == 5,
+                  $"the reverb's x1.2: {got[0]} rounds in the 2.3 s from the first while it runs (6, every 0.417 s), {got[1]} with it down (5, every 0.5 s)");
+            Ready(); await Wait(1.0);
+        }
+
+        // THE BLAST: 35% of a varied store on the last hit's mark and on a hostile 219 u from it; nothing 221 u off;
+        // the cooldown 18 from the press, a second press inside it refused
+        for (int run = 0; run < 3; run++)
+        {
+            Ready();
+            var at = VaryNear(yonder, 300f); ec.Position = at; ec.Velocity = Vector2.Zero;
+            var markAt = at + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 350f);
+            float a = VaryAngle();
+            var inAt = markAt + Vector2.Right.Rotated(a) * 219f; var outAt = markAt + Vector2.Right.Rotated(a + Vary(1.2f, 2.0f)) * 221f;
+            var mark = HeldI(markAt, Enemies.Gunship); var inner = HeldI(inAt, Enemies.Gunship); var outer = HeldI(outAt, Enemies.Gunship);
+            await Frame();
+            ec.UseAbility("reverb", 0);
+            for (int i = 0; i < 30 && ec.Sl("reverb").Left <= 0; i++) await Frame();
+            double cool0 = ec.Sl("reverb").Cool, left0 = ec.Sl("reverb").Left;
+            double store = Vary(60f, 200f);
+            ec.NoteDealt(store * 0.4, outer, "shell"); ec.NoteDealt(store * 0.6, mark, "shell");   // the last hit is the mark's
+            ec.UseAbility("reverb", 0); await Frame();
+            bool refused = ec.Sl("reverb").Left < left0 && ec.Sl("reverb").Left > 4.5;
+            double m0 = mark.Hp, i0 = inner.Hp, o0 = outer.Hp;
+            for (int i = 0; i < 60 * 7 && ec.Sl("reverb").Left > 0; i++) { mark.Position = markAt; inner.Position = inAt; outer.Position = outAt; await Frame(); }
+            await Wait(0.1);
+            double want = store * 0.35;
+            Check(Math.Abs(m0 - mark.Hp - want) < 1e-6 && Math.Abs(i0 - inner.Hp - want) < 1e-6 && o0 == outer.Hp && Math.Abs(cool0 - 18) < 0.1 && refused,
+                  $"the reverb's blast of a {store:0.0} store: {m0 - mark.Hp:0.00} on the last hit's mark, {i0 - inner.Hp:0.00} at 219 u ({want:0.00} = 35%), {o0 - outer.Hp:0.00} at 221 u (0); cooling {cool0:0.00} s at the press (18), a second press refused ({refused})");
+            mark.TakeDamage(1e12); inner.TakeDamage(1e12); outer.TakeDamage(1e12);
+            Ready(); await Wait(0.3);
+        }
+
+        // THE REPEATER THROUGH THE REVERB: the rounds AND their echoes that land while it runs are what it stores, and the
+        // blast is 35% of exactly that -- at a still hostile 200-450 u off, 3 bearings
+        for (int run = 0; run < 3; run++)
+        {
+            Ready();
+            var at = VaryNear(yonder, 300f); var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 450f);
+            var foe = HeldI(spot, Enemies.Gunship);
+            ec.Position = at; ec.Velocity = Vector2.Zero; ec.AimPoint = spot;
+            for (double t = 0; t < 1.2; t += GetProcessDeltaTime()) { ec.Position = at; foe.Position = spot; await Frame(); }
+            ec.UseAbility("reverb", 0);
+            for (int i = 0; i < 30 && ec.Sl("reverb").Left <= 0; i++) await Frame();
+            double s0 = ec.DealtBy.GetValueOrDefault("shell"), e0 = ec.DealtBy.GetValueOrDefault("echo");
+            ec.Trigger = true;
+            for (int i = 0; i < 60 * 3; i++) { ec.Position = at; ec.Velocity = Vector2.Zero; foe.Position = spot; await Frame(); }
+            ec.Trigger = false;
+            for (int i = 0; i < 60 * 2 && ec.Sl("reverb").Left > 0.3; i++) { foe.Position = spot; await Frame(); }
+            double stored = ec.Sl("reverb").Own;
+            double shells = ec.DealtBy.GetValueOrDefault("shell") - s0, echoes = ec.DealtBy.GetValueOrDefault("echo") - e0;
+            double r0 = ec.DealtBy.GetValueOrDefault(Dealt.Reverb);
+            for (int i = 0; i < 60 && ec.Sl("reverb").Left > 0; i++) { foe.Position = spot; await Frame(); }
+            await Wait(0.1);
+            double blast = ec.DealtBy.GetValueOrDefault(Dealt.Reverb) - r0;
+            Check(echoes > 0 && Math.Abs(stored - (shells + echoes)) < 1e-6 && Math.Abs(blast - stored * 0.35) < 1e-6,
+                  $"the reverb over the repeater {at.DistanceTo(spot):0} u off: stored {stored:0.0} = rounds {shells:0.0} + their echoes {echoes:0.0}; its blast {blast:0.00} = 35%");
+            foe.TakeDamage(1e12);
+            Ready(); await Wait(1.0);
+        }
+        ec.Demo = demo; ec.Velocity = Vector2.Zero;
+    }
+
     // ── SLICE 6d, RUNG 5: A GUEST'S PEPPERBOX. The guest (LaneA6dPepperGuestChecks) flies a DART at rest, its cursor
     // on a varied point 400-600 u off the nose, and holds the trigger 2 s: its own world shows the host's darts
     // (cosmetic copies, Commanded onto ITS cursor) -- 12 +- 2 of them, each within 10° of the bearing to the cursor
@@ -9356,14 +9543,14 @@ public partial class _Test : Node
     }
 
     // THE ECHO REPEATS WHAT WAS WEIGHED, ONCE (Items.Repeats): each blow it stores was weighed at the
-    // door as it landed, so its blast is that sum x echo_share and nothing at the door weighs it again.
+    // door as it landed, so its blast is that sum x reverb_share and nothing at the door weighs it again.
     // Redline T10 (x1.5895 under 50% own hull): a 100 blow stored at 10-45% of the hull is 158.95, at
-    // 55-100% it is 100, and the blast is that stored figure x echo_share whatever the hull is when it
+    // 55-100% it is 100, and the blast is that stored figure x reverb_share whatever the hull is when it
     // goes off. The Hunter Chip T1 (+8% against craft): a blow on a webifier stores 108, on a gunship
-    // 100, and the blast lands stored x echo_share on a craft and a gunship alike.
+    // 100, and the blast lands stored x reverb_share on a craft and a gunship alike.
     async Task ItemsEchoChecks(Vector2 yonder)
     {
-        static void Arm(PlayerShip ec) { ec.Sl("echo").Cool = 0; ec.Sl("echo").Left = 0; ec.Sl("echo").Own = 0; ec.StartEcho(); }
+        static void Arm(PlayerShip ec) { ec.Sl("reverb").Cool = 0; ec.Sl("reverb").Left = 0; ec.Sl("reverb").Own = 0; ec.StartReverb(); }
 
         var was = await WearI(ShipClass.LightEcho, "redline_t10");
         foreach (var (lo, hi, blo, bhi) in new[] { (0.10f, 0.45f, 0.10f, 0.45f), (0.55f, 1.0f, 0.10f, 0.45f), (0.10f, 0.45f, 0.55f, 1.0f) })
@@ -9374,14 +9561,14 @@ public partial class _Test : Node
             ec.Hp = ec.MaxHp * storeAt;
             var t = HeldI(ec.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 400f), Enemies.Gunship);
             Dealt.Deal(t, 100, ec, "shell");
-            double stored = ec.Sl("echo").Own, want = storeAt < 0.5 ? 158.9487 : 100.0;
+            double stored = ec.Sl("reverb").Own, want = storeAt < 0.5 ? 158.9487 : 100.0;
             ec.Hp = ec.MaxHp * blastAt;
-            double share = ec.Stats["echo_share"];
-            ec.Sl("echo").Left = 0;                                           // its time up: the blast stores nothing (Detonate's own rule)
+            double share = ec.Stats["reverb_share"];
+            ec.Sl("reverb").Left = 0;                                           // its time up: the blast stores nothing (Detonate's own rule)
             double h0 = t.Hp; ec.Detonate(); double got = h0 - t.Hp;
             Check(NearI(stored, want, 1e-3) && NearI(got, want * share, 1e-3),
                   $"Echo + Redline T10: a 100 blow at {storeAt * 100:0}% of its own hull stores {stored:0.00} ({want:0.00}); gone off at {blastAt * 100:0}% it lands {got:0.00} (stored x {share:0.###} = {want * share:0.00}, weighed once)");
-            t.TakeDamage(1e12); ec.Hp = ec.MaxHp; ec.Sl("echo").Cool = 0;
+            t.TakeDamage(1e12); ec.Hp = ec.MaxHp; ec.Sl("reverb").Cool = 0;
         }
         await WornOffI(ShipClass.LightEcho, was);
 
@@ -9391,18 +9578,18 @@ public partial class _Test : Node
             var ec = Me; ec.Position = VaryNear(yonder, 300f); ec.Velocity = Vector2.Zero;
             Arm(ec);
             var spot = ec.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 400f);
-            float reach = (float)ec.Stats["echo_radius"];
+            float reach = (float)ec.Stats["reverb_radius"];
             var craft = HeldI(spot, Enemies.Webifier);
             var heavy = HeldI(spot + Vector2.Right.Rotated(VaryAngle()) * reach * Vary(0.2f, 0.5f), Enemies.Gunship);
             foreach (bool c in onCraft) Dealt.Deal(c ? craft : heavy, 100, ec, "shell");
-            ec.Sl("echo").At = spot;                                          // it goes off over the craft, the gunship in reach
-            double stored = ec.Sl("echo").Own, share = ec.Stats["echo_share"];
-            ec.Sl("echo").Left = 0;
+            ec.Sl("reverb").At = spot;                                          // it goes off over the craft, the gunship in reach
+            double stored = ec.Sl("reverb").Own, share = ec.Stats["reverb_share"];
+            ec.Sl("reverb").Left = 0;
             double c0 = craft.Hp, g0 = heavy.Hp; ec.Detonate();
             double onC = c0 - craft.Hp, onG = g0 - heavy.Hp;
             Check(NearI(stored, want, 1e-6) && NearI(onC, want * share, 1e-6) && NearI(onG, want * share, 1e-6),
                   $"Echo + Hunter Chip T1: {string.Join(" then ", onCraft.Select(c => c ? "a craft" : "a gunship"))} struck for 100 stores {stored:0.00} ({want:0}); the blast lands {onC:0.00} on the craft and {onG:0.00} on the gunship ({want * share:0.00} each: no second +8%)");
-            craft.TakeDamage(1e12); heavy.TakeDamage(1e12); ec.Sl("echo").Cool = 0;
+            craft.TakeDamage(1e12); heavy.TakeDamage(1e12); ec.Sl("reverb").Cool = 0;
         }
         await WornOffI(ShipClass.LightEcho, was);
     }
@@ -9999,8 +10186,8 @@ public partial class _Test : Node
         // ...and the rule, on real rows in three orders: weapon rows first, walled rows first, the two interleaved
         foreach (var (kit, want) in new[] {
             (new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Missile, Ab.Reload, Ab.Anchor }, new[] { 1, 1, 1, 3, 1, 6 }),
-            (new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Hunters, Ab.Bubble, Ab.Echo }, new[] { 1, 1, 1, 3, 6, int.MaxValue }),
-            (new[] { Ab.Echo, Ab.Guns, Ab.Stealth, Ab.Deploy, Ab.Hunters, Ab.FireMode }, new[] { 1, 1, 3, 1, 6, 1 }) })
+            (new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Hunters, Ab.Bubble, Ab.Reverb }, new[] { 1, 1, 1, 3, 6, int.MaxValue }),
+            (new[] { Ab.Reverb, Ab.Guns, Ab.Stealth, Ab.Deploy, Ab.Hunters, Ab.FireMode }, new[] { 1, 1, 3, 1, 6, 1 }) })
         {
             var got = kit.Select(a => Unlocks.AbilityAt(kit, a)).ToArray();
             Check(got.SequenceEqual(want) && Unlocks.AbilityAt(kit, Ab.Reboard) == 1,
@@ -10206,10 +10393,10 @@ public partial class _Test : Node
     // ── CHIP SLOTS AND KINDS (F15; level_walls checks 6, 6b and 7) ────────────────────────────────
     // Six chip slots on every hull, opened by the pilot's highest level; at most 3 Combat and 3
     // Utility chips; a file never loses a chip it cannot fly. A capital, a heavy and a light, with
-    // their class rows' hulls as literals: battleship 300, warden 270, echo 90.
+    // their class rows' hulls as literals: battleship 300, warden 270, echo 180.
     void ChipChecks()
     {
-        var three = new[] { (c: ShipClass.Battleship, hull: 300.0), (c: ShipClass.HeavyWarden, hull: 270.0), (c: ShipClass.LightEcho, hull: 90.0) };
+        var three = new[] { (c: ShipClass.Battleship, hull: 300.0), (c: ShipClass.HeavyWarden, hull: 270.0), (c: ShipClass.LightEcho, hull: 180.0) };
         string[] With(ShipClass c, params string[] chips)
         {
             var l = Equipment.Default(c);
@@ -13898,8 +14085,8 @@ public partial class _Test : Node
                     Check(Math.Abs(new ShipStats(ShipClass.HeavyWarden).SustainedDps - (22.5 / 0.5 + 6 * 45 / 14.0 + 5 / 0.5)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.FreightHauler).SustainedDps - 50.0) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.HeavyWarrior).SustainedDps - 26 / 0.40) < 1e-6
-                          && Math.Abs(new ShipStats(ShipClass.LightEcho).SustainedDps - (5 / 0.35 + (5 / 0.35) * 5 / 15.0)) < 1e-6,
-                          $"...and every other signature weapon counts too: the warden's flak 45 + 19.29 + 10, the freighter's gun 12 + three dropped turrets 36 + its always-on point defence 2 = 50, the warrior's blade 26 every 0.40 s (65), the echo repeating five seconds of its own damage every 15");
+                          && Math.Abs(new ShipStats(ShipClass.LightEcho).SustainedDps - (22 / 0.5 + 11 / 0.5 + 66 * 1.2 * 0.35 * 5 / 18.0)) < 1e-6,
+                          $"...and every other signature weapon counts too: the warden's flak 45 + 19.29 + 10, the freighter's gun 12 + three dropped turrets 36 + its always-on point defence 2 = 50, the warrior's blade 26 every 0.40 s (65), the echo's repeater 44 + its echo rounds 22 + the reverb's 35% of five seconds at x1.2 every 18 s (7.7)");
                     Check(Math.Abs(new ShipStats(ShipClass.Carrier).SustainedDps - (3 * (2.5 / 0.35) * (15.0 / 18.0) + 4 * 2 * 137.5 / 27.5 + 3 * 0.5 / 0.5)) < 1e-6
                           && Math.Abs(new ShipStats(ShipClass.Carrier).DamageLines.First(l => l.Label.StartsWith("Bomber")).Dps - 40.0) < 1e-6,
                           $"the carrier's torpedoes are in its total at last: 8 x 137.5 = 1100 over a 27.5 s run (20 s out and back, 1.5 s launching, 6 s rearming) = 40 DPS, beside 17.86 from the fighters and 3 from the point defence, always on ({new ShipStats(ShipClass.Carrier).SustainedDps:0.00})");
@@ -14043,7 +14230,7 @@ public partial class _Test : Node
                 Check(Fx.All.Length == 10 && warnLane.Warn && warnZone.Warn && aimZone.Warn
                       && warnLane.Shape == FxShape.Lane && warnZone.Shape == FxShape.Zone && aimZone.Shape == FxShape.Zone
                       && warnLane.Sound == null && warnZone.Sound == null && aimZone.Sound == null
-                      && new[] { Fx.Burst, Fx.Lost, Fx.Rebuilt, Fx.Wave, Fx.Emp, Fx.Echo, Fx.Rail }.All(i => !Fx.Of(i).Warn)
+                      && new[] { Fx.Burst, Fx.Lost, Fx.Rebuilt, Fx.Wave, Fx.Emp, Fx.Reverb, Fx.Rail }.All(i => !Fx.Of(i).Warn)
                       && Fx.All.Count(x => x.Warn) == 3 && Fx.World == 0 && Fx.Flash == 0.35
                       // ...and the friendly one is the SAME telegraph in another colour: where one
                       // of YOUR shots will land reads nothing like where one of THEIRS will.
@@ -14062,7 +14249,7 @@ public partial class _Test : Node
                 }
 
                 Check(Fx.All.Length == 10 && Fx.Of(Fx.Wave).Shape == FxShape.Ring
-                      && Fx.Of(Fx.Emp).Shape == FxShape.Spokes && Fx.Of(Fx.Echo).Shape == FxShape.Spokes
+                      && Fx.Of(Fx.Emp).Shape == FxShape.Spokes && Fx.Of(Fx.Reverb).Shape == FxShape.Spokes
                       && Fx.Of(Fx.Rail).Shape == FxShape.Bar && Fx.Of(Fx.Burst).Shape == FxShape.Burst
                       && Fx.Of(Fx.Rebuilt).Tint != Fx.Of(Fx.Lost).Tint,
                       "the effects, each a row: a burst, a fleet craft lost and rebuilt, a wave, an EMP, an echo and a railgun's bar -- and beside them the three telegraphs, which were their own node until they became rows too");
@@ -14199,6 +14386,9 @@ public partial class _Test : Node
             await LaneA6dRamjetChecks(yonder);
             await LaneA6dSlingChecks(yonder);
             await LaneA6dSlipChecks(yonder);
+            LaneA6dRepeaterRowChecks();
+            await LaneA6dRepeaterChecks(yonder);
+            await LaneA6dReverbChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -14289,16 +14479,16 @@ public partial class _Test : Node
             var mark = H.SpawnRaider(yonder + new Vector2(150, 0)); mark.Hp = 4000;
             var near2 = H.SpawnRaider(yonder + new Vector2(260, 0)); near2.Hp = 4000;
             await Wait(0.1);
-            ec.UseAbility("echo", 0); await Wait(0.1);
+            ec.UseAbility("reverb", 0); await Wait(0.1);
             ec.NoteDealt(90, mark, "shell");                       // as a shell of its own would
-            Check(Math.Abs(ec.Sl("echo").Own - 90) < 1e-6, $"the echo remembers what it deals ({ec.Sl("echo").Own:0})");
+            Check(Math.Abs(ec.Sl("reverb").Own - 90) < 1e-6, $"the echo remembers what it deals ({ec.Sl("reverb").Own:0})");
             double m0 = mark.Hp, n0 = near2.Hp;
             var markHome = mark.Position; var nearHome = near2.Position;
-            for (int i = 0; i < 60 * 6 && ec.Sl("echo").Left > 0; i++)
+            for (int i = 0; i < 60 * 6 && ec.Sl("reverb").Left > 0; i++)
             { mark.Position = markHome; near2.Position = nearHome; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             await Wait(0.1);
-            Check(Math.Abs(m0 - mark.Hp - 90) < 0.01 && Math.Abs(n0 - near2.Hp - 90) < 0.01,
-                  $"and puts all of it down where the last of it landed, on everything within 220 u ({m0 - mark.Hp:0})");
+            Check(Math.Abs(m0 - mark.Hp - 31.5) < 0.01 && Math.Abs(n0 - near2.Hp - 31.5) < 0.01,
+                  $"and puts 35% of it (31.5 of 90) down where the last of it landed, on everything within 220 u ({m0 - mark.Hp:0.0} / {n0 - near2.Hp:0.0})");
             mark.TakeDamage(99999); near2.TakeDamage(99999); await Wait(0.2);
 
             // ── WRAITH: five seconds nothing hostile can pick it ──
@@ -14394,11 +14584,11 @@ public partial class _Test : Node
                     void XcHold() { xcShip.Position = xcAt; xcShip.Velocity = Vector2.Zero; }
                     XcHold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); XcHold();
                     var xcCm = XCruise(xcAt + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 400f));
-                    xcShip.UseAbility("echo", 0); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                    xcShip.UseAbility("reverb", 0); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                     xcShip.NoteDealt(24, xcCm, "shell");                 // a hit of its own landing there, as a shell's would
                     double xcDrop = await XFirstBlow(xcCm, 7, XcHold);
-                    Check(Math.Abs(xcDrop - 24 * xcShip.Stats["echo_share"]) < 1e-6,
-                          $"the echo puts down what it remembered on a cruise missile: 24 dealt where it stands, {xcDrop:0.0} off its 30 hull at the echo's x{xcShip.Stats["echo_share"]:0.00}");
+                    Check(Math.Abs(xcDrop - 24 * xcShip.Stats["reverb_share"]) < 1e-6,
+                          $"the echo puts down what it remembered on a cruise missile: 24 dealt where it stands, {xcDrop:0.0} off its 30 hull at the echo's x{xcShip.Stats["reverb_share"]:0.00}");
                     xcCm.Intercept();
                 }
                 // A SEEKER HOMING ON IT: the warden's cell, past its own point defence's 420 u
@@ -14576,7 +14766,7 @@ public partial class _Test : Node
                     ["rod"]       = sp => sp.Sl("rod").Left > sp.Stats["sprint_time"] - 0.1 && sp.Forced && sp.Sl("rod").Cool > sp.Stats["rod_cooldown"] - 0.1,
                     ["ramjet"]    = sp => sp.Sl("ramjet").Left > sp.Stats["ramjet_time"] - 0.1 && sp.Sl("ramjet").Cool > sp.Stats["ramjet_cooldown"] - 0.1,
                     ["slingshot"] = sp => sp.Sl("slingshot").Cool > sp.Stats["sling_cooldown"] - 0.1,
-                    ["echo"]      = sp => sp.Sl("echo").Left > sp.Stats["echo_time"] - 0.1,
+                    ["reverb"]    = sp => sp.Sl("reverb").Left > sp.Stats["reverb_time"] - 0.1,
                     ["stealth"]   = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("stealth").Left > sp.Stats["stealth_time"] - 0.1,
                     ["anchor"]    = sp => sp.Sl("anchor").Left > sp.Stats["anchor_time"] - 0.1 && sp.Held == 0f,
                     ["tether"]    = sp => sp.Sl("tether").N == 1 && sp.Sl("tether").Cool > sp.Stats["tether_recharge"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId),
@@ -14951,7 +15141,7 @@ public partial class _Test : Node
                             Sink(mkIn); Sink(mkOut);
                             break;
                         }
-                        case "echo_radius":
+                        case "reverb_radius":
                         {
                             // The blast goes off where the LAST of the damage landed, not where
                             // the ship is, so both marks are measured from that spot.
@@ -14967,17 +15157,17 @@ public partial class _Test : Node
                             await Wait(0.8);
                             double inWas = mkIn.Hp, outWas = mkOut.Hp;
                             int strays = InFlight().Count();
-                            pilot.Sl("echo").Cool = 0;
-                            doAbility.Invoke(pilot, new object[] { "echo", 0, Vector2.Zero, System.Array.Empty<int>() });
+                            pilot.Sl("reverb").Cool = 0;
+                            doAbility.Invoke(pilot, new object[] { "reverb", 0, Vector2.Zero, System.Array.Empty<int>() });
                             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                             pilot.NoteDealt(80, new StandIn { Position = landedAt }, "shell");  // as a shell of its own would
-                            pilot.Sl("echo").Left = 0.001;
+                            pilot.Sl("reverb").Left = 0.001;
                             await Wait(0.12);
-                            double blastWas = 80 * pilot.Stats["echo_share"];
+                            double blastWas = 80 * pilot.Stats["reverb_share"];
                             proved = Math.Abs(inWas - mkIn.Hp - blastWas) < 0.01 && mkOut.Hp == outWas;
                             told = $"{blastWas:0} stored puts {inWas - mkIn.Hp:0} on what stands {landedAt.DistanceTo(mkIn.Position):0} u from where it landed and {outWas - mkOut.Hp:0} on what stands {landedAt.DistanceTo(mkOut.Position):0} u from it ({strays} missiles in flight at the press)";
                             Sink(mkIn); Sink(mkOut);
-                            pilot.Sl("echo").Left = 0; pilot.Sl("echo").Cool = 0; pilot.Sl("echo").Own = 0;
+                            pilot.Sl("reverb").Left = 0; pilot.Sl("reverb").Cool = 0; pilot.Sl("reverb").Own = 0;
                             break;
                         }
                         case "wave_range":

@@ -393,11 +393,19 @@ public static class Dps
                   + $"every {s["hunter_cooldown"]:0.0} s",
     };
 
-    public static readonly DpsSource Echo = new()
+    // THE ECHO'S ROUNDS AGAIN (TurretSpec.RepeatShare): each main round's echo, a share of it
+    public static readonly DpsSource Repeat = new()
     {
-        Label = "Echo, averaged over its cooldown",
-        Rate = s => s.MainDps * s["echo_share"] * s["echo_time"] / s["echo_cooldown"],
-        Note = s => $"it repeats {s["echo_share"]:0.00}× what you deal in {s["echo_time"]:0.0} s, every {s["echo_cooldown"]:0.0} s",
+        Label = "Echo rounds", Rate = s => s.MainDps * s["echo_share"],
+        Note = s => $"every round again at {s["echo_share"]:0.00}× of it, {s["echo_delay"]:0.00} s later from where it was fired",
+    };
+
+    // THE REVERB, averaged over its cooldown: its share of what the guns and their echoes deal through it at its rate
+    public static readonly DpsSource Reverb = new()
+    {
+        Label = "Reverb, averaged over its cooldown",
+        Rate = s => s.MainDps * (1 + s["echo_share"]) * s["reverb_rate"] * s["reverb_share"] * s["reverb_time"] / s["reverb_cooldown"],
+        Note = s => $"it puts down {s["reverb_share"]:0.00}× what you deal in {s["reverb_time"]:0.0} s at ×{s["reverb_rate"]:0.0} rate, every {s["reverb_cooldown"]:0.0} s",
     };
 }
 

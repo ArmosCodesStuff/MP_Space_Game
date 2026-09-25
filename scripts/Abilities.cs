@@ -75,17 +75,17 @@ public class AbilityDef
     //              must show at once, before the host's next report (the broadside leaving its
     //              wind-up for its volleys). Nothing that damages or spends belongs here.
     //   Expire  -- on the HOST alone: what it resolves (the railgun's shot, the lunge's end, the
-    //              echo's blast, the magazine a reload refills). The host gate is the LOOP's, so a new row is safe by default.
+    //              reverb's blast, the magazine a reload refills). The host gate is the LOOP's, so a new row is safe by default.
     // Each is handed the ship, and a row that stored a number reads it back from its own slot
-    // (PlayerShip.Sl): the echo detonates Sl("echo").Own, so no number has to be carried here.
+    // (PlayerShip.Sl): the reverb detonates Sl("reverb").Own, so no number has to be carried here.
     public Action<PlayerShip> Elapsed, Expire;
 
     // WHAT THIS ROW HEARS OF ITS OWN SHIP'S BLOWS, WHILE IT RUNS (F18): every weapon's hit comes
     // through PlayerShip.NoteDealt (the hostile damage door, Dealt.Deal), which calls this on every
     // row whose Left > 0 (and While, if it narrows the run) -- the target, how much, and the
-    // weapon's id (Dealt.*, or a shot row's own). The echo is the one row that uses it today: it
-    // stores the damage and where it landed in its own slot (PlayerShip.Sl("echo").Own / .At)
-    // rather than NoteDealt knowing the echo by name.
+    // weapon's id (Dealt.*, or a shot row's own). The reverb is the one row that uses it today: it
+    // stores the damage and where it landed in its own slot (PlayerShip.Sl("reverb").Own / .At)
+    // rather than NoteDealt knowing the reverb by name.
     public Action<PlayerShip, IHittable, double, string> OnDealt;
 
     // WHILE IT RUNS, what it lifts. A row that speeds a ship's guns or its hull up names the stat
@@ -172,7 +172,7 @@ public class AbilityDef
 // rewards flying straight and bleeds it into a turn. A row is nothing but three stat ids (how fast
 // it builds, its ceiling, how hard turning costs it) and a condition; the number itself lives in
 // the ship's own slot (PlayerShip.Sl(id).Own -- per-ability state is how it reaches the wire, same
-// as the echo's stored damage). Step is the ONE place the arithmetic lives: pure, no ship and no
+// as the reverb's stored damage). Step is the ONE place the arithmetic lives: pure, no ship and no
 // Godot frame, so it is provable (LaneARampChecks) before any row exists to carry it.
 public class RampSpec
 {
@@ -589,17 +589,20 @@ public static class Ab
         Show = (s, _) => Timed(s, "slingshot", "sling_cooldown", "READY"),
     };
 
-    public static readonly AbilityDef Echo = new()
+    // THE ECHO'S REVERB (kits_v2's card): 5 s of guns at x1.2 while it remembers what they deal, then 35% of the lot in
+    // 220 u where the last of it landed; 18 s from the press
+    public static readonly AbilityDef Reverb = new()
     {
-        Id = "echo", Name = "Bullet echo", Short = "ECHO", Default = Key.F,
-        Blurb = "The echo remembers the damage you deal, then detonates all of it where your last shot landed.",
-        Press = (s, _) => s.StartEcho(),
-        OnDealt = (s, t, d, w) => { ref var e = ref s.Sl("echo"); e.Own += d; e.At = t.Position; },
+        Id = "reverb", Name = "Reverb", Short = "REVERB", Default = Key.F,
+        Blurb = "Your guns run hot for five seconds while the reverb remembers what they deal, then a third of it goes off where your last shot landed.",
+        RateStat = "reverb_rate",
+        Press = (s, _) => s.StartReverb(),
+        OnDealt = (s, t, d, w) => { ref var e = ref s.Sl("reverb"); e.Own += d; e.At = t.Position; },
         Expire = s => s.Detonate(),
-        Refuse = (s, _) => s.Sl("echo").Cool > 0 ? "COOLING" : null,
-        Show = (s, _) => s.Sl("echo").Left > 0
-            ? new SlotState { Line = $"{s.Sl("echo").Own:0} STORED", Lit = true }
-            : Timed(s, "echo", "echo_cooldown", "READY"),
+        Refuse = (s, _) => s.Sl("reverb").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => s.Sl("reverb").Left > 0
+            ? new SlotState { Line = $"{s.Sl("reverb").Own:0} STORED", Lit = true }
+            : Timed(s, "reverb", "reverb_cooldown", "READY"),
     };
 
     public static readonly AbilityDef Stealth = new()

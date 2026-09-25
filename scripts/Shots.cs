@@ -19,7 +19,7 @@ using System.Collections.Generic;
 // down a fixed lane on a cubic ease, strikes everything in the lane ONCE and breaks at the end.
 // It shares the sweep (Shots.Sweep) and nothing else.
 // ─────────────────────────────────────────────────────────────────────────────
-public enum ShotLook { Bullet, Ball, Shard, Missile, Rod }
+public enum ShotLook { Bullet, Ball, Shard, Missile, Rod, Ghost }
 
 public class ShotDef
 {
@@ -68,7 +68,7 @@ public static class Shots
 {
     // The index IS the id on the wire (Hub.NetShot), so APPEND ONLY.
     public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Flak = 8,
-                     Pepper = 9, Rod = 10;
+                     Pepper = 9, Rod = 10, Echo = 11;
 
     public static readonly ShotDef[] All =
     {
@@ -107,6 +107,9 @@ public static class Shots
         // THE DART'S ROD FROM GOD (kits_v2's card, AbilityDef.Parting): straight down the nose, through every hostile body
         // on its line once each (Stops 0) to its range, never a missile
         new() { Id = "rod", AtPlayers = false, Pad = 4f, Sweep = 6f, Look = ShotLook.Rod, Stops = 0 },
+        // A ROUND'S ECHO (TurretSpec.RepeatShare, the Echo's repeater): a ghost of a round already fired, leaving the muzzle
+        // it left and along the bearing it took, a moment later; straight, the first hostile body, never a missile
+        new() { Id = "echo", AtPlayers = false, Pad = 3f, Sweep = 6f, Look = ShotLook.Ghost },
     };
 
     public static ShotDef Of(int id) => All[id >= 0 && id < All.Length ? id : Shell];
@@ -393,6 +396,10 @@ public partial class Shot : Node2D, IHittable, ITagged
                 DrawLine(new Vector2(0, 4f), new Vector2(0, 22f), new Color(1f, 0.75f, 0.35f, 0.35f), 3f);
                 DrawRect(new Rect2(-1.8f, -5f, 3.6f, 9f), new Color(1f, 0.92f, 0.7f));
                 DrawColoredPolygon(new[] { new Vector2(-1.8f, -5f), new Vector2(0, -8f), new Vector2(1.8f, -5f) }, new Color(1f, 0.85f, 0.5f));
+                break;
+            case ShotLook.Ghost:    // a pale, see-through slug: a round's echo (the Echo's repeater)
+                DrawLine(new Vector2(0, 4f), new Vector2(0, 20f), new Color(0.55f, 0.85f, 1f, 0.25f), 3f);
+                DrawRect(new Rect2(-1.8f, -5f, 3.6f, 9f), new Color(0.7f, 0.9f, 1f, 0.55f));
                 break;
             case ShotLook.Rod:      // a white-hot lance with a long wake: the Dart's rod
                 DrawLine(new Vector2(0, 10f), new Vector2(0, 70f), new Color(0.75f, 0.9f, 1f, 0.3f), 5f);

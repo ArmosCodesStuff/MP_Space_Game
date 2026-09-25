@@ -576,30 +576,37 @@ public static class Classes
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
             Abilities = new[] { Ab.Pepperbox, Ab.Rod, Ab.Ramjet, Ab.Slingshot } },
         new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
-            Blurb = "Its echo remembers the damage it deals, then detonates the lot where the last shot landed.",
-            Hint = "ECHO  ·  mouse aims the main gun",
+            Blurb = "Every round it fires comes again a moment later from where it was fired; its reverb stores what it deals and puts a third of it down at once.",
+            Hint = "ECHO  ·  mouse aims the repeater, every round echoes 0.6 s later  ·  F reverb",
             Drive = Drives.Boost,
             Nums = new() {
-                ["hull"] = 90,
+                ["hull"] = 180,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
                 ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
-                ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
+                // THE ECHO REPEATER (kits_v2's card): 22 every 0.5 s out to 500 u, and each round's echo (Shots row "echo")
+                // at 0.5 of it 0.6 s later from the recorded muzzle: 44 + 22 = 66 DPS
+                ["main_count"] = 1, ["main_damage"] = 22, ["main_interval"] = 0.5, ["main_range"] = 500, ["shell_speed"] = 620,
             },
-                // echo_share is NOT a weapon: the blast is a share of damage already dealt, so it
-                // grows with main_damage on its own, and naming it would count the same purchase twice
-            Damage = new() { ["main_damage"] = 1 },
-            Reach = new() { ["main_range"] = 1, ["echo_radius"] = 1 },
+                // 1.1 = 5% of the repeater's 22, what a level is worth on every other primary. reverb_share is NOT a weapon:
+                // the blast is a share of damage already dealt, so it grows with main_damage on its own
+            Damage = new() { ["main_damage"] = 1.1 },
+            Reach = new() { ["main_range"] = 1, ["reverb_radius"] = 1 },
             Cycle = new() { ["main_interval"] = 1 },
-            Weapons = new[] { Dps.Main, Dps.Echo },
+            Weapons = new[] { Dps.Main, Dps.Repeat, Dps.Reverb },
             Kit = new[] {
                 LightCannon,
-                ItemDef.Own(GearSlot.Utility, "light_echo_core", "Echo Core", "what the echo remembers, and its blast", "echo_time"),
+                ItemDef.Own(GearSlot.Utility, "light_echo_core", "Reverb Core", "what the reverb remembers, and its blast", "reverb_time"),
             },
             Rows = new StatRow[] {
-                new() { Group = "Echo", Id = "echo_time",   Label = "It remembers for", Base = 5, Unit = "s", Dec = 1 },
-                new() { Group = "Echo", Id = "echo_radius", Label = "Blast radius",     Base = 220, Unit = "u", Dec = 0 },
-                new() { Group = "Echo", Id = "echo_share",  Label = "Of what it dealt", Base = 1, Unit = "x", Dec = 2 },
-                new() { Group = "Echo", Id = "echo_cooldown", Label = "Cooldown",       Base = 15, Unit = "s", Dec = 1, Inverse = true },
+                // THE REPEATER'S ECHO: half of each round, 0.6 s after it, from where it left
+                new() { Group = "Echo repeater", Id = "echo_share", Label = "Echo, of the round", Base = 0.5, Unit = "x", Dec = 2 },
+                new() { Group = "Echo repeater", Id = "echo_delay", Label = "Echo after",         Base = 0.6, Unit = "s", Dec = 2 },
+                // REVERB (kits_v2's card): 5 s at x1.2 rate, 35% of what it dealt in 220 u where the last landed; 18 s
+                new() { Group = "Reverb", Id = "reverb_time",     Label = "It remembers for", Base = 5, Unit = "s", Dec = 1 },
+                new() { Group = "Reverb", Id = "reverb_rate",     Label = "Rate of fire",     Base = 1.2, Unit = "x", Dec = 2 },
+                new() { Group = "Reverb", Id = "reverb_share",    Label = "Of what it dealt", Base = 0.35, Unit = "x", Dec = 2 },
+                new() { Group = "Reverb", Id = "reverb_radius",   Label = "Blast radius",     Base = 220, Unit = "u", Dec = 0 },
+                new() { Group = "Reverb", Id = "reverb_cooldown", Label = "Cooldown",         Base = 18, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 // fighter_f (the pack, J5): one main on the centreline stands for the paired
@@ -607,7 +614,7 @@ public static class Classes
                 Texture = "res://light_echo_hull.png", Length = 70f, HalfWidth = 14.68f,
                 Mains = new Vector2[] { new(0.0f, -23.39f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Echo } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Reverb } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
             Blurb = "While its veil is up nothing hostile can pick it: whatever was coming for it goes elsewhere, or gives up.",
             Hint = "WRAITH  ·  mouse aims the main gun",

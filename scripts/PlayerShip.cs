@@ -316,6 +316,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             Turn     = (float)(pd ? Stats["pd_turn"]  : Stats["main_turn"]),
             ShellSpeed = (float)Stats["shell_speed"],
             Kind     = Stats.Def.Shot,                // what its main guns fire (ClassDef.Shot); point defence fires none
+            // each main round's echo (the Echo's repeater): a stat row, 0 on every sheet that has none
+            RepeatShare = pd ? 0 : Stats["echo_share"], RepeatDelay = Stats["echo_delay"],
             Texture  = pd ? art.PdTurret : art.MainTurret,
             TexScale = art.TurretTexScale,
             Barrel   = pd ? art.PdBarrel : art.MainBarrel,
@@ -952,33 +954,33 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     // ── THE LIGHTS ──────────────────────────────────────────────────────
-    // The echo remembers what this ship dealt, through its own row's OnDealt (AbilityDef.OnDealt,
-    // called by NoteDealt while Sl("echo").Left > 0), and puts all of it down at once, where the
-    // last of it landed (Slot.At).
-    public void StartEcho()
+    // The reverb remembers what this ship dealt, through its own row's OnDealt (AbilityDef.OnDealt,
+    // called by NoteDealt while Sl("reverb").Left > 0), and puts reverb_share of it down at once, where
+    // the last of it landed (Slot.At). Its guns run at reverb_rate meanwhile (the row's RateStat).
+    public void StartReverb()
     {
-        if (Sl("echo").Cool > 0) return;
-        ref var e = ref Sl("echo");
-        e.Left = Stats["echo_time"]; e.Own = 0; e.Cool = Cooling(Stats["echo_cooldown"]); e.At = Position;
+        if (Sl("reverb").Cool > 0) return;
+        ref var e = ref Sl("reverb");
+        e.Left = Stats["reverb_time"]; e.Own = 0; e.Cool = Cooling(Stats["reverb_cooldown"]); e.At = Position;
     }
-    // The echo's time is up (the Echo row's Expire, on the host; Left is already 0 here, so this
+    // The reverb's time is up (the Reverb row's Expire, on the host; Left is already 0 here, so this
     // blast does not re-store itself through NoteDealt). What it remembered is its OWN slot's Own
     // and At, so the row hands it nothing but the ship and no number travels through the tick.
     public void Detonate()
     {
-        ref var e = ref Sl("echo");
+        ref var e = ref Sl("reverb");
         double stored = e.Own; e.Own = 0; var at = e.At;
         if (stored <= 0) return;
-        double blast = stored * Stats["echo_share"];
-        float reach = (float)Stats["echo_radius"];
+        double blast = stored * Stats["reverb_share"];
+        float reach = (float)Stats["reverb_radius"];
         NoteCombat();                                       // detonating is combat, whether or not it lands
         foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
         {
             if (h.Position.DistanceTo(at) > reach) continue;
-            Dealt.Deal(h, blast, this, Dealt.Echo);
+            Dealt.Deal(h, blast, this, Dealt.Reverb);
             if (h is Node2D n) Popups.NoteImpact(n, h.Position);
         }
-        Fx.Raise(Fx.Echo, at, reach);                       // on every peer, where it remembered
+        Fx.Raise(Fx.Reverb, at, reach);                     // on every peer, where it remembered
     }
 
     public void GoDark()
