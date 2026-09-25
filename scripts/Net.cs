@@ -232,13 +232,19 @@ public partial class Net : Node
         || (t.IsArray && Plain(t.GetElementType()))
         || (t.GetMethod("<Clone>$") != null && !typeof(GodotObject).IsAssignableFrom(t))
         || Table(t) || StructRow(t);
-    // A STRUCT ROW: a readonly struct of the game's whose public fields are all Plain (a site's post, a
-    // target filter). As fixed as a table row, and written out the same way; before this, an array of
-    // them was not hashed at all. One with a field that is code (WaveCrew's Count) stays out: its text
-    // would say nothing the other build could compare.
+    // A STRUCT ROW: a value type of the game's own assembly whose public fields are all Plain (a
+    // site's post, a target filter, a status guard, a turret's spec), or a `System.ValueTuple`N`
+    // whose fields are all Plain (a table row of names, positions and flags -- Hub.Outposts,
+    // Hub.PracticeTargets). As fixed as a table row, and written out the same way; before this, an
+    // array of them was not hashed at all. READONLY OR NOT: a value in a static readonly field or a
+    // table row is as fixed as what holds it -- a mutable struct (StatusSet.Guards' StatusGuard,
+    // EmplacementDef.Gun's TurretSpec) is no less part of the build for having settable fields, and
+    // `IsReadOnlyAttribute` only ever told us the struct itself, never the array holding it, could
+    // not be reassigned in place. One with a field that is code (WaveCrew's Count) stays out: its
+    // text would say nothing the other build could compare.
     private static bool StructRow(Type t) =>
-        t.IsValueType && !t.IsPrimitive && !t.IsEnum && t.Assembly == typeof(Net).Assembly
-        && t.IsDefined(typeof(System.Runtime.CompilerServices.IsReadOnlyAttribute), false)
+        t.IsValueType && !t.IsPrimitive && !t.IsEnum
+        && (t.Assembly == typeof(Net).Assembly || (t.Namespace == "System" && t.Name.StartsWith("ValueTuple`", StringComparison.Ordinal)))
         && t.GetFields(BindingFlags.Public | BindingFlags.Instance) is { Length: > 0 } fields && fields.All(f => Plain(f.FieldType));
     // A TABLE ROW: one of the game's own data classes (a gear part, an upgrade, a boss type). Held in
     // a readonly field it is as fixed as a constant -- but a class, so it has no text of its own:

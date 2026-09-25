@@ -553,3 +553,44 @@ Owed on the R1 records commit (it carries J10 and J9c):
 - checkpoint: c4a7e01 (the fix); nothing to commit for the green re-run itself (records below carry it)
 - next: CHANGES.md Handoff and Known broken updated to this rung 3/5-equivalent result (the pair-proxy
   line removed, not a fallback); then the bar, a merge to `version-l`, and R2.
+
+### R1Q PRE (the merge gate's StructRow fix)
+- model: sonnet (escalate to opus after one red)
+- intent: the merge gate failed the lane on `scripts/Net.cs:239-242`: `StructRow` required
+  `IsReadOnlyAttribute`, so a MUTABLE struct row (`StatusSet.Guards`: `StatusGuard[]`;
+  `EmplacementDef.Gun`: `TurretSpec?`, the pirate base's cruise missile) and a `System.ValueTuple`N`
+  row (`Hub.PracticeTargets`, `Hub.Outposts`'s names) never entered the build's fingerprint --
+  `Show` printed a mutable struct as its bare type name, and a ValueTuple row was skipped entirely.
+  Fix: `StructRow` accepts any value type of the game's own assembly, or any `System.ValueTuple`N`,
+  whose public instance fields are all Plain; the `IsReadOnlyAttribute` test is dropped (a value in
+  a static readonly field or a table row is as fixed as what holds it). Add `BuildChecks` rows
+  beside the Post check (SmokeTest.cs.txt:2233) that move one Guards Share, the base gun's Damage,
+  and one PracticeTargets row -- each must move the fingerprint and be restored. Rewrite the
+  DESIGN.md:1354-1357 trap to match. Then re-prove the lane: `-Quick`, rung 3 twice (two seeds), the
+  six-role run, through the shared `rungs.ps1` runner, tags `net_r1c`, `net_r1d`, ...
+- files (may touch, only if a rung is red): scripts/Net.cs, tools/smoketest/SmokeTest.cs.txt,
+  docs/DESIGN.md, docs/plans/ledger_webrtc.md
+- from: 77c3174c913611418ee30327bb33c6b1e8b6d79b
+- hashes: Net.cs 3c10715d9675c949b56010b2c106d2f000254341; SmokeTest.cs.txt
+  9cefc479ecf01d7a1db0132a85d1bc0a5612fa3e; DESIGN.md f2f244bc2ec1fec574c2fc903f0f3bc2fee15f7b;
+  ledger 14b87e23ffde1226385b72b49d16e32d23df02a3
+
+### R1Q POST
+- verdict: ALL GREEN. Rung 1 clean (0 errors, real GodotSharp.dll). `net_r1c` (tag) at 77c3174: `-Quick`
+  ALL CHECKS PASSED (84s, after waiting 495s for another engine run on the machine); rung 3 green twice,
+  seeds 11400714819323524536 (128s) and 11400714819323511382 (126s), all three new checks PASS on both
+  ("a mutable struct row is part of the build's fingerprint: one status guard's share moved moves it...",
+  "the pirate base's mutable gun is part of the build's fingerprint: its damage moved moves it...", "a
+  value-tuple row is part of the build's fingerprint: one practice target moved moves it..."), every
+  check the R1P handoff owed read back PASS in both logs (none missing), no FAIL, no ERROR line; the
+  six-role run green (239s, seed 11400714819323521240), all six roles `fails=0` (solo, guest, host,
+  guest2, aguest, ahost), no build/protocol refusal anywhere -- host and every guest still agree on
+  `Net.Protocol` with the widened `StructRow`.
+- files: scripts/Net.cs (`StructRow`: any value type of the game's assembly, or any
+  `System.ValueTuple`N`, whose public instance fields are all Plain -- `IsReadOnlyAttribute` dropped),
+  tools/smoketest/SmokeTest.cs.txt (`BuildChecks`: three new checks beside the post check -- a status
+  guard's `Share`, the pirate base's `Gun.Damage`, one `PracticeTargets` row, each moved and restored),
+  docs/DESIGN.md (the struct-row trap rewritten to the three kinds and the fix), this ledger (PRE/POST)
+- checkpoint: the R1Q commit (code + records together)
+- next: CHANGES.md Handoff and the R1 Unreleased entry updated to carry this fix (same commit); then
+  the bar, a merge to `version-l`, and R2.

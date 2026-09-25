@@ -45,9 +45,18 @@ this commit (seeds 11400714819323513555 and 11400714819323526641) and the six-ro
 (seed 11400714819323519265, every role `fails=0`): host and every guest agree on J9c's `Net.Protocol`.
 **The pair-proxy unknown is closed, in the box's favour**: libjuice does use a loopback pair proxy as a
 remote candidate (9 datagrams to the host, 9 to the guest); the `Net.DropBeatsFor` fallback (plan
-§10.2) was never needed. Next: the bar (`verify.ps1 -Update`), a merge to `version-l`, and **R2**
-(network_webrtc.md §13: the switch; its `Net` is the desks, `Net._Process` polls `Rendezvous.Paths`,
-`Join` adds an invite's candidates only after the walk, D15). Not pushed.
+§10.2) was never needed. **The merge gate then failed the lane on `Net.cs:239-242`: `StructRow`
+demanded `IsReadOnlyAttribute`, so a MUTABLE struct row (`StatusSet.Guards`, `EmplacementDef.Gun`) and
+a `System.ValueTuple`N` row (`Hub.PracticeTargets`, `Hub.Outposts`) never entered the fingerprint.**
+Fixed (ledger R1Q): `StructRow` takes any value type of the game's own assembly, or any
+`System.ValueTuple`N`, whose public fields are all Plain, readonly or not; three new `BuildChecks` (a
+status guard's share, the base gun's damage, one practice target) each move the fingerprint and are
+restored. Re-proved: `-Quick`, rung 3 green twice more (seeds 11400714819323524536 and
+11400714819323511382), the six-role run green once more (seed 11400714819323521240, every role
+`fails=0`) -- host and every guest still agree on `Net.Protocol`. Next: the bar (`verify.ps1 -Update`),
+a merge to `version-l`, and **R2** (network_webrtc.md §13: the switch; its `Net` is the desks,
+`Net._Process` polls `Rendezvous.Paths`, `Join` adds an invite's candidates only after the walk, D15).
+Not pushed.
 
 **2026-09-24 (local session): R0 is green** -- rung 2, rung 3 on seeds 90331 and 4127, `-OneDll`,
 `-ReplyWindow` (every delay to 60 s connected: `Link.ReplyWindowS` = 30, DESIGN.md). Three harness
@@ -514,9 +523,15 @@ session uses any of it yet: R2 switches, and R2's `Net._Process` polls the rows.
 fingerprint was taken mid-way through Net's own initialization: it hashed itself as 0 and the Net
 statics below it as unset, and differed from every fingerprint taken later in the process (3724c77b
 against 7991f5f3). It is a property set by Net's static constructor. `Character.Bought` (the pilot's
-purchases) was a readonly array and so hashed live: a property over a mutable field. And a readonly
-struct row (a pirate-base `Post`, a `TargetFilter`) was never hashed: `Net.Plain` takes one whose public
-fields are all Plain. The fingerprint's value changes with this; both ends of a run share it.
+purchases) was a readonly array and so hashed live: a property over a mutable field. And a struct row
+(a pirate-base `Post`, a `TargetFilter`) was never hashed: `Net.Plain` takes one whose public fields are
+all Plain. **Then the merge gate found the fix half done:** `StructRow` still demanded
+`IsReadOnlyAttribute`, so a MUTABLE struct row (`StatusSet.Guards`, `EmplacementDef.Gun` -- the pirate
+base's cruise missile) printed as its bare type name, and a `System.ValueTuple`N` row
+(`Hub.PracticeTargets`, `Hub.Outposts`) was skipped whole, a different assembly than the game's own.
+`StructRow` now takes any value type of the game's own assembly, or any `System.ValueTuple`N`, whose
+public fields are all Plain, readonly or not. The fingerprint's value changes with this; both ends of a
+run share it.
 
 **Checks:** new in the solo role -- `Link.ReplyWindowS` is 30, and a reply taken 30 s late still
 connects within 2 s; every record kind round-trips; the wire values; the spike's bundles pack to the
@@ -538,13 +553,17 @@ row through the courier's files, the reply taken off the clipboard as a whole Di
 the host's own invite; the pickup's pace and once-only; a pair whose codes the courier rewrote connects
 through the box's pair proxy, datagrams both ways; a packet sent into a 1 s blackhole arrives after it
 lifts; nothing about the pilot is in the fingerprint; the fingerprint never hashes itself; a struct row
-is in it; every field of Character is accounted for by the round-trip test (`<Bought>k__BackingField`,
-the property's own backing field, now that `Bought` is one); `Character`'s own `const` bounds are not
-the pilot and stay in the fingerprint (`Dir`, `MaxBonus`, `MaxStock`, `PaidKept`, `SaveDelay`).
+is in it; a MUTABLE struct row is in it too (a status guard's share, the pirate base's gun damage); a
+`System.ValueTuple`N` row is in it too (one practice target); every field of Character is accounted for
+by the round-trip test (`<Bought>k__BackingField`, the property's own backing field, now that `Bought`
+is one); `Character`'s own `const` bounds are not the pilot and stay in the fingerprint (`Dir`,
+`MaxBonus`, `MaxStock`, `PaidKept`, `SaveDelay`).
 Replaced: the reply-window measurement. Rung 3 green on two seeds at 8760795 (J7-J9b); two rung-3
 checks of J9c's fixed at c4a7e01 (both invisible below rung 3); rung 3 green twice more at c4a7e01
 (seeds 11400714819323513555, 11400714819323526641) and the six-role run once (seed
-11400714819323519265, every role `fails=0`): host and every guest agree on `Net.Protocol`.
+11400714819323519265, every role `fails=0`); the merge gate's `StructRow` fix (R1Q) re-proved: rung 3
+green twice more (seeds 11400714819323524536, 11400714819323511382) and the six-role run once more
+(seed 11400714819323521240, every role `fails=0`): host and every guest agree on `Net.Protocol`.
 
 **Known broken (R1):**
 - **What libjuice writes after an IPv6 server-reflexive candidate is unread**; the codec writes

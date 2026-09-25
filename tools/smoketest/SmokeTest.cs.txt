@@ -2239,6 +2239,39 @@ public partial class _Test : Node
         string postPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("Emplacements.PirateBase=", StringComparison.Ordinal)) ?? "none";
         Check(shifted != Net.Protocol && FingerprintNow() == Net.Protocol && postPart.Contains("Post{At=", StringComparison.Ordinal),
               $"a struct row is part of the build's fingerprint: one pirate-base post moved moves it, put back it is the build's again (post {at}: {shifted:x8}, the build's {Net.Protocol:x8}; {postPart[..Math.Min(90, postPart.Length)]})");
+        // A MUTABLE STRUCT ROW IS HASHED TOO: StatusGuard and TurretSpec carry no IsReadOnlyAttribute
+        // (a mount's gun has settable fields) -- StructRow used to demand it, so a StatusGuard[] and
+        // an EmplacementDef's TurretSpec? printed as their bare type name no matter their numbers, and
+        // two builds that differed only there still shook hands.
+        int gi = Rng.RandiRange(0, StatusSet.Guards.Length - 1);
+        var guardWas = StatusSet.Guards[gi];
+        StatusSet.Guards[gi] = new StatusGuard { Status = guardWas.Status, Stat = guardWas.Stat, Share = guardWas.Share + Vary(0.05f, 0.4f) };
+        int guardShifted = FingerprintNow();
+        StatusSet.Guards[gi] = guardWas;
+        string guardPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("StatusSet.Guards=", StringComparison.Ordinal)) ?? "none";
+        Check(guardShifted != Net.Protocol && FingerprintNow() == Net.Protocol && guardPart.Contains("Share=", StringComparison.Ordinal),
+              $"a mutable struct row is part of the build's fingerprint: one status guard's share moved moves it, put back it is the build's again (guard {gi}: {guardShifted:x8}, the build's {Net.Protocol:x8}; {guardPart[..Math.Min(90, guardPart.Length)]})");
+        var baseDef = Emplacements.Of(Emplacements.RowOf(Emplacements.Base));
+        var gunWas = baseDef.Gun.GetValueOrDefault();
+        var gun = gunWas; gun.Damage = gunWas.Damage + Vary(1f, 50f);
+        baseDef.Gun = gun;
+        int gunShifted = FingerprintNow();
+        baseDef.Gun = gunWas;
+        string gunPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("Emplacements.All=", StringComparison.Ordinal)) ?? "none";
+        Check(gunShifted != Net.Protocol && FingerprintNow() == Net.Protocol && gunPart.Contains("Damage=", StringComparison.Ordinal) && !gunPart.Contains("Gun=TurretSpec}", StringComparison.Ordinal),
+              $"the pirate base's mutable gun is part of the build's fingerprint: its damage moved moves it, put back it is the build's again ({gunShifted:x8}, the build's {Net.Protocol:x8})");
+        // A VALUE-TUPLE ROW IS HASHED TOO: Hub.PracticeTargets and Hub.Outposts are
+        // System.ValueTuple`N tables, a different assembly than the game's own -- StructRow only ever
+        // looked at the game's assembly, so an array of them was skipped whole, not merely printed
+        // wrong. One practice target moved, moves the fingerprint; put back it is the build's again.
+        int pi = Rng.RandiRange(0, Hub.PracticeTargets.Length - 1);
+        var targetWas = Hub.PracticeTargets[pi];
+        Hub.PracticeTargets[pi] = (targetWas.number, targetWas.at + Vector2.Right.Rotated(VaryAngle()) * Vary(1f, 50f), targetWas.armed, targetWas.fighter);
+        int targetShifted = FingerprintNow();
+        Hub.PracticeTargets[pi] = targetWas;
+        string targetPart = FingerprintParts().FirstOrDefault(p => p.StartsWith("Hub.PracticeTargets=", StringComparison.Ordinal)) ?? "none";
+        Check(targetShifted != Net.Protocol && FingerprintNow() == Net.Protocol && targetPart != "none",
+              $"a value-tuple row is part of the build's fingerprint: one practice target moved moves it, put back it is the build's again (target {pi}: {targetShifted:x8}, the build's {Net.Protocol:x8}; {targetPart[..Math.Min(90, targetPart.Length)]})");
         // Net.Fingerprint() folds in every static field of every null-namespace type that is
         // IsLiteral or IsInitOnly with a Plain field type -- and string is Plain. A
         // `public static readonly string Build` would therefore enter the hash two peers are
