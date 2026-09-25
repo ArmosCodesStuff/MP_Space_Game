@@ -11388,8 +11388,9 @@ public partial class _Test : Node
     // boost and gear included"): the price reads the live top, so a part on max_speed or the boost's lift reaches it.
     // (a) Combat Chip T1 (max_speed -4%): top 249.6, a dart at the x1 floor (its own +8% on the dart's row: 8.1), and a
     // boosted sprint's rod 180 x (249.6 x 1.5 + 100) / 260 = 328.43; (b) Burner Drive T1 (the boost's excess +25%: x1.625)
-    // boosted: top 422.5, a dart 11.25, the rod 360 (the cap: 522.5); (c) Combat Chip T10 boosted, its tiered price: top
-    // under 249.6 and the rod Bores.Price(180, top x 1.5 + 100, 260, 2). Each at a varied spot and heading.
+    // boosted: top 422.5, a dart 11.25, the rod 360 (the cap: 522.5); (c) Combat Chip T10 boosted: the price is as written
+    // at every tier (Items.Build), so the top is 249.6 again and the rod 328.43, while the dart carries T10's tiered lift
+    // (7.5 x (1 + 0.08 x P(10))) at the boosted top's price. Each at a varied spot and heading.
     async Task LaneA6dPepperGearChecks(Vector2 yonder)
     {
         async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -11439,10 +11440,10 @@ public partial class _Test : Node
             }
             else
             {
-                double rodWant = Bores.Price(180, t10 * 1.5 + 100, 260, 2);
-                ok = t10 < 249.6 && NearI(sheet, t10, 1e-6) && NearI(top, t10 * 1.5, 1e-2) && rod != null && NearI(rod.Damage, rodWant, 1e-3)
-                     && dart != null && NearI(dart.Damage, Bores.Price(pepper, t10 * 1.5, 260, 1.5), 1e-4);
-                want = $"top under 249.6 ({t10:0.00}), the rod {rodWant:0.00}";
+                double pepWant = 7.5 * (1 + 0.08 * Tiers.P(10));
+                ok = NearI(t10, 249.6, 1e-2) && NearI(sheet, t10, 1e-6) && NearI(top, 249.6 * 1.5, 1e-2) && rod != null && NearI(rod.Damage, 328.43, 0.05)
+                     && NearI(pepper, pepWant, 1e-6) && dart != null && NearI(dart.Damage, Bores.Price(pepWant, 249.6 * 1.5, 260, 1.5), 1e-3);
+                want = $"top 249.6 (the price as written: {t10:0.00}), the rod 328.43, the dart {Bores.Price(pepWant, 249.6 * 1.5, 260, 1.5):0.000}";
             }
             Check(ok, $"{id} on the Dart{(boosted ? ", boosted" : "")}: top {top:0.00} u/s, a dart {dart?.Damage:0.000}, a sprint's rod {rod?.Damage:0.00} ({want})");
             dt.Demo = demo; dt.Trigger = false; dt.Velocity = Vector2.Zero;
