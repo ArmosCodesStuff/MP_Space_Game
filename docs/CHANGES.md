@@ -468,6 +468,34 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Class kits, lane A job 1b: rung 3's four fails at ad19fd8 (2026-09-25, worktree wt/kits)
+
+Rung 3 at ad19fd8 (seed 11400714819323522083) failed four checks. Two were bugs in the game, one
+was the check's geometry.
+- **Disabled holds the heading at any speed.** Steer zeroed a Disabled hull's yaw only on the turning
+  circle; at pivot speed (at or below 5% of top) the rate it carried in coasted down at the rudder's
+  2.5 rad/s² bite. A warden disabled 0.3 s after a W+A turn (about 0.85 rad/s left) turned 7.92 deg
+  on (the check's 2nd and 3rd headings; the 1st carried no turn). The yaw is zeroed wherever the hull
+  is Disabled or held at x0.
+- **A point-defence mount re-picks while it holds.** It kept what it held for as long as that lived;
+  with no window there is no fresh pick, so the carrier's mount that doubled up on a practice fighter
+  never spread to the third light, and a mount on a light would have let a missile through. It now
+  gives way to something FREE that betters its target: a lower rank, or the same rank while a sibling
+  shares it (never down the ranks, never to a fallback; no flicking by distance).
+- **The lights' DPS** ("three lights, 1 DPS each") read 1.40 of 3: the carrier's passive mounts shoot
+  them while they strike. The check takes its point defence out of reach until the DPS is read.
+- DESIGN's "point defence is an active ability" (missed by F16) now says passive, with the re-pick.
+
+**Checks:** new `LaneAPdRepickChecks` (a battleship, a carrier and a destroyer at seeded spots,
+headings and sides: every mount on one light, a second light abeam spreads them, a standing cruise
+missile is taken over a light, none idle); rewritten "a DISABLED warden at N deg" (turning at a
+seeded 0.4-0.8 s of W and a seeded rudder when it is disabled: the carried yaw must not turn it);
+"three lights, 1 DPS each" (point defence out of reach for the window). "carrier PD: three turrets on
+three different LIGHT targets" unchanged: it is the spread's reproduction.
+**Rungs:** 1 and 2 in the worktree (ledger_kits.md J3b); rung 3 owed on two seeds.
+
+**Known broken:** nothing known; rung 3 has not run on this commit.
+
 ### Class kits, lane A: point defence is passive (F16) (2026-09-25, worktree wt/kits)
 
 - Every hull that mounts point defence fires it whenever the ship is alive: no key, no 15 s window,
@@ -496,9 +524,9 @@ figures, the sustained totals (freighter 50, carrier +3), the hauler's mount, th
 defence out of reach". Shots: the dead Q presses dropped; frame 23 is `23_bar_battleship_cooldown`.
 **Rungs:** 1 and 2 in the worktree (see the ledger); 3, 4 and 5 owed.
 
-**Known broken:** nothing known; no engine rung has run. Watch at rung 3: the carrier's raider
-checks (webifier DPS, the gunship's burn on a pinned carrier, the armed dummy's seeker) now run with
-its point defence on; the audit put each light raider's loss at 8-12 of 25 hull, so they should hold.
+**Known broken:** rung 3 at ad19fd8: this entry's new and rewritten checks passed except "carrier PD:
+three turrets on three different LIGHT targets" and "three lights, 1 DPS each" (1.40 of 3), both
+fixed in job 1b above. Rungs 4 and 5 not run.
 
 ### Class kits, lane A: a burn counts its judgements (2026-09-25, worktree wt/kits)
 
@@ -512,9 +540,10 @@ its point defence on; the audit put each light raider's loss at 8-12 of 25 hull,
 **Checks:** rewritten `LaneABurnClockChecks` (5 hits, 0.75 s apart, 250, over a window that runs
 0.4 s past the burn with nothing in it; the burn 3 s from its first hit); rewritten "the beam,
 judged every 0.25 s ... 3 hits ... 150" (was 200-350) with the 1.9 s sidestep.
-**Rungs:** 1 and 2 green in the worktree; rung 3 owed (ledger_kits.md).
+**Rungs:** 1 and 2 green in the worktree; rung 3 green on one seed at ad19fd8, a second owed
+(ledger_kits.md).
 
-**Known broken:** nothing known; rung 3 has not run.
+**Known broken:** nothing known.
 
 ### Class kits, lane A slice 1a: the burn clock, a hold on the helm, Disabled on a pilot, Hardened from its applier (2026-09-25, worktree wt/kits)
 
@@ -545,7 +574,8 @@ sniper's "charges with the hull locked" (now `Held == 0`), its "hull is free aga
 the ability sweep's railgun row, and the stat-reach sweep's railgun case (no Disabled to clear).
 **Rungs:** 1 and 2 green in the worktree; rung 3 owed on two seeds (ledger_kits.md).
 
-**Known broken:** nothing known; rung 3 has not run.
+**Known broken:** rung 3 at ad19fd8 (one seed): this entry's checks passed except "a DISABLED
+warden" on 2 of its 3 headings (a carried yaw turned it 7.92 deg), fixed in job 1b above.
 
 ### verify's text step skips a binary by what it holds, not by its extension (2026-09-24, in the WarShips_Version_L fork)
 

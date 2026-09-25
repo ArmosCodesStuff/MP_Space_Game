@@ -145,9 +145,11 @@ public partial class Turret : Node2D
         // positions picks the same targets, so a guest sees its turrets track what
         // the host's are shooting. Only the host's copy deals damage. A FALLBACK (a practice
         // dummy, to a turret left standing) is never HELD: it is picked again every tick, so the
-        // first thing that can die to come into reach takes the gun off it.
+        // first thing that can die to come into reach takes the gun off it. What it does hold, it
+        // keeps only until something free betters it (Acquire's `held`).
         Vector2 wp = GlobalPosition;
-        if (!StillThere(Target) || S.Prey.IsFallback(Target) || wp.DistanceTo(Target.Position) > Range * 1.15f) Target = Acquire(wp);
+        Target = !StillThere(Target) || S.Prey.IsFallback(Target) || wp.DistanceTo(Target.Position) > Range * 1.15f
+            ? Acquire(wp, null) : Acquire(wp, Target);
 
         float desired = Target != null ? (Target.Position - wp).Angle() : rest;
         float diff = Swing(desired, delta);
@@ -178,14 +180,24 @@ public partial class Turret : Node2D
     // turret left standing takes them all (Targeting.Sentry). Below every rank, what its filter
     // takes only as a FALLBACK. Within a rank, the nearest one no sibling turret has claimed (if
     // all are claimed, the nearest regardless).
+    // HELD, it is not re-picked by distance (no flicking between two in reach), but it gives way
+    // to something FREE that betters it: a lower rank (a missile over the light it is on), or the
+    // same rank while a sibling shares what it holds (the spare that doubled up spreads to the
+    // first new one in reach) -- never down the ranks, and never to a fallback. Point defence is
+    // passive, so no window starts a fresh pick: without this a doubled-up mount would stay
+    // doubled up, and one on a light would let a missile through.
     public static int Rank(IHittable h) => TagExt.Is(h, Tag.Missile | Tag.Hulled) ? 0 : TagExt.Is(h, Tag.Light | Tag.Fighter) ? 1 : 2;
     private const int FallbackRank = 3;
+    private bool Claimed(IHittable h)
+    {
+        foreach (var t in Host.Siblings) if (t != this && t.Target == h) return true;
+        return false;
+    }
     // Best by (rank, then distance), preferring one no sibling turret has claimed, falling
-    // back to the best claimed one -- in a single pass with no allocation. This used to be a LINQ
-    // chain with two lists built and sorted, and Tick calls it EVERY FRAME FOR EVERY PD TURRET
-    // while point defence is active with nothing in range, because a null Target never satisfies
-    // the guard -- and every frame a turret holds a fallback.
-    private IHittable Acquire(Vector2 from)
+    // back to the best claimed one -- in a single pass with no allocation. Tick calls it EVERY
+    // FRAME FOR EVERY TURRET THAT PICKS FOR ITSELF: to pick, and, holding (`held`), to see whether
+    // something free betters what it holds.
+    private IHittable Acquire(Vector2 from, IHittable held)
     {
         IHittable bestFree = null, bestAny = null;
         int freePri = 0, anyPri = 0; float freeDist = 0, anyDist = 0;
@@ -198,12 +210,13 @@ public partial class Turret : Node2D
             if (d > range) continue;
             int p = spec.Prey.IsFallback(h) ? FallbackRank : Rank(h);
             if (bestAny == null || p < anyPri || (p == anyPri && d < anyDist)) { bestAny = h; anyPri = p; anyDist = d; }
-            bool claimed = false;
-            foreach (var t in Host.Siblings) if (t != this && t.Target == h) { claimed = true; break; }
-            if (claimed) continue;
+            if (Claimed(h)) continue;
             if (bestFree == null || p < freePri || (p == freePri && d < freeDist)) { bestFree = h; freePri = p; freeDist = d; }
         }
-        return bestFree ?? bestAny;
+        if (held == null) return bestFree ?? bestAny;
+        if (bestFree == null || ReferenceEquals(bestFree, held)) return held;
+        int heldPri = Rank(held);
+        return freePri < heldPri || (freePri == heldPri && Claimed(held)) ? bestFree : held;
     }
 
     // One main-gun shot, along the barrel as it points RIGHT NOW: whatever the gun's row FIRES

@@ -148,6 +148,44 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
   edits those rows too -- whichever merges second drops `PdRing = x` from its lines.
 - Checkpoint: the commit after this entry. Next: slice 2 (a FRESH agent: this one passed ~150k).
 
+### J3b · PRE · kits job 1b: the four rung-3 fails at ad19fd8
+- Intent: rung 3 at ad19fd8 (seed 11400714819323522083) failed 4: (1) "carrier PD: three turrets on
+  three different LIGHT targets", (2) "three lights, 1 DPS each (1.40 DPS)", (3+4) "a DISABLED warden
+  at 160 / -4 deg ... turn it 7.92 deg". Fix each at its cause in the game where the game is wrong
+  (Disabled's heading in Steer; a PD mount's hold that never re-picks now that no window starts a
+  fresh pick), the geometry where the check is (PD out of reach while the lights' own DPS is read);
+  the DISABLED-warden check made to turn the hull into the Disabled on every run, not by accident;
+  a new lane A check for the re-pick; DESIGN's stale "PD is an active ability" line; CHANGES entry.
+- Files: scripts/PlayerShip.cs, scripts/Turrets.cs, tools/smoketest/SmokeTest.cs.txt,
+  docs/CHANGES.md, docs/DESIGN.md, this ledger (its uncommitted Handover 3 goes in unchanged).
+- Start: ad19fd82c02453fa994c45a50af120f75c4a0a79
+- Hashes: PlayerShip 39e359e4 · Turrets 80a48423 · SmokeTest b676d56d · CHANGES 415d0412 ·
+  DESIGN a4928663
+
+### J3b · POST
+- Verdict: rung 1 (typecheck, 0 errors) and rung 2 (`verify.ps1 -Quick`, ALL CHECKS PASSED, 0
+  warnings, UNUSED 0) green in the worktree. No engine rung.
+- Causes: (1) GAME: a PD mount held its target for as long as it lived; no window means no fresh
+  pick, so the carrier's mount doubled up on a practice fighter never took the third light.
+  (2) CHECK: the carrier's passive mounts shoot the three latched lights while their DPS is read
+  (1.40 of 3; less, not more). (3+4) GAME: Steer zeroed a Disabled yaw only on the turning circle; at
+  pivot speed the rate carried in from the previous run's free W+A turn (~0.85 rad/s after the 0.3 s
+  wait) coasted down at the rudder's 2.5 rad/s^2: 0.85^2 / 5 = 0.144 rad = 8 deg (7.92 read); the
+  1st heading carried none.
+- Files: PlayerShip.cs (Steer: `disabled || hold <= 0` zeroes the yaw at any speed; the turning
+  circle's Disabled half deleted), Turrets.cs (`Acquire(from, held)`, `Claimed`), SmokeTest
+  (`LaneADisabledChecks` turns into every Disabled; `LaneAPdRepickChecks` new, called after
+  `LaneAPassivePdChecks`; the lights' block takes `PdReachOff` until its DPS check; a comment on the
+  carrier PD check), DESIGN.md (line ~623: PD passive + the re-pick), CHANGES.md (entry; the F16,
+  J2b and slice 1a Known broken lines made true to the ad19fd8 run).
+- **D20** A held PD / sentry target gives way to a FREE one that betters it: a lower rank, or the
+  same rank while a sibling shares it; never down the ranks, never to a fallback, never by distance
+  alone (so no flicking). This restores what a window's fresh pick gave (spread, missiles first).
+- **D21** Disabled freezes the heading like a hold of x0 but is NOT folded into `Held`: a hold of x0
+  also clamps both speed caps to 0 (a dead stop), and D7 asks no helm, not a stop. A Disabled hull
+  still coasts on its speed with no thrust and no turn.
+- Checkpoint: the commit after this entry ("Kits lane A job 1b"). Next: slice 2 (Handover 3, J4).
+
 ## Engine rungs owed to the main session (run in the worktree, rebased, one engine at a time)
 
 | after | rung | seeds | look for (PASS lines) |
@@ -157,6 +195,83 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
 | J3 F16 | 3 (`-Solo`) | two different seeds | new: "every hull that mounts point defence is in the passive-PD table", 7 x "...: point defence with nothing pressed and no key for it". Rewritten: "PD fires with nothing pressed", "each battleship PD turret picks its own target", "no window and no recharge: 15.5 to 17.5 s on", "Point defence: 2.00 DPS ... = 64.65", "keys tab lists the battleship's 3 abilities + 6 open slots", "Esc cancels a capture", the BB / DD bar lines, "carrier PD: three turrets on three different LIGHT targets", "a hunter called off while the fighters and point defence are on it", "the warden's point defence is on with nothing pressed -- ... 10 DPS", the sustained-total pair (freighter 50, carrier), the 12 fittings-sweep lines, "every ability on every bar has a witness", the pd_range reach row, "a battleship's point defence picks a cruise missile ... before a light raider", "point defence, with nothing pressed, shoots the boss's missiles down", "left alone (no point defence), the escorts pin the pilot", the siege's "falls to the battleship's MAIN GUNS ... point defence out of reach", "a 1000 u shockwave throws nothing in flight", "a carrier's wing sent at a raider that dies", "a turret left standing shoots what comes near it", the hauler pad's three. Watch (unchanged but now with PD on): the carrier raider checks (webifier DPS 3.0 +- 0.7, the gunship's 700% burn and laser on a pinned carrier), the armed dummy's 50 hit |
 | J3 F16 | 4 (`tools\screens\run.ps1`) | - | LINT 0; read by eye: 4_hub_battleship (PD firing, no ring), 7_hub_carrier_strike, 23_bar_battleship_cooldown (renamed: no PD slot on the bar), one close-up (no ring round a PD mount) |
 | J3 F16 | 5 (`tools\smoketest\run.ps1`) | - | host "a guest's point defence fires on the host with nothing pressed"; guest "guest sees its own point defence fire with nothing pressed and no key for it"; unchanged neighbours "guest's bomber strike launched real torpedoes on the host", "the host's raiders reached this guest" |
+| J3b job 1b | 3 (`-Solo`) | 11400714819323522083 and one other | the four that failed: "carrier PD: three turrets on three different LIGHT targets -- never a plain dummy" · "three lights, 1 DPS each (3.0 +- 0.7)" · "a DISABLED warden at N deg, turning at N deg/s on A/D when it is disabled: ... turn it 0.00 deg" x3 (each turning > 20 deg/s) · new "BATTLESHIP / CARRIER / DESTROYER: a point-defence mount gives way to something free that betters what it holds" x3. Neighbours the re-pick could move: "with more turrets than light targets, the spare turret still never takes a plain dummy", "each battleship PD turret picks its own target", the 7 x passive-PD table lines, "a battleship's point defence picks a cruise missile ... before a light raider", "a turret left standing takes the small craft first", "a hunter called off while the fighters and point defence are on it", "pinned: A does not turn it" |
+
+## Handover 3: slice 2's plan (the third agent read the spec, then handed each job to a fresh writer)
+
+Read this, not the specs again: it is kits_v2 §5 (F4/F17/F18/F20 + the OutGuards table), v3 §3.6
+(Ramjet) / §3.7 (heavies) / §5, v31 §6 / §8, README rulings, raids_squads_adds.md's EnemyDef rows,
+reduced to what each job builds. Jobs run ONE AT A TIME, each by a fresh writer, in this order.
+
+- **D15** Slice 2 is four jobs, not three, so each fits one writer's context and the files split:
+  **J4** F17 (Boss.cs, Raider.cs, Emplacements.cs, Statuses.cs) · **J5** F4 + F18 (Turrets, Shots,
+  Missiles, PlayerShip's NoteDealt, Deployed, ShipClasses' wing, Abilities' echo row, a new owning
+  file) · **J6** F1 Add + Ramp (Abilities.cs AbilityDef, PlayerShip Lifts, one line in Steer) ·
+  **J7** F20 (Enemies.cs, Raider.cs, Hub's MissileFlight readers). J4 before J7: both edit Raider's
+  Strike and missile line; J7 then only changes rows and the pin gate.
+- **D16 (J4, F17)** The three OutGuards statuses are declared now, because the OutGuards table names
+  them (their use, so D4's UNUSED objection no longer holds for these three): `Suppressed = 64,
+  Dazzled = 128, Jammed = 256`, host-only: `StatusSet.HostOnly` (the three) is masked out of `Bits`.
+  Parrying 32 still lands with 6c. Nothing in the game applies them until 6a (DD Suppress), 6c (SN
+  Flares) and 6d (EC EMP); the harness applies them on the host through `IStatused.ApplyStatus`.
+  The table (kits_v2 §5), one row each, `StatusSet.OutGuards`: {Status, Gun (its guns vs craft and
+  structures), Move (boss non-super), Super, HoldsThrow, Bosses (reaches a boss)} =
+  Suppressed {0.5, 0.7, 1.0, held, yes} · Dazzled {1.0, -, -, held, bosses immune} · Jammed
+  {0, -, -, held, bosses immune}. "Held" = the launcher's clock keeps its zero and it throws at the
+  lapse. The latch columns (new / existing web) are NOT built now: slice 5's Dazzled / Jammed gates
+  are their reader. ONE door for all hostile damage (name it for the mechanism, e.g.
+  `StatusSet.Out(in StatusSet by, double d, OutKind kind)` returning the share-scaled damage, and a
+  `Holds(kind)` for throws); `Boss.Out(move)` = the door on `m.Damage * DamageMult` with the move's
+  kind (super or not), replacing all six `m.Damage * DamageMult` sites (Boss.cs ~478, 487, 497, 519,
+  525, 599; the curve lane will put DamageScale inside Boss.Out); Raider.Strike (both the light's and
+  the heavy's laser), the heavy's missile throw (held) and the Emplacement gun (Emplacements.cs,
+  `_dmg`) go through the same door. Emplacement must be IStatused (check; J2 gave the six
+  implementers a share parameter). Checks in `LaneAOutDoorChecks`: the table against those literals
+  in one place; from 3 varied spots a Suppressed webifier latched on a pilot lands x0.5, a Jammed
+  one 0, a Dazzled one x1.0 (hull lost over a window that starts on the first landed hit); a
+  Suppressed gunship holds its missile and throws it within a frame or two of the lapse; a Suppressed
+  boss's non-super move lands x0.7 and its super x1.0; a Dazzled / Jammed boss is unchanged; a
+  Suppressed emplacement gun x0.5; `Bits` of Pinned|Suppressed is 1. Host-only: no rung 5.
+- **D17 (J5, F4 + F18)** The hostile damage door: ONE static function every player-side blow on a
+  hostile goes through (target.TakeDamage, then the credit), in a new file named for the mechanism
+  (e.g. `Dealt.cs`, `static class Dealt { Deal(IHittable target, double d, ITurretHost by, string
+  weapon) }`); weapon ids are consts in that file (main, pd, turret, rail, emp, echo, missile,
+  hunter, fighter, torpedo, ... whatever the sites are). The credit: `ITurretHost.NoteDealt` gains
+  the target and the weapon; PlayerShip keeps `DealtBy` (host: damage dealt, by weapon id: the
+  harness's DealtBy probe) and NoteCombat, then runs **F18**: `AbilityDef.OnDealt(ship, target, d,
+  weapon)` of every RUNNING row (Sl(id).Left > 0 and While). The echo's arm in NoteDealt is deleted:
+  the Echo row's OnDealt stores d and where it landed. No hostile-side rows yet (Taunt's x1.5 is 6c,
+  Buster etc. later): the door is the foundation; do not build an empty table. Sites (grep
+  `TakeDamage\(|NoteDealt\(`): Turrets.cs:169, Shots.cs:226, PlayerShip rail ~619 / emp ~644 / echo
+  ~715, Missiles.cs:94, the wing's shots and torpedoes, Deployed, anything else found; a hostile
+  hitting a player (Incoming) is NOT this door. Checks in `LaneADamageDoorChecks`: from 3 varied
+  spots, DealtBy[weapon] equals the hull the target lost for the BB's main guns, PD, a freighter's
+  dropped turret (credited to its owner), the railgun and a torpedo; the echo stores exactly what
+  was dealt while it runs and nothing after (existing echo checks unchanged, they are its old truth).
+- **D18 (J6, F1)** **Add**: `AbilityDef.SpeedAdd` (a stat id) adds a flat top speed after the lifts'
+  multiplier: top = sheet x Scale(shares) + adds, then the hold (Held) on the whole. **Ramp**: a lift
+  whose size is a running total kept in the row's slot (`Own`: per-ability state is how it reaches
+  the wire), with `AbilityDef.Ramp` {build, cap, bleed stat ids, and the condition}: while it runs
+  and the condition holds, +build a second; minus bleed x (|yaw| / the hull's turn rate) a second;
+  clamped to [0, cap]; after the run it drains to 0 over 1.0 s; its value is a share in
+  `LiftShares` on the speed side. No row uses either until 6d (the Dart); prove the pure step with
+  v3 §3.6's literals on a 260 u/s sheet, varied by frame rate (1/30, 1/60, 1/144 s): top after
+  {1, 3, 5, 7} s straight at full throttle {286, 338, 390, 390} +- 3; then 1 s of full rudder
+  390 -> 364; 0 by 9.0 s. Add: 260 x 1.5 + 100 = 490 (v31 §3.4). Steer is lane B's: one line.
+- **D19 (J7, F20)** Heavy rows: `EnemyDef.Barrels` (1; heavies 2) and `Dps` PER BARREL, heavies 1.29
+  (gunship 2.0, cross 2.6, lancerkin 1.8 today), so 2.58 per heavy; one Strike per volley of
+  Dps x Barrels x ShotEvery x Strength (two strikes from one source would be eaten by the 0.52 s
+  HitGap), drawn as two flashes from two barrel offsets on the turret. `MissileFlight` is a row (10;
+  the `Raider.MissileFlight` const 12 is deleted, callers read the row), `MissileDamage` 42 -> 35
+  (README ruling "heavy missile 35 in 10 s, only at a pinned target"; numbers §4 row 8's "42" is
+  today's code, not a ruling), and the throw only at a pinned target (the pin gate on the missile
+  line). Raids rows in the same edit: `Cc` (a Status: pin rows Pinned, standoff rows none; the
+  light's latch line applies `Def.Cc`), `Exp` (6 light, 18 heavy; lane G pays it). Lane G keeps
+  "heavies laser unpinned", the tether draw and the pay. Checks in `LaneAHeavyRowsChecks`: the rows
+  against 2 x 1.29 = 2.58 / 35 / 10 / Cc / Exp in one place; from 3 varied spots a gunship on a
+  pinned pilot lands 2.58 +- 0.15 DPS; a missile's flight is 10 s and it lands 35; an unpinned
+  target inside 500 u draws no missile. Rewrite every old-truth check (grep `Dps|2\.6|1\.8|
+  MissileFlight|MissileDamage|42|HeavyDps` in SmokeTest near the raider sections).
 
 ## Handover 2: the second agent stopped after J3 (context cap), at a job boundary
 

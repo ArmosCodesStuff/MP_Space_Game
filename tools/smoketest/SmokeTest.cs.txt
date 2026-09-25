@@ -1513,14 +1513,25 @@ public partial class _Test : Node
     // fight on. A warden (point defence always on, a main gun, hunters on a key) is disabled three
     // times at a seeded heading, a light raider held at a seeded spot inside its 420 u point-defence
     // reach; then, the status cleared, the same keys fire and move it (so the check can fail).
+    // Each time it is TURNING when it is disabled -- W and a seeded rudder for a seeded 0.4-0.8 s,
+    // then stopped dead with the yaw still on it -- because the rate a hull carries in turned it
+    // on: zeroed only on the turning circle, a hull at pivot speed coasted it down (7.92 deg).
     async Task LaneADisabledChecks(Vector2 yonder)
     {
         await SetClass(ShipClass.HeavyWarden);
         var wd = Me; wd.Position = yonder; wd.Velocity = Vector2.Zero; await Wait(0.3);
         var gun = Abilities.KeyFor(wd.Class, "guns");
+        bool portFirst = Vary(0f, 1f) < 0.5f;
         for (int run = 0; run < 3; run++)
         {
             wd.Rotation = VaryAngle(); wd.Velocity = Vector2.Zero;
+            var rudderKey = (run % 2 == 0) == portFirst ? global::Godot.Key.A : global::Godot.Key.D;
+            KeyDown(global::Godot.Key.W); KeyDown(rudderKey); await Wait(Vary(0.4f, 0.8f));
+            KeyUp(global::Godot.Key.W); KeyUp(rudderKey);
+            float r0 = wd.Rotation;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            float spin = Mathf.Abs(Mathf.AngleDifference(r0, wd.Rotation)) / (float)GetProcessDeltaTime();   // the yaw it carries in, rad/s
+            wd.Velocity = Vector2.Zero;
             var prey = H.SpawnRaider(VaryNear(wd.Position, 300f), Enemies.Webifier);
             prey.Hp = 9000; prey.ApplyStatus(Status.Disabled, 30);
             wd.Sl("hunters").Left = 0; wd.Sl("hunters").Cool = 0;
@@ -1548,8 +1559,8 @@ public partial class _Test : Node
             }
             KeyUp(global::Godot.Key.W); KeyUp(global::Godot.Key.A); KeyUp(gun);
             float freeMoved = wd.Position.DistanceTo(freeAt);
-            Check(moved < 1f && turned < 0.005f && shellsHeld == 0 && noHunters && pdOn && shellsFree > 0 && freeMoved > 5f,
-                  $"a DISABLED warden at {Mathf.RadToDeg(rot):0} deg: W+A move it {moved:0.00} u and turn it {Mathf.RadToDeg(turned):0.00} deg, its held trigger fires {shellsHeld} shells, its hunters key starts nothing ({noHunters}), and its point defence still takes the raider {prey.Position.DistanceTo(wd.Position):0} u off ({pdOn}); cleared, the same keys fire {shellsFree} and move it {freeMoved:0} u");
+            Check(spin > Mathf.DegToRad(20f) && moved < 1f && turned < 0.005f && shellsHeld == 0 && noHunters && pdOn && shellsFree > 0 && freeMoved > 5f,
+                  $"a DISABLED warden at {Mathf.RadToDeg(rot):0} deg, turning at {Mathf.RadToDeg(spin):0} deg/s on {rudderKey} when it is disabled: W+A move it {moved:0.00} u and turn it {Mathf.RadToDeg(turned):0.00} deg, its held trigger fires {shellsHeld} shells, its hunters key starts nothing ({noHunters}), and its point defence still takes the raider {prey.Position.DistanceTo(wd.Position):0} u off ({pdOn}); cleared, the same keys fire {shellsFree} and move it {freeMoved:0} u");
             prey.TakeDamage(99999);
             wd.Velocity = Vector2.Zero; await Wait(0.3);
         }
@@ -1627,6 +1638,54 @@ public partial class _Test : Node
             Check(allOn && hp0 < was && s.PdOnline && Abilities.Find(c, "pd") == null && Math.Abs(got - nominal) <= mounts * shot + 1e-9,
                   $"{Classes.NameOf(c)}: point defence with nothing pressed and no key for it -- {pds.Count} mounts on a light raider {prey.Position.DistanceTo(s.Position):0} u off at {Mathf.RadToDeg(s.Rotation):0} deg take {got:0.0} in 1.9 s ({mounts} x {shot} every 0.5 s: {nominal:0.0}, a shot a mount either way)");
             prey.TakeDamage(1e12);
+            await Wait(0.2);
+        }
+    }
+
+    // A MOUNT THAT HOLDS GIVES WAY TO SOMETHING FREE THAT BETTERS IT (Turret.Acquire's `held`).
+    // Passive point defence never starts a fresh pick, so a mount keeps what it holds -- until a
+    // free one of its target's rank comes into reach while a sibling shares that target (it
+    // spreads), or a free one of a LOWER rank does (a missile over a light). A battleship, a
+    // carrier and a destroyer, each at a seeded spot, heading and side: every mount on one light;
+    // a second light abeam on the other side; then a cruise missile standing still. Held for as
+    // long as it lived (the old rule), every mount stays on the first light through both.
+    async Task LaneAPdRepickChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.2);
+        foreach (var hull in new[] { ShipClass.Battleship, ShipClass.Carrier, ShipClass.Destroyer })
+        {
+            await SetClass(hull);
+            var s = Me; var at = VaryNear(yonder, 300f); float head = VaryAngle();
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = head; }
+            Hold(); await Wait(0.2); Hold();
+            // abeam, clear of the hull (110 u and more off the keel) and inside every mount's 460 u
+            // reach (a mount sits within half the 378 u battleship of its centre)
+            var fwd = Vector2.Up.Rotated(head);
+            var abeam = new Vector2(-fwd.Y, fwd.X) * (Vary(0f, 1f) < 0.5f ? 1f : -1f);
+            Raider Light(Vector2 p) { var l = H.SpawnRaider(p); l.Hp = 9000; l.ApplyStatus(Status.Disabled, 30); return l; }
+            var pds = s.PdTurrets;
+            var first = Light(at + abeam * Vary(110f, 170f) + fwd * Vary(-60f, 0f));
+            for (int i = 0; i < 60 && !pds.All(t => ReferenceEquals(t.Target, first)); i++) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            bool doubled = pds.Count >= 2 && pds.All(t => ReferenceEquals(t.Target, first));
+            var second = Light(at - abeam * Vary(110f, 170f) + fwd * Vary(-60f, 60f));
+            int spreadIn = -1;
+            for (int i = 0; i < 30 && spreadIn < 0; i++)
+            {
+                Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                if (pds.Any(t => ReferenceEquals(t.Target, first)) && pds.Any(t => ReferenceEquals(t.Target, second))) spreadIn = i + 1;
+            }
+            var cm = Combat.Fire(Shots.Cruise, at + abeam * Vary(110f, 170f) + fwd * Vary(90f, 150f), Vector2.Down, 0.001f, 4000f, 1, size: 3f, hull: 30);
+            int missileIn = -1;
+            for (int i = 0; i < 30 && missileIn < 0; i++)
+            {
+                Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                if (pds.Any(t => ReferenceEquals(t.Target, cm))) missileIn = i + 1;
+            }
+            bool noneIdle = pds.All(t => t.Target != null);
+            Check(doubled && spreadIn > 0 && missileIn > 0 && noneIdle,
+                  $"{Classes.NameOf(hull)}: a point-defence mount gives way to something free that betters what it holds -- {pds.Count} mounts all on one light ({doubled}); a second light {at.DistanceTo(second.Position):0} u off: spread in {spreadIn} frames; a cruise missile {at.DistanceTo(cm.Position):0} u off: taken in {missileIn} frames, over the light that mount held; none left idle ({noneIdle})");
+            first.TakeDamage(1e12); second.TakeDamage(1e12); cm.Intercept();
             await Wait(0.2);
         }
     }
@@ -3585,6 +3644,9 @@ public partial class _Test : Node
         Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 283.5f) < 0.5f,
               "carrier flies the owner's line-art sprite at 283.5 u, 25% smaller than the battleship");
         await Park(VaryNear(fighterPair + new Vector2(-120, 150), 20f), 0);
+        // Passive, the three mounts are already on the two practice fighters (one doubled up) when a
+        // third light comes into reach: the one that doubled up must spread to it, since no window
+        // starts a fresh pick (Turret.Acquire's `held`)
         var pdLight = H.SpawnRaider(ship.Position + new Vector2(-80, 160));   // a third light target (the practice fighters are two), placed off the parked hull
         await Wait(2.0);                                                      // nothing pressed: point defence is passive
         var cpds = ship.PdTurrets;
@@ -4756,6 +4818,10 @@ public partial class _Test : Node
         // ── raiders (6a): the light fighter -- cruise, boost, post, pin, laser ──
         {
             var me = Me; var keepPos = me.Position;
+            // the LIGHTS on trial, up to their DPS: the carrier's three passive mounts shoot them
+            // while they strike (with them in reach the three read 1.40 DPS of their 3), so its
+            // point defence is out of reach (test only) until the DPS is read.
+            double lightsReach = PdReachOff(me);
             me.Position = new Vector2(4000, 2500); me.Velocity = Vector2.Zero; me.Rotation = 0f; await Wait(0.3);
             var r1 = H.SpawnRaider(me.Position + new Vector2(0, 2300));
             await Wait(0.5); var rp0 = r1.Position; await Wait(0.5);
@@ -4787,6 +4853,7 @@ public partial class _Test : Node
             double dm0 = Raided(); await Wait(5.0);
             double dps = (Raided() - dm0) / 5.0;
             Check(Math.Abs(dps - 3.0) < 0.7, $"three lights, 1 DPS each ({dps:0.00} DPS)");
+            me.Stats.SetBase("pd_range", lightsReach);
             foreach (var r in new[] { r1, r2, r3 }) r.TakeDamage(999);
             await Wait(0.5);
             Check(H.Raiders.Count == 0 && !Combat.Hostiles.OfType<Raider>().Any() && !me.Pinned, "shot down, they are gone -- and the pin lets go");
@@ -5766,6 +5833,7 @@ public partial class _Test : Node
             await LaneAHoldChecks(sn);
             await LaneADisabledChecks(yonder);
             await LaneAPassivePdChecks(yonder);
+            await LaneAPdRepickChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);

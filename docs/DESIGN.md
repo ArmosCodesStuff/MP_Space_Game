@@ -620,10 +620,14 @@ fire mode onto F never finds two abilities on it, and its `reload`, which is gon
   **staggered** fires one every reload ÷ barrels. Same rate: reloads **carry their remainder**
   (`cd += step`); resetting instead rounds each step up to a whole frame and staggered falls behind
   (measured 4.50 against 6.00).
-- **Point defence is an active ability**: activation opens a 15 s firing window, then 15 s of
-  recharge. While active, **each turret picks and tracks its own target** — the nearest in range
-  that no sibling turret has claimed, else the nearest — so a group gets spread across. Battleship
-  mounts swing slowly (τ/3); the carrier's fast (τ/1.2). 460 u reach, 8° firing cone.
+- **Point defence is passive**: no key, no window, no recharge; it fires whenever its ship is alive.
+  **Each turret picks and tracks its own target** — by rank (what is in flight, then small craft),
+  then the nearest in range that no sibling turret has claimed, else the nearest — so a group gets
+  spread across. What it holds it keeps (no flicking between two in reach) until something FREE
+  betters it: a lower rank (a missile over the light it is on), or the same rank while a sibling
+  shares its target (`Turret.Acquire`'s `held`). With no window there is no fresh pick, so without
+  that rule a doubled-up mount stayed doubled up and a mount on a light let a missile through.
+  Battleship mounts swing slowly (τ/3); the carrier's fast (τ/1.2). 460 u reach, 8° firing cone.
 - **The broadside (battleship, F).** A **0.5 s wind-up** in which every main turret swings onto the
   cursor — fast enough to come round from anywhere in time (half a turn in the wind-up, or their own
   τ/4 if that is faster) — then **three volleys of every main gun, 0.25 s apart**, each shell a normal

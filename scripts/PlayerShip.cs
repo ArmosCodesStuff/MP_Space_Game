@@ -1180,9 +1180,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var side = new Vector2(-fwd.Y, fwd.X);
         float along = Velocity.Dot(fwd), across = Velocity.Dot(side);
 
-        // DISABLED: no thrust, no rudder, whatever is pressed. HELD (a running row's Hold, after
-        // the lifts): the thrust both ways, both caps and the rudder, all by the one share.
-        if (_status.Has(Status.Disabled)) { throttle = 0f; rudder = 0f; }
+        // DISABLED: no thrust, no rudder, whatever is pressed, and the heading holds (below). HELD
+        // (a running row's Hold, after the lifts): the thrust both ways, both caps and the rudder,
+        // all by the one share.
+        bool disabled = _status.Has(Status.Disabled);
+        if (disabled) { throttle = 0f; rudder = 0f; }
         float hold = Held;
         throttle *= hold; rudder *= hold;
         // A SPEED LIFT (the rush, the boost, the veil) lifts the push ahead WITH the top speed. The
@@ -1208,9 +1210,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             float cap = Mathf.Min(Mathf.Abs(along) / (float)Stats["turn_radius"], (float)Stats["turn_rate"]);
             float want = rudder * cap * Mathf.Sign(along == 0 ? 1 : along);
             _yawRate = Mathf.MoveToward(_yawRate, want, 2.5f * dt);     // the rudder takes a moment to bite
-            if (Pinned || _status.Has(Status.Disabled)) _yawRate = 0f;  // pinned or held: it cannot turn
+            if (Pinned) _yawRate = 0f;                                  // pinned: it cannot turn
         }
-        if (hold <= 0f) _yawRate = 0f;                                  // rooted: the heading holds too
+        // Disabled or rooted: the heading holds too, at ANY speed -- including the yaw it carried
+        // in. At pivot speed the rudder's 2.5 rad/s^2 bite would otherwise coast that rate down:
+        // 8 degrees from a 0.85 rad/s turn.
+        if (disabled || hold <= 0f) _yawRate = 0f;
         Rotation += _yawRate * dt;
 
         fwd = Vector2.Up.Rotated(Rotation); side = new Vector2(-fwd.Y, fwd.X);
