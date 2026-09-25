@@ -809,3 +809,16 @@ Jobs (each: PRE, edit + its checks, typecheck + verify -Quick, POST, commit):
 - **J11 F7** Charge.cs + FireRail through the bands. Files Charge.cs (new), PlayerShip.cs, SmokeTest
   (`LaneAChargeBandChecks`), docs/CHANGES.md (the slice's Unreleased + Handoff), docs/DESIGN.md (Lines/Stops
   trap), this ledger.
+
+### J8 · PRE · F5 Shot.Strike (D24) -- tier opus
+- Intent: Strike strikes each body once and ends after Stops bodies (0 = through all); ShotDef.Stops = 1 on
+  every row; Shot.Stops (per shot, null = the row's). Check LaneAShotStopsChecks.
+- Files: scripts/Shots.cs, tools/smoketest/SmokeTest.cs.txt, this ledger.
+- HEAD 94546fef83a3c6ec68c6c16ab350c79ab6253825 · Shots.cs 755e3eccae0a67db095e3b1ea97b99a8a8e68979 · SmokeTest.cs.txt 41b697f6eea4c4e29aad5b68c82c571e7aa8c9e6
+### J8 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Strike now asks `Touching` afresh after each blow (a blow may end a body and remove it from the
+  list being walked), strikes each body once (`_struck`), and ends after `Stops` bodies; every row keeps Stops 1,
+  so every existing shot's behaviour is unchanged.
+- Files: scripts/Shots.cs; SmokeTest.cs.txt (`LaneAShotStopsChecks`, called after LaneAHeavyRowsChecks).
+- Checkpoint: the commit after this entry. Next: J9 (F23 Lines).

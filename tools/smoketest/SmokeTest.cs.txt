@@ -3143,6 +3143,49 @@ public partial class _Test : Node
         pm.Position = keep; pm.Velocity = Vector2.Zero;
     }
 
+    // ── F5 · A SHOT STRIKES EACH BODY ONCE, AND ENDS AFTER ITS STOPS (lane A slice 3, J8) ──────────
+    // A shell (10 a blow) down a held line of three gunships, from 3 varied angles and spacings, with
+    // Stops 1, 2 and 0: exactly the first 1, 2 or 3 lose exactly 10 each -- once, however many of the
+    // sweep's 6 u points fall inside a body -- and the ones past its last stop lose nothing.
+    async Task LaneAShotStopsChecks(Vector2 yonder)
+    {
+        var pm = Me; pm.Position = yonder; pm.Velocity = Vector2.Zero;
+        for (int run = 0; run < 3; run++)
+        {
+            var dir = Vector2.Right.Rotated(VaryAngle());
+            var from = yonder + dir.Orthogonal() * Vary(1200f, 1600f);       // well off the pilot, whatever the angle
+            float gap = Vary(160f, 260f), first = Vary(200f, 320f);
+            foreach (int stops in new[] { 1, 2, 0 })
+            {
+                var spots = new Vector2[3];
+                var foes = new Raider[3];
+                for (int k = 0; k < 3; k++)
+                {
+                    spots[k] = from + dir * (first + gap * k) + dir.Orthogonal() * Vary(-4f, 4f);
+                    foes[k] = H.SpawnRaider(spots[k], Enemies.Gunship); foes[k].Hp = 1e9;
+                }
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                for (int k = 0; k < 3; k++) foes[k].Position = spots[k];
+                var hp0 = foes.Select(f => f.Hp).ToArray();
+                float range = first + gap * 2 + 300f;
+                var shot = Combat.Fire(Shots.Shell, from, dir, 1500f, range, 10, radius: 2f, hitSource: "test:stops");
+                shot.Stops = stops;
+                for (int i = 0; i < 120 && IsInstanceValid(shot) && shot.Alive; i++)
+                {
+                    for (int k = 0; k < 3; k++) foes[k].Position = spots[k];
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                }
+                var lost = Enumerable.Range(0, 3).Select(k => hp0[k] - foes[k].Hp).ToArray();
+                int want = stops == 0 ? 3 : stops;
+                bool ok = Enumerable.Range(0, 3).All(k => Math.Abs(lost[k] - (k < want ? 10 : 0)) < 1e-6);
+                Check(ok, $"a shell with Stops {stops} ({(stops == 0 ? "through everything" : stops == 1 ? "the first body" : "two bodies")}) down a line of three gunships {first:0} u + {gap:0} u apart, at {Mathf.RadToDeg(dir.Angle()):0} deg: the first {want} lose 10 each, once ({string.Join(" / ", lost.Select(l => l.ToString("0.##")))})");
+                foreach (var f in foes) f.TakeDamage(1e12);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+        }
+        pm.Position = yonder; pm.Velocity = Vector2.Zero;
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -7914,6 +7957,7 @@ public partial class _Test : Node
             await LaneARampWiringChecks(yonder);
             LaneASpeedAddChecks();
             await LaneAHeavyRowsChecks(yonder);
+            await LaneAShotStopsChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);
