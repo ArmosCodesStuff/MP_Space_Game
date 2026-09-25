@@ -394,3 +394,32 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
 - Wraith today (Ships.cs `ShipClass.LightWraith, Name`): hull 90, LightCannon, Ab.Guns + Ab.FireMode + Ab.Stealth, rows
   stealth_time/speed/rof/cooldown; PlayerShip.GoDark; Items @duration holds stealth_time; SmokeTest has ~4 stealth callers and
   a `── WRAITH: five seconds nothing hostile can pick it ──` block after the Echo's in the ability tour.
+
+## kits6d-J8 · PRE
+- tier opus; intent: the Wraith row (DL1 hull 220) + Ambush scattergun (DL3: 7 pellets x 7 every 0.75 s, ±10°, 320 u, 620 u/s; TurretSpec.Pellets/Fan fanned by Turret.Shoot; Shots row pellet appended; MainDpsPerBarrel x scatter_pellets) + Backstab (x1.5 inside ±60° of the tail, IHittable.Facing: Raider/Boss; PlayerShip.Outgoing reads backstab_mult / backstab_arc, 0 on every other sheet); own weapon part light_scattergun; LightCannon becomes the Echo's alone (Needs echo_share: the J5 rename left it naming echo_time, which no sheet has).
+- HEAD c43f2feffbca96afba32903b0b6d5130f69660b6
+- scripts/Shots.cs b14641663b185157eff4dd45b69ffce782d3c953
+- scripts/Turrets.cs a066ab4c1af53c550faa323862d128d718f6bfa4
+- scripts/PlayerShip.cs 45b1a4dcbc23be0c34e5406e5bfeab8267db6086
+- scripts/Ships.cs cef6c8a91a2238529eb6e806abe9465e9e2835e4
+- scripts/Stats.cs d548d0291381e5cbec49b186b6021a6267233f77
+- scripts/Items.cs 98c235fb2bcf1661e945d94a9eb58aecb265fd48
+- scripts/ShipClasses.cs 6b0afaa3460039d471cd903855cc383326d2b54e
+- scripts/Raider.cs 57c93802c6e3d46a8e144ce0bec813b8454deed4
+- scripts/Boss.cs 75d6ea1da2f119d47f9e6a56155e127964a3c2ad
+- tools/smoketest/SmokeTest.cs.txt 4049ba0752e5ba0422786a9cb66bd965270ed9f5
+- tools/screens/Shots.cs.txt e43f7d32a17821733cedb479d78bdbbeece7823a
+
+## kits6d-J8 · POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- built: Wraith row hull 220, Shot = Shots.Pellet (row 12 `pellet`, appended), 7 x 7 every 0.75 s to 320 u (Damage level 0.35);
+  TurretSpec.Pellets/Fan (Turret.Shoot fans n rounds evenly -Fan..+Fan; 0/1 one round); rows scatter_pellets 7 / scatter_spread 10;
+  ShipStats.MainDpsPerBarrel x max(1, scatter_pellets) = 65.33; Items.PrimaryShots + "pellet"; Backstab: IHittable.Facing (Raider,
+  Boss), PlayerShip.Backstab (rows backstab_mult 1.5 / backstab_arc 60, 0 elsewhere) in Outgoing. Kit: `light_scattergun` (the
+  Wraith's); the shared LightCannon static is gone -- `light_main_gun` is the Echo's alone, renamed "Mk I Echo Repeater", Needs
+  echo_share (**DL12**: J5's rename left it Needing echo_time, which no sheet has, so the Echo could not wear its own gun).
+- checks: LaneA6dScatterRowChecks, LaneA6dScatterChecks (7 pellets fanned -10..+10 x3; 392 in 6.375 s point blank x3; 3-6 of 7
+  at 250-300 u and 0 at 360-420 x3), LaneA6dBackstabChecks (inside/just outside/front x3; dummy x1 from 3 sides; an Echo x1 by
+  the stat x3; strafe across the tail x1.5 every volley x3); frame 78b_wraith_scatter (LaneA6dWraithFrames). Rewritten: the
+  kit-carry check (21 parts, light_main_gun Echo only, pepperbox Dart, scattergun Wraith).
+- next: kits6d-J9 (Veil).

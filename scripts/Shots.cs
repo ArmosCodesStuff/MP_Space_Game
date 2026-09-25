@@ -68,7 +68,7 @@ public static class Shots
 {
     // The index IS the id on the wire (Hub.NetShot), so APPEND ONLY.
     public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Flak = 8,
-                     Pepper = 9, Rod = 10, Echo = 11;
+                     Pepper = 9, Rod = 10, Echo = 11, Pellet = 12;
 
     public static readonly ShotDef[] All =
     {
@@ -110,6 +110,9 @@ public static class Shots
         // A ROUND'S ECHO (TurretSpec.RepeatShare, the Echo's repeater): a ghost of a round already fired, leaving the muzzle
         // it left and along the bearing it took, a moment later; straight, the first hostile body, never a missile
         new() { Id = "echo", AtPlayers = false, Pad = 3f, Sweep = 6f, Look = ShotLook.Ghost },
+        // THE WRAITH'S AMBUSH SCATTERGUN (TurretSpec.Pellets): one of a volley fanned about the barrel; straight, the first
+        // hostile body, never a missile
+        new() { Id = "pellet", AtPlayers = false, Pad = 2f, Sweep = 6f, Look = ShotLook.Bullet },
     };
 
     public static ShotDef Of(int id) => All[id >= 0 && id < All.Length ? id : Shell];

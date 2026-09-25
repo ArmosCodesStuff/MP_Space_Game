@@ -258,7 +258,8 @@ public class ShipStats
     }
 
     // ── derived figures: computed from the stats above, never stored ─────────
-    public double MainDpsPerBarrel => Def.Has(Fit.Guns) ? this["main_damage"] / this["main_interval"] : 0;
+    // every round of a volley counts (scatter_pellets: the Wraith's seven; 0 on every other sheet, one round)
+    public double MainDpsPerBarrel => Def.Has(Fit.Guns) ? this["main_damage"] * Math.Max(1, this["scatter_pellets"]) / this["main_interval"] : 0;
     public double MainDps          => MainDpsPerBarrel * this["main_count"];
     public double PdDpsPerTurret   => Def.Has(Fit.Pd) ? this["pd_damage"] / this["pd_interval"] : 0;
     // Passive, so what it deals while firing is what it sustains: there is no window to share.

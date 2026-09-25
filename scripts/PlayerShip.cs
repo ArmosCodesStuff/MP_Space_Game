@@ -232,7 +232,18 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // A CRAFT THIS SHIP CALLED (the Taunt) takes its taunt_mult -- a row of the dealer's sheet, 0 (nothing)
         // on a class without it
         double called = target is ICalled { CalledBy: { } by } && ReferenceEquals(by, this) && Stats["taunt_mult"] > 0 ? Stats["taunt_mult"] : 1;
-        return d * (1 + share) * called;
+        return d * (1 + share) * called * Backstab(target);
+    }
+    // BACKSTAB (a stat row, the Wraith's passive): a blow this ship lands from inside the target's rear arc (backstab_arc
+    // degrees either side of its tail) takes backstab_mult; a target with no heading (IHittable.Facing) has no behind.
+    // 0 on every other sheet: x1.
+    public double Backstab(IHittable target)
+    {
+        double mult = Stats["backstab_mult"];
+        if (mult <= 0 || target?.Facing is not { } nose) return 1;
+        var from = Position - target.Position;
+        if (from.LengthSquared() < 1e-6f) return 1;
+        return Mathf.RadToDeg(Mathf.Abs(from.AngleTo(-nose))) <= Stats["backstab_arc"] ? mult : 1;
     }
     // A kill this ship made: every ability cooldown left, less the Kill rows' share.
     public void NoteKill()
@@ -318,6 +329,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             Kind     = Stats.Def.Shot,                // what its main guns fire (ClassDef.Shot); point defence fires none
             // each main round's echo (the Echo's repeater): a stat row, 0 on every sheet that has none
             RepeatShare = pd ? 0 : Stats["echo_share"], RepeatDelay = Stats["echo_delay"],
+            // a volley fanned about the barrel (the Wraith's scattergun): stat rows, 0 (one round) on every other sheet
+            Pellets  = pd ? 0 : (int)Stats["scatter_pellets"], Fan = (float)Stats["scatter_spread"],
             Texture  = pd ? art.PdTurret : art.MainTurret,
             TexScale = art.TurretTexScale,
             Barrel   = pd ? art.PdBarrel : art.MainBarrel,

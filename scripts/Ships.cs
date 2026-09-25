@@ -144,15 +144,12 @@ public static class Classes
     // THE MOUNTS MORE THAN ONE HULL IS BORN WITH -- one ItemDef each, fitted to every hull that
     // carries it below. A part fits the hulls whose SIGNATURE row it names (ItemDef.Needs), so a
     // shared mount names one id per hull: the cargo gun the three freighters' three systems, the
-    // light cannon the warden's hunters, the dart cannon the Echo's
-    // and the Wraith's. Written above All because static fields start in the order they are written, and
-    // All is what fits them.
+    // flak battery the warden's hunters. Written above All because static fields start in the order they are
+    // written, and All is what fits them.
     private static readonly ItemDef CargoGun = ItemDef.Own(GearSlot.Weapon, "freight_main_gun", "Mk I Cargo Gun",
         "the freighter's single main turret", "bubble_pool", "overdrive_mult", "wave_range");
     private static readonly ItemDef WardenFlak = ItemDef.Own(GearSlot.Weapon, "heavy_main_gun", "Mk I Flak Battery",
         "the proximity flak", "hunter_count");
-    private static readonly ItemDef LightCannon = ItemDef.Own(GearSlot.Weapon, "light_main_gun", "Mk I Dart Cannon",
-        "the light's single turret", "echo_time", "stealth_time");
 
     public static readonly ClassDef[] All =
     {
@@ -594,7 +591,7 @@ public static class Classes
             Cycle = new() { ["main_interval"] = 1 },
             Weapons = new[] { Dps.Main, Dps.Repeat, Dps.Reverb },
             Kit = new[] {
-                LightCannon,
+                ItemDef.Own(GearSlot.Weapon, "light_main_gun", "Mk I Echo Repeater", "the repeater: its rounds and their echoes", "echo_share"),
                 ItemDef.Own(GearSlot.Utility, "light_echo_core", "Reverb Core", "what the reverb remembers, and its blast", "reverb_time"),
             },
             Rows = new StatRow[] {
@@ -625,24 +622,33 @@ public static class Classes
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Reverb, Ab.Rewind, Ab.Emp } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
-            Blurb = "While its veil is up nothing hostile can pick it: whatever was coming for it goes elsewhere, or gives up.",
-            Hint = "WRAITH  ·  mouse aims the main gun",
+            Blurb = "An ambusher: its scattergun is murder point blank and half again from behind. While its veil is up nothing hostile can pick it.",
+            Hint = "WRAITH  ·  mouse aims the scattergun, x1.5 from behind",
             Drive = Drives.Boost,
+            Shot = Shots.Pellet,
             Nums = new() {
-                ["hull"] = 90,
+                ["hull"] = 220,
                 ["thrust"] = 190, ["reverse_thrust"] = 90, ["max_speed"] = 260, ["reverse_speed"] = 95,
                 ["turn_radius"] = 35, ["turn_rate"] = 3.0, ["strafe_speed"] = 130, ["strafe_thrust"] = 520,
-                ["main_count"] = 1, ["main_damage"] = 5, ["main_interval"] = 0.35, ["main_range"] = 500, ["shell_speed"] = 620,
+                // THE AMBUSH SCATTERGUN (DL3): 7 pellets of 7 every 0.75 s, fanned +-10 deg, out to 320 u = 65.3 DPS point blank
+                ["main_count"] = 1, ["main_damage"] = 7, ["main_interval"] = 0.75, ["main_range"] = 320, ["shell_speed"] = 620,
             },
-            Damage = new() { ["main_damage"] = 1 },
+            // 0.35 = 5% of a pellet's 7, what a level is worth on every other primary
+            Damage = new() { ["main_damage"] = 0.35 },
             Reach = new() { ["main_range"] = 1 },
             Cycle = new() { ["main_interval"] = 1 },
             Weapons = new[] { Dps.Main },
             Kit = new[] {
-                LightCannon,
+                ItemDef.Own(GearSlot.Weapon, "light_scattergun", "Ambush Scattergun", "the scattergun: its pellets, their rate and their reach", "scatter_pellets"),
                 ItemDef.Own(GearSlot.Utility, "light_stealth_veil", "Stealth Veil", "how long nothing can pick it", "stealth_time"),
             },
             Rows = new StatRow[] {
+                // THE SCATTERGUN'S VOLLEY (TurretSpec.Pellets / Fan): seven pellets fanned +-10 deg
+                new() { Group = "Scattergun", Id = "scatter_pellets", Label = "Pellets a volley", Base = 7, Unit = "", Dec = 0 },
+                new() { Group = "Scattergun", Id = "scatter_spread",  Label = "Fanned either side", Base = 10, Unit = "deg", Dec = 0 },
+                // BACKSTAB (the passive, PlayerShip.Backstab): x1.5 on a blow landed within 60 deg of a heading target's tail
+                new() { Group = "Backstab", Id = "backstab_mult", Label = "From behind",   Base = 1.5, Unit = "x", Dec = 2 },
+                new() { Group = "Backstab", Id = "backstab_arc",  Label = "Behind within", Base = 60, Unit = "deg", Dec = 0 },
                 new() { Group = "Stealth", Id = "stealth_time", Label = "Unseen for", Base = 5, Unit = "s", Dec = 1 },
                 // WHAT IT DOES WHILE IT IS UNSEEN, x1.00 each: the veil changes nothing about the
                 // ship until a part moves one of them, so a wraith with no veil gear is exactly

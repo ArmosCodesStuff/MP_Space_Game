@@ -8708,6 +8708,197 @@ public partial class _Test : Node
         me.Demo = demo;
     }
 
+    // ── SLICE 6d: THE WRAITH'S AMBUSH SCATTERGUN (DL3): 7 pellets of 7 every 0.75 s fanned +-10 deg out to 320 u (65.3 DPS
+    // point blank; fewer land at range), hull 220; BACKSTAB x1.5 on a blow landed within 60 deg of a heading target's tail.
+    void LaneA6dScatterRowChecks()
+    {
+        var st = new ShipStats(ShipClass.LightWraith);
+        var ec = new ShipStats(ShipClass.LightEcho);
+        var row = Shots.Of(Shots.Pellet);
+        var gun = Classes.Of(ShipClass.LightWraith).Kit.FirstOrDefault(k => k.Slot == GearSlot.Weapon);
+        Check(st["hull"] == 220 && st["main_damage"] == 7 && st["main_interval"] == 0.75 && st["main_range"] == 320 && st["shell_speed"] == 620
+              && st["scatter_pellets"] == 7 && st["scatter_spread"] == 10 && Math.Abs(st.MainDps - 49 / 0.75) < 1e-9 && Math.Abs(st.MainDps - 65.33) < 0.01
+              && st["backstab_mult"] == 1.5 && st["backstab_arc"] == 60 && Classes.Of(ShipClass.LightWraith).Shot == Shots.Pellet
+              && row.Id == "pellet" && !row.Guided && row.Stops == 1 && !row.AtPlayers && Items.PrimaryShots.Contains("pellet")
+              && gun?.Id == "light_scattergun" && ec["scatter_pellets"] == 0 && ec["backstab_mult"] == 0 && Math.Abs(ec.MainDps - 44) < 1e-9,
+              $"the Wraith row: hull {st["hull"]:0} (220), {st["scatter_pellets"]:0} pellets (7) of {st["main_damage"]:0} (7) every {st["main_interval"]:0.00} s (0.75) +-{st["scatter_spread"]:0} deg to {st["main_range"]:0} u = {st.MainDps:0.00} DPS (65.33); backstab x{st["backstab_mult"]:0.0} in {st["backstab_arc"]:0} deg; row pellet straight, one body; its gun {gun?.Id}; the Echo's sheet one round, no backstab ({ec.MainDps:0} DPS)");
+    }
+
+    async Task LaneA6dScatterChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightWraith);
+        var wt = Me; bool demo = wt.Demo; wt.Demo = true; wt.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double Landed() => wt.DealtBy.GetValueOrDefault("pellet");
+        bool Mine(Shot x) => x.Kind == Shots.Pellet && x.Source == wt;
+        // hold the Wraith still, aimed, and the raider's NOSE on the Wraith: in front of it, no backstab
+        void Hold(Vector2 at, float rot, Raider r, Vector2 spot)
+        { wt.Position = at; wt.Rotation = rot; wt.Velocity = Vector2.Zero; wt.AimPoint = spot; if (r != null) { r.Position = spot; r.Rotation = Aim.Face(spot, at); } }
+
+        // SEVEN PELLETS A VOLLEY, 7 each, fanned evenly from -10 to +10 deg about the barrel, at a varied bearing
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            var aim = at + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 300f);
+            for (double t = 0; t < 1.0; t += GetProcessDeltaTime()) { Hold(at, rot, null, aim); await Frame(); }
+            var before = Nodes<Shot>().ToHashSet();
+            wt.Trigger = true; await Frame(); wt.Trigger = false;
+            var vol = Nodes<Shot>().Where(x => Mine(x) && !before.Contains(x)).ToList();
+            var mid = (aim - at).Normalized();
+            var offs = vol.Select(x => Mathf.RadToDeg(mid.AngleTo(x.Dir))).OrderBy(a => a).ToList();
+            bool even = offs.Count == 7 && Enumerable.Range(0, 7).All(k => Math.Abs(offs[k] - (-10 + k * 20.0 / 6)) < 1.0);
+            Check(vol.Count == 7 && vol.All(x => Math.Abs(x.Damage - 7) < 1e-9) && even,
+                  $"one volley at {Mathf.RadToDeg(mid.Angle()):0} deg: {vol.Count} pellets (7) of {vol.FirstOrDefault()?.Damage:0.0} (7), fanned {string.Join(" ", offs.Select(a => a.ToString("0.0")))} (-10 .. +10, 3.33 apart)");
+            await Wait(1.0);
+        }
+
+        // 65.3 DPS POINT BLANK: a held gunship 60-100 u off at a varied bearing, the Wraith in front of it; the 6.375 s after
+        // the first volley lands hold 8 more (at 0.75 s .. 6.0 s, clear of both edges), every pellet landing: 8 x 49 = 392
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(60f, 100f);
+            var foe = HeldI(spot, Enemies.Gunship);
+            for (double t = 0; t < 1.0; t += GetProcessDeltaTime()) { Hold(at, rot, foe, spot); await Frame(); }
+            double d0 = Landed(), tFirst = -1, landed0 = 0, clock = 0;
+            wt.Trigger = true;
+            for (int i = 0; i < 60 * 12 && (tFirst < 0 || clock - tFirst < 6.375); i++)
+            {
+                Hold(at, rot, foe, spot); await Frame(); clock += GetProcessDeltaTime();
+                if (tFirst < 0 && Landed() > d0) { await Frame(); clock += GetProcessDeltaTime(); tFirst = clock; landed0 = Landed(); }
+            }
+            wt.Trigger = false;
+            double got = Landed() - landed0;
+            Check(tFirst >= 0 && Math.Abs(got - 392) <= 392 * 0.03 && Math.Abs(landed0 - d0 - 49) < 1e-6,
+                  $"point blank ({spot.DistanceTo(at):0} u): the first volley {landed0 - d0:0.0} (49: all seven), then {got:0.0} in the 6.375 s after (392 = 8 x 49: 65.3 DPS, +-3%)");
+            foe.TakeDamage(1e12);
+            await Wait(1.0);
+        }
+
+        // FEWER AT RANGE: at 250-300 u the fan is wider than the gunship (+-44 .. 53 u against its 43): 3-6 of 7 land a
+        // volley; at 360-420 u (past 320) none do
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(); float bearing = VaryAngle();
+            var near = at + Vector2.Right.Rotated(bearing) * Vary(250f, 300f);
+            var far = at + Vector2.Right.Rotated(bearing) * Vary(360f, 420f);
+            var got = new double[2];
+            for (int k = 0; k < 2; k++)
+            {
+                var spot = k == 0 ? near : far;
+                var foe = HeldI(spot, Enemies.Gunship);
+                for (double t = 0; t < 1.0; t += GetProcessDeltaTime()) { Hold(at, rot, foe, spot); await Frame(); }
+                double d0 = Landed();
+                wt.Trigger = true; Hold(at, rot, foe, spot); await Frame(); wt.Trigger = false;
+                for (double t = 0; t < 0.9; t += GetProcessDeltaTime()) { Hold(at, rot, foe, spot); await Frame(); }
+                got[k] = Landed() - d0;
+                foe.TakeDamage(1e12);
+                await Wait(0.8);
+            }
+            double pellets = got[0] / 7;
+            Check(pellets >= 3 - 1e-6 && pellets <= 6 + 1e-6 && Math.Abs(pellets - Math.Round(pellets)) < 1e-6 && got[1] == 0,
+                  $"at range: {pellets:0} of 7 pellets landed at {near.DistanceTo(at):0} u (3-6), {got[1]:0} at {far.DistanceTo(at):0} u (0: past its 320)");
+        }
+        wt.Demo = demo; wt.Velocity = Vector2.Zero;
+    }
+
+    async Task LaneA6dBackstabChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightWraith);
+        var wt = Me; bool demo = wt.Demo; wt.Demo = true; wt.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double Landed() => wt.DealtBy.GetValueOrDefault("pellet");
+        float D(float deg) => Mathf.DegToRad(deg);
+        // one volley from `off` radians about the raider's TAIL (0: dead astern) at 70-100 u, every pellet landing
+        async Task<double> Volley(Raider r, float rrot, float off)
+        {
+            var tail = -Vector2.Up.Rotated(rrot);
+            var at = r.Position + tail.Rotated(off) * Vary(70f, 100f);
+            void Hold() { wt.Position = at; wt.Rotation = Aim.Face(at, r.Position); wt.Velocity = Vector2.Zero; wt.AimPoint = r.Position; r.Rotation = rrot; }
+            for (double t = 0; t < 1.0; t += GetProcessDeltaTime()) { Hold(); await Frame(); }
+            double d0 = Landed();
+            wt.Trigger = true; Hold(); await Frame(); wt.Trigger = false;
+            for (double t = 0; t < 0.5; t += GetProcessDeltaTime()) { Hold(); await Frame(); }
+            return Landed() - d0;
+        }
+
+        // x1.5 INSIDE THE REAR ARC (up to 55 deg off the tail), x1 JUST OUTSIDE IT (62-75 deg) and FROM THE FRONT, at a
+        // varied raider heading each run; the multiplier read and the volley landed (49 x1, 73.5 x1.5)
+        for (int run = 0; run < 3; run++)
+        {
+            var r = HeldI(VaryNear(yonder, 300f), Enemies.Gunship); float rrot = VaryAngle();
+            float inside = D(Vary(-55f, 55f)), outside = D(Vary(62f, 75f) * (Rng.Randf() < 0.5f ? -1 : 1)), front = D(180f + Vary(-60f, 60f));
+            double gIn = await Volley(r, rrot, inside); double mIn = wt.Backstab(r);
+            double gOut = await Volley(r, rrot, outside); double mOut = wt.Backstab(r);
+            double gFront = await Volley(r, rrot, front); double mFront = wt.Backstab(r);
+            Check(NearI(mIn, 1.5) && NearI(gIn, 73.5) && NearI(mOut, 1) && NearI(gOut, 49) && NearI(mFront, 1) && NearI(gFront, 49),
+                  $"backstab at a raider heading {Mathf.RadToDeg(rrot):0}: {Mathf.RadToDeg(inside):0} deg off its tail x{mIn:0.0} ({gIn:0.0}, 73.5), {Mathf.RadToDeg(outside):0} deg x{mOut:0.0} ({gOut:0.0}, 49), from the front x{mFront:0.0} ({gFront:0.0}, 49)");
+            r.TakeDamage(1e12);
+            await Wait(0.5);
+        }
+
+        // NO HEADING, NO BEHIND: the practice dummy takes x1 from any side; and BY THE STAT: an Echo behind a raider x1
+        {
+            var dummy = H.GetNode<TargetDummy>("TargetDummy1");
+            string ls = ""; bool ok = true;
+            for (int k = 0; k < 3; k++)
+            {
+                var at = dummy.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(70f, 100f);
+                for (double t = 0; t < 1.0; t += GetProcessDeltaTime()) { wt.Position = at; wt.Velocity = Vector2.Zero; wt.AimPoint = dummy.Position; await Frame(); }
+                double t0 = dummy.Total;
+                wt.Trigger = true; await Frame(); wt.Trigger = false;
+                for (double t = 0; t < 0.5; t += GetProcessDeltaTime()) { wt.Position = at; wt.Velocity = Vector2.Zero; await Frame(); }
+                double took = dummy.Total - t0;
+                ok &= NearI(wt.Backstab(dummy), 1) && NearI(took, 49); ls += $"{took:0.0} ";
+            }
+            Check(ok && ((IHittable)dummy).Facing == null, $"the practice dummy (no heading) takes x1 from three sides: {ls}(49 each)");
+            wt.Demo = demo; wt.Velocity = Vector2.Zero;
+            await SetClass(ShipClass.LightEcho);
+            var ec = Me; var r = HeldI(VaryNear(yonder, 300f), Enemies.Gunship);
+            string es = ""; bool eok = true;
+            for (int k = 0; k < 3; k++)
+            {
+                r.Rotation = VaryAngle();
+                ec.Position = r.Position - Vector2.Up.Rotated(r.Rotation).Rotated(D(Vary(-50f, 50f))) * Vary(70f, 300f);
+                eok &= NearI(ec.Backstab(r), 1); es += $"{ec.Backstab(r):0.0} ";
+            }
+            Check(eok, $"an Echo behind a raider: x{es}(1: no backstab row)");
+            r.TakeDamage(1e12);
+            await SetClass(ShipClass.LightWraith);
+            wt = Me; demo = wt.Demo; wt.Demo = true; wt.AutopilotTo = null;
+        }
+
+        // STRAFE HOLDS THE REAR ARC (v31 §3.4): the Wraith slides sideways at its strafe speed across the raider's tail,
+        // nose on it, from one side of the arc to the other over 2.4 s, the gun held down: every volley lands whole at x1.5
+        for (int run = 0; run < 3; run++)
+        {
+            var r = HeldI(VaryNear(yonder, 300f), Enemies.Gunship); float rrot = VaryAngle();
+            var tail = -Vector2.Up.Rotated(rrot); float dist = Vary(75f, 95f), from = D(Vary(-45f, -35f)), to = D(Vary(35f, 45f));
+            Vector2 Spot(float a) => r.Position + tail.Rotated(a) * dist;
+            for (double t = 0; t < 1.0; t += GetProcessDeltaTime())
+            { wt.Position = Spot(from); wt.Rotation = Aim.Face(wt.Position, r.Position); wt.Velocity = Vector2.Zero; wt.AimPoint = r.Position; r.Rotation = rrot; await Frame(); }
+            var seen = new HashSet<Shot>(); double d0 = Landed(), clock = 0; bool inArc = true;
+            wt.Trigger = true;
+            while (clock < 2.4)
+            {
+                float a = Mathf.Lerp(from, to, (float)(clock / 2.4));
+                var p = Spot(a); var tangent = tail.Rotated(a + Mathf.Pi / 2) * (float)wt.Stats["strafe_speed"];
+                wt.Position = p; wt.Rotation = Aim.Face(p, r.Position); wt.Velocity = tangent; wt.AimPoint = r.Position; r.Rotation = rrot;
+                inArc &= NearI(wt.Backstab(r), 1.5);
+                await Frame(); clock += GetProcessDeltaTime();
+                foreach (var x in Nodes<Shot>()) if (x.Kind == Shots.Pellet && x.Source == wt) seen.Add(x);
+            }
+            wt.Trigger = false;
+            for (double t = 0; t < 0.5; t += GetProcessDeltaTime()) { wt.Velocity = Vector2.Zero; r.Rotation = rrot; await Frame(); }
+            double got = Landed() - d0; int volleys = seen.Count / 7;
+            Check(inArc && volleys >= 3 && seen.Count % 7 == 0 && NearI(got, volleys * 73.5),
+                  $"a strafe across the tail {Mathf.RadToDeg(from):0} .. {Mathf.RadToDeg(to):0} deg at {wt.Stats["strafe_speed"]:0} u/s: {volleys} volleys ({seen.Count} pellets), {got:0.0} landed ({volleys * 73.5:0.0}: every one x1.5)");
+            r.TakeDamage(1e12);
+            await Wait(0.5);
+        }
+        wt.Demo = demo; wt.Velocity = Vector2.Zero;
+    }
+
     // ── SLICE 6d, RUNG 5: A GUEST'S PEPPERBOX. The guest (LaneA6dPepperGuestChecks) flies a DART at rest, its cursor
     // on a varied point 400-600 u off the nose, and holds the trigger 2 s: its own world shows the host's darts
     // (cosmetic copies, Commanded onto ITS cursor) -- 12 +- 2 of them, each within 10° of the bearing to the cursor
@@ -10139,14 +10330,17 @@ public partial class _Test : Node
             var anyHull = kit.Where(i => !carries.Contains(i.Id)).ToList();
             // and what a SAVED loadout does with one that no longer fits: the hull's own, as ever
             var saved = Equipment.Sanitize(ddC, new[] { "bs_main_battery", "std_drive", "basic_deflector", "reinforced_frame", "dd_missile_rack", "", "", "", "", "", "" }, 14);
-            Check(wrongHull.Count == 0 && carries.Count == 19 && anyHull.Count == 3
-                  && carries["freight_main_gun"].Count() == 3 && carries["light_main_gun"].Count() == 3 && carries["heavy_main_gun"].Count() == 1
+            Check(wrongHull.Count == 0 && carries.Count == 21 && anyHull.Count == 3
+                  && carries["freight_main_gun"].Count() == 3 && carries["heavy_main_gun"].Count() == 1
+                  && carries["light_main_gun"].SequenceEqual(new[] { ShipClass.LightEcho })
+                  && carries["light_pepperbox"].SequenceEqual(new[] { ShipClass.LightDart })
+                  && carries["light_scattergun"].SequenceEqual(new[] { ShipClass.LightWraith })
                   && anyHull.All(i => Classes.All.Where(c => c.Ready).All(c => Equipment.Fits(i, i.Slot, c.Id)))
                   && Equipment.Fits(Equipment.ById("freight_main_gun"), GearSlot.Weapon, ShipClass.FreightTender)
                   && !Equipment.Fits(Equipment.ById("freight_bubble"), GearSlot.Utility, ShipClass.FreightTender)
                   && !Equipment.Fits(Equipment.ById("bs_main_battery"), GearSlot.Weapon, ddC)
                   && saved[0] == "dd_main_battery" && saved[4] == "dd_missile_rack",
-                  $"a kit part fits the hulls born with it and no others: nineteen named by a class row -- one cargo gun on the three freighters, one flak battery on the warden, one dart cannon on the three lights -- and the drive, the deflector and the frame on any hull; a battleship's mount saved on a destroyer comes back as the destroyer's own ({wrongHull.Count} wrong: {string.Join(", ", wrongHull)})");
+                  $"a kit part fits the hulls born with it and no others: twenty-one named by a class row -- one cargo gun on the three freighters, one flak battery on the warden, each light its own gun (the Echo's repeater, the Dart's pepperbox, the Wraith's scattergun) -- and the drive, the deflector and the frame on any hull; a battleship's mount saved on a destroyer comes back as the destroyer's own ({wrongHull.Count} wrong: {string.Join(", ", wrongHull)})");
         // a part for another category changes nothing, even named in the loadout
         var wrong = Equipment.Default(bsC); wrong[0] = "hot_barrel_t10";
         var kitB = Equipment.Bonuses(bsC, Equipment.Default(bsC), 14, NoLevels); var wrongB = Equipment.Bonuses(bsC, wrong, 14, NoLevels);
@@ -14788,6 +14982,9 @@ public partial class _Test : Node
             await LaneA6dRewindChecks(yonder);
             LaneA6dEmpRowChecks();
             await LaneA6dEmpChecks(yonder);
+            LaneA6dScatterRowChecks();
+            await LaneA6dScatterChecks(yonder);
+            await LaneA6dBackstabChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a

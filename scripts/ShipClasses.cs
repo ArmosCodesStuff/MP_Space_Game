@@ -51,6 +51,9 @@ public interface IHittable
     // THE SHARE OF ITS HULL LEFT, 0..1 (Executioner's "under 35%"). A thing with no hull to speak of
     // answers 1, so nothing executes it.
     double HullLeft => 1;
+    // WHERE ITS NOSE POINTS, a unit vector, for a thing with a heading (a raider, a boss): what "behind it" means (the
+    // Wraith's Backstab, PlayerShip.Outgoing). Null -- a structure, a dummy, a round -- has no behind.
+    Vector2? Facing => null;
     // A missile (Tag.Missile) can be shot down but is never SELECTED (click or Tab); a body in
     // flight with a hull of its own (Tag.Hulled) is picked like any hull.
     bool Selectable => true;

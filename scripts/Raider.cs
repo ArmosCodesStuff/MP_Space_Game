@@ -59,6 +59,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
     // ONE VOLLEY, every barrel at once (F20), on its level's damage scale: what each laser Strike carries
     public double Volley => Def.Dps * Def.Barrels * Def.ShotEvery * Par.DamageScale(Strength) * DamageShare;
     public float HitRadius => Length * Def.HitShare;
+    public Vector2? Facing => Vector2.Up.Rotated(Rotation);
     public bool Selectable => true;
 
     // The two the rest of the game names by hand -- the plain webifier and the plain gunship.

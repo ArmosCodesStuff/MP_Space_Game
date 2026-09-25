@@ -68,6 +68,10 @@ public struct TurretSpec
     // turret records both at the shot (Turret.Shoot), so a ship that has moved or turned since fires it from where it
     // was. 0: no echo, every gun but the Echo's.
     public double RepeatShare, RepeatDelay;
+    // A VOLLEY FANNED ABOUT THE BARREL (the Wraith's scattergun): Pellets rounds at the full damage each, spread evenly from
+    // -Fan to +Fan degrees about the barrel's bearing. 0 or 1: one round down the barrel, every other gun.
+    public int Pellets;
+    public float Fan;
     public readonly float RoundSize => Size > 0 ? Size : 1f;
 }
 
@@ -257,13 +261,18 @@ public partial class Turret : Node2D
     {
         if (!Net.Sim) return;
         var spec = S;
-        var dir = Vector2.Right.Rotated(GlobalRotation);
-        var muzzle = GlobalPosition + dir * spec.Barrel;
-        Combat.Fire(spec.Kind, muzzle, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult,
-                    targetId: spec.Homing > 0 ? target : 0, turnRate: spec.Homing, source: Host.Credit, hitSource: spec.Source,
-                    size: spec.RoundSize, hull: spec.Hull);
-        if (spec.RepeatShare > 0)
-            _echoes.Add(new Echoed(muzzle, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult * spec.RepeatShare, _clock + spec.RepeatDelay));
+        var bore = Vector2.Right.Rotated(GlobalRotation);
+        var muzzle = GlobalPosition + bore * spec.Barrel;
+        int n = Mathf.Max(1, spec.Pellets);
+        for (int k = 0; k < n; k++)
+        {
+            var dir = n == 1 ? bore : bore.Rotated(Mathf.DegToRad(spec.Fan * (2f * k / (n - 1) - 1f)));
+            Combat.Fire(spec.Kind, muzzle, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult,
+                        targetId: spec.Homing > 0 ? target : 0, turnRate: spec.Homing, source: Host.Credit, hitSource: spec.Source,
+                        size: spec.RoundSize, hull: spec.Hull);
+            if (spec.RepeatShare > 0)
+                _echoes.Add(new Echoed(muzzle, dir, spec.ShellSpeed, spec.Range, spec.Damage * mult * spec.RepeatShare, _clock + spec.RepeatDelay));
+        }
     }
 
     // THE ECHOES STILL TO GO (TurretSpec.RepeatShare), each as its round left: muzzle, bearing, speed, reach and its

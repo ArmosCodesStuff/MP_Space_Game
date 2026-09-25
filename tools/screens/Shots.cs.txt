@@ -439,6 +439,7 @@ public partial class _Shots : Node
         await LaneA6dRodFrames();
         await LaneA6dEchoFrames();
         await LaneA6dEmpFrames();
+        await LaneA6dWraithFrames();
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -1164,6 +1165,35 @@ public partial class _Shots : Node
         foreach (var r in craft) r.TakeDamage(1e12);
         es.Demo = demo; es.Sl("emp").Cool = 0;
         await W(0.6);
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
+    }
+
+    // SLICE 6d: the Wraith's scattergun a moment after a volley from behind a raider -- seven pellets fanned +-10 deg (78b).
+    async Task LaneA6dWraithFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        Character.Class = ShipClass.LightWraith; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var ws = H.GetNode<PlayerShip>("Ship_1");
+        bool demo = ws.Demo; ws.Demo = true;
+        var at = new Vector2(-900, 1100); const float rot = 0.4f;
+        var foeAt = at + Vector2.Up.Rotated(rot) * 240f;
+        var foe = H.SpawnRaider(foeAt, Enemies.Gunship); foe.Hp = 1e9; foe.ApplyStatus(Status.Disabled, 30); foe.Rotation = rot;
+        cam.Zoom = new Vector2(1.5f, 1.5f);
+        ws.Position = at; ws.Rotation = rot; ws.Velocity = Vector2.Zero; ws.AimPoint = foeAt;
+        await W(0.8);
+        ws.Trigger = true;
+        for (double t = 0; t < 0.12; t += GetProcessDeltaTime())
+        {
+            ws.Position = at; ws.Rotation = rot; ws.Velocity = Vector2.Zero; ws.AimPoint = foeAt; foe.Rotation = rot;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        ws.Trigger = false;
+        await Snap("78b_wraith_scatter");
+        foe.TakeDamage(1e12);
+        ws.Demo = demo; ws.Velocity = Vector2.Zero;
+        await W(0.8);
         Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
         cam.Zoom = z0;
     }
