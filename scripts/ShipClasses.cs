@@ -103,7 +103,7 @@ public interface IRaidTarget : IStatused
 // patrol takes whatever the turret's order, Turret.RankIn, puts first among what its filter
 // chooses inside its EngageStat ring round the carrier -- a seeker before a raider before a
 // boss, a practice dummy last -- and between targets it circles the carrier OrbitStat out).
-// The fighter's ring is its row's EngageStat too, where it was a literal "control_range" in the tick.
+// The fighter's ring is its row's EngageStat too.
 //
 // A NEW CRAFT MUST FILL IN: an appended WingKind, a row, and its count/speed/range/gun stats on
 // the sheet (Stats.cs); a sortie its LifeStat and EngageStat. It needs a new tick ONLY if it flies
@@ -257,6 +257,7 @@ public partial class Wing : Node2D
     // Sent out until the carrier's clock reads `until`, at `given` (a gunship's target; null for
     // a craft that picks its own). The carrier frees it once it is Done (home, or warped out).
     public void SendOut(IHittable given, double until) { _given = given; _until = until; }
+    public double Until => _until;
     public bool Done { get; private set; }
     private bool Over => Def.Sortie && (Carrier.Clock >= _until || !Carrier.Alive);
     // what it is on: a picking craft's own pick, a gunship's given target (for a check, and a chevron)
@@ -393,6 +394,8 @@ public partial class Wing : Node2D
         switch (_f)
         {
             case FSt.Docked:
+                // a sortie that ends (or loses its carrier) before this craft is out never sends it
+                if (Def.Sortie && Over) { Done = true; break; }
                 Position = Carrier.Position; Velocity = Carrier.Velocity; _heading = Carrier.Rotation - Mathf.Pi / 2f;
                 if (_rest > 0) { _rest -= delta; break; }
                 // a sortie goes as soon as it is sent; a fitted craft when there is something to fight
@@ -640,7 +643,12 @@ public partial class Wing : Node2D
     {
         if (Net.Sim) return;
         code %= RowCode;
-        if (code >= 200) { _o = (OSt)(code - 200); return; }
+        if (code >= 200)
+        {   // its warp onto the circle is a warp here too: from the host's pose, never eased across
+            var o = (OSt)(code - 200);
+            if (_o == OSt.Waiting && o == OSt.Orbit && _net.Has) { Position = _net.Pos; Rotation = _net.Rot; }
+            _o = o; return;
+        }
         if (code >= 100)
         {
             bool wasDocked = _f == FSt.Docked;

@@ -3186,11 +3186,14 @@ public partial class _Test : Node
                 int want = (int)cv.Stats["fighter_count"];
                 int sent = cv.Sortie(WingKind.Patrol);
                 var pat = Patrol();
+                // sent for the row's LifeStat: its end read in the frame it was sent
+                double life = pat.Count > 0 ? pat.Max(w => w.Until) - cv.Clock : -1;
+                bool lifeAll = pat.Count > 0 && pat.All(w => Math.Abs(w.Until - cv.Clock - 20) < 1e-6);
                 for (int i = 0; i < 60 * 6 && pat.Any(w => w.LaunchedAt < 0); i++) await Frame();
                 var outs = pat.Select(w => w.LaunchedAt).Where(t => t >= 0).OrderBy(t => t).ToList();
                 double gap = 99; for (int g = 1; g < outs.Count; g++) gap = Math.Min(gap, outs[g] - outs[g - 1]);
-                Check(sent == want && pat.Count == want && outs.Count == want && gap >= 0.83 - 1e-9 && gap < 0.83 + 0.05,
-                      $"run {run + 1}: the patrol is fighter_count craft ({want}), out of the hangar 0.83 s apart ({sent} sent, smallest gap {gap:0.000} s)");
+                Check(sent == want && pat.Count == want && outs.Count == want && gap >= 0.83 - 1e-9 && gap < 0.83 + 0.05 && lifeAll,
+                      $"run {run + 1}: the patrol is fighter_count craft ({want}), out of the hangar 0.83 s apart ({sent} sent, smallest gap {gap:0.000} s), sent for 20 s ({life:0.###} s)");
                 if (run == 1) cv.Stats.SetBase("fighter_count", 3);
                 // circling the carrier 300 u out: the frames after every craft has settled into the circle
                 for (int i = 0; i < 60 * 8 && !pat.All(w => w.FighterPhase == "Circle"); i++) await Frame();
@@ -3260,6 +3263,21 @@ public partial class _Test : Node
                 for (int i = 0; i < 60 * 10 && Patrol().Count > 0; i++) await Frame();
                 Check(stillOut && Patrol().Count == 0 && cv.WingCount(WingKind.Patrol) == 0 && cv.WingCount(WingKind.Fighter) == 3,
                       $"run {run + 1}: the sortie ends at its time -- out 2 s before it, then home and freed ({cv.WingCount(WingKind.Patrol)} left); the 3 fitted fighters are kept");
+                // ENDED WITH CRAFT STILL IN THE HANGAR (the carrier lost in the launch spread, or a short
+                // LifeStat): `run` of them out when it ends -- none, one, two -- the rest never go and
+                // are freed at once; the ones out come home and are freed as ever
+                int crew = (int)cv.Stats["fighter_count"];
+                cv.Sortie(WingKind.Patrol);
+                var early = Patrol();
+                for (int i = 0; i < 60 * 4 && early.Count(w => w.LaunchedAt >= 0) < run; i++) await Frame();
+                var inside = early.Where(w => w.LaunchedAt < 0).ToList();
+                foreach (var w in early) w.SendOut(null, cv.Clock);
+                int innerFrames = 0;
+                for (; innerFrames < 60 && inside.Any(w => GodotObject.IsInstanceValid(w) && !w.Done); innerFrames++) await Frame();
+                bool innerFreed = inside.All(w => !GodotObject.IsInstanceValid(w) || (w.Done && w.LaunchedAt < 0));
+                for (int i = 0; i < 60 * 10 && cv.WingCount(WingKind.Patrol) > 0; i++) await Frame();
+                Check(early.Count == crew && inside.Count == crew - run && innerFreed && cv.WingCount(WingKind.Patrol) == 0,
+                      $"run {run + 1}: a sortie ended with {inside.Count} of {early.Count} still in the hangar: those never launch and are freed within 1 s ({innerFrames} frames), and none is left ({cv.WingCount(WingKind.Patrol)})");
             }
         }
         finally
@@ -3296,6 +3314,8 @@ public partial class _Test : Node
                 await Frame();
                 int sent = cv.Sortie(WingKind.Gunship, tgt);
                 var gs = Guns();
+                double life = gs.Count > 0 ? gs.Max(w => w.Until) - cv.Clock : -1;
+                bool lifeAll = gs.Count > 0 && gs.All(w => Math.Abs(w.Until - cv.Clock - 12) < 1e-6);
                 bool warped = false; float firstOff = 0f;
                 for (int i = 0; i < 60 * 2 && !warped; i++)
                 {
@@ -3303,8 +3323,8 @@ public partial class _Test : Node
                     warped = gs.Count == 2 && gs.All(w => w.OrbitPhase == "Orbit");
                     if (warped) firstOff = gs.Max(w => Mathf.Abs(w.Position.DistanceTo(tgt.Position) - 240f));
                 }
-                Check(refused == 0 && sent == 2 && warped && firstOff < 30f,
-                      $"run {run + 1}: gunships at a target {at.DistanceTo(past.Position):0} u out refused ({refused}); at one {at.DistanceTo(tgt.Position):0} u out, 2 warp onto its 240 u circle (off it by {firstOff:0.0} u)");
+                Check(refused == 0 && sent == 2 && warped && firstOff < 30f && lifeAll,
+                      $"run {run + 1}: gunships at a target {at.DistanceTo(past.Position):0} u out refused ({refused}); at one {at.DistanceTo(tgt.Position):0} u out, 2 warp onto its 240 u circle (off it by {firstOff:0.0} u), sent for 12 s ({life:0.###} s)");
                 // the landed DPS, timed from the frame both were on their circle: 2 x 10 over 4 s
                 double hp0 = tgt.Hp, c0 = cv.DealtBy.GetValueOrDefault("gunship"); float lo = 9999f, hi = 0f;
                 for (int i = 0; i < 240; i++) { await Frame(); foreach (var w in gs) { float d = w.Position.DistanceTo(tgt.Position); lo = Mathf.Min(lo, d); hi = Mathf.Max(hi, d); } }
@@ -11107,7 +11127,9 @@ public partial class _Test : Node
     // the guest's carrier -- host-decided, as the Supercarrier's press will be -- and, once three of
     // them circle it, fires a seeker at that carrier from inside the ring, its point defence out of
     // reach so the patrol is on trial. Host side: the seeker is taken and downed before it lands,
-    // credited "patrol". Started once the guest's point-defence check has had its flashes (3 s).
+    // credited "patrol". Then GUNSHIPS from the same carrier at a target the host sets down 1100-1800 u
+    // off it: both on their circle, held there 3 s, sent home, the target left a second longer so the
+    // guest measures them against it. Started once the guest's point-defence check has had its flashes (3 s).
     async Task WingsHostSortie(PlayerShip g)
     {
         await Wait(3.0);
@@ -11125,6 +11147,22 @@ public partial class _Test : Node
                   && g.DealtBy.GetValueOrDefault("patrol") > c0,
                   $"host: a patrol of {sent} sent on the guest's carrier takes a seeker fired at it from {from.DistanceTo(g.Position):0} u and downs it before it lands, credited \"patrol\" ({g.DealtBy.GetValueOrDefault("patrol") - c0:0.0})");
             await Wait(1.0);                            // the MissileDown on its way to the guest
+            // THE GUNSHIPS: a warp onto the circle and a warp out, their state code's row bringing them
+            var gt = H.SpawnRaider(g.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(1100f, 1800f), Enemies.Gunship);
+            gt.Hp = 9000; gt.ApplyStatus(Status.Disabled, 60);
+            await Wait(0.5);                            // the target reaches the guest before its gunships
+            List<Wing> Gs() => Nodes<Wing>().Where(w => w.Carrier == g && w.Kind == WingKind.Gunship && !w.Done).ToList();
+            int guns = g.Sortie(WingKind.Gunship, gt);
+            await RealTime(() => Gs().Count == 2 && Gs().All(w => w.OrbitPhase == "Orbit"), 5);
+            bool onStation = Gs().Count == 2 && Gs().All(w => w.OrbitPhase == "Orbit");
+            await Wait(3.0);
+            foreach (var w in Gs()) w.SendOut(gt, g.Clock);
+            await RealTime(() => g.WingCount(WingKind.Gunship) == 0, 3);
+            bool home = g.WingCount(WingKind.Gunship) == 0;
+            await Wait(1.0);                            // the guest drops them while the target is still there
+            Check(guns == 2 && onStation && home,
+                  $"host: 2 gunships sent from the guest's carrier ({guns}) at a target {gt.Position.DistanceTo(g.Position):0} u off it, both on their circle ({onStation}), then warped out ({home})");
+            gt.TakeDamage(1e12);
         }
         finally { g.Stats.SetBase("pd_range", pdWas); }
     }
@@ -11133,10 +11171,13 @@ public partial class _Test : Node
     // orders: its own carrier's patrol craft as the host's report brings them (added to its list by
     // their row in the state code, no new RPC), drawn and amber; the patrol and the fighters out
     // together, 2 x fighter_count (6 on a stock carrier; this guest's hangar flies more); and the
-    // host's seeker at this carrier seen, then gone here too while still clear of the hull.
+    // host's seeker at this carrier seen, then gone here too while still clear of the hull. Then the
+    // host's two GUNSHIPS from this carrier: every frame one is drawn it is on its 240 u circle round
+    // the target (the Waiting -> Orbit change is a warp here too, never eased across from the carrier).
     Func<Task> WingsGuestWatch(PlayerShip mine)
     {
         int patrolMost = 0, bothMost = 0; bool amber = true, gone = false; Shot seen = null; float lastD = -1f;
+        int gunMost = 0; bool gunsGone = false; float gunLo = 9999f, gunHi = 0f;
         var livery = Wings.Of(WingKind.Patrol).Livery;
         var watch = new LateSampler { Probe = () =>
         {
@@ -11146,6 +11187,15 @@ public partial class _Test : Node
             patrolMost = Math.Max(patrolMost, pat.Count);
             bothMost = Math.Max(bothMost, pat.Count + mineW.Count(w => w.Kind == WingKind.Fighter && !w.Inside));
             foreach (var w in pat) amber &= Nodes<Sprite2D>(w).First().Modulate == livery;
+            var guns = mineW.Where(w => w.Kind == WingKind.Gunship && !w.Inside && w.Visible).ToList();
+            gunMost = Math.Max(gunMost, guns.Count);
+            if (gunMost >= 2 && !mineW.Any(w => w.Kind == WingKind.Gunship)) gunsGone = true;
+            foreach (var w in guns)
+            {   // the target: the host's gunship-class raider nearest this craft (none here, a fail)
+                var tg = Nodes<Raider>().Where(r => r.Alive && r.Kind == Enemies.Gunship).OrderBy(r => r.Position.DistanceTo(w.Position)).FirstOrDefault();
+                float d = tg == null ? -1f : w.Position.DistanceTo(tg.Position);
+                gunLo = Mathf.Min(gunLo, d); gunHi = Mathf.Max(gunHi, d);
+            }
             if (seen == null) seen = Nodes<Shot>().FirstOrDefault(s => s.Kind == Shots.Seeker && s.TargetId == mine.NetId && s.Alive);
             else if (!gone)
             {
@@ -11158,12 +11208,14 @@ public partial class _Test : Node
         return async () =>
         {
             int want = mine == null ? -1 : (int)mine.Stats["fighter_count"];
-            await RealTime(() => patrolMost >= want && gone, Wan ? 45 : 30);
+            await RealTime(() => patrolMost >= want && gone && gunsGone, Wan ? 60 : 40);
             watch.QueueFree();
             Check(want > 0 && patrolMost == want && bothMost == 2 * want && amber,
                   $"guest: the patrol the host sent out on this carrier is here, {patrolMost} craft (its fighter_count, {want}), drawn in amber ({amber}); with the fighters, {bothMost} out at once (2 x {want})");
             Check(seen != null && gone && lastD > 160f,
                   $"guest: the host's seeker at this carrier is seen, and brought down here too, {lastD:0} u out -- clear of the hull, not landed");
+            Check(gunMost == 2 && gunsGone && gunLo > 240 - 40 && gunHi < 240 + 40,
+                  $"guest: the host's 2 gunships from this carrier seen ({gunMost}), on their 240 u circle round the target every frame one is drawn ({gunLo:0}-{gunHi:0} u) -- a warp, never a streak -- then gone ({gunsGone})");
         };
     }
 

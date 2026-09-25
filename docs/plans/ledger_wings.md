@@ -106,3 +106,13 @@ asserts 2 gunships, every visible frame 240 +- 40 u of the target); (3) the old-
 in the wing header comment deleted; (4) `Wing.Until` exposed, and the patrol's 20 s / gunships'
 12 s asserted right after each Sortie. Files @ HEAD e2a2ed8: ShipClasses.cs 45fad2c8,
 PlayerShip.cs 1e7afc69 (untouched unless needed), SmokeTest.cs.txt 677012ad.
+### GATE FIX POST: typecheck 0 errors, quick ALL CHECKS PASSED. Engine-unproven: rungs owed in the final test phase.
+Built: Docked sortie craft Done once its sortie is Over (carrier lost in the launch spread, or a short
+LifeStat); guest SetNetState snaps a gunship to the host's pose on Waiting->Orbit; `Wing.Until`;
+header clause on the old "control_range" deleted.
+Checks written/rewritten: WingsPatrolChecks (sent for 20 s, `Until - Clock`, each run; NEW per run: a
+sortie ended with 0/1/2 craft out -- the rest never launch, freed within 1 s, none left),
+WingsGunshipChecks (sent for 12 s, each run), WingsHostSortie (NEW: 2 gunships from the guest's
+carrier at a target 1100-1800 u off, on station, warped out), WingsGuestWatch (NEW: 2 gunships seen,
+every drawn frame 240 +- 40 u of the target, then gone; guest wait 30/45 -> 40/60 s).
+Owed in the test phase additionally: `six,six` for the gunship wire pair (host ~5 s longer).
