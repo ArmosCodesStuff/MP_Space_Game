@@ -1,9 +1,11 @@
-# Coordinator state -- last event 14:14: the test phase launched (critique-2 applied at 1cd733e)
+# Coordinator state -- last event 15:20: the test phase resumed as task wbbiuayve (same run id) after a stop: the fails file now
+# collapses repeated lines (59669ac); a blocked review scope retries. Review fixes cap/fr/hv merged; lt and net pending; the baseline
+# solo has 41 fails + 1 throw, the cap/fr merges added 2 throws (round 1's triage fixes FAIL LANEs first).
 Under 25 lines. Edit tool only; commit as the FIRST call after every event. The hook re-injects this after a compact and
 cross-checks every `task <id>` below against its output file. Facts go to README / CHANGES, not here.
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
-- test-phase / task wvagk489n (wf_8c62491c-3b2): review fixes per scope -> rounds (5 chains, triage, pooled fixes) -> seed sweep ->
+- test-phase / task wbbiuayve (wf_8c62491c-3b2): review fixes per scope -> rounds (5 chains, triage, pooled fixes) -> seed sweep ->
   extras -> bar -> release. lands: 3 lines to the owner + the frames (framesForOwner, netOwed); a stop -> docs/plans/ledger_test.md
   and the journal, fix, relaunch: Workflow({scriptPath: <scripts>\test-phase.js, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 2, review: []}}).
 - watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout): re-arm at each expiry while the test phase runs.
