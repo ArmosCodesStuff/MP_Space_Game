@@ -135,12 +135,19 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
     "5 s round a ..."; 3 x "... the line stops at".
   - LaneA4HelmLiveChecks (the destroyer on TargetDummy1): the refusals; 3 x unmarked cast off at 0.5 s; 3 x marked
     pull; 3 x the swing on A/D; 3 x cast off by Pressed / Host / Time with speed kept; 3 x Webbed / Disabled / Drive.
-  - LaneA4WardChecks: 3 x "F8 ward: marked, a report at N u/s stands ...".
+  - LaneA4WardChecks (REWRITTEN kits4-J5, through PlayerShip.ApplyState): 3 x "F8 ward: a report at N u/s read by the
+    host (ApplyState): unmarked, cut ...; marked, it stands ...; released / run out, cut ...".
+  - LaneA4TargetsChecks (kits4-J5): 3 x "F8 picks: N picked {..}, the host holds {..}"; 3 x "... claimed on a 3-pick hull";
+    3 x "... with a dead (id) or unknown id among them". Trap: six disabled gunship raiders 2500+ u out, killed in a finally.
+  - LaneA4AnchorWarpChecks (kits4-J5): 3 x "F8 helm: the anchor warped N u in the bite / mid-pull / mid-swing ...".
+    Trap: TargetDummy1 is moved and put back; mid-bite needs frames under 0.15 s (1-3 frames).
+  - LaneA4WreckChecks (kits4-J5): 3 x "F8 helm: wrecked N s after an unmarked press ...: the move is off ...; re-boarded".
   - LaneA4MendChecks: 3 x "F10: N mended ... lands whole"; 3 x "... stops at full"; 4 x "an amount of X mends
     nothing"; "a wreck takes nothing; re-boarded, whole again".
-  - Watch (rewritten, 3 args now): every `doAbility.Invoke` / `doAb.Invoke` line of the sweeps and the walls.
-- **Rung 5 (`six`)**: nothing new; watch GuestWalls' "RequestAbility" by string (now 3 args). The payload's and the
-  ward's guest checks land with their first rows (6b throw, 6a Grapnel), K4-8.
+  - Watch (rewritten, 4 args now: the point and the picks): every `doAbility.Invoke` / `doAb.Invoke` line of the sweeps and the walls.
+- **Rung 5 (`six`, twice)**: NEW (kits4-J5) in the arena pair: ahost's LaneA4HostPointCheck, "arena host: the guest's F,
+  its row taking a point, lands the guest's cursor in this copy's slot" (the aguest's bubble press, LaneA4GuestPointPress,
+  lent TakesPoint on both peers). Watch GuestWalls' "RequestAbility" by string (now 4 args: the point and the picks).
 - **Rung 4**: no frame (nothing drawn changed).
 
 ### kits4-J5 · PRE · kits4 gate fix (the opus merge gate's four findings) -- tier opus
@@ -156,3 +163,17 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
 - Files: scripts/HelmMoves.cs, scripts/PlayerShip.cs, scripts/Hub.cs, scripts/Abilities.cs, tools/smoketest/SmokeTest.cs.txt,
   docs/CHANGES.md, docs/DESIGN.md, this ledger.
 - HEAD 43dedd3d8e479ac79433b4edea48d4337040c00e · HelmMoves.cs 51d41c884e82e744ec057fdd4e93193549654e1f · PlayerShip.cs 6b010d40b6ceffdf8e490de6ba24bf52a22ab30b · Hub.cs bb3d4f97e167719b852743c3c0fb7971669b7909 · Abilities.cs b74c5c69f181c591d4f0946f5d327374ed6a504d · SmokeTest.cs.txt 276ad25df64ddfdddc8fc29c3c7eac1c3cc04ee2 · CHANGES.md 113d5a3f64d36a6f6f84ece08a3d8c629df56ed0 · DESIGN.md 1b1f6313c2598f2d2fee16972426c7943632b348
+### kits4-J5 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. (1) `AbilityDef.TakesTargets`; `UseAbility(id, target, int[] picks = null)`; `RequestAbility` /
+  `DoAbility(id, target, at, int[] targets)`; `PlayerShip.Pick` -> `Picked` (Distinct, Take(ClassDef.Targets), then
+  Combat.ById alive); Hub's press passes its live picks. (2) `HelmRun.AnchorAt`; `Why` returns `HelmEnd.AnchorWarped`
+  first when the anchor moved over Drives.SnapAt in a frame. (3) `TickAbilities` ends the run `HelmEnd.Wrecked` on a
+  wreck (every peer). Both enum values appended at the END of HelmEnd.
+- Files: scripts/Abilities.cs, scripts/HelmMoves.cs, scripts/Hub.cs, scripts/PlayerShip.cs, SmokeTest.cs.txt (NEW
+  LaneA4TargetsChecks, LaneA4AnchorWarpChecks, LaneA4WreckChecks, LaneA4GuestPointPress / LaneA4HostPointLend /
+  LaneA4HostPointCheck + LaneA4MpCursor; REWRITTEN LaneA4WardChecks; 21 DoAbility invokes and GuestWalls' AskHost to 4
+  args), docs/CHANGES.md (Handoff, Unreleased), docs/DESIGN.md (helm moves: the two outside ends; the picks).
+- Defaults taken: the host cuts the claim at the cap AFTER dropping repeats and BEFORE dropping the dead (the cap bounds
+  what a press may claim); `Picked` is ship-wide, overwritten by the next press of a TakesTargets row.
+- Checkpoint: the commit after this entry. Slice 4 gate fix complete.

@@ -42,8 +42,10 @@ public struct HelmNums
     public double Time;
 }
 
-// WHY A MOVE ENDED, for the ability that started it (the rip reads it, 6a) and the checks.
-public enum HelmEnd { None, Pressed, Time, AnchorLost, Webbed, Disabled, Drive, Unconfirmed, Host }
+// WHY A MOVE ENDED, for the ability that started it (the rip reads it, 6a) and the checks. Drive is
+// the ship's OWN warp charge (it rips); AnchorWarped is the anchor's warp (kits_v31 §3.4: it casts off
+// with none); Wrecked is the owner's hull lost mid-move.
+public enum HelmEnd { None, Pressed, Time, AnchorLost, Webbed, Disabled, Drive, Unconfirmed, Host, AnchorWarped, Wrecked }
 
 // ONE SHIP'S MOVE, on its owner. Move is null when none runs.
 public class HelmRun
@@ -52,6 +54,7 @@ public class HelmRun
     public HelmNums N;
     public IHittable Anchor;
     public int AnchorId;
+    public Vector2 AnchorAt;     // where the anchor was last frame: a step over Drives.SnapAt is its warp
     public double T;             // seconds since the press
     public float Line;           // the swing's line, centre to centre
     public float Side;           // the speed round the anchor (starboard +); NaN until the move reads it
@@ -156,18 +159,22 @@ public static class HelmMoves
         if (s.Disabled) return "DISABLED";
         float dist = s.Position.DistanceTo(anchor.Position);
         if (dist > n.Reach) return "OUT OF RANGE";
-        r.Move = m; r.N = n; r.Anchor = anchor; r.AnchorId = anchor.NetId;
+        r.Move = m; r.N = n; r.Anchor = anchor; r.AnchorId = anchor.NetId; r.AnchorAt = anchor.Position;
         r.T = 0; r.Confirmed = false; r.Ended = HelmEnd.None; r.Side = float.NaN;
         r.Pulling = dist > StopAt(anchor.HitRadius, n);
         r.Line = LineFor(dist, anchor.HitRadius, n);
         return null;
     }
 
-    // WHY THE RUN MUST END NOW, or None: the same rules for every row.
+    // WHY THE RUN MUST END NOW, or None: the same rules for every row. An anchor that WARPED (moved
+    // further than Drives.SnapAt in one frame) ends it before the law runs, so the hull is never
+    // dragged across the jump with it.
     private static HelmEnd Why(PlayerShip s, HelmRun r)
     {
         r.Anchor = Combat.ById(r.AnchorId);                       // among the living, or null
         if (r.Anchor == null) return HelmEnd.AnchorLost;
+        if (r.Anchor.Position.DistanceTo(r.AnchorAt) > Drives.SnapAt) return HelmEnd.AnchorWarped;
+        r.AnchorAt = r.Anchor.Position;
         if (s.Pinned) return HelmEnd.Webbed;
         if (s.Disabled) return HelmEnd.Disabled;
         if (s.Charging) return HelmEnd.Drive;

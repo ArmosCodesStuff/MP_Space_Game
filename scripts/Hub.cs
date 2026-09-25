@@ -1825,7 +1825,8 @@ public partial class Hub : Node2D
                 if (!mine.Alive) { if (kk.Keycode == Key.F) mine.UseAbility("reboard", 0); GetViewport().SetInputAsHandled(); return; }
                 var ab = Abilities.ByKey(mine.Class, kk.Keycode);
                 if (ab == null) return;
-                if (ab.Kind == AbilityKind.Press && !ab.Open) mine.UseAbility(ab.Id, Selected?.NetId ?? 0);
+                if (ab.Kind == AbilityKind.Press && !ab.Open)
+                    mine.UseAbility(ab.Id, Selected?.NetId ?? 0, _targets.Where(t => t != null && t.Alive).Select(t => t.NetId).ToArray());
                 // Hold abilities (the main guns) are read by polling in PlayerShip.
             }
             GetViewport().SetInputAsHandled();

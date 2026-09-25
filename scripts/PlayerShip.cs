@@ -513,8 +513,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // missile at target 1000", never "I did 5 damage". The broadside aims at the owner's
     // cursor, which reaches the host with the rest of its intent (AimPoint), not in the request.
     // A row that TAKES A POINT (AbilityDef.TakesPoint, F8) sends the cursor IN the request: where it
-    // was when the key went down, not where the next report says it is.
-    public void UseAbility(string id, int targetId)
+    // was when the key went down, not where the next report says it is. A row that TAKES TARGETS
+    // (AbilityDef.TakesTargets) sends `picks`, the NetIds the pilot has picked; any other sends none.
+    public void UseAbility(string id, int targetId, int[] picks = null)
     {
         var def = Abilities.Find(Class, id);
         if (def == null) return;                       // not an ability this class carries
@@ -529,14 +530,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (PressHeld(def)) { Fail(id, "DISABLED"); return; }
         if (def.Refuse?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null) is { } why) { Fail(id, why); return; }
         var point = def.TakesPoint ? AimPoint : Vector2.Zero;
-        if (Net.Sim) DoAbility(id, targetId, point);
-        else Net.AskHost(this, nameof(RequestAbility), id, targetId, point);
+        var ids = def.TakesTargets && picks != null ? picks : System.Array.Empty<int>();
+        if (Net.Sim) DoAbility(id, targetId, point, ids);
+        else Net.AskHost(this, nameof(RequestAbility), id, targetId, point, ids);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void RequestAbility(string id, int targetId, Vector2 at)
+    private void RequestAbility(string id, int targetId, Vector2 at, int[] targets)
     {
-        if (Net.FromPlayer(this, out int who) && who == OwnerId) DoAbility(id, targetId, at);
+        if (Net.FromPlayer(this, out int who) && who == OwnerId) DoAbility(id, targetId, at, targets);
     }
 
     // THE GATE, not a courtesy. Refuse (above) runs on the owner so the slot says why at once;
@@ -553,8 +555,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public double Cooling(double seconds) => seconds * System.Math.Max(CoolFloor, Stats["cooldown_share"]);
 
     // `at`: the press's point (F8), written into the row's own slot for a row that takes one; a point
-    // that is not a number (nothing an honest owner sends) presses nothing.
-    private void DoAbility(string id, int targetId, Vector2 at)
+    // that is not a number (nothing an honest owner sends) presses nothing. `targets`: the pilot's
+    // picks (F8), for a row that takes them: Picked holds them for its Press.
+    private void DoAbility(string id, int targetId, Vector2 at, int[] targets)
     {
         var def = Abilities.Find(Class, id);
         if (def == null || !Net.Sim || (!Alive && !def.WhenWrecked) || PressHeld(def)
@@ -564,7 +567,21 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             if (!float.IsFinite(at.X) || !float.IsFinite(at.Y)) return;
             Sl(id).At = at;
         }
+        if (def.TakesTargets) Pick(targets);
         def.Press?.Invoke(this, targetId != 0 ? Combat.ById(targetId) : null);
+    }
+
+    // THE PICKS A PRESS CARRIED, as the host takes them: no more than the class may hold at once
+    // (ClassDef.Targets -- a claim past it is cut, in the order sent), each once, and only what
+    // Combat.ById finds alive (a dead or unknown id is dropped). A row that takes targets reads them here.
+    private readonly List<IHittable> _picked = new();
+    public IReadOnlyList<IHittable> Picked => _picked;
+    private void Pick(int[] ids)
+    {
+        _picked.Clear();
+        int cap = Classes.Known(Class) ? Classes.Of(Class).Targets : 1;
+        foreach (int nid in (ids ?? System.Array.Empty<int>()).Distinct().Take(cap))
+            if (Combat.ById(nid) is { Alive: true } h) _picked.Add(h);
     }
 
     // ── what the abilities do. The catalogue (Abilities.cs) points at these, and each one
@@ -1084,6 +1101,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // corrects any drift. A timed ability is a row and nothing else: this loop is the only expiry.
     private void TickAbilities(double delta)
     {
+        // A WRECK ENDS ITS HELM MOVE (F8): the owner's flight stops at the wreck (LocalFlight), so the
+        // run's own end rules never see it -- left on, it would fly the re-boarded hull from where it lay.
+        if (!Alive) HelmMoves.End(this, _helm, HelmEnd.Wrecked);
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
