@@ -33,7 +33,11 @@ if (-not $csc -or -not $refDir -or -not (Test-Path $refDir)) {
 }
 
 $refs = Get-ChildItem "$refDir\*.dll" | ForEach-Object { "-r:$($_.FullName)" }
-$outDll = Join-Path $env:TEMP 'typecheck.dll'
+# ONE SCRATCH PER CHECKOUT. A second copy of the repo (a git worktree) typechecking at the same
+# moment wrote the same typecheck.dll and harness copies, and each read the other's result.
+$scratch = Join-Path $env:TEMP ('typecheck_' + [BitConverter]::ToString([Security.Cryptography.MD5]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes((Resolve-Path ..).Path.ToLower()))).Replace('-', '').Substring(0, 8))
+New-Item -ItemType Directory -Force $scratch | Out-Null
+$outDll = Join-Path $scratch 'typecheck.dll'
 
 # THE HARNESS IS SOURCE TOO. SmokeTest.cs.txt and Shots.cs.txt are compiled INTO the game by the
 # runners (as scripts/_Test.cs and scripts/_Shots.cs), but `dotnet build` never sees them -- so a
@@ -43,7 +47,7 @@ $outDll = Join-Path $env:TEMP 'typecheck.dll'
 $harness = @()
 foreach ($h in @('..\tools\smoketest\SmokeTest.cs.txt', '..\tools\screens\Shots.cs.txt')) {
   if (-not (Test-Path $h)) { continue }
-  $dst = Join-Path $env:TEMP ('typecheck_' + [IO.Path]::GetFileNameWithoutExtension($h))
+  $dst = Join-Path $scratch ('typecheck_' + [IO.Path]::GetFileNameWithoutExtension($h))
   Copy-Item $h $dst -Force
   $harness += $dst
 }

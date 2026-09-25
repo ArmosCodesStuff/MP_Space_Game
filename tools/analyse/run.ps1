@@ -15,7 +15,8 @@ if (Test-Path $ec) {
   exit 2
 }
 
-$log = Join-Path $env:TEMP 'warships_analyse.log'
+# ONE LOG PER CHECKOUT: two copies of the repo (a git worktree) analysing at once shared one file.
+$log = Join-Path $env:TEMP ('warships_analyse_' + [BitConverter]::ToString([Security.Cryptography.MD5]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($root.ToString().ToLower()))).Replace('-', '').Substring(0, 8) + '.log')
 Copy-Item (Join-Path $PSScriptRoot 'analysers.editorconfig') $ec
 try {
   Push-Location $root
