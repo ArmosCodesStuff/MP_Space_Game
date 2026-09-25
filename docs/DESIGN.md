@@ -582,7 +582,7 @@ here is how this section came to claim a 5.9 shell for a gun that fires 17.9. Th
 and its reload belong to the CLASS (`main_damage` / `main_interval` in that class's `Nums`,
 `Ships.cs`): the same weapon runs from the dart's 5 every 0.35 s to the battleship's 17.9 every
 2 s. Everything else is a default on the sheet (`Stats.cs`), which a class overrides only where its
-row says so — point defence `pd_damage` / `pd_interval` (the warden's mount is the one override), a
+row says so — point defence `pd_damage` / `pd_interval` (every PD class reads the sheet: 1 DPS a mount), a
 fighter's `fighter_damage` / `fighter_interval`, a bomber's `torpedo_damage`, a missile's
 `missile_damage`, three to a burst (`PlayerShip.BurstSides`). Turrets, wings and helm read that
 sheet and the K window prints the same object, so the two cannot drift. Stat = base × (1 + bonus); reload, cooldown and radius bonuses divide. Bonuses are
@@ -1210,6 +1210,9 @@ The three heavies' rows and keys (ledger_kits6c.md D38-D58). What is durable:
   press and survives the tether and the flares; the prism drops at once and ends on any other press.
 - **The Taunt's x1.5 is the dealer's stat** (`taunt_mult`, 0 elsewhere) read in `Outgoing` through `ICalled`, never
   a class test; the call itself is the squad's (slice 5).
+- **A call holds a standoff heavy as a web would**: a raider counts its squad's caller as pinned (the missile's gate,
+  `Raider`), and `Squad.Call` spends the reboost wait so the commit the call forces burns -- a gunship boosts in and
+  throws at once instead of waiting at range (D57, review hv-R6c-2).
 - **The Taunt draws the emplacement guns by a row flag** (`AbilityDef.Draws`, read through `IRaidTarget.Draws`): an
   emplacement's gun takes the nearest drawing pilot in its reach before the nearest of all (`Emplacement.Prefer`, read
   where each warning goes up). Its mount is a main gun that follows `AimAt`, so `Turret.Preferred` never sees it.

@@ -381,7 +381,7 @@ whenever the ship is alive, on every hull that mounts it.
 | Bastion | siege mortar (150-1100 u, 1.4 s) | -- | bunker buster (180; 360 on a boss or structure; 12 s) | Q shockwave (1000 u; a boss, structure or dummy held 3 s), E gravity well (900 u, 280 u, 6 s), point defence (passive) |
 | Sniper | railgun (hold to charge; Space in the white box while it reloads: x1.5) | — | Anchor (8 s rooted, x2.5, reach x1.4) | Q tether mine (2 charges), E flares |
 | Warrior | blade (26 every 0.40 s) | — | prism stance (2 s) | E lunge (420 u), Q whirlwind (2 s) |
-| Warden | proximity flak (45 DPS, 70 u fuse) | fire mode | six hunter-seekers (latched raiders first) | Q taunt (6 s), E flak curtain, point defence (passive), 10 DPS |
+| Warden | proximity flak (45 DPS, 70 u fuse) | fire mode | six hunter-seekers (latched raiders first) | Q taunt (6 s), E flak curtain, point defence (passive, 1 DPS) |
 | Dart | pepperbox (hold: darts steered onto the cursor) | — | sprint and Rod from God (3 s, then the rod) | Q ramjet (+10% top a second, up to +50%), E slingshot, slipstream (passive) |
 | Echo | repeater (every round again 0.6 s later) | fire mode | reverb (5 s x1.2, 35% of it blasted) | Q rewind (8 s back, hull too), E EMP (300 u, 4 s) |
 | Wraith | ambush scattergun (7 pellets; x1.5 from behind) | fire mode | veil (5 s unpickable, next volley x3) | Q venom (poison doses), E shadow step (140 u behind the target) |
@@ -783,8 +783,7 @@ Q **Taunt** (6 s: every raider within 1000 u, or hunting within it, comes for th
 deals; 33% less taken; an emplacement's gun takes the Warden first; the slot reads `TAUNT 5.9s  -33%`; 20 s); E **flak curtain** (500 x 80 u at the cursor, 150-700 u, across the aim, 6 s: 20 on
 touching, then 10 every 0.5 s; 18 s). New mechanisms: `Zones.cs` (laid zones: traps and fields), charged abilities,
 `ShotDef.Fuse`, `ClassDef.Shot`, `ICalled`.
-**Known broken:** engine-unproven (rungs 3-5 owed). The Taunt's "standoff heavies boost in" is not built (D57; the
-emplacements' preference is). The tether's 170 u and the curtain's size take no @area item (literal rows, D54 / D58).
+**Known broken:** engine-unproven (rungs 3-5 owed). The tether's 170 u and the curtain's size take no @area item (literal rows, D54 / D58).
 
 ### Class kits, lane A slice 5: melee, the prism, owned bodies, tow and hurl (2026-09-25, worktree wt/kits5)
 
@@ -1267,7 +1266,7 @@ headings ("turning at 0 deg/s"; the warden turned 0.00 deg, as it should): fixed
   carried it (Q is free on them), with `Fit.AlwaysPd`, the rows `pd_active` / `pd_reload`, the
   window's members on PlayerShip, the ring a turret drew round itself (`ITurretHost.PdRing`,
   `TurretSpec.Ring`, `ClassArt.PdRing`) and the duty share on the sheet (`PdDps` is what it holds).
-- Per-hull numbers are unchanged (1 DPS a mount; the carrier 3 mounts, the warden 10 DPS): their
+- Per-hull numbers are unchanged (1 DPS a mount; the carrier 3 mounts, the warden 1 mount): their
   cuts go with the 6a / 6c cards. The sheet's point-defence line doubles (a battleship 1.00 -> 2.00
   DPS, sustained total 63.65 -> 64.65; the freighter 49 -> 50; the carrier's 1.5 -> 3).
 - The two frames that moved the window now move point-defence stats: Endurance Frame a shorter
@@ -1278,7 +1277,7 @@ headings ("turning at 0 deg/s"; the warden turned 0.00 deg, as it should): fixed
   hauler's own mount, the session host) take its reach to 0 for the while: it cannot be switched off.
 
 **Checks:** new `LaneAPassivePdChecks` (all 7 PD hulls at seeded spots, headings and reaches: every
-mount on a light raider with nothing pressed, 0.5 every 0.5 s = 1 DPS a mount, the warden 5 = 10 DPS,
+mount on a light raider with nothing pressed, 0.5 every 0.5 s = 1 DPS a mount, the warden's one mount too,
 over 1.9 s from the first shot; no pd key) and the table-coverage check beside it; rung 5: host "a
 guest's point defence fires on the host with nothing pressed", guest "guest sees its own point
 defence fire with nothing pressed". Rewritten: the battleship's PD block (fires unpressed; still

@@ -820,14 +820,30 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     // A TIMED ROW'S PRESS (AbilityDef.Time), on the host: it runs its Time, its Cooldown from the press, and
-    // hardens the hull at its Guard share for that time. The row's Refuse holds a press while it cools.
+    // hardens the hull at its Guard share for that time. The row's Refuse holds a press while it cools (or runs).
+    // A Swing row's first blow lands at once; a Sheds row lets go every web and takes none for its Time (the
+    // whirlwind); a Call row calls the raiders round it onto this ship for its Time (the Taunt).
     public void RunFor(string id)
     {
         var def = Abilities.Find(Class, id);
         ref var sl = ref Sl(id);
         if (!Net.Sim || def?.Time == null || sl.Cool > 0) return;
         Engage(def, Stats[def.Time]);
+        if (def.Swing != null) sl.Own = 0;
         if (def.Guard != null) _status.Apply(Status.Hardened, sl.Left, Stats[def.Guard]);
+        if (def.Sheds) { LetGoWebs(); _status.Apply(Status.Unwebbed, sl.Left); }
+        if (def.Call is { } call && MyHub is { } hub) CallIn(hub, call, sl.Left);
+    }
+    // A CALL (AbilityDef.Call), on the host: every raider squad with a member within the spec's reach, or hunting a
+    // target within it, is called onto this ship for `secs` (Raider.Call: a boss, a missile or a practice craft never --
+    // Targeting.Raiding); the reach flashes for every peer. The x taunt_mult is Outgoing's; the row Draws while it runs.
+    private void CallIn(Hub hub, CallSpec call, double secs)
+    {
+        float reach = (float)Stats[call.Reach];
+        Fx.Raise(call.Ring, Position, reach);
+        foreach (var r in hub.Raiders.ToList())
+            if (Targeting.Raiding.Hits(r) && (r.Position.DistanceTo(Position) <= reach || (r.Target is { } t && t.Position.DistanceTo(Position) <= reach)))
+                r.Call(this, secs);
     }
     // A STATUS THIS SHIP PUTS ON A HOSTILE IT HIT (a row's OnDealt, on the host): for the stat's seconds, through the
     // hostile's own ApplyStatus (its Reaches decides whether the status can hold it at all), with the row's mark raised
@@ -1977,23 +1993,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         hub.Flares(Position, Rotation, Array.IndexOf(Decoys.All, row), row.CountStat != null ? (int)Math.Round(Stats[row.CountStat]) : 0);
     }
 
-    // THE TAUNT (AbilityDef Taunt: the Warden's Q), on the host: for taunt_time every raider squad with a member
-    // within taunt_reach, or hunting a target within it, is called onto this ship (Raider.Call: a boss, a missile
-    // or a practice craft never -- Targeting.Raiding); the hull takes taunt_guard of every blow (Hardened); the
-    // reach flashes for every peer. The x taunt_mult is Outgoing's; the row Draws while it runs (Draws below).
-    public void Taunt()
-    {
-        ref var sl = ref Sl("taunt");
-        if (!Net.Sim || sl.Cool > 0 || sl.Left > 0 || MyHub is not { } hub) return;
-        double secs = Stats["taunt_time"]; float reach = (float)Stats["taunt_reach"];
-        sl.Left = secs; sl.Cool = Cooling(Stats["taunt_cooldown"]);
-        _status.Apply(Status.Hardened, secs, Stats["taunt_guard"]);
-        Fx.Raise(Fx.TauntRing, Position, reach);
-        foreach (var r in hub.Raiders.ToList())
-            if (Targeting.Raiding.Hits(r) && (r.Position.DistanceTo(Position) <= reach || (r.Target is { } t && t.Position.DistanceTo(Position) <= reach)))
-                r.Call(this, secs);
-    }
-
     // IT DRAWS THE HOSTILE GUNS (IRaidTarget.Draws) while any of its class's rows that Draws runs: the Taunt. Read by
     // an emplacement's gun (Emplacement.Prefer), on the host, where the row's Left is the host's own.
     public bool Draws
@@ -2005,16 +2004,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         }
     }
 
-    // THE WHIRLWIND'S PRESS (host): its time up, its cooldown, its first blow at once; every web on
-    // the hull let go (the pin and the web's own ask), and none may take it until the spin is over.
-    public void Whirl()
-    {
-        ref var sl = ref Sl("whirlwind");
-        if (sl.Left > 0 || sl.Cool > 0) return;
-        sl.Left = Stats["whirl_time"]; sl.Cool = Cooling(Stats["whirl_cooldown"]); sl.Own = 0;
-        LetGoWebs();
-        _status.Apply(Status.Unwebbed, sl.Left);
-    }
     // EVERY WEB ON THE HULL LET GO (host): the pin and the web's own ask. A latch still on asks again next frame.
     private void LetGoWebs() { _webAsked = 0; _webPhase = 0; _status.Clear(Status.Pinned); }
 
@@ -2104,7 +2093,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private void DashSweeps()
     {
         foreach (var def in Abilities.For(Class))
-            if (def.Dash is { } d && Sl(def.Id).Left > 0) DashSweep(def.Id, 1 - Sl(def.Id).Left / Stats[d.Time]);
+            if (def.Dash is { } d && Sl(def.Id).Left > 0)
+            {   // DISABLED inside the dash: the row ends where the hull stopped (the owner's carry stops on the same
+                // state, which rides the wire) -- no Expire sweep to the Reach it never went, no hardening left on
+                if (Disabled) { Sl(def.Id).Left = 0; _status.Clear(Status.Hardened); continue; }
+                DashSweep(def.Id, 1 - Sl(def.Id).Left / Stats[d.Time]);
+            }
     }
     // THE OWNER'S CARRY: from the first frame it sees a dash row's Left (the host's press, here at once
     // on the host, a packet later on a guest), the hull goes the row's Reach along its nose over the
