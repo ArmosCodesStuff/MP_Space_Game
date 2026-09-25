@@ -647,3 +647,44 @@ Owed on the R1 records commit (it carries J10 and J9c):
 - Gate 3 (opus) passed the code and failed two comments: Net.cs StructRow + DESIGN.md claimed the assigned delegate moves the
   fingerprint (Show prints only its type name, Func`2); Unlocks.cs (from the walls merge) said Plain() never hashes a plain struct.
 - Fixed both as the gate wrote them; comments only. quick net_r1s ALL GREEN. Chain net_r1r2 still covers the code. Next: merge into version-l.
+
+## Lane net2 · S2 + R2-R5 code and record (worktree WarShips_wt_net2, branch wt/net2, from f168508)
+
+BUILD PHASE (CLAUDE.md top, owner ruling): no engine run of any kind. Per job: typecheck, `verify.ps1
+-Quick`, a read of the diff. Checks are WRITTEN with each job, in the lane's own named methods
+(`S2Checks`, `R2*`, `R3*`, `R4*` in SmokeTest.cs.txt; `WebRtcFrames` in Shots.cs.txt), RUN in the
+final test phase. Owner questions take their defaults (README rulings line 101): clipboard pickup YES,
+hold 90 s KEEP, UPnP DELETE.
+
+### JOB 0 · the lane's job list (foundations first)
+S2 is not built (no ledger entry, no commit; P4's `Held` return still precedes Boss's send, P10's
+`RestoreHeld` re-keys votes only), so it comes first (plan §13: before R2).
+- **S2a** P4 (Boss sends while Held), P5 (shockwave throws no Structure/Dummy: `Targeting.Throwable`
+  row forbids them), P8 (the host refuses a class change in the arena or in combat), P9 (`GoTo` of
+  the sector it is in is a no-op; `NetMySector` carries the world serial; a stale one is ignored; a
+  world's first report is never metered), P10 (`RestoreHeld` re-keys deployed turrets; the dead
+  `back` branch goes). Files: Boss.cs, Targeting.cs, Hub.cs, PlayerShip.cs (smallest hunks),
+  SmokeTest `S2Checks`.
+- **S2b** P10b, the rejoin token (plan §3.9): the host issues a per-pilot token after admission
+  (`NetToken`, Reliable, Hub), the guest keeps it per host and sends it with its identity; a token
+  that matches a held place, or a live peer still holding that character, gives the place to the
+  returning peer (the old peer hung up). Files: Hub.cs, Session.cs, SmokeTest `S2Checks`.
+- **R2a** foundations that compile beside ENet: `NetChannels.Beat` = 12 + `NetBeat`/`NetBeatBack`,
+  `StreamChannel` -> `Beat + 1`, `Pending` entries grown (conn, name, made), `PretendAt` flags,
+  GodotStub `WebRtc*` members.
+- **R2b** THE SWITCH (one edit): Net's session on `WebRtcMultiplayerPeer` (host offers, both rows,
+  the listener, `Invite()`, `TakeCode`, `Join(text)` by row), the watchdog, the goodbye's body,
+  every hang-up through `Link.Hang`, retries by row (`Auto`); delete ENet, UPnP (Router.cs ->
+  Adapters.cs), describe/reach/reveal/public-IP (api.ipify.org), fakeigd, the router scenarios,
+  S1's `Net.Link`/throttle/`server` flag; `CouldNotReach` wording; SessionMenu INVITE / reply box /
+  JOIN box (minimal); the roles moved, `Drop()` rewritten, waits re-set (P() kept on every port).
+- **R3** §6's words, COPY NETWORK REPORT, clipboard pickup wired, Hints, Game.cs's comment, frames
+  51_invite_ready / 52_reply_countdown replacing 51-52, reply_expired and join_failed.
+- **R4** the watchdog's blackhole check and the rate check at 150/40/5; per-row gap and backlog
+  printed.
+- **R5** packaging scripts (pack/install/play/snapshot/manifest, NOTES texts) and the record
+  (DESIGN, README "Playing with a friend", CHANGES Unreleased + Handoff + Known broken = §10.5).
+- Not this lane (the test phase): `pack.ps1 -Dirty`, the one-machine check, rung 6, publishing, §11.
+- Decisions taken by default (no source says otherwise): P10b's token is 16 random bytes as hex,
+  sent by the host after the welcome and kept by the guest per host address/name for the process;
+  it is never in a code (plan §3.9: "carried after connection, not in the code").
