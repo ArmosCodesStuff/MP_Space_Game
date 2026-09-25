@@ -266,3 +266,17 @@ rung 5 LaneA6cPrismHostChecks / LaneA6cPrismGuestChecks; sweep witness ["prism"]
   74d_warrior_prism_wedge, 74e_warrior_prism_square, 74f_warrior_prism_slant (LaneA6cPrismFrames); rewritten: sweep
   witness ["prism"] + a stance's second press drops it (cooldown = its row), Parrying cleared after the sweeps.
 - Next: kits6c-J5 ActiveReload foundation.
+
+## kits6c-J5 · PRE
+- tier opus. Intent: the ActiveReload foundation (sniper_active_reload.md §2.2, §3): ActiveReload.cs (new: ReloadSpec incl. Charge, Chamber, Verdict, Spent / Seat / Take / Judged / Give / Judge / Press / Shot / Step / View), Net.Leeway, AbilityDef.Reload + Loose, PlayerShip.RequestReloadPress + AskReloadPress, the owner's stroke rule, the host's charge latch, a fitted chamber seated; Sfx.Special renamed Sfx.ByName (Press plays through it). No row uses it yet (J6). Checks: LaneA6cReloadJudgeChecks (pure). HEAD c6c67808764fa0329d148c1f19321632b3595712
+- scripts/ActiveReload.cs new
+- scripts/Abilities.cs 0ed703fad647696f5b8fc44f80b2d16a3d373644
+- scripts/PlayerShip.cs f9da5898c6fd5d163cd8368dfea98de71c02b7b7
+- scripts/Net.cs f424f5a20037bb4fe6aeb298886ee58de1d1b04d
+- scripts/Sfx.cs 01157ae1939d553ea78014a3926c7ad6d44664b6
+- scripts/Boss.cs 873f332ec2392263d6d977c5f9dabb46a43365c9
+- scripts/Fx.cs 54e6c935b131221c1ee07d0a15226d26de6c8475
+- scripts/Hub.cs ab952edc87ccfb72862347360be24402bedeb011
+- scripts/Shots.cs 05c56a1f0517457bda6938d963d7330c049989ef
+- scripts/ThrownRock.cs c398efc801266348f7db2d56049911dd7fa64f67
+- tools/smoketest/SmokeTest.cs.txt a1b003390d24ecd2588fb34a5eb2f962b7113f78
