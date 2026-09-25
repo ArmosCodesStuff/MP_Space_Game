@@ -241,7 +241,7 @@ public partial class Shot : Node2D, IHittable, ITagged
     }
 
     // a scrap piece's jagged outline, one of three, in its own frame (nose up)
-    private static readonly Vector2[][] Shards =
+    internal static readonly Vector2[][] Shards =
     {
         new Vector2[] { new(-7, -6), new(2, -9), new(8, -2), new(5, 7), new(-4, 8), new(-9, 1) },
         new Vector2[] { new(-5, -9), new(6, -7), new(9, 3), new(1, 9), new(-8, 5) },

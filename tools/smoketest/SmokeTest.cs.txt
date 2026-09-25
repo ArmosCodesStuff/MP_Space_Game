@@ -3246,6 +3246,123 @@ public partial class _Test : Node
             Check(!Nodes<FxNode>().Any(x => x.Id == Fx.TauntRing), "fields: ...and is gone after its 0.8 s");
         }
     }
+    // ── THE TORN CHUNK (lane D, F9; kits_v3 §3.2, kits_v31 §3.3): ONE raise per tear, riding the
+    // anchor's NetId, Size 0.16 x the hull's length; with it the sparks, the smoke and a scar on the
+    // hull at the hook. The chunk leaves at 260 u/s within ±25° of the line to the destroyer and is
+    // at rest at 2 s; the node follows the pure Fx.Tumble of its raise, which is what lets every peer
+    // draw the same chunk. `size` is the spec's literal (Lancer 57.6, pylon 35.2, base 89.6), NaN
+    // for a hull the spec gives no figure for (a dummy: 0.16 of its length, Fx.LengthOf). The hook, the bearing
+    // and the distance to the destroyer are seeded, and re-taken for every tear.
+    async Task FieldsRipChecks(IHittable anchor, string what, float size, bool timed)
+    {
+        var n = (Node2D)anchor;
+        float len = Fx.LengthOf(anchor);
+        var hookLocal = new Vector2(Vary(-0.4f, 0.4f) * anchor.HitRadius, Vary(-0.4f, 0.4f) * len);
+        var hook = n.ToGlobal(hookLocal);
+        var toward = hook + Vector2.Right.Rotated(VaryAngle()) * Vary(400f, 700f);
+        int scars0 = n.GetChildren().OfType<FxNode>().Count(x => x.Id == Fx.Scar && !x.IsQueuedForDeletion());
+        Fx.Tear(anchor, hook, toward);
+        for (int i = 0; i < 3; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var rips = Nodes<FxNode>().Where(x => x.Id == Fx.Rip && x.Anchor == anchor.NetId && x.Elapsed < 0.3).ToList();
+        var chunk = rips.FirstOrDefault();
+        float want = float.IsNaN(size) ? 0.16f * len : size;
+        Check(rips.Count == 1 && chunk.GetParent() == n && Math.Abs(chunk.Radius - want) < 0.05f && Math.Abs(0.16f * len - want) < 0.05f
+              && chunk.Start.DistanceTo(hook) < 0.5f,
+              $"rip on the {what}: ONE chunk rides its id, {want:0.0} u (0.16 of its {len:0} u), cut where the hook was ({rips.Count} raised, {chunk?.Radius:0.0} u, {chunk?.Start.DistanceTo(hook):0.0} u off)");
+        int sparks = Nodes<FxNode>().Count(x => x.Id == Fx.RipSparks && x.Anchor == anchor.NetId && x.Elapsed < 0.3);
+        int smoke = Nodes<FxNode>().Count(x => x.Id == Fx.RipSmoke && x.Anchor == anchor.NetId && x.Elapsed < 0.3);
+        var scars = n.GetChildren().OfType<FxNode>().Where(x => x.Id == Fx.Scar && !x.IsQueuedForDeletion()).ToList();
+        var fresh = scars.OrderBy(x => x.Elapsed).FirstOrDefault();
+        Check(sparks == 1 && smoke == 1 && scars.Count == Math.Min(scars0 + 1, 3) && fresh != null && fresh.Position.DistanceTo(hookLocal) < 0.5f
+              && Fx.All[Fx.RipSparks].Count == 28 && Fx.All[Fx.RipSmoke].Count == 6,
+              $"rip on the {what}: 28 sparks and 6 puffs go with it, and a scar on the hull at the hook ({sparks}, {smoke}, {scars.Count} scars)");
+        if (chunk == null) return;
+        for (int i = 0; i < 60 * 2 && GodotObject.IsInstanceValid(chunk) && chunk.Elapsed < 0.5; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        if (!GodotObject.IsInstanceValid(chunk)) { Check(false, $"rip on the {what}: the chunk is gone before 0.5 s"); return; }
+        double e = chunk.Elapsed;
+        var moved = chunk.GlobalPosition - chunk.Start;
+        float off = Mathf.RadToDeg(Mathf.Abs(moved.AngleTo(toward - chunk.Start)));
+        float run = 260f * (float)(e - e * e / 4);
+        var (pure, _) = Fx.Tumble(chunk.Seed, chunk.Start, toward, e);
+        Check(off <= 25.01f && Math.Abs(moved.Length() - run) < 1f && chunk.GlobalPosition.DistanceTo(pure) < 0.01f,
+              $"rip on the {what}: {e:0.00} s on, the chunk is {moved.Length():0} u out (260 u/s slowing to rest in 2 s: {run:0}), {off:0.0} degrees off the line to the destroyer, exactly where its raise says");
+        if (!timed) return;
+        for (int i = 0; i < 60 * 3 && GodotObject.IsInstanceValid(chunk) && chunk.Elapsed < 2.2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var still = chunk.GlobalPosition;
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        bool atRest = GodotObject.IsInstanceValid(chunk) && chunk.GlobalPosition.DistanceTo(still) < 0.01f;
+        await Wait(1.1);
+        bool gone = !GodotObject.IsInstanceValid(chunk) || chunk.IsQueuedForDeletion();
+        bool loose = !Nodes<FxNode>().Any(x => (x.Id == Fx.RipSparks || x.Id == Fx.RipSmoke) && x.Anchor == anchor.NetId);
+        bool scarOn = GodotObject.IsInstanceValid(fresh) && !fresh.IsQueuedForDeletion();
+        Check(atRest && gone && loose && scarOn,
+              $"rip on the {what}: the chunk lies still past 2 s and is gone by 3.3 s with its sparks and smoke; the scar stays (still {atRest}, gone {gone}, sprays gone {loose}, scar {scarOn})");
+        await Wait(7.0);
+        Check(!GodotObject.IsInstanceValid(fresh) || fresh.IsQueuedForDeletion(), $"rip on the {what}: ...and the scar is gone by 10.3 s");
+    }
+    // AT MOST 3 SCARS ON ONE HULL: four tears in a row leave three, the first one gone.
+    async Task FieldsScarCapChecks(IHittable anchor)
+    {
+        var n = (Node2D)anchor;
+        FxNode first = null;
+        for (int k = 0; k < 4; k++)
+        {
+            var hook = n.ToGlobal(new Vector2(Vary(-0.4f, 0.4f) * anchor.HitRadius, Vary(-0.4f, 0.4f) * Fx.LengthOf(anchor)));
+            Fx.Tear(anchor, hook, hook + Vector2.Right.Rotated(VaryAngle()) * Vary(400f, 700f));
+            await Wait(Vary(0.08f, 0.15f));
+            first ??= n.GetChildren().OfType<FxNode>().FirstOrDefault(x => x.Id == Fx.Scar && !x.IsQueuedForDeletion());
+        }
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        int scars = n.GetChildren().OfType<FxNode>().Count(x => x.Id == Fx.Scar && !x.IsQueuedForDeletion());
+        Check(scars == 3 && (!GodotObject.IsInstanceValid(first) || first.IsQueuedForDeletion()),
+              $"four tears in a row leave 3 scars on the hull, the oldest gone ({scars})");
+    }
+    // THE YARD'S DUMMIES: three tears on three of them, the last one watched to the end, then the cap.
+    async Task FieldsRipYardChecks()
+    {
+        var names = new[] { "TargetDummy1", "TargetDummy3", "TargetDummy4" };
+        for (int i = 0; i < names.Length; i++)
+            await FieldsRipChecks(H.GetNode<TargetDummy>(names[i]), $"dummy {names[i][^1]}", float.NaN, timed: i == names.Length - 1);
+        await FieldsScarCapChecks(H.GetNode<TargetDummy>("TargetDummy1"));
+    }
+    // A GUEST SEES THE HOST'S TEAR (rung 5). The host tears a chunk from the boss's nose, at the
+    // literal hook FieldsRipHook, thrown at the guest's ship; this watches every frame, from before
+    // the arena, for the first chunk to go up here, and reads it once it has flown 30 u: riding the
+    // boss's id at the Lancer's 57.6 u, gone up within 20 u of where the boss's nose is on THIS
+    // peer, flying at this ship within 25 degrees, and its scar on the boss here too.
+    static Vector2 FieldsRipHook(float len) => new(0, -0.4f * len);
+    void FieldsHostTears(Boss boss, PlayerShip at)
+    {
+        if (boss == null || at == null) return;
+        Fx.Tear(boss, boss.ToGlobal(FieldsRipHook(boss.Length)), at.Position);
+    }
+    string _guestRip;
+    LateSampler FieldsGuestRipWatch()
+    {
+        _guestRip = null;
+        var w = new LateSampler { Probe = () =>
+        {
+            if (_guestRip != null) return true;
+            var b = H?.Boss; var me = Me;
+            var chunk = Nodes<FxNode>().FirstOrDefault(x => x.Id == Fx.Rip);
+            if (b == null || me == null || chunk == null || chunk.GlobalPosition.DistanceTo(chunk.Start) < 30f) return false;
+            float fromNose = chunk.Start.DistanceTo(b.ToGlobal(FieldsRipHook(b.Length)));
+            float off = Mathf.RadToDeg(Mathf.Abs((chunk.GlobalPosition - chunk.Start).AngleTo(me.Position - chunk.Start)));
+            bool scar = b.GetChildren().OfType<FxNode>().Any(x => x.Id == Fx.Scar);
+            bool ok = chunk.Anchor == b.NetId && Math.Abs(chunk.Radius - 57.6f) < 0.05f && fromNose < 20f && off < 25.5f && scar;
+            _guestRip = $"{(ok ? "ok" : "BAD")}: rides {chunk.Anchor} (boss {b.NetId}), {chunk.Radius:0.0} u, {fromNose:0.0} u from the nose here, {off:0.0} degrees off this ship, scar {scar}";
+            return true;
+        } };
+        AddChild(w);
+        return w;
+    }
+    async Task FieldsGuestRipChecks(LateSampler w)
+    {
+        await RealTime(() => w.Seen, Wan ? 20 : 12);
+        Check(_guestRip != null && _guestRip.StartsWith("ok"), $"arena guest: the host's torn chunk is drawn here, the same chunk ({_guestRip ?? "never seen"})");
+        w.QueueFree();
+    }
+
     // A GUEST DRAWS THE HOST'S BUBBLE: the same row, from the slot the host's report carried.
     void FieldsGuestBubbleChecks(PlayerShip fgm)
     {
@@ -7373,6 +7490,7 @@ public partial class _Test : Node
             await FieldsBubbleChecks(fr, yonder);
             FieldsRowChecks();
             await FieldsTauntRingChecks(yonder);
+            await FieldsRipYardChecks();
 
             // ── A WRECK FIRES NOTHING, AND PRESSES NOTHING BUT REBOARD ──
             // Both halves are the HOST's rule, so both are poked the way a guest reaches them: the
@@ -9123,6 +9241,7 @@ public partial class _Test : Node
             }
             await LaneABurnClockChecks(boss, me2);
             await LaneAOutDoorBossChecks(boss, me2);
+            await FieldsRipChecks(boss, "Lancer", boss.Type.Id == "silver_lancer" ? 57.6f : float.NaN, false);
             // ── STEALTH STOPS THE BOSS CHOOSING, NEVER HITTING, AND NEVER STOPS THE FIGHT ──
             // Its pilots were ONE list, the seen one: a solo pilot who went dark emptied it and the
             // boss stopped closing, turning and counting every clock it had until the pilot came
@@ -9882,6 +10001,8 @@ public partial class _Test : Node
                     Check(spentLaneAt > 0 && lanes.Count > 0 && Math.Abs(lanes[0].t - spentLaneAt - gun.Interval) < 0.1,
                           $"the warning after one an EMP's hold spent goes up {gun.Interval:0} s after it, round or no round ({(lanes.Count > 0 && spentLaneAt > 0 ? $"{lanes[0].t - spentLaneAt:0.00} s" : "never")})");
                     await LaneAOutDoorBaseChecks(pbase, bs);
+                    await FieldsRipChecks(pbase, "base", 89.6f, false);
+                    await FieldsRipChecks(pylons[0], "pylon", 35.2f, false);
                     bs.Stats.SetBase("pd_range", bsReach);
                     if (classWas != ShipClass.Battleship) await SetClass(classWas);
                 }
@@ -10457,6 +10578,7 @@ public partial class _Test : Node
             // scenario has a second arena visit after it, and a stay stretched to fit a whole beam
             // cycle pushed that off the end of every wait that follows. (Two of its four seconds are
             // the cruise missile's, above.)
+            FieldsHostTears(H.Boss, gship);
             await Wait(2.0);
             // the host in stasis at the moment of the kill: a pilot shot down in the fight still
             // helped win it, and gets its own crates -- only its own
@@ -10699,6 +10821,7 @@ public partial class _Test : Node
                 return cruiseGone;
             } };
             AddChild(cruiseWatch);
+            var ripWatch = FieldsGuestRipWatch();
             // THE HOST'S RAILGUN, HEARD HERE: the ahost branch fires a sniper's railgun within 600 u of
             // this ship before it leaves for the arena. The report is counted under the beam's own id
             // ("rail"), on this peer, from the flash the host sends every peer.
@@ -10707,6 +10830,7 @@ public partial class _Test : Node
                   $"arena guest: a railgun the host fired near this ship is heard here ({Sfx.Played.GetValueOrDefault("rail") - railHeard0} reports since joining)");
             await ToArena("arena guest", "mission 1");
             await GuestSeesTheFight();
+            await FieldsGuestRipChecks(ripWatch);
             if (Wan) Check(Net.Arriving(1.5) < 1.45 && Net.Arriving(1.5) >= 0.6,
                            $"over the internet, a 1.5 s warning is shown a round trip short, so it ends when this pilot is judged ({Net.Arriving(1.5):0.00} s)");
             int agHold0 = Character.GearHold.Values.Sum();

@@ -53,3 +53,24 @@ Shots.cs.txt (FieldsFrames after frame 79: 81_patrol_ring, 82_taunt_shimmer, 83_
 owed: rung 3 x2; rung 4 frames 81/82/83/83b by eye (81-83 print "shot skipped" until lanes E / A(Taunt) / B merge their slots);
 FieldsLiveRowChecks prints "NOTE unbound field row" until then -- after those merges the NOTE lines must be gone.
 next: J3.
+
+## PRE J3 -- the torn chunk: FxShape Debris/Sparks/Puffs/Scar, rows rip/rip_sparks/rip_smoke/scar, Fx.Tear
+tier: opus. intent: FxDef With/Cap/Loose/Count; FxNode Start + seeded Fx.Tumble; Fx.Tear(anchor, hook, toward) raises ONE rip (Anchor = NetId, Size = 0.16 x hull art length); companions spawned on every peer; Shots.Shards made internal (one word) for the chunk's outline. Checks FieldsRipChecks (dummy x3 / pylon / base / Lancer), host raise + guest watch (rung 5); frame 84_rip_chunk_and_scar.
+files: scripts/Fx.cs, scripts/Shots.cs (one word), tools/smoketest/SmokeTest.cs.txt, tools/screens/Shots.cs.txt
+HEAD: e2a150545fe8355018d00df806f49a6887c2aabe
+  scripts/Fx.cs 6708cbc8d3b47d6297a6fce2c09f9a1958fff814
+  scripts/Shots.cs 7e0371e1688ca3b10d069b84db62dc9d36037c12
+  tools/smoketest/SmokeTest.cs.txt 744894650335d775046565b9d75ec6744268f9f4
+  tools/screens/Shots.cs.txt 29757171a6848358671d59844dd1b7e5fb7b07d7
+
+## POST J3
+verdict: compiles (typecheck 0; verify -Quick ALL CHECKS PASSED). engine-unproven: rungs owed in the final test phase.
+files: scripts/Fx.cs (FxShape Debris/Sparks/Puffs/Scar; FxDef With/Cap/Loose/Count; rows rip 11, rip_sparks 12, rip_smoke 13, scar 14;
+Fx.Tear / HullArt / HullLength / LengthOf / Seed / U / Tumble; FxNode Start, Seed, cut-from-art UVs), scripts/Shots.cs (Shards private -> internal),
+SmokeTest.cs.txt (FieldsRipChecks, FieldsScarCapChecks, FieldsRipYardChecks after FieldsTauntRingChecks; Lancer after LaneAOutDoorBossChecks;
+base + pylon after LaneAOutDoorBaseChecks; rung 5: FieldsHostTears before the ahost 2 s wait, FieldsGuestRipWatch after cruiseWatch,
+FieldsGuestRipChecks after GuestSeesTheFight), Shots.cs.txt (84_rip_chunk_and_scar in FieldsFrames, 84b_rip_on_boss after frame 39).
+owed: rung 3 x2 (dummy x3 incl. a 10.3 s timed run, scar cap, Lancer, base, pylon); rung 5 x2 (guest draws the host's chunk);
+rung 4 frames 84 and 84b by eye -- confirm DrawPolygon's UVs (normalised 0..1 assumed) show the hull plating, not a smear.
+risk noted: a chunk and scar are children of their anchor, so a boss killed within 3 s of a tear takes its chunk with it.
+next: J4 (records).
