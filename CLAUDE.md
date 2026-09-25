@@ -24,15 +24,16 @@ Anything in the tree you did not write: report it in one line, then ADOPT or REV
 3. One clarifying question batch, each with the default you will use anyway. Then build.
 4. Never ask what the repo answers.
 
-### Fan out by default; sequence only what depends
+### Sequence only what depends -- and fan out only what pays (§2b)
 
 Two pieces of work are sequential only when one needs the other's OUTPUT -- a foundation before
 the feature that uses it, an edit before the check that proves it. Everything else starts at once.
 
 - **Independent tool calls go in one message**, never one per turn.
-- **Read-only work goes to several agents at once, each on a DIFFERENT ANGLE**: a review, an audit,
-  a cross-reference, a sweep of a subsystem you have not read. Give each a scope no other one has,
-  so their findings ADD UP. Variations cover more ground; duplicates of one job only cost tokens.
+- **Read-only work MAY go to a second agent, on a DIFFERENT ANGLE** (a review, an audit, a sweep of a
+  subsystem you have not read) when §2b says it pays: give it a scope no other one has, so the
+  findings ADD UP. Duplicates of one job only cost tokens, and most work is cheaper as one agent's
+  BATCH (§2b rule 3).
 - **Take results as they land.** Stop the stragglers once the map is complete rather than waiting
   for the slowest.
 - **An engine rung and read-only agents run together fine** -- but every agent's prompt must say
@@ -42,6 +43,68 @@ the feature that uses it, an edit before the check that proves it. Everything el
   file is a lost edit.
 - Sequential is a decision that needs a reason. If you cannot name what the second step takes from
   the first, they were concurrent and you were slow.
+
+## 2b · Tokens: spend them where they buy accuracy
+
+Measured on the 2026-09-24 session (1.52 billion tokens, 97% of it re-reading cached context): the
+conversation's own size, re-read on every turn, is the cost -- not output. Every rule below is
+explicit and binding.
+
+1. **Compact aggressively; never every turn.** Write a 10-20 line state note first (what runs,
+   what is next, open questions with defaults -- in the repo's docs/CHANGES.md Handoff or
+   docs/plans/, never only in the conversation), then compact when ANY of these is true: the
+   context passes ~200k tokens; a slice is committed; a design or decision document has landed and
+   its outcome is written down; the work turns to a different subject; a big log or report has
+   been read and its conclusion written down. Do not compact every turn: it throws away the prompt
+   cache (a cached re-read costs about a tenth of fresh input) and the detail that then has to be
+   re-read. Hold off only while waiting on a job whose purpose is not in the state note yet.
+   Claude cannot run `/compact` itself: at a trigger it writes the note and tells the owner
+   "compact now" in one line.
+2. **Fewer wake-ups.** Every background job's completion is a full turn at the full context's
+   price (37% of that session's turns were wake-ups). Chain engine rungs into ONE background
+   command that stops at the first red; start agents so they finish together; take a finished job
+   in silence when nothing is actionable, and report once, when there is something the owner must
+   see or decide.
+3. **One or two agents at a time, each on a BATCH (the default way to delegate).**
+   - At most two agents run at once, never two writers in one checkout. A wider fan-out (a
+     workflow) is only for large design, audit or research with genuinely different angles --
+     name what each extra agent sees that the others do not; cap it at 5; no critic stage for a
+     mechanical plan; one restart per agent, after reading why the first attempt failed.
+   - A batch is several related jobs, in order, chosen so they SHARE files: the big files are read
+     once per batch, not once per job (SmokeTest.cs.txt was opened 378 times in one session).
+   - Every agent keeps a LEDGER on disk (scratchpad `ledger/<batch>.md`, or `docs/plans/` when it
+     must outlive the session). The ledger is the record; the agent's reply is the ledger's path
+     plus at most 10 lines. Each job writes TWO entries:
+     - **PRE, before it touches anything:** job id, intent, the files it will touch, the commit it
+       starts from (`git rev-parse HEAD`) and each of those files' hash (`git hash-object`).
+     - **POST, when it is finished:** verdict, files changed, the checkpoint commit (a writer
+       commits after every finished job), what comes next.
+   - A PRE with no POST is an INTERRUPTED job, and the next agent redoes it before anything else:
+     it compares those files with their recorded hashes, reverts that job's half-made edits (or
+     keeps them only where they match the plan exactly), then runs the job again. Jobs are written
+     to be repeatable: exact-match edits skip what is already applied, so a redo never doubles an
+     edit, and an interruption costs at most the one job in flight.
+   - An agent stops at a job boundary with its ledger current once its own context passes ~150k;
+     the rest of the batch goes to a FRESH agent that reads the ledger, not the old transcript.
+   - The one writer may run the engine rungs for its own batch (build, rung, fix, re-run) while no
+     other engine run is going: the fix loop then happens in its small context, not the main one.
+   - The main conversation holds only ledger paths and verdicts, so compacting it loses nothing and
+     nothing is multiplied by the number of agents.
+4. **Cheap agents for mechanical work.** Applying a written plan, resolving a merge, copying files,
+   grepping, re-running a check: a smaller model at low effort. The default model is for design,
+   diagnosis and review.
+5. **Sequential beats parallel when jobs share files; resume while small.** Several agents reading
+   the same files each pay for them; one agent doing the jobs in turn reads them once. For a
+   follow-up on the same scope, RESUME the agent that did the work while its transcript is under
+   ~150k; past that, a fresh agent reading its ledger is cheaper.
+6. **Agents return a verdict and a pointer, not a report.** Detail goes to a file; the reply is at
+   most ~40 lines: pass/fail, what changed (file: one line), the number that matters, the file to
+   read for more. (Returned reports reached 89 KB and all of it entered the caller's context.)
+7. **Never paste a log.** Redirect engine and build output to a file and grep the verdict and the
+   failing lines back. A whole log in the conversation is paid for on every later turn.
+8. **Read slices, never whole big files.** SmokeTest.cs.txt, Hub.cs, PlayerShip.cs, CHANGES.md and
+   DESIGN.md: grep for the name, then read the lines around it with an offset. version/MAP.md (the
+   generated map of every script, member and RPC) answers "what exists" without opening the code.
 
 ## 3 · Build
 
