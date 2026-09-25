@@ -367,16 +367,20 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     public void SetClass(ShipClass c) { Class = c; FitClass(); }
 
-    // The pilot's purchased upgrades (Progression). The host needs them too: it resolves
-    // hull and damage. Changing them refits the ship (Restat).
+    // The pilot's purchased upgrades (Progression), and the highest level it has reached (its PEAK,
+    // what the level walls read: Unlocks). The host needs both: it resolves hull and damage, and it
+    // is held to the walls. Either one changing refits the ship (Restat). A ship no identity has
+    // reached yet is a level-1 pilot's.
     private int[] _bought = new int[Progression.All.Length];
     public int[] Bought => _bought;
-    public void SetProgress(int[] bought)
+    public int Peak { get; private set; } = 1;
+    public void SetProgress(int[] bought, int peak)
     {
         var b = new int[Progression.All.Length];
         for (int i = 0; i < b.Length && i < (bought?.Length ?? 0); i++) b[i] = Math.Clamp(bought[i], 0, Progression.MaxPerUpgrade);
-        if (b.AsSpan().SequenceEqual(_bought)) return;
-        _bought = b;
+        int pk = Progression.Claim(peak);
+        if (b.AsSpan().SequenceEqual(_bought) && pk == Peak) return;
+        _bought = b; Peak = pk;
         Restat();
     }
 

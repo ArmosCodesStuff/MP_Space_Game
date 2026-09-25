@@ -458,12 +458,15 @@ public partial class _Test : Node
         // and deletes its own along the way.
         // Ids get the role too: an id is a millisecond stamp, guest and guest2 start together, and the
         // host holds a dropped pilot's place by that id.
-        if (role != "solo") { Character.NewBlank(); Character.Id += "-" + role; Character.Name = role; Character.Save(); }
+        if (role != "solo") { Character.NewBlank(); Character.Id += "-" + role; Character.Name = role; Character.Peak = Unlocks.Top; Character.Save(); }
         // A SAVED BASE HAS TO SURVIVE ENTERING THE HUB. Hub._Ready builds the Yard, and the Yard
         // reads Character.Base* in its _Ready -- so if the character is loaded AFTER that, the base
         // comes up zero and the Yard's first-frame autosave writes the zeros back over the file.
         // Set here, asserted below, for every role.
         Character.NewBlank(); if (role != "solo") Character.Id += "-" + role;
+        // EVERY WALL OPEN (Unlocks): a pilot that has reached the top level once, at level 1, so every
+        // check that reads the pilot's level keeps its meaning. The wall checks set lower peaks themselves.
+        Character.Peak = Unlocks.Top;
         Character.Name = role + " Base"; Character.BaseCredits = 7777;
         Character.BaseStock["ore"] = 55; Character.Save();
         string baseId = Character.Id;
@@ -679,6 +682,7 @@ public partial class _Test : Node
         // this is the one place that already throws pilots away and loads the real one back at the
         // end. Run where the hub starts, its NewBlank wiped the tutorial's hint state.
         RefitChecks();
+        WallChecks();
         GearLevelChecks();
         BossScaleChecks();
         BuildChecks();
@@ -691,7 +695,7 @@ public partial class _Test : Node
         foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass))) Character.LoadoutFor(sc);
         Character.Name = "Roundtrip"; Character.Class = ShipClass.Carrier;
         Character.Main = new Color(0.11f, 0.22f, 0.33f); Character.Accent = new Color(0.44f, 0.55f, 0.66f);
-        Character.Exp = 777; Character.Level = 5; Character.Points = 3;
+        Character.Exp = 777; Character.Level = 5; Character.Peak = 7; Character.Points = 3;
         for (int i = 0; i < Character.Bought.Length; i++) Character.Bought[i] = i % (Progression.MaxPerUpgrade + 1);
         Character.Spent.Clear(); Character.Spent.AddRange(new[] { 1, 3, 1 });   // the order they were bought in
         Character.Spent.Clear(); Character.Spent.AddRange(new[] { 1, 3, 1 });   // the order they were bought in
@@ -729,7 +733,7 @@ public partial class _Test : Node
         var exercised = new[] { "Accent", "BaseCredits", "BaseInvested", "BaseLevels",
                                 "BaseStock", "BossCleared", "Bonuses", "Bought", "Class", "Exp",
                                 "GearHold", "GearLevel", "GearLocked", "HintsOff", "HintsSeen", "Id", "Level", "Loadout", "Main",
-                                "Name", "PaidKills", "Points", "Spent", "TourDone", "Unclaimed" };
+                                "Name", "PaidKills", "Peak", "Points", "Spent", "TourDone", "Unclaimed" };
         // Not state a character carries: a path, and the compiler's backing field for a property
         // that reports how the LAST save went. Named explicitly rather than filtered by a pattern,
         // so a real field that happens to look like one cannot slip through.
@@ -758,7 +762,7 @@ public partial class _Test : Node
         // ── the format-2 fields, read from a file on the player's disk: sanitised, never trusted ──
         {
             var bad = new ConfigFile();
-            bad.SetValue("id", "version", 2); bad.SetValue("id", "name", "Tampered");
+            bad.SetValue("id", "version", Game.Version); bad.SetValue("id", "name", "Tampered");
             bad.SetValue("gear_hold", "std_drive", 2); bad.SetValue("gear_hold", "chip_basic", -3);
             bad.SetValue("gear_hold", "basic_deflector", 0); bad.SetValue("gear_hold", "no_such_part", 1);
             bad.SetValue("loot", "unclaimed", "chip_basic,no_such_part,cv_elite_3");
@@ -785,7 +789,7 @@ public partial class _Test : Node
                   && Character.GearLevel.GetValueOrDefault("dd_salvo_1") == 3,
                   $"gear levels off disk: known parts only, held to 40, a renamed part's level follows it ({string.Join(",", Character.GearLevel.Select(kv => kv.Key + "=" + kv.Value))})");
             // a pilot with all of it in memory, then a file that has none of it
-            var bare = new ConfigFile(); bare.SetValue("id", "version", 2); bare.SetValue("id", "name", "Bare");
+            var bare = new ConfigFile(); bare.SetValue("id", "version", Game.Version); bare.SetValue("id", "name", "Bare");
             bare.Save($"{Character.Dir}/bare.cfg");
             Character.Unclaimed.Add("cv_elite_3"); Character.HintsSeen.Add("raid"); Character.PaidKills.Add(5);
             bool bl = Character.Load("bare");
@@ -804,7 +808,7 @@ public partial class _Test : Node
             // is not its gatherer's prefix and which a tidier generated id would have DROPPED,
             // losing a level the player paid for.
             var old = new ConfigFile();
-            old.SetValue("id", "version", 2); old.SetValue("id", "name", "OldKeys");
+            old.SetValue("id", "version", Game.Version); old.SetValue("id", "name", "OldKeys");
             old.SetValue("base", "ore", 1234.5); old.SetValue("base", "salvage", 678.25); old.SetValue("base", "credits", 4321.0);
             old.SetValue("base_levels", "miner_hold", 3); old.SetValue("base_levels", "mine_rate", 2);
             old.SetValue("base_levels", "salvage_rate", 1); old.SetValue("base_levels", "salvager_hull", 1);
@@ -838,7 +842,7 @@ public partial class _Test : Node
         // (by some route) a destroyer Seeker Rack I too; a Buster Rack II waited unclaimed.
         {
             var old = new ConfigFile();
-            old.SetValue("id", "version", 2); old.SetValue("id", "name", "Veteran"); old.SetValue("id", "class", 0);
+            old.SetValue("id", "version", Game.Version); old.SetValue("id", "name", "Veteran"); old.SetValue("id", "class", 0);
             old.SetValue("equipment", "Battleship", "bs_heavy_2,std_drive,basic_deflector,reinforced_frame,bs_salvo_3,chip_basic,chip_basic,,,");
             old.SetValue("gear_hold", "bs_seeker_1", 1); old.SetValue("gear_hold", "bs_missile_rack", 1); old.SetValue("gear_hold", "dd_seeker_1", 1);
             old.SetValue("loot", "unclaimed", "bs_buster_2,cv_elite_3");
@@ -857,7 +861,7 @@ public partial class _Test : Node
         }
 
         // ── the build stamp ──
-        Check(Character.List().First(x => x.Id == id).Version == 2 && Game.Version == 2,
+        Check(Character.List().First(x => x.Id == id).Version == 3 && Game.Version == 3,
               $"a character records the build that wrote it (version {Character.List().First(x => x.Id == id).Version}, game {Game.Version})");
 
         // A character from ANOTHER build: written by hand on disk, because the only other way to
@@ -885,6 +889,16 @@ public partial class _Test : Node
         var v1slot = Character.List().FirstOrDefault(x => x.Id == "v1old");
         Check(v1slot != null && v1slot.Version == 1 && !v1slot.Playable && !Character.Load("v1old") && Character.Id == keptId,
               $"a character from the last release (save format 1) is listed, marked unplayable and refused (format {v1slot?.Version})");
+        // FORMAT 2, the build before six chip slots and the level walls: refused the same way, with
+        // nothing migrated and nothing refunded (the owner's ruling: existing saves are disregarded).
+        var v2 = new ConfigFile();
+        v2.SetValue("id", "version", 2); v2.SetValue("id", "name", "FiveChips"); v2.SetValue("id", "class", 0);
+        v2.SetValue("progress", "level", 9);
+        v2.Save($"{Character.Dir}/v2old.cfg"); await Wait(0.05);
+        var v2slot = Character.List().FirstOrDefault(x => x.Id == "v2old");
+        Check(v2slot != null && v2slot.Version == 2 && !v2slot.Playable && !Character.Load("v2old") && Character.Id == keptId,
+              $"a character from save format 2 (five chip slots, no walls) is listed, marked unplayable and refused (format {v2slot?.Version})");
+        Character.Delete("v2old");
 
         // ...and the select screen greys it out and says why, rather than failing on PLAY.
         GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"); await Wait(0.3);
@@ -1989,6 +2003,51 @@ public partial class _Test : Node
         Character.NewBlank();
     }
 
+    // ── THE LEVEL WALLS (Unlocks): what a pilot's highest level reached opens ─────────────────────
+    // docs/plans/level_walls.md with the owner's rulings (6 chip slots on every hull, walls read the
+    // highest level ever reached). The levels are the plan's literals, never the table's own numbers;
+    // levels are never varied. Runs beside the refit's checks, on pilots it throws away.
+    void WallChecks()
+    {
+        // THE TABLE, in one place (level_walls check 2)
+        var abil = new[] { 1, 2, 3 }.Select(n => Unlocks.At(Opens.Ability, n)).ToArray();
+        var chip = Enumerable.Range(1, 6).Select(n => Unlocks.At(Opens.ChipSlot, n)).ToArray();
+        Check(abil.SequenceEqual(new[] { 1, 3, 6 }) && chip.SequenceEqual(new[] { 2, 4, 8, 10, 12, 14 }) && Unlocks.Top == 14
+              && Unlocks.At(Opens.Ability, 4) == int.MaxValue && Unlocks.At(Opens.ChipSlot, 7) == int.MaxValue,
+              $"the walls: abilities at levels 1, 3, 6; chip slots at 2, 4, 8, 10, 12, 14; every wall open at 14; never a 4th ability or a 7th slot (abilities {string.Join(",", abil)}; chips {string.Join(",", chip)}; top {Unlocks.Top})");
+        var chipsOpen = new[] { 1, 2, 4, 8, 14 }.Select(l => Unlocks.Count(Opens.ChipSlot, l)).ToArray();
+        var abOpen = new[] { 1, 2, 3, 5, 6 }.Select(l => Unlocks.Count(Opens.Ability, l)).ToArray();
+        Check(chipsOpen.SequenceEqual(new[] { 0, 1, 2, 3, 6 }) && abOpen.SequenceEqual(new[] { 1, 1, 2, 2, 3 }),
+              $"...so every hull has 0, 1, 2, 3 and 6 chip slots open at levels 1, 2, 4, 8 and 14, and 1, 1, 2, 2 and 3 abilities at 1, 2, 3, 5 and 6 ({string.Join(",", chipsOpen)}; {string.Join(",", abOpen)})");
+
+        // THE PEAK (level_walls check 8, the pilot's half): a level up raises it, a refit never lowers
+        // it, and it survives a save and a load. Three pilots: into ability 3, into chip slot 6, into ability 2.
+        foreach (int from in new[] { 5, 13, 2 })
+        {
+            Character.NewBlank(); Character.Level = from; Character.Peak = from;
+            Progression.AddExp(1000);                                   // saves
+            int grew = Character.Peak;
+            Progression.Refit();                                        // saves
+            string pid = Character.Id; int refitTo = Character.Level;
+            Character.NewBlank(); bool back = Character.Load(pid);
+            Check(grew == from + 1 && refitTo == from && back && Character.Level == from && Character.Peak == from + 1,
+                  $"a pilot at level {from} levels up to {from + 1}, refits back to {from}, and its highest level reached stays {from + 1} through a save and a load (peak {grew} after the level; level {Character.Level}, peak {Character.Peak} loaded)");
+            Character.Delete(pid);
+        }
+        // A FILE WITHOUT THE KEY reads its level, and so does one whose peak is under its level
+        foreach (var (level, peak, want) in new[] { (4, -1, 4), (9, 2, 9), (3, 12, 12) })
+        {
+            var f = new ConfigFile(); f.SetValue("id", "version", Game.Version); f.SetValue("id", "name", "PeakFile");
+            f.SetValue("progress", "level", level); if (peak >= 0) f.SetValue("progress", "peak", peak);
+            f.Save($"{Character.Dir}/peakfile.cfg");
+            bool ok = Character.Load("peakfile");
+            Check(ok && Character.Peak == want && Character.Level == level,
+                  $"a file at level {level} {(peak < 0 ? "with no peak" : $"with peak {peak}")} loads with peak {want} ({Character.Peak})");
+            Character.Delete("peakfile");
+        }
+        Character.NewBlank();
+    }
+
     async Task Solo()
     {
         Check(H != null, "hub loaded");
@@ -2252,7 +2311,7 @@ public partial class _Test : Node
                 typeof(Hub).GetMethod("NetShipState", BindingFlags.NonPublic | BindingFlags.Instance)
                            .Invoke(loose, new object[] { 5, 0f, 0f, 0f, 0f, 0f, 0f, 0f, false, false, 0f, 0f, 0f, false });
                 typeof(Hub).GetMethod("NetIdentity", BindingFlags.NonPublic | BindingFlags.Instance)
-                           .Invoke(loose, new object[] { 5, "X", Colors.White, Colors.White, 0, new int[0], 1, new string[0], new string[0], new int[0], "x" });
+                           .Invoke(loose, new object[] { 5, "X", Colors.White, Colors.White, 0, new int[0], 1, 1, new string[0], new string[0], new int[0], "x" });
                 dropped &= !Net.FromPlayer(loose, out int who) && who == 0;
             }
             catch (Exception) { dropped = false; }
@@ -8756,11 +8815,11 @@ public partial class _Test : Node
                   $"no UPnP router: LAN hosting stands, and the status explains the fix");
             Check(Router.IsShared("100.72.1.5") && Router.IsShared("192.168.1.20") && !Router.IsShared("81.2.3.4"),
                   "carrier-grade and private addresses are recognised as unreachable from outside");
-            // THE BUILD HANDSHAKE. The save format is versioned (2, as a literal: a check that reads
+            // THE BUILD HANDSHAKE. The save format is versioned (3, as a literal: a check that reads
             // the number it tests cannot catch the number being wrong); a SESSION is matched on the
             // build's fingerprint. The refusal is proved on a real connection by the third player,
             // who first knocks as another build: exactly one refusal here, and no ship for it.
-            Check(Game.Version == 2 && Net.Accepts(Net.Protocol) && !Net.Accepts(Net.Protocol ^ 1),
+            Check(Game.Version == 3 && Net.Accepts(Net.Protocol) && !Net.Accepts(Net.Protocol ^ 1),
                   $"a session admits this build and refuses any other (save format {Game.Version}, build {Net.Protocol:x8})");
             Check(refusals == 1, $"the host refused the one peer that knocked as another build ({refusals})");
             var ships = Nodes<PlayerShip>().ToList();
@@ -8824,6 +8883,10 @@ public partial class _Test : Node
             var g = ships.FirstOrDefault(s => s.Pilot == "Guesty");
             Check(g != null && g.Name == PlayerShip.NodeName(g.OwnerId), "guest ship named by its id");
             Check(g != null && g.Pilot == "Guesty" && g.Class == ShipClass.Carrier && g.Main == new Color(1, 0, 0), $"guest identity reached host ({g?.Pilot}/{g?.Class}/{g?.Main})");
+            // THE GUEST'S PEAK, NOT ITS LEVEL: every role's pilot is level 1 with every wall open (peak
+            // 14), and the host's copy of its ship is held to the peak it announced (Unlocks).
+            Check(g != null && g.Peak == 14 && Net.I.Players.TryGetValue(g.OwnerId, out var gPeakInfo) && gPeakInfo.Peak == 14 && gPeakInfo.Level == 1,
+                  $"a guest's highest level reached comes with its identity: the host's copy of its ship reads peak 14 at level 1 (peak {g?.Peak})");
             Check(g != null && g.Loadout[0] == "cv_swarm_3" && g.WingCount(WingKind.Fighter) == 9 && g.WingCount(WingKind.Bomber) == 2,
                   $"the guest's dropped hangar reached the host: its carrier flies 9 fighters and 2 bombers here ({g?.WingCount(WingKind.Fighter)} / {g?.WingCount(WingKind.Bomber)})");
             // ITS PILOT'S LEVELS, NOT THIS HOST'S: the guest levelled its Racing Drive (+25% top speed)

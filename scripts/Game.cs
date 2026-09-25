@@ -14,7 +14,7 @@ using Godot;
 // or anything a save cannot notice.
 public static class Game
 {
-    public const int Version = 2;
+    public const int Version = 3;
 
     // WHICH BUILD THIS IS, for a bug report to name. Read once out of the BUILD.txt a release
     // ships beside the executable (tools\pack.ps1 writes it); "dev" in the editor and in every

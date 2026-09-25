@@ -790,13 +790,13 @@ public partial class Hub : Node2D
         if (s.OwnerId == Net.LocalId)
         {
             s.SetIdentity(Character.Name, Character.Main, Character.Accent, Character.Class);
-            s.SetProgress(Character.Bought);
+            s.SetProgress(Character.Bought, Character.Peak);
             s.SetEquipment(Character.LoadoutFor(Character.Class), Character.GearLevel);
         }
         else if (Net.I != null && Net.I.Players.TryGetValue(s.OwnerId, out var p) && p.HasIdentity)
         {
             s.SetIdentity(p.Name, p.Main, p.Accent, p.Class);
-            s.SetProgress(p.Bought);
+            s.SetProgress(p.Bought, p.Peak);
             s.SetEquipment(p.Equip, p.GearLevel);
         }
     }
@@ -806,14 +806,14 @@ public partial class Hub : Node2D
         if (!Net.IsOnline) return;
         // THE LEVELS GO WITH THE GEAR, as two lists in step (one dictionary's keys and values, which
         // enumerate in the same order): every peer lifts this pilot's parts by this pilot's levels.
-        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level,
+        var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level, Character.Peak,
                                    Character.LoadoutFor(Character.Class), Character.GearLevel.Keys.ToArray(), Character.GearLevel.Values.ToArray(), Character.Id };
         if (toPeer == 0) Rpc(nameof(NetIdentity), args);
         else             RpcId(toPeer, nameof(NetIdentity), args);
     }
 
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, string[] equip,
+    private void NetIdentity(int peer, string name, Color main, Color accent, int cls, int[] bought, int level, int peak, string[] equip,
                              string[] gearIds, int[] gearLevels, string characterId)
     {
         // a peer may only describe itself
@@ -843,6 +843,7 @@ public partial class Hub : Node2D
         // peer's copy of its ship is lifted by. Never this host's -- those are the host's pilot's.
         p.GearLevel = Equipment.SanitizeLevels((gearIds ?? System.Array.Empty<string>()).Zip(gearLevels ?? System.Array.Empty<int>()));
         p.Level = System.Math.Max(1, level);                    // a claim; what it may SPEND is capped above
+        p.Peak = Progression.Claim(System.Math.Max(peak, level));   // ...and what it OPENS (Unlocks), by the same cap
         if (_ships.TryGetValue(peer, out var s) && IsInstanceValid(s)) ApplyIdentity(s);
         TryRestoreHold(peer);
     }

@@ -467,6 +467,28 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Level walls, job 1: the unlock table, the pilot's peak, save format 3 (2026-09-25, lane C, `wt/walls`)
+
+**`scripts/Unlocks.cs` is the one table of what a pilot's level opens** (docs/plans/level_walls.md with
+the owner's rulings): ability 1 at level 1, chip slot 1 at 2, ability 2 at 3, chip slot 2 at 4,
+ability 3 at 6, chip slots 3-6 at 8, 10, 12 and 14 (`Unlocks.All`, queried by `At`, `Count`, `Top`).
+**Walls read `Character.Peak`**, the highest level a pilot has ever reached: saved as
+`[progress] peak`, loaded as max(peak, level), raised by `AddExp`, never lowered by a refit. The
+identity carries it after the level; the host takes it through `Progression.Claim` (1-100, the cap a
+claim's spending already had) and hands it to the ship (`PlayerShip.SetProgress(bought, peak)`,
+`PlayerShip.Peak`). **`Game.Version` is 3**: format 2 files are listed greyed out and refused, with
+nothing migrated or refunded (owner's ruling). Nothing reads the walls yet: chip slots (job 2) and
+abilities (job 3) do.
+
+**Checks:** `WallChecks` (new, rung 3): the table against the plan's literals; a level up, a refit and
+a reload from levels 5, 13 and 2 keep the peak; files with no peak / a peak under the level / above it.
+Rewritten: the save round trip and its field inventory (`Peak`), the build stamp (3), the handshake's
+literal (3), fixtures written as this build's format, a format-2 file refused. Rung 5 (new): the host's
+copy of a guest reads peak 14 at level 1. The harness roles and both Shots pilots fly with every wall
+open (`Peak = Unlocks.Top`, level 1).
+
+**Known broken:** none known; compiles (rung 1-2), rungs 3 and 5 not yet run.
+
 ### verify's text step skips a binary by what it holds, not by its extension (2026-09-24, in the WarShips_Version_L fork)
 
 The text step skipped `.png`, `.ogg` and `.wav` by name, so the two vendored plugin DLLs (4 MB each)

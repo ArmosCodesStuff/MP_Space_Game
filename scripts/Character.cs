@@ -34,6 +34,9 @@ public static class Character
     public static readonly Dictionary<string, double> Bonuses = new();
     // pilot progression (see Progression)
     public static int Exp, Level = 1, Points;
+    // THE HIGHEST LEVEL THIS PILOT HAS EVER REACHED: what the level walls read (Unlocks). A refit
+    // takes a level off and never this, so it can never lock again what a pilot had opened.
+    public static int Peak = 1;
     public static readonly int[] Bought = new int[Progression.All.Length];
     // THE ORDER THE POINTS WERE SPENT IN, one upgrade index per purchase, oldest first. `Bought`
     // says how many of each a pilot owns and never said WHICH it bought last, so a refit could not
@@ -122,7 +125,7 @@ public static class Character
         Id = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
         (Name, Main, Accent, Class) = (Defaults.Name, Defaults.Main, Defaults.Accent, ShipClass.Battleship);
         Bonuses.Clear();
-        Exp = 0; Level = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); GearHold.Clear(); Unclaimed.Clear(); PaidKills.Clear();
+        Exp = 0; Level = 1; Peak = 1; Points = 0; Array.Clear(Bought); BossCleared.Clear(); Loadout.Clear(); GearHold.Clear(); Unclaimed.Clear(); PaidKills.Clear();
         GearLevel.Clear(); GearLocked.Clear();
         HintsSeen.Clear(); HintsOff = false; TourDone = false;
         BaseCredits = 0; BaseStock.Clear(); BaseLevels.Clear(); BaseInvested.Clear();
@@ -161,6 +164,7 @@ public static class Character
         c.SetValue("id", "class", (int)Class);
         foreach (var kv in Bonuses) c.SetValue("bonus", kv.Key, kv.Value);
         c.SetValue("progress", "exp", Exp); c.SetValue("progress", "level", Level); c.SetValue("progress", "points", Points);
+        c.SetValue("progress", "peak", Peak);
         for (int i = 0; i < Bought.Length; i++) c.SetValue("progress", "bought_" + Progression.All[i].Id, Bought[i]);
         // The ids, not the indices: a row added or moved in Progression.All would otherwise turn
         // one pilot's rudder into another's hull.
@@ -264,6 +268,7 @@ public static class Character
             foreach (var k in c.GetSectionKeys("base_invested"))
                 BaseInvested[k] = Num(c, "base_invested", k, 0, MaxStock);
         Exp = (int)c.GetValue("progress", "exp", 0); Level = Math.Max(1, (int)c.GetValue("progress", "level", 1));
+        Peak = Math.Max(Level, (int)c.GetValue("progress", "peak", 0));      // never below the level: a file without it reads its level
         Points = Math.Max(0, (int)c.GetValue("progress", "points", 0));
         for (int i = 0; i < Bought.Length; i++) Bought[i] = Math.Clamp((int)c.GetValue("progress", "bought_" + Progression.All[i].Id, 0), 0, Progression.MaxPerUpgrade);
         Spent.Clear();

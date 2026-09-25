@@ -64,11 +64,13 @@ public partial class _Shots : Node
         // sooner -- the sweep has to finish inside the sandbox's 300 s limit
         Engine.TimeScale = 2.0;
         Settings.TestVolume = 0.05f; Settings.ApplyVolume();   // a real window on a real machine
+        // Both have reached the top level once (Character.Peak = Unlocks.Top), so every frame shows every
+        // wall open; the frames of the walls themselves set lower peaks.
         // two characters, like the user's: a black-hulled carrier and a default battleship -- hints
         // off, so no frame changes with whichever hint happens to be up (57 shows one on purpose)
-        Character.NewBlank(); Character.Name = "Commander"; Character.Class = ShipClass.Carrier; Character.Main = new Color(0.05f, 0.05f, 0.05f); Character.HintsOff = true; Character.Save();
+        Character.NewBlank(); Character.Name = "Commander"; Character.Class = ShipClass.Carrier; Character.Main = new Color(0.05f, 0.05f, 0.05f); Character.HintsOff = true; Character.Peak = Unlocks.Top; Character.Save();
         await W(0.05);
-        Character.NewBlank(); Character.Name = "Ironside"; Character.Class = ShipClass.Battleship; Character.HintsOff = true; Character.Save();
+        Character.NewBlank(); Character.Name = "Ironside"; Character.Class = ShipClass.Battleship; Character.HintsOff = true; Character.Peak = Unlocks.Top; Character.Save();
         await W(0.5);
         await W(0.6); await Snap("0_main_menu");
         GetTree().ChangeSceneToFile("res://CharacterSelect.tscn"); await W(0.8); await Snap("1_select");
