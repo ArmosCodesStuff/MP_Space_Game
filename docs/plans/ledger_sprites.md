@@ -77,3 +77,55 @@ in this lane; the main session owes rungs 3 and 4 (listed at the end).
 - **D9** Boss tints are sprites.md Q5's literals. On the new grey (mean L 0.65) they draw at ~0.65x
   the old average colour, i.e. darker; the brighter alternative is in CHANGES Known broken.
 - Next: J3 fleet.
+
+## STOPPED after J2 (context past ~150k). J3-J5 go to a FRESH agent that reads this file.
+
+### How to continue (for the next agent; no transcript needed)
+- Tool: add rows to `$Finished` in tools/make_ships.ps1 (marks and nozzles in the NOSE-UP frame, D4),
+  run `powershell -ExecutionPolicy Bypass -File tools\make_ships.ps1 -Preview %TEMP%\p.png`, then
+  `git checkout -- battleship_hull.png carrier_player.png destroyer_hull.png turret_main.png turret_pd.png`
+  (the line-drawing trap) until J5 replaces those blocks. The finished rows rebuild byte-identical.
+- Nozzle candidates: a scratch stern-lobe finder (turn nose-up, per column the lowest alpha>0.5 px,
+  runs within ~6% of the tail) found every bell so far; confirm the count by eye on a stern crop
+  (centre lobes are often a spine or tail, not a bell: D5).
+- A table moves onto `HullArt` by deriving from it (D3): delete its own Texture/Length/Tint fields,
+  keep the row syntax, `Sprites.Fit(row)` tints, `row.DrawPlumes(ci, at, k, col, throttle, active, reach)`.
+- Harness helper `Trimmed(texture)` (SmokeTest top) is the trim test for any HullArt row.
+- J3 fleet per sprites.md §1/§2: hauler cargo_4 (Right? -- sprites.md: 90° CW, i.e. nose Left; L 200;
+  6 PodCentre + PodSize on its frames, PD (0, 8) re-seated, Extent re-measured, its 3 inline nozzles
+  -> 2 bells via DrawPlumes; Hauler.cs:301/:319 copies of Length/GetHeight go), miner drone_mining
+  (nose Left, L 40, tint 0.63/0.46/0.31, beam emitter off 0.45 L onto the scoop; harness anchor
+  `Gatherer.Length * 0.45f`), salvager drone_salvager (nose Right, L 40, tint 0.61/0.35/0.11),
+  couriers drone_economy (nose Left, NEW file courier.png, L 22 -> 30 on all 4 Lanes rows, Q6),
+  wing fighter interceptor_a (nose Left, L 17), bomber interceptor_b (nose Left, L 28.125, torpedo
+  point off 0.45 L onto the pods' front). Frames 7, 8, 12-16, 27, 28-28e, 46, 59, 59b + a NEW courier
+  close-up frame. Retire nothing from art_source (these had no drawings there).
+- J4 siege: crescent_b (none, L 560 -> 483, HW 330) and drone_sensor (none, L 220 -> 300, HW 150);
+  `EmplacementDef.Mounts` replaces `Guns`/`GunRing` (base 4 on the painted guns, pylon 1 at (0,0));
+  retire art_source/pirate_base.png + pirate_pylon.png; NEW siege frame; check "the base has 4
+  turrets on its Mounts, the pylon 1".
+- J5 player ships (lane H): 12 ClassArt rows per sprites.md §1 table, hit sizes (HalfWidth) unchanged,
+  BB mains on the 4 flanking twins (paint out the 6 painted twins' barrels: needs a Patch helper),
+  PD on the aft domes; delete the carrier/battleship/destroyer line blocks + Hull()/CutOut/Seed/
+  Dilate/Specks/Blank/Paper/Load if unused, retire their drawings, delete tools/finish_ships.ps1 and
+  art_unused/art_4x (Q9), edit CLAUDE.md §7 + docs/README.md:197-198 in the same commit. Harness
+  anchors: `EndsWith("battleship_hull.png")`, `x.Offset.Y > 150f`, `14.7f ... 36f`, `-110.06f`.
+  CAUTION: the kits lane (WarShips_wt_kits) edits ClassArt mounts (F7 arcs, F16 PD 2): touch only
+  Texture/Length-art/marks/nozzle lines, and say in the POST which mount literals moved.
+
+### OWED to the main session (nothing here has run above rung 2)
+- Rung 3 (`tools\smoketest\run.ps1 -Solo`, two seeds for the new checks):
+  - new "the title screen's foes wear their raider rows' tints, the Web on its own art"
+  - new "every raider's art is trimmed to its drawing and flames from its own two bells at the
+    stern; the gunship is drawn 136 u"
+  - new "a boss wears its tint on the pack's grey art, trimmed, its bells listed"
+  - rewritten "a boss's hull, art and approach are its row's" and "level 2 is the Drake Bastion"
+    (+ tint); the hand-made "post" and "mixed" boss rows (Texture)
+  - every existing raider/boss check (sizes, HitShare 0.4/0.3, gunship = 4 x webifier) should stay
+    green untouched: a red one there means the art or a row is wrong, not the check.
+- Rung 4 (`tools\screens\run.ps1`), read by eye: 0_main_menu (title foes + the Web's red crescent),
+  48_raiders_pinning, 49_heavy_waiting_missile, 50_base_defence, 53_raid_incoming,
+  80_every_enemy_hull (renamed from 80_new_enemies: all six rows; turrets on seats, a flame per
+  bell), 38/39 arena telegraphs, 42_boss_bar_chunk, 62_arena_loot, 63-66 Drake frames. Look for:
+  turrets on their painted seats, flames on the bells, tint brightness (raiders read BRIGHTER, D7;
+  bosses DARKER, D9).
