@@ -89,3 +89,34 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
 | after | rung | seeds | look for (PASS lines) |
 |---|---|---|---|
 | J2 slice 1a | 3 (`tools\smoketest\run.ps1 -Solo`) | two different seeds | "the burn clock:" x3 · "the railgun's charge is a hold of x0" x3 · "a DISABLED warden" x3 · "Hardened at the applier's share" x3 · rewritten: "the railgun charges with the hull held at x0", "then its railgun's whole", the ability sweep's railgun row, "a 100 blow on a HARDENED battleship" |
+
+## Handover: the first agent stopped here (context cap), at a job boundary
+
+Nothing is in flight: J1 and J2 have POSTs, the tree is clean at the J2 commit. The next agent starts
+J3 with a PRE entry. Map of what J3 touches (found by J2's greps; line numbers at 38401be):
+
+**J3 · F16, passive point defence** (v2: "PD is passive: 1 DPS per node"; D8 keeps per-hull numbers).
+- Delete: `Ab.Pd` (Abilities.cs ~119-127) and `Ab.Pd` from six class rows (Ships.cs BB 179, CV 204,
+  DD 230, FR 270, TE 306, BA 343); `Fit.AlwaysPd` (Ships.cs:42, the Warden's Fit 408); the rows
+  `pd_active` / `pd_reload` (Stats.cs:178-179); PlayerShip `PdActive/PdReady/PdLeft/PdRechargeLeft/
+  PdActiveFrac/PdRechargeFrac` (182-187), `StartPd` (~505), `Sl("pd").Left = 0` (~988);
+  `PdOnline` becomes `Stats.Def.Has(Fit.Pd)`; `ITurretHost.PdRing` and every `PdRing => 0f`
+  (Turrets.cs:74, 273-276 ring draw; Deployed/Emplacements/Hauler/Lanes) and `ClassArt.PdRing` +
+  `Spec.Ring` if the ring then has no reader; `Stats.PdDuty` (234-242, note at 316) collapses to 1.
+- Equipment.cs:367/369 `fr_endurance` / `fr_armour` move pd_active/pd_reload: restate on PD stats
+  only (e.g. pd_damage/pd_range) so every hull's Wear count (SmokeTest ~3954) is unchanged.
+- Harness rewrites (grep `Ab\.Pd|"pd"|PdActive|PdReady|PdRecharge|pd_active|pd_reload|AlwaysPd|
+  PdRing|PdDuty`): 2568, 2886-2887 (key-capture example uses "pd" on Q: pick another BB ability),
+  2942 and 3194 (ability id lists), 3125-3135 (the window/recharge block -> PD fires with nothing
+  pressed), 3535/3541, 3954 (`Fit.Pd ? 9`), 5617 (warden), 5866/5872, 5943 (sweep row), 5993-5997,
+  6137/6149, 6832/6848 (Lancer arena: "without point defence" must now kill or hold the PD another
+  way, e.g. a pilot class with no Fit.Pd or the escorts out of PD reach), 7655, and the rung-5 pair
+  8838 ("guest's PD activation reached the host") and 9172-9173 ("guest sees its PD window") ->
+  a guest's PD fires with nothing pressed, host-decided.
+- New check: from 3 varied spots, every PD hull's point defence takes a light raider in reach
+  with no key pressed, at 1 DPS a mount (pd_damage / pd_interval literal 0.5 / 0.5).
+- Rungs owed after J3: 3 on two seeds, and it adds to rung 5's first run (the guest PD check).
+
+**Then slice 2** (§8): F4 + F17 + F18; F1 (+ Add, + Ramp; the hold half is in J2); F20 (2.58, with the
+raids' EnemyDef rows Cc, Exp; MissileFlight onto the row). Specs: kits_v2.md §5 (F17 OutGuards
+table, F18 deletes the echo arm in NoteDealt), kits_v3.md §5, kits_v31.md §6.
