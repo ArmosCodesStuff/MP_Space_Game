@@ -702,18 +702,23 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // THE SENTRY THROW (F14). R with the cursor on open space throws one from the hull to the
     // cursor, clamped to deploy_reach on the same bearing; it lands deploy_flight later, and in
     // flight it is no body (nothing hits it, it fires at nothing). R with the cursor within
-    // recall_pick of one of yours recalls it: never refused, and its hull is stowed for the next
-    // throw. The host keeps the throws in flight; every peer sees the landing mark (Fx.AimZone).
+    // recall_pick of one of yours recalls it: never refused; it flies deploy_flight back (still out
+    // while it flies) and its hull is stowed for the next throw when it lands. The host keeps the
+    // throws and the recalls in flight, and their count in the deploy slot's N (the slots ride the
+    // host report, so a guest's TurretsOut reads it); every peer sees the landing mark (Fx.AimZone).
     private readonly List<(Vector2 At, double Left, double Hp, double Max)> _throws = new();
+    private readonly List<(double Left, double Hp, double Max)> _home = new();
     private readonly Stack<(double Hp, double Max)> _stowed = new();
+    private void CountFlights() => Sl("deploy").N = _throws.Count + _home.Count;
 
-    // How many of this pilot's turrets are standing or in flight.
+    // How many of this pilot's turrets are standing or in flight (thrown, or recalled and flying home).
     public int TurretsOut
     {
         get
         {
             var h = MyHub; if (h == null) return 0;
-            int n = _throws.Count; foreach (var t in h.Deployed) if (t.OwnerId == OwnerId) n++;
+            int n = Net.Sim ? _throws.Count + _home.Count : Sl("deploy").N;
+            foreach (var t in h.Deployed) if (t.OwnerId == OwnerId) n++;
             return n;
         }
     }
@@ -737,8 +742,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (!Stats.Def.Has(Fit.Deploy)) return;
         if (RecallAt(cursor) is { } mine)
         {
-            _stowed.Push((mine.Hp, mine.MaxHp));
+            _home.Add((Stats["deploy_flight"], mine.Hp, mine.MaxHp));
             MyHub?.DeployedTaken(mine);
+            CountFlights();
             return;
         }
         if (Sl("deploy").Cool > 0 || TurretsOut >= (int)Stats["deploy_max"]) return;
@@ -746,6 +752,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         double flight = Stats["deploy_flight"];
         var (hp, max) = _stowed.Count > 0 ? _stowed.Pop() : (Stats["deploy_hull"], Stats["deploy_hull"]);
         _throws.Add((at, flight, hp, max));
+        CountFlights();
         Fx.Warn(new FxRaise { Id = Fx.AimZone, At = at, To = at, Size = DeployedTurret.Radius, Time = flight });
         Sl("deploy").Cool = Cooling(Stats["deploy_cooldown"]);
     }
@@ -775,8 +782,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             MyHub?.DeployedTaken(t);
             Fx.Warn(new FxRaise { Id = Fx.AimZone, At = at, To = at, Size = DeployedTurret.Radius, Time = flight });
         }
+        CountFlights();
     }
-    // host, each frame: a throw whose flight is over lands as a turret
+    // host, each frame: a throw whose flight is over lands as a turret; a recall whose flight is
+    // over is stowed for the next throw
     private void TickThrows(double delta)
     {
         for (int i = _throws.Count - 1; i >= 0; i--)
@@ -787,6 +796,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             _throws.RemoveAt(i);
             MyHub?.Drop(this, th.At, th.Hp, th.Max);
         }
+        for (int i = _home.Count - 1; i >= 0; i--)
+        {
+            var hm = _home[i];
+            hm.Left -= delta;
+            if (hm.Left > 0) { _home[i] = hm; continue; }
+            _home.RemoveAt(i);
+            _stowed.Push((hm.Hp, hm.Max));
+        }
+        CountFlights();
     }
 
     // The bubble is a POOL IN THE WORLD, not a flag on one hull: it covers whoever is inside it
@@ -1109,7 +1127,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Sl("buster").Cool > 0) return;
         Sl("buster").Cool = Cooling(Stats["buster_cooldown"]);
         var from = _mains.Count > 0 ? _mains[0].GlobalPosition : Position;
-        var off = AimPoint - from;
+        var off = Sl("buster").At - from;
         var dir = off.LengthSquared() > 1f ? off.Normalized() : Vector2.Up.Rotated(Rotation);
         Combat.Fire(Shots.Buster, from + dir * Spec(false).Barrel, dir, (float)Stats["buster_speed"], (float)Stats["buster_range"],
                     Stats["buster_damage"], source: this, hitSource: "buster", size: 1.8f);
@@ -1964,7 +1982,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         var def = Abilities.Find(Class, id);
         if (def?.Lays is not { } row || !Net.Sim || MyHub is not { } hub || !Spend(def)) return;
-        var (at, rot) = Zones.Spot(row, Position, Rotation, MyArt.Length * 0.5f, AimPoint);
+        var (at, rot) = Zones.Spot(row, Position, Rotation, MyArt.Length * 0.5f, def.TakesPoint ? Sl(id).At : AimPoint);
         Zones.Lay(hub, row, at, rot, this);
     }
 

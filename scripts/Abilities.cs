@@ -453,9 +453,9 @@ public static class Ab
     // ── the freighters ───────────────────────────────────────────────────────
     public static readonly AbilityDef Deploy = new()
     {
-        Weapon = true, Id = "deploy", Name = "Sentry", Short = "SENTRY", Default = Key.R,
+        Weapon = true, Id = "deploy", Name = "Sentry", Short = "SENTRY", Default = Key.R, TakesPoint = true,
         Blurb = "Throws a sentry to the cursor, up to 600 u; it lands 0.8 s later and shoots what comes near. R with the cursor on one of yours recalls it.",
-        Press = (s, _) => s.DeployTurret(s.AimPoint),
+        Press = (s, _) => s.DeployTurret(s.Sl("deploy").At),
         // a recall is never refused
         Refuse = (s, _) => s.RecallAt(s.AimPoint) != null ? null
                          : s.TurretsOut >= (int)s.Stats["deploy_max"] ? "ALL OUT"
@@ -539,7 +539,7 @@ public static class Ab
 
     public static readonly AbilityDef Buster = new()
     {
-        Id = "buster", Name = "Bunker buster", Short = "BUSTER", Default = Key.F,
+        Id = "buster", Name = "Bunker buster", Short = "BUSTER", Default = Key.F, TakesPoint = true,
         Blurb = "One slow heavy round at the cursor that stops on the first thing it meets: double on a boss or a structure, and a quarter of that through a pylon's shield.",
         Press = (s, _) => s.FireBuster(),
         Refuse = (s, _) => s.Sl("buster").Cool > 0 ? "COOLING" : null,
@@ -585,7 +585,7 @@ public static class Ab
 
     public static readonly AbilityDef Well = new()
     {
-        Id = "well", Name = "Gravity well", Short = "WELL", Default = Key.E,
+        Id = "well", Name = "Gravity well", Short = "WELL", Default = Key.E, TakesPoint = true,
         Blurb = "A well at the cursor that drags loose raiding craft into its centre -- the light ones twice as fast. Bosses, structures and anything latched stay put.",
         Lays = Zones.All[Zones.Well], Cooldown = "well_cooldown",
         Press = (s, _) => s.Lay("well"),
