@@ -10,8 +10,9 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task wxmo7btan (round 1: two merges; round 2: 17 pre-authored fixes in 5 groups, no chains, no triage; round 3 measures). A stop ->
-   relaunch with the same args (premerged: arena-stall fix1, a1-rip-dummy4 ids x4 fix0; done: items-tables + the 3 group ids; preTasks a2 from
-   docs/plans/round2_tasks.json) plus every task merged since per ledger_test.md in done; the cache replays only an unchanged PREFIX of calls.
+   relaunch with args {attempt: 4, review: [], done: [a1-items-tables, a1-arena-stall, a1-rip-dummy4, a1-shots-stale-cam, a1-warp-2frames,
+   a1-heavy-target + every task merged since per ledger_test.md], preTasks: {a2: docs/plans/round2_tasks.json}} (no premerged: a merged lane
+   re-merged costs a Haiku refusal + a Sonnet run); the cache replays only an unchanged PREFIX of calls.
 2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
 
 ## Owner questions (one line each, with its default): none open (today's rulings: README, Agents).
