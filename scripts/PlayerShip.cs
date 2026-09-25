@@ -1401,7 +1401,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         sl.Cool = Cooling(Stats[h.Cooldown]);
     }
     // THE HOST'S WATCH on a line that holds, every frame: the anchor or the craft gone, or the anchor warped, ends it with
-    // no rip; a web, a disable or this ship's own warp charge ends a swing WITH one (its owner has cast off already).
+    // no rip; a web, a disable or this ship's own warp charge (its own, or a guest's reported one) ends a swing WITH one
+    // (its owner has cast off already).
     private void HookWatch()
     {
         foreach (var def in Abilities.For(Class))
@@ -1414,7 +1415,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             if (!Targeting.Immovable.Hits(t)) continue;                       // a tow runs by Towing.Step
             if (t.Position.DistanceTo(sl.At) > Drives.SnapAt) { CastOffHook(def.Id, rip: false); continue; }
             sl.At = t.Position;
-            if (Pinned || Disabled || Charging) CastOffHook(def.Id, rip: true);
+            if (Pinned || Disabled || Charging || _drive.Remote) CastOffHook(def.Id, rip: true);
         }
     }
     // THE RIP: the chunk's look raised FIRST (Fx.Tear finds the anchor among the living), then the hit through the

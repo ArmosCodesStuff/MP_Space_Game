@@ -6880,6 +6880,23 @@ public partial class _Test : Node
                   $"gunships refused: a lone pick {far.Position.DistanceTo(s.Position):0} u off -- {outSaid} (OUT OF RANGE), {outSent} sent; nothing picked or selected -- {noneSaid} (NO TARGET); nothing spent");
             far.TakeDamage(1e12);
         }
+        {   // NO PICK BUT A SELECTED TARGET (carrier.md E: "else the selected one"): two craft on its 240 u circle
+            var at = VaryNear(yonder, 300f);
+            s.Position = at; s.Velocity = Vector2.Zero; s.Sl("gunships").Cool = 0; s.Sl("gunships").Left = 0;
+            await Frame();
+            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(800f, 2600f);
+            var sel = Held(spot);
+            await Frame();
+            H.ClearSelection(); H.SelectTarget(sel);
+            s.UseAbility("gunships", sel.NetId, System.Array.Empty<int>());
+            double tp = s.Clock;
+            while (s.Clock < tp + 3.0) { s.Position = at; s.Velocity = Vector2.Zero; sel.Position = spot; await Frame(); }
+            int on = Gs().Count(w => Mathf.Abs(w.Position.DistanceTo(sel.Position) - 240f) <= 25f);
+            Check(Gs().Count == 2 && on == 2 && Math.Abs(s.Sl("gunships").Cool - 25 + 3) < 0.3,
+                  $"gunships with no pick but a selected target {sel.Position.DistanceTo(at):0} u off: {Gs().Count} craft (2), {on} on its 240 u circle (2); cooling {s.Sl("gunships").Cool:0.0} (22 after 3 s)");
+            sel.TakeDamage(1e12); H.ClearSelection();
+            foreach (var w in Gs()) w.SendOut(null, s.Clock);
+        }
     }
 
     // ── SLICE 6a: THE GUNSHIPS' FIRE (W5: 2.5 a shot every 0.25 s = 10 DPS each, two a pick = 20 DPS) and the leash at the
@@ -6992,6 +7009,54 @@ public partial class _Test : Node
             }
         }
         finally { s.Stats.SetBase("pd_range", was); }
+    }
+
+    // ── SLICE 6a: THE PATROL THROUGH A WARP (carrier.md Identity: "the patrol is leashed to the carrier and flies back
+    // after a jump (~7 s from 2400 u)"). Three varied runs (VaryNear spot, VaryAngle heading): Q, three patrol craft
+    // circling; V held until the charge has run 3.6-3.95 s (2080-2360 u, inside the 2400 u safe ring: no disable) and
+    // let go; from the frame the carrier is 1500 u from where it was, within 9.0 s by its clock all three are back within
+    // 340 u (the 300 u circle + 40) of its NEW position and stay 0.5 s, none Done, the Supercarrier still up.
+    async Task LaneA6aSuperWarpChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Carrier);
+        var s = Me;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        List<Wing> Ps() => Nodes<Wing>().Where(w => w.Carrier == s && w.Kind == WingKind.Patrol && !w.Done).ToList();
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float head = VaryAngle();
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = head; }
+            s.Sl("super").Left = 0; s.Sl("super").Cool = 0; s.Sl("warp").Cool = 0; s.Statuses.Clear(Status.Disabled);
+            H.ClearSelection();
+            Hold(); await Wait(0.2); Hold();
+            s.UseAbility("super", 0);
+            double c0 = s.Clock;
+            while (s.Clock < c0 + 12 && Ps().Count(w => w.FighterPhase == "Circle") < 3) { Hold(); await Frame(); }
+            int circling = Ps().Count(w => w.FighterPhase == "Circle");
+            Hold();
+            double held = Vary(3.6f, 3.95f);
+            var (reach, _, _) = await WarpHold(s, held, () => { s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = head; }, driver: true);
+            double j0 = s.Clock;
+            while (s.Clock < j0 + 2 && s.Position.DistanceTo(at) <= 1500f) await Frame();
+            var landed = s.Position; double t0 = s.Clock, back = -1, onSince = -1;
+            bool disabled = s.Statuses.Has(Status.Disabled);
+            while (s.Clock < t0 + 9.5 && back < 0)
+            {
+                s.Position = landed; s.Velocity = Vector2.Zero; await Frame();
+                bool on = Ps().Count == 3 && Ps().All(w => w.Position.DistanceTo(s.Position) <= 300f + 40f);
+                if (!on) onSince = -1;
+                else if (onSince < 0) onSince = s.Clock;
+                else if (s.Clock - onSince >= 0.5) back = onSince - t0;
+            }
+            int n = Ps().Count; double up = s.Sl("super").Left;
+            Check(circling == 3 && landed.DistanceTo(at) > 1500f && !disabled && back >= 0 && back <= 9.0 && n == 3 && up > 0,
+                  $"patrol through a warp run {run}: {circling} circling (3); charged {held:0.00} s, reach {reach:0} u, landed {landed.DistanceTo(at):0} u off (> 1500), disabled {disabled} (False); "
+                  + $"all 3 back on the 300 u circle round the new spot {back:0.00} s on (<= 9.0), {n} craft (3), the Supercarrier up {up:0.0} s (> 0)");
+            foreach (var w in Ps()) w.SendOut(null, s.Clock);
+            s.Sl("super").Left = 0; s.Sl("super").Cool = 0; s.Sl("warp").Cool = 0; s.Statuses.Clear(Status.Disabled);
+            await Wait(0.5);
+        }
     }
 
     // ── SLICE 6a: THE PATROL TAKES MISSILES (kits_v31 §3.2 and §7: "CV patrol vs BB CIWS vs FR sentries vs PD -- all four
@@ -7213,8 +7278,9 @@ public partial class _Test : Node
             var ls = Lances();
             var l = ls.FirstOrDefault();
             var p0 = l?.GlobalPosition ?? Vector2.Zero;
+            double t0 = s.Clock;                                              // the speed timed by the clock, not by frames
             for (int i = 0; i < 10; i++) { Hold(); tgt.Position = spot; await Frame(); }
-            float spd = l != null && GodotObject.IsInstanceValid(l) ? (l.GlobalPosition - p0).Length() * 6f : 0f;
+            float spd = l != null && GodotObject.IsInstanceValid(l) && s.Clock > t0 ? (float)((l.GlobalPosition - p0).Length() / (s.Clock - t0)) : 0f;
             double cool = s.Sl("longlance").Cool;
             string refused = Abilities.Find(ShipClass.Destroyer, "longlance").Refuse(s, null);
             s.UseAbility("longlance", 0); await Frame(); await Frame();
@@ -9493,6 +9559,43 @@ public partial class _Test : Node
               + $"with Space on it the host's chevron is drawn on it here ({marks}, want 1)");
     }
 
+    // ── SLICE 6a, RUNG 5: A GUEST'S GRAPNEL, ITS HOST HALF (kits_v31 §8: "the Grapnel rip (host damage, the chunk on a
+    // guest)"). Started with the suppress watch; the guest destroyer (re-read every frame) hooks the practice dummy
+    // (LaneA6aGrapnelGuestChecks): its slot up here on the dummy's id; when that slot drops (the guest's E cast-off) the
+    // dummy has taken 10 HERE (the flat; a dummy has no hull to share) and the guest's own tally credits "grapnel" >= 10.
+    // The meter restarts after 5 s idle: a rip that restarts it reads its whole total.
+    sealed class LaneA6aGrapnelSeen { public bool Hooked, Done; public double Before, Credit0, Took = double.NaN, Credit = double.NaN; }
+    LateSampler LaneA6aGrapnelHostWatch(LaneA6aGrapnelSeen seen)
+    {
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (seen.Done || H == null || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.Destroyer } g) return seen.Done;
+            var dm = H.GetNodeOrNull<TargetDummy>("TargetDummy1");
+            if (dm == null) return false;
+            var sl = g.Sl("grapnel");
+            if (!seen.Hooked)
+            {
+                if (sl.Left <= 0 || sl.N != dm.NetId) return false;
+                seen.Hooked = true; seen.Before = dm.Total; seen.Credit0 = g.DealtBy.GetValueOrDefault("grapnel");
+                return false;
+            }
+            if (sl.Left > 0) return false;
+            seen.Took = dm.Total >= seen.Before ? dm.Total - seen.Before : dm.Total;
+            seen.Credit = g.DealtBy.GetValueOrDefault("grapnel") - seen.Credit0;
+            seen.Done = true;
+            return true;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6aGrapnelHostChecks(LateSampler watch, LaneA6aGrapnelSeen seen)
+    {
+        await RealTime(() => seen.Done, Wan ? 120 : 90);
+        watch.QueueFree();
+        Check(seen.Hooked && Math.Abs(seen.Took - 10) < 1e-6 && seen.Credit >= 10 - 1e-6,
+              $"arena host: the guest's grapnel on the dummy, hooked here ({seen.Hooked}), cast off -- the dummy took {seen.Took:0.###} here (10), credited to the guest's \"grapnel\" {seen.Credit:0.###} (>= 10)");
+    }
+
     // ── SLICE 6a, RUNG 5: A GUEST'S GRAPNEL (kits_v2 / v3 Rung 5: "a guest's swing is drawn on the host"; kits_v31 §8's
     // second-run list: "the Grapnel rip (host damage, the chunk on a guest)"). The guest, a destroyer, stands 400-650 u off
     // the practice dummy at a varied bearing and presses E with it selected: its own pull begins at once and the host's
@@ -9533,6 +9636,31 @@ public partial class _Test : Node
               && cool > 14.5 && cool <= 16.0 + 1e-6 && said == "COOLING",
               $"arena guest: its own E at the dummy -- its pull begun here and the host's mark on the dummy's id ({marked}); hauled to {off:0.0} u off the hull (250 +- 15), swinging {swinging}; E again casts off ({me.Helm.Ended}) and the host's torn chunk is drawn here "
               + $"({Chunks().Count - before}, cut {cut:0.0} u off the hull, within 20); cooling {cool:0.0} (16, a report late); E again {said} (COOLING)");
+        // ITS OWN WARP CHARGE RIPS (kits_v31 §3.3: "the DD's own warp ... rip"): the host's 16 s run out (the host
+        // holds the cooldown), hooked again from a fresh spot, V pressed 0.6-1.2 s into the swing -- the guest ends its
+        // move (Drive) and the host, reading the charge off its report, rips at once: the chunk here within 1.5 s of the
+        // press (the slot's own expiry is 5 s), and the host's cooldown arrives.
+        await RealTime(() => me.Sl("grapnel").Cool <= 0, Wan ? 20 : 18);
+        me.Position = d.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(400f, 650f); me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+        await Wait(Vary(0.3f, 0.6f));
+        me.Velocity = Vector2.Zero;
+        H.SelectTarget(d);
+        Key(Abilities.KeyFor(ShipClass.Destroyer, "grapnel"));
+        await RealTime(() => me.Sl("grapnel").Left > 0 && me.Sl("grapnel").N == d.NetId, Wan ? 2 : 1);
+        bool marked2 = me.Sl("grapnel").Left > 0 && me.Sl("grapnel").N == d.NetId && me.Helm.On;
+        await RealTime(() => !me.Helm.On || !me.Helm.Pulling, 3);
+        await Wait(Vary(0.6f, 1.2f));
+        bool swinging2 = me.Helm.On;
+        int before2 = Chunks().Count;
+        me.DriveHeld = true; me.PressDrive();
+        bool ripped = await RealTime(() => Chunks().Count > before2, 1.5);
+        var ended = me.Helm.Ended;
+        me.DriveHeld = false;
+        bool cooled = await RealTime(() => me.Sl("grapnel").Cool > 14.5, Wan ? 2 : 1);
+        double cool2 = me.Sl("grapnel").Cool;
+        H.ClearSelection(); me.Velocity = Vector2.Zero;
+        Check(marked2 && swinging2 && ripped && ended == HelmEnd.Drive && cooled,
+              $"arena guest: hooked again ({marked2}), swinging ({swinging2}), V pressed -- its move ended {ended} (Drive) and the host's chunk drawn here within 1.5 s ({ripped}, not at the 5 s expiry); cooling {cool2:0.0} (> 14.5)");
     }
 
     // ── SLICE 6a, RUNG 5: THE RIP IN A PARTY OF TWO (kits_v31 §3.3 Proves: "in a party of 2, the rip is 1% of the
@@ -10452,6 +10580,7 @@ public partial class _Test : Node
             for (int k = 0; k < 3; k++)
             {   // ONE, TWO, THREE picked: the host holds them, in order
                 var picks = Shuffled(k + 1);
+                dd.Sl("longlance").Cool = 0;                                  // each press past the refusal: the first set 18 s
                 dd.UseAbility("longlance", 0, picks);
                 Check(picks.Length == k + 1 && Seen().SequenceEqual(picks),
                       $"F8 picks: {k + 1} picked {Ids(picks)}, the host holds {Ids(Seen())}");
@@ -18644,6 +18773,7 @@ public partial class _Test : Node
             await Lane("LaneA6aGunshipChecks", () => LaneA6aGunshipChecks(yonder));
             await Lane("LaneA6aGunshipFireChecks", () => LaneA6aGunshipFireChecks(yonder));
             await Lane("LaneA6aSuperChecks", () => LaneA6aSuperChecks(yonder));
+            await Lane("LaneA6aSuperWarpChecks", () => LaneA6aSuperWarpChecks(yonder));
             await Lane("LaneA6aSuperMissileChecks", () => LaneA6aSuperMissileChecks(yonder));
             await Lane("LaneA6aSuperWingsChecks", () => LaneA6aSuperWingsChecks(yonder));
             await Lane("LaneA6aDirectorChecks", () => LaneA6aDirectorChecks(yonder));
@@ -22376,6 +22506,8 @@ public partial class _Test : Node
             var reloadWatch = LaneA6cReloadHostWatch(reloadSeen);           // slice 6c: ...and then fires a railgun, timing its reloads
             var suppressSeen = new LaneA6aSuppressSeen();
             var suppressWatch = LaneA6aSuppressHostWatch(suppressSeen);     // slice 6a: ...and, after its curtain, suppresses a webifier posted here
+            var grapnelSeen = new LaneA6aGrapnelSeen();
+            var grapnelWatch = LaneA6aGrapnelHostWatch(grapnelSeen);        // slice 6a: ...then hooks the dummy and casts off (the rip's damage here)
             var pepperSeen = new LaneA6dPepperSeen();
             var pepperWatch = LaneA6dPepperHostWatch(pepperSeen);           // slice 6d: ...and, after its curtain, holds a Dart's pepperbox
             var rodSeen = new LaneA6dRodSeen();
@@ -22406,6 +22538,7 @@ public partial class _Test : Node
                   && Abilities.For(ShipClass.HeavyWarrior).Length == Classes.Of(ShipClass.HeavyWarrior).Abilities.Length + 7,
                   $"arena host: hosting as a WARRIOR -- its stock 300 hull, no chips, its own rows, the drive and six open slots ({hw.MaxHp:0})");
             await Lane("LaneA6aSuppressHostChecks", () => LaneA6aSuppressHostChecks(suppressWatch, suppressSeen));  // the guest's Suppress comes before it parks as a freighter
+            await Lane("LaneA6aGrapnelHostChecks", () => LaneA6aGrapnelHostChecks(grapnelWatch, grapnelSeen));     // slice 6a: the guest's grapnel rip, its damage on the host
             await Lane("LaneA6dPepperHostChecks", () => LaneA6dPepperHostChecks(pepperWatch, pepperSeen));          // slice 6d: the guest's pepperbox, before it refits to a freighter
             await Lane("LaneA6dRodHostChecks", () => LaneA6dRodHostChecks(rodWatch, rodSeen));                  // slice 6d: the guest's rod, priced on the host
             await Lane("LaneA6dRamjetHostChecks", () => LaneA6dRamjetHostChecks(ramjetWatch, ramjetSeen));         // slice 6d: the host's own copy of the guest's ramjet
