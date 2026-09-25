@@ -108,6 +108,17 @@ Network and infrastructure
 Sprites
 - 34 sprites in `art_source/pack_2026-09-24/`; mapping in `sprites.md`; hit sizes unchanged; BB
   mains on the 4 flanking twins; enemies, bosses, fleet and siege first, player ships with their kits.
+- THE OWNER'S SPRITE PICKS (2026-09-25, the casting page; every other row as `sprites.md`):
+  Carrier `carrier_a`; the future pirate-carrier boss `carrier_b`; Wraith `fighter_unit_a`; Pod
+  `drone_sensor` (shared with the pylon); Miner `drone_salvager` (shared with the salvager); wing
+  fighter `fighter_delta`; wing bomber `fighter_g`. Unused now: `drone_mining`, `interceptor_a`,
+  `interceptor_b`, `cargo_1`, `fighter_tri_b`.
+- The BOSSES are TWICE AS BIG (2026-09-25, "2 or 3x"; 2x built, one multiplier on the boss rows): Rusty
+  L 720, Drake L 840, and their HIT SIZE scales with the art (HW 140 / 180) -- "hit sizes unchanged"
+  no longer holds for bosses. A bigger boss is easier to hit, so the numbers model's land rates move.
+- The BOSSES are RED AND BLACK (2026-09-25): the owner's swatch, mean RGB 172, 7, 2 = tint
+  (0.67, 0.03, 0.01), over the grey art so the shadows go black; value lifted only as far as a frame
+  needs to read against space.
 
 Testing (owner, standing)
 - Every change carries its check (CLAUDE.md §3). After the features: new Python scenario tools and

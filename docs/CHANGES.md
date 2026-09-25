@@ -36,12 +36,36 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
-**2026-09-24 (local session): R0 is green** -- rung 2, rung 3 on seeds 90331 and 4127, `-OneDll`,
-`-ReplyWindow` (every delay to 60 s connected: `Link.ReplyWindowS` = 30, DESIGN.md). Three harness
-faults fixed on the way (ledger J6). Owner rulings since: the Echo's Rewind goes back 8 s with hull,
-from a 0.5 s snapshot ring; no boss-hull trim for adds (docs/plans/README.md). **Next:** the bar
-(`verify.ps1 -Update`), a push to both branches, then R1 (network_webrtc.md §13), whose first edit
-adds `Link.ReplyWindowS = 30` and the permanent reply-window check.
+**2026-09-24 (local session): R0 is VERIFIED (aa1e4f9) and pushed to version-l and main.** Rung 2,
+rung 3 on seeds 90331 and 4127, `-OneDll`, `-ReplyWindow` (every delay to 60 s connected:
+`Link.ReplyWindowS` = 30, DESIGN.md), then a green bar. Owner rulings since: the Echo's Rewind goes
+back 8 s with hull, from a 0.5 s snapshot ring; no boss-hull trim for adds (docs/plans/README.md).
+**Four lanes run in parallel** (owner, for speed), each a writer in its own worktree OUTSIDE this
+folder, compile rungs only; the main session runs every engine rung, one at a time, then merges:
+| worktree (branch) | lane | ledger |
+|---|---|---|
+| `..\WarShips_wt_net` (wt/net) | WebRTC R1: codes, STUN rows, `Link.ReplyWindowS` = 30 | `docs/plans/ledger_webrtc.md` J7+ |
+| `..\WarShips_wt_kits` (wt/kits) | kits lane A: the v2/v3/raids_v2 specs into docs/plans, slices 1-2 | `docs/plans/ledger_kits.md` |
+| `..\WarShips_wt_art` (wt/art) | sprites: enemies, bosses, fleet, siege, then the 12 hulls | `docs/plans/ledger_sprites.md` |
+| `..\WarShips_wt_walls` (wt/walls) | kits lane C: `Unlocks.cs`, 6 chip slots, walls, `Peak` | `docs/plans/ledger_walls.md` |
+Each ledger lists the engine rungs it owes. A lane whose ledger has a PRE with no POST was interrupted.
+**In flight, 2026-09-25 ~01:10** (engine tests run from a detached checkout `..\WarShips_wt_test`, one
+at a time, by the main session's scratch `rungs.ps1`):
+- **walls (lane C): all 4 jobs + 2b done (58d7d1a).** Rung 2, rung 3 x2 green; rung 5 RED once:
+  `[third] FAIL third player: nor after a restart -- the kills it was paid for are on its file (exp 650
+  -> 650, 6 parts)` (guest2 now claims level 3, D12). A 4-angle review workflow is running on
+  aa1e4f9..58d7d1a; ONE fixer (opus: unexplained) takes the rung-5 fail + the confirmed findings, then
+  rung 5 + screens (111 frames), then merge.
+- **kits (lane A):** slice 1a + J0 + F16 + 1b (606201f) green except the rewritten Disabled check's
+  own setup (timed from the input); the writer on J4 (F17) lands "job 1c" first. Next: J5-J7.
+- **net (R1):** J7-J9 + J9b (8760795) under rung 3 now. D17 cause found: `Character.Bought` (a
+  `static readonly int[]`) is hashed live by `Net.Fingerprint` -- two pilots with different upgrades
+  could refuse each other. The writer fixes it as J9c after J10; it wants the text after "parts moved
+  since the run began" from the two seam lines of the 8760795 run. Then J11 (record).
+- **art (sprites):** J1-J3b + a73d26e green (rung 3 x2, 108 frames). The writer is on J3c (the owner's
+  picks, README), J3d (bosses 2x, hit size too), J4 siege, J5 hulls.
+- The owner's casting page: https://claude.ai/artifact/G1HZfHe3ipoKdgUWy964hb (db `picks/current`).
+- New agents follow CLAUDE.md 2b.4 (lowest trusted tier, `model` set explicitly).
 
 **2026-09-25 (cloud session): WebRTC slice R0's code landed** (tested since: above).
 Ledger: `docs/plans/ledger_webrtc.md` (jobs J1-J6, decisions D1-D7, v1 of the plan is not in the repo).

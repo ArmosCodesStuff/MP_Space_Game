@@ -1359,6 +1359,9 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   "DTLS handshake failed", EOF). A guest holding an invite reaches the host before any reply is
   applied (SPIKE P2) and starts its handshake, so hanging up a pending invite does it whenever the
   timing lands. R0's pending-entry check never delivers its invite; a real guest will still print it.
+- **A worktree goes BESIDE the project folder, never inside it.** Both runners robocopy the whole
+  folder (excluding only `.godot`, `.git`, `bin`, `obj`) into the scratch project, so a worktree
+  under `.claude\` or anywhere inside would put a second copy of every script into the build.
 
 ## Smoke test
 
