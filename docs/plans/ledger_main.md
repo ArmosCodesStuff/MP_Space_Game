@@ -3,23 +3,23 @@
 Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\claude\C--Users-logan-Downloads-WarShips-Version-L\31bcb796-5d47-41e0-ad68-ba3af2cf375b\scratchpad
 (their summary.txt is UTF-16: read with powershell Get-Content). New batches write to %TEMP%\warships_rungs.
 
-## Running (BUILD PHASE COMPLETE 2026-09-25: every planned lane is merged into version-l at 1ff39a3; nothing has run in the engine)
-- fable-critique / task w2f27eojd: 3 Fable critics + a synthesis -> scratchpad/fable/REPORT.md, CLAUDE.md, process/*.md, MAP.md. When it
-  lands: report to the owner (SendUserFile REPORT.md), apply the "NOW" items (CLAUDE.md swap, test-phase.js edits), THEN launch the test phase.
-- slots proof (background PowerShell): two chains quick,solo at once from WarShips_wt_t0 / _t1 (tags tpslots_0/1). Both green = slots work;
-  a red is a rungs.ps1 / harness -Slot bug to fix before the test phase.
+## Running (TEST PHASE since 2026-09-25 12:51; process = lean CLAUDE.md bccdadd + docs/process/*.md; Fable coordinates)
+- test-prep / task w1t537izg (wf_f152cf63-f20): the harness Lane() helper (wt_prep, Opus) and 12 spec cards docs/plans/cards (wt_cards:
+  4 Sonnet writers, an Opus review, a Sonnet fix), merged by the Haiku->Sonnet->Opus chain. Both rows merged: launch test-phase.js (Next 1).
+  A row not merged: read it, one fix agent or a merge by hand, then launch.
+- watchdog: a 30-min Monitor polls tools/agents.ps1 every 10 min while Sonnet/Haiku agents run; re-arm it at each expiry.
 
 ## Next
-1. Launch Workflow({scriptPath: workflows/scripts/test-phase.js}) once the critique's NOW items are applied, and arm the watchdog
-   (agents.ps1 -Loop in the background). Its rows: audit -> rounds -> extras -> bar -> release. A stop: read the row, fix, resume with
-   args {attempt: 2}.
-2. After the release: frames to the owner (its framesForOwner), the owed one-machine / two-machine network checks (netOwed), then the
-   critique's "after this release" items.
-3. Delete each lane's worktree once merged (t0..t4 are the test phase's).
-Done: BUILD PHASE. Kits lane A slices 1-6 (6a d524c33, 6b bcab9c3, 6d 667be46, 6c ac2817d), items 669c5a3 + reconcile 1ff39a3,
-  follow-ups d9f2e82 (fingerprint tables, retarget lead, warp cooldown), drives, fields, wings, curve, raids, net2 (R2-R5), art, walls,
-  slots, net R1. Defaults the lanes took are in each ledger's "defaults" lines (6a: rip on a dummy = 10, no rip sound; 6d: Wraith numbers
-  derived from the power rows; items: 4 unpriced pairs). Backup: origin/backup/unverified.
+1. Workflow({scriptPath: workflows/scripts/test-phase.js}): rounds a (5 chains, Haiku runners, Opus triage, fixes) -> audit merge after
+   the first green -> rounds c -> extras (frames, wan, pack -Dirty) -> bar -> release. A stop: read the row, fix, relaunch with
+   resumeFromRunId and args {attempt: 2}.
+2. After the release: frames to the owner (framesForOwner), the owed one-machine / two-machine network checks (netOwed), then the
+   critique's "after this release" list (REPORT.md in scratchpad/fable; copy it to docs/plans/process_after_release.md first).
+3. Delete each lane's worktree once merged (t0..t4 belong to the test phase).
+Slots proof tpslots_0/1 at ae8ae99: two chains at once on slots 0 and 1, quick green on both, solo ran to the end on both: 42 / 45 problems,
+  the same first 12 at two seeds = deterministic reds (every warp +27 u and its overshoot pricing, broadside 343.75 of 375, the fingerprint
+  coverage check, the BB keys tab, a squad tracker on jumps, "never walled"). Tooling proven; the reds are round 1's triage.
+Build phase complete: every lane merged at 1ff39a3 (defaults in each lane ledger); backup origin/backup/unverified.
 
 ## Owner questions
 - none open. Owner 2026-09-25: Fable orchestrates everything (they switch the model menu); a Fable critique + lean CLAUDE.md proposal is
