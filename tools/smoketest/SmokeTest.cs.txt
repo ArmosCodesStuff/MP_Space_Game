@@ -17341,7 +17341,10 @@ public partial class _Test : Node
             typeof(PlayerShip).GetProperty("StrikeTarget").SetValue(ship, d3);
             typeof(PlayerShip).GetField("_strikesOut", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 2);
             int armed0 = ship.BombersReady;
-            Character.Bonuses["bomber_count"] = 1.5; ship.SetClass(ship.Class); ship = Me;   // 2 x 2.5 = 5
+            // IN SERVICE: the ship's own refit (Restat, what a part or a purchase runs), never SetClass --
+            // a class change builds the whole wing fresh, and a fresh wing is armed
+            Character.Bonuses["bomber_count"] = 1.5;                                          // 2 x 2.5 = 5
+            typeof(PlayerShip).GetMethod("Restat", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(ship, null); ship = Me;
             int armedAfter = ship.BombersReady;
             bool strikeOff = ship.StrikeTarget == null;
             await CheckBays(5);

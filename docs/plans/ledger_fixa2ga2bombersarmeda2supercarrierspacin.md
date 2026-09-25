@@ -14,3 +14,9 @@ Reproduced all four at solo@11400714819323392986 (tag ..._a2, FAIL 186): lines 4
 - a2-anchor-warp-end: mid-pull/mid-swing read `0.000 s on`, moved 0.0: the Wait (a timer, resumed after the
   frame's ships fly) then one Frame (resumed before they fly) holds no hull tick. Check timing, not HelmMoves.
 - a2-pd-release: Turret.Tick drops at Range*1.15 and Acquire skips past Range; static read finds no hold. PDDIAG run.
+
+## POST a2-bombers-armed
+
+Kind check, not code: the check refitted through `SetClass` (a class change: the wing rebuilt fresh, armed). It now
+runs the in-service refit, `PlayerShip.Restat`, as a part or purchase does; asserts the same literal "still 2 ready
+of 5". Proved solo@11400714819323392986 (tag ..._d): PASS (2 -> 2). Checks: the carrier wing block's rearm check.
