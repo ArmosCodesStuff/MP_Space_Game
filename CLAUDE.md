@@ -52,7 +52,8 @@ The cost is the context re-read on every turn and by every agent, not the output
    - sonnet: building from a written plan or ledger (a slice, a sprite re-map, a row, a named failing
      check), a read-only sweep of a subsystem.
    - opus: design, a failure nobody has explained, authority and wire work, the merge gate.
-2. **Prompts** give paths, the job, the chain, the return schema, and only the rules that bite here.
+2. **Prompts** give paths, the job, the chain, the return schema, and only the rules that bite here, plus one
+   line: an owner message that reaches the agent mid-run is for the coordinator; never stop or wait for it.
    **Returns** are a verdict and a pointer: `status` (done / stopped_context / red / blocked), `head`,
    ≤10 lines of summary, `open`. Detail goes to the ledger.
 3. **Fan-outs.** Every lane gets ONE merge-gate reviewer (opus, read-only), once. A fan-out review (≤ 5
