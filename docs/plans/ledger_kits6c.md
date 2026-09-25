@@ -403,3 +403,33 @@ Held 0), a second UseAbility weighs it (Left runs out within 60 frames, anchor_r
   gone around 0.6 s, enhanced waiting; a Warrior holding Space never shows it); NEW frame 73c_sniper_reload_spot
   (inside LaneA6cRailFrames, before 73d).
 - Next: kits6c-J8 Anchor (satisfy SniperAnchor; S7 in LaneA6cAnchorChecks).
+
+## kits6c-J8 · PRE
+- tier opus. Intent: the Anchor (D50) as a STANCE row: StanceSpec gains Release (a second press lets it go after that
+  stat's seconds, not at once) and Keeps (another ability leaves it running); Holds may be Status.None. AbilityDef gains
+  ReachStat (a running row lifts reach, Lift.Reach, PlayerShip.ReachMult; the ramp stays on speed / strafe only); the
+  rail reads rail_range x ReachMult. Sniper rows anchor_time 8 / anchor_rate 2.5 / anchor_reach 1.4 / anchor_release 0.3
+  / anchor_cooldown 12; Utility kit part sniper_anchor; Items @duration + anchor_time; Abilities {Railgun, Anchor}.
+  Old truth (6.3): weapon-rows list gains railgun, the walls kit swaps Ab.Railgun (a Weapon since J6) for Ab.Anchor.
+  Checks LaneA6cAnchorChecks (S7 included), rung 5 LaneA6cAnchorGuestChecks. HEAD 2fa13b1a702b434a44723a2ac2c8f61eee27dc64
+- scripts/Abilities.cs 81e3cee470f26833973805613ab80900fe83e16f
+- scripts/PlayerShip.cs 0c5d90edf136f69a254970532cd68cff6c000108
+- scripts/Ships.cs 9cabd4386e0c9bfdcdcbb81e34b924b1c926a3bc
+- scripts/Items.cs 522b3d7d042dc710397a399afbee4d5c634b8353
+- tools/smoketest/SmokeTest.cs.txt 2d5975e3bb2dcadab05722dc3859c8c0f59cf142
+## kits6c-J8 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: Ab.Anchor (F) = a STANCE row (StanceSpec + Release "anchor_release", Keeps, Holds None), Hold 0, RateStat anchor_rate,
+  ReachStat anchor_reach; AbilityDef.ReachStat + PlayerShip.ReachMult (Lift.Reach; the ramp now names speed / strafe);
+  FireRail reach = rail_range x ReachMult; PlayerShip.Stance cuts Left to the Release on a second press; the stance-ending
+  loop skips Keeps rows; Split only reads a stance that names Splits. Sniper rows anchor_time 8 / anchor_rate 2.5 /
+  anchor_reach 1.4 / anchor_release 0.3 / anchor_cooldown 12; kit part sniper_anchor (Utility, anchor_time); Items
+  @duration + anchor_time; Sniper Abilities {Railgun, Anchor}. SniperAnchor's three callers (LaneAHoldChecks, F24 ROOTED,
+  ANCHORED) now have their row.
+- D53 (default): anchored the hull cannot turn either (Hold 0 roots the heading, v1 "rooted"; D50).
+- Checks: NEW LaneA6cAnchorChecks (rows; 3 runs: the earlier reload keeps 3.0; W+Shift+D 2 s rooted; V ANCHORED; S7 reload
+  1.2 / spot 0.48-0.72 / charge 0.32 / perfect or missed press; reach 3500 vs 2500; release 0.3 or the 8 s cap; cooldown
+  12 + COOLING); NEW rung 5 LaneA6cAnchorGuestChecks; REWRITTEN (6.3, stale since J6) the weapon-rows list (+ railgun)
+  and the walls kit (Ab.Railgun -> Ab.Anchor, still opens at 6).
+- Owed: the Anchor kept through the flares / tether presses (J9 / J10 write it).
+- Next: kits6c-J9 Zones foundation + Tether mine.

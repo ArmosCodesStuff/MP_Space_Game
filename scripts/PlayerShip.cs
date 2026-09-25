@@ -139,7 +139,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public float FireRate => (float)Stat.Scale(Lifts(Lift.Rate));
     public float SpeedMult => (float)Stat.Scale(Lifts(Lift.Speed));
     public float StrafeMult => (float)Stat.Scale(Lifts(Lift.Strafe));
-    private enum Lift { Rate, Speed, Strafe }
+    // REACH: every running row's ReachStat, the same rule (the anchor's x1.4 on the railgun's line)
+    public float ReachMult => (float)Stat.Scale(Lifts(Lift.Reach));
+    private enum Lift { Rate, Speed, Strafe, Reach }
     private readonly List<double> _lifts = new();
     private double Lifts(Lift kind)
     {
@@ -147,12 +149,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         foreach (var def in Abilities.For(Class))
         {
             ref var sl = ref Sl(def.Id);
-            string stat = kind == Lift.Rate ? def.RateStat : kind == Lift.Speed ? def.SpeedStat : def.StrafeStat ?? def.SpeedStat;
+            string stat = kind switch { Lift.Rate => def.RateStat, Lift.Speed => def.SpeedStat, Lift.Reach => def.ReachStat, _ => def.StrafeStat ?? def.SpeedStat };
             if (stat != null && sl.Left > 0 && (def.While == null || def.While(this))) _lifts.Add(Stats[stat]);
             // a RAMP's running total is already a share (F1, D18): 1 + it reads the same as any
             // other lift's raw multiplier would, and it keeps lifting through its post-run drain,
-            // not only while Left > 0.
-            if (kind != Lift.Rate && def.Ramp != null && sl.Own > 0) _lifts.Add(1 + sl.Own);
+            // not only while Left > 0. It lifts the helm alone: speed and slide.
+            if ((kind == Lift.Speed || kind == Lift.Strafe) && def.Ramp != null && sl.Own > 0) _lifts.Add(1 + sl.Own);
         }
         return LiftShares(_lifts);
     }
@@ -611,7 +613,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (def.Stance == null && !def.Weapon && Array.IndexOf(Classes.Of(Class).Abilities, def) >= 0
             && def.Refuse?.Invoke(this, target) == null)
             foreach (var st in Abilities.For(Class))
-                if (st.Stance != null && Sl(st.Id).Left > 0) EndStance(st.Id);
+                if (st.Stance is { Keeps: false } && Sl(st.Id).Left > 0) EndStance(st.Id);
         def.Press?.Invoke(this, target);
     }
 
@@ -758,8 +760,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // THE RAILGUN'S SHOT (its row's Loose, on the host, when a charge stroke is let go on a seated
     // round): the band the charge reached (Charges.Of: rail_tap at once, ramping to the whole at full)
     // times the round in the chamber (ActiveReload.Take: x rail_perfect enhanced, drawn and heard
-    // white) of rail_damage, from the nose along the heading as far as rail_range; then the chamber
-    // is spent and reloads by itself.
+    // white) of rail_damage, from the nose along the heading as far as rail_range (x ReachMult: the
+    // anchor's x1.4); then the chamber is spent and reloads by itself.
     public void FireRail(double share)
     {
         var r = ActiveReload.Rail;
@@ -767,7 +769,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         double round = ActiveReload.Take(this, r);
         if (round > 1) line = Lines.RailEnhanced;
         var nose = Aim.Nose(this, MyArt.Length * 0.5f);
-        Lines.Strike(line, this, nose, nose + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"], Stats["rail_damage"] * mult * round);
+        Lines.Strike(line, this, nose, nose + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"] * ReachMult, Stats["rail_damage"] * mult * round);
         ActiveReload.Spent(this, r);
     }
 
@@ -1318,16 +1320,22 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     // ── a stance (AbilityDef.Stance: the prism) ─────────────────────────────
     // THE PRESS, on the host: up (its Time, its Status for that Time, no split yet), or, pressed while it
-    // runs, dropped. Its cooldown is set where it ENDS (EndStance), never here.
+    // runs, dropped -- at once, or over its Release (what is left is cut to it; a press inside the release
+    // changes nothing). Its cooldown is set where it ENDS (EndStance), never here.
     public void Stance(string id)
     {
         var st = Abilities.Find(Class, id)?.Stance;
         ref var sl = ref Sl(id);
         if (st == null) return;
-        if (sl.Left > 0) { EndStance(id); return; }
+        if (sl.Left > 0)
+        {
+            if (st.Release == null) EndStance(id);
+            else sl.Left = Math.Min(sl.Left, Stats[st.Release]);
+            return;
+        }
         if (sl.Cool > 0) return;
         sl.Left = Stats[st.Time]; sl.N = 0; sl.Own = 0;
-        _status.Apply(st.Holds, sl.Left);
+        if (st.Holds != Status.None) _status.Apply(st.Holds, sl.Left);
     }
     // IT ENDS: dropped, ended by another press, or run out (the row's Elapsed, on every peer, so every bar
     // shows the cooldown at once). The cooldown runs from here; the host lets the Status go.
@@ -1337,7 +1345,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (st == null) return;
         ref var sl = ref Sl(id);
         sl.Left = 0; sl.Cool = Cooling(Stats[st.Cooldown]);
-        if (Net.Sim) _status.Clear(st.Holds);
+        if (Net.Sim && st.Holds != Status.None) _status.Clear(st.Holds);
     }
     // THE SPLIT TICK (IPrism.Split, the host's Prism.Catch): a running stance splits at most its Splits
     // catches, Every seconds apart (a hair early is on time: a burn's own tick is the same 0.75 s); its
@@ -1349,7 +1357,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         foreach (var def in Abilities.For(Class))
         {
-            if (def.Stance is not { } st || Sl(def.Id).Left <= 0) continue;
+            if (def.Stance is not { Splits: not null } st || Sl(def.Id).Left <= 0) continue;   // a stance that splits
             ref var sl = ref Sl(def.Id);
             double into = Stats[st.Time] - sl.Left;
             if (sl.N >= (int)Stats[st.Splits] || (sl.N > 0 && into - sl.Own < Stats[st.Every] - SplitEarly)) return false;

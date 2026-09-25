@@ -383,6 +383,7 @@ public static class Classes
             Weapons = new[] { Dps.Railgun },
             Kit = new[] {
                 ItemDef.Own(GearSlot.Weapon, "heavy_railgun", "Railgun Mount", "the railgun: its round, its charge and its reload", "rail_damage"),
+                ItemDef.Own(GearSlot.Utility, "sniper_anchor", "Anchor Winch", "the anchor: how long it holds", "anchor_time"),
             },
             Rows = new StatRow[] {
                 // sniper_active_reload.md 2.1: one round, 3.0 s to reload, the spot 40-60% of it, x1.5
@@ -395,12 +396,18 @@ public static class Classes
                 new() { Group = "Railgun", Id = "rail_perfect", Label = "Perfect round",       Base = 1.5, Unit = "x", Dec = 1 },
                 new() { Group = "Railgun", Id = "rail_range",   Label = "Reach",               Base = 2500, Unit = "u", Dec = 0 },
                 new() { Group = "Railgun", Id = "rail_width",   Label = "Beam width",          Base = 14, Unit = "u", Dec = 0 },
+                // the v1 Anchor (kits_v3 3.4): up to 8 s rooted, every interval x2.5, reach x1.4, 0.3 s to weigh, 12 s
+                new() { Group = "Anchor", Id = "anchor_time",     Label = "Holds",           Base = 8, Unit = "s", Dec = 1 },
+                new() { Group = "Anchor", Id = "anchor_rate",     Label = "Charge and reload", Base = 2.5, Unit = "x", Dec = 1 },
+                new() { Group = "Anchor", Id = "anchor_reach",    Label = "Rail reach",      Base = 1.4, Unit = "x", Dec = 1 },
+                new() { Group = "Anchor", Id = "anchor_release",  Label = "Weighs in",       Base = 0.3, Unit = "s", Dec = 1 },
+                new() { Group = "Anchor", Id = "anchor_cooldown", Label = "Cooldown",        Base = 12, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://heavy_sniper_hull.png", Length = 120f, HalfWidth = 30.03f,
                 Mains = new Vector2[] { new(0.0f, -24.0f) },
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
-            Abilities = new[] { Ab.Railgun } },
+            Abilities = new[] { Ab.Railgun, Ab.Anchor } },
         new() { Id = ShipClass.HeavyWarrior, Name = "WARRIOR", Ready = true, Fit = Fit.None,
             Blurb = "Fast and close. A blade that cuts everything in front of it, a dash, a spin, and a prism stance that splits light.",
             Hint = "WARRIOR  ·  Space swings the blade",

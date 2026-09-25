@@ -84,6 +84,9 @@ public class AbilityDef
     // names one, and its SpeedStat otherwise: the boost's slide is a row of its own (surge_strafe), so
     // gear can lift the slide without the top speed (Convoy Rig) or the top speed without the slide.
     public string RateStat, SpeedStat, StrafeStat;
+    // WHILE IT RUNS, what it lifts the REACH of the ship's weapons by (the anchor's x1.4), added like every
+    // other lift (PlayerShip.ReachMult). A gun that reads it multiplies its own range row: the railgun.
+    public string ReachStat;
     public Func<PlayerShip, bool> While;
     // WHILE IT RUNS, what it HOLDS the helm to: a share taken after the lifts are summed
     // (PlayerShip.Held), so no speed lift moves a held hull. 0 roots it, heading included; 0.5
@@ -160,11 +163,15 @@ public class DashSpec
 // A STANCE: a Status held for Time (PlayerShip.Stance), dropped by a second press or by any other of the
 // class's three abilities (PlayerShip.DoAbility), its Cooldown from the moment it ends (PlayerShip.EndStance,
 // on every peer through the row's Elapsed). Split names the split tick of a prism stance: at most Splits
-// catches split in one stance, Every seconds apart (PlayerShip.Split, read by Prism.Catch). Stat ids:
+// catches split in one stance, Every seconds apart (PlayerShip.Split, read by Prism.Catch). Release names
+// how long a second press takes to let it go (the anchor's 0.3 s; none: at once), and Keeps leaves it
+// running when another of the class's abilities is pressed (the anchor keeps through the flares). Holds
+// may be Status.None: a stance whose whole effect is its row's lifts and hold. Stat ids:
 public class StanceSpec
 {
-    public string Time, Cooldown, Every, Splits;
+    public string Time, Cooldown, Every, Splits, Release;
     public Status Holds;
+    public bool Keeps;
 }
 
 // THE CATALOGUE. Every ability in the game, once. A class's row (Ships.cs) lists the ones it
@@ -348,6 +355,24 @@ public static class Ab
         Elapsed = s => ActiveReload.Seat(s, ActiveReload.Rail),
         Loose = (s, share) => s.FireRail(share),
         Show = (s, _) => ActiveReload.Slot(s, ActiveReload.Rail),
+    };
+
+    // THE ANCHOR (the Sniper's F, v1): up to 8 s rooted (a hold of x0, so the boost is refused ANCHORED),
+    // every interval x2.5 (the charge AND the reload, through Cadence), the rail's reach x1.4; F again
+    // weighs it in 0.3 s; the cooldown runs 12 s from the release. The flares and the tether keep it.
+    public static readonly AbilityDef Anchor = new()
+    {
+        Id = "anchor", Name = "Anchor", Short = "ANCHOR", Default = Key.F,
+        Blurb = "Plant the ship for up to 8 s: it cannot move or turn, but the railgun charges and reloads x2.5 and reaches x1.4. F again weighs it in 0.3 s.",
+        Stance = new StanceSpec { Time = "anchor_time", Cooldown = "anchor_cooldown", Release = "anchor_release", Holds = Status.None, Keeps = true },
+        Hold = 0, RateStat = "anchor_rate", ReachStat = "anchor_reach",
+        Press = (s, _) => s.Stance("anchor"),
+        Elapsed = s => s.EndStance("anchor"),
+        Refuse = (s, _) => s.Sl("anchor").Left <= 0 && s.Sl("anchor").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => s.Sl("anchor").Left > s.Stats["anchor_release"]
+            ? new SlotState { Line = $"ANCHORED {s.Sl("anchor").Left:0.0}s", Lit = true }
+            : s.Sl("anchor").Left > 0 ? new SlotState { Line = "WEIGHING", Lit = true }
+            : Timed(s, "anchor", "anchor_cooldown", "READY"),
     };
 
     // THE LUNGE (the Warrior's E): 420 u along the nose in 0.3 s, 40 to each body on the way, half

@@ -5694,6 +5694,162 @@ public partial class _Test : Node
         H.SetZoom(z0);
     }
 
+    // ── SLICE 6c: THE SNIPER'S ANCHOR (the v1 Anchor, kits_v3 3.4; D50), kits6c-J8 ──────────────────────────
+    // The rows once: up to 8 s, x2.5, reach x1.4, 0.3 s to weigh, 12 s; F, a hold of x0; the Sniper's ability 1.
+    // Then three varied runs (VaryNear spot, VaryAngle heading, a gunship Vary 3300-3450 u and one 2200-2400 u down
+    // the nose), all through the keys:
+    //   a reload started Vary(0.3, 1.2) s before the drop keeps its 3.0 s (seated 3.0 +- 0.05 s after its shot);
+    //   anchored, W + Shift + D held 2 s move it under 1 u and turn it under 0.3 deg, and V is refused ANCHORED;
+    //   S7: an anchored shot reloads in 1.2 s with the spot 0.48-0.72 s and a 0.32 s charge; a press at Vary 0.52-0.68 s
+    //   is PERFECT (runs 0, 1), one at Vary 0.78-0.95 s MISSED (run 2); the full charge reaches the far gunship (3500 u);
+    //   F again at a varied moment weighs it in 0.3 +- 0.05 s, still rooted inside the release (runs 0, 1), or it runs
+    //   out 8.0 +- 0.05 s after the drop (run 2); either way the cooldown reads 12.0 and F is refused COOLING;
+    //   weighed, a full charge reaches the near gunship (120) and not the far one (0: 2500 u).
+    // The flares and the tether keeping it are theirs (kits6c-J9 / J10).
+    async Task LaneA6cAnchorChecks(Vector2 yonder)
+    {
+        var st = new ShipStats(ShipClass.HeavySniper);
+        Check(st["anchor_time"] == 8 && st["anchor_rate"] == 2.5 && Math.Abs(st["anchor_reach"] - 1.4) < 1e-9 && Math.Abs(st["anchor_release"] - 0.3) < 1e-9
+              && st["anchor_cooldown"] == 12 && Ab.Anchor.Default == global::Godot.Key.F && Ab.Anchor.Hold == 0 && Ab.Anchor.Stance is { Keeps: true }
+              && Abilities.For(ShipClass.HeavySniper).Take(2).SequenceEqual(new[] { Ab.Railgun, Ab.Anchor }) && Unlocks.Nth(ShipClass.HeavySniper, 1) == Ab.Anchor
+              && Math.Abs(st["rail_range"] * st["anchor_reach"] - 3500) < 1e-6,
+              $"the Anchor's rows: {st["anchor_time"]:0} s (8), x{st["anchor_rate"]:0.0} (2.5), reach x{st["anchor_reach"]:0.0} = {st["rail_range"] * st["anchor_reach"]:0} u (3500), weighs in {st["anchor_release"]:0.0} s (0.3), cooldown {st["anchor_cooldown"]:0} s (12); F, x0; ability 1 {Unlocks.Nth(ShipClass.HeavySniper, 1)?.Name}");
+        await SetClass(ShipClass.HeavySniper);
+        var sn = Me; sn.AutopilotTo = null;
+        var key = Abilities.KeyFor(ShipClass.HeavySniper, "railgun"); var fkey = Abilities.KeyFor(ShipClass.HeavySniper, "anchor");
+        Chamber Ch() => (Chamber)sn.Sl("railgun").N;
+        bool Loading() => ActiveReload.Reloading(sn.Sl("railgun"));
+        double El() => sn.Sl("railgun").Own - sn.Sl("railgun").Left;
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            sn.Position = at; sn.Rotation = rot; sn.Velocity = Vector2.Zero;
+            sn.Sl("anchor").Left = 0; sn.Sl("anchor").Cool = 0; sn.Sl("boost").Cool = 0;
+            var spots = new[] { at + nose * Vary(3300f, 3450f) + nose.Orthogonal() * Vary(-4f, 4f), at + nose * Vary(2200f, 2400f) + nose.Orthogonal() * Vary(-4f, 4f) };
+            var foes = spots.Select(p => { var f = H.SpawnRaider(p, Enemies.Gunship); f.Hp = 1e9; return f; }).ToArray();
+            void Pin() { for (int k = 0; k < 2; k++) foes[k].Position = spots[k]; }
+            async Task Until(Func<bool> done, int cap = 600) { for (int i = 0; i < cap && !done(); i++) { Pin(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); } }
+            async Task Hold(double secs) { double t0 = sn.Clock; await Until(() => sn.Clock - t0 >= secs); }
+            double[] Hp() => foes.Select(f => f.Hp).ToArray();
+            string L(double[] a, double[] b) => $"{a[0] - b[0]:0.0} far / {a[1] - b[1]:0.0} near";
+            // the rail through its key, the gunships held on the line every frame (RailFire's stroke)
+            async Task Fire()
+            {
+                KeyUp(key); Pin(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                sn.Sl("railgun").Left = 0; sn.Sl("railgun").N = (int)Chamber.Seated; sn.ReloadView = default;
+                Pin(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                KeyDown(key); await Hold(sn.Cadence("rail_charge") + 0.1); KeyUp(key);
+                await Until(Loading, 30);
+            }
+            sn.Hp = sn.MaxHp;
+            await Hold(0.2);
+
+            // a reload started before the drop keeps its length
+            await Fire(); double shot = sn.Clock;
+            await Hold(Vary(0.3f, 1.2f));
+            await SniperAnchor(sn, true); double drop = sn.Clock; double ownThen = sn.Sl("railgun").Own;
+            // rooted: W + Shift + D, 2 s
+            var p0 = sn.Position; float r0 = sn.Rotation;
+            KeyDown(global::Godot.Key.W); KeyDown(global::Godot.Key.Shift); KeyDown(global::Godot.Key.D);
+            await Hold(2.0);
+            KeyUp(global::Godot.Key.D); KeyUp(global::Godot.Key.Shift); KeyUp(global::Godot.Key.W);
+            float moved = sn.Position.DistanceTo(p0), turned = Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(r0, sn.Rotation)));
+            Key(global::Godot.Key.V); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var vSaid = sn.FailNote("boost"); bool vRan = sn.Sl("boost").Left > 0;
+            await Until(() => !Loading());
+            double seatedAfter = sn.Clock - shot;
+            Check(Math.Abs(ownThen - 3.0) < 1e-6 && Math.Abs(seatedAfter - 3.0) < 0.05 && moved < 1f && turned < 0.3f && vSaid == "ANCHORED" && !vRan && sn.Held == 0f,
+                  $"anchor run {run} at {Mathf.RadToDeg(rot):0} deg: the reload shot before the drop keeps {ownThen:0.00} s and seats {seatedAfter:0.00} s after its shot (3.0); W + Shift + D 2 s move it {moved:0.00} u and turn it {turned:0.00} deg (none); V is refused {vSaid} (ANCHORED), boost running {vRan}");
+
+            // S7: the anchored reload, its spot and its charge; the reach
+            var hp0 = Hp();
+            await Fire();
+            await Hold(0.05);
+            var hp1 = Hp();
+            double own = sn.Sl("railgun").Own, charge = sn.Cadence("rail_charge");
+            var (open, close) = ActiveReload.Spot(sn.Stats, ActiveReload.Rail);
+            double press = run < 2 ? Vary(0.52f, 0.68f) : Vary(0.78f, 0.95f);
+            await Until(() => El() >= press || !Loading());
+            double pressedAt = El();
+            KeyDown(key); await Hold(0.05); KeyUp(key); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var verdict = Ch();
+            await Until(() => !Loading());
+            Check(Math.Abs(own - 1.2) < 1e-6 && Math.Abs(open * own - 0.48) < 1e-6 && Math.Abs(close * own - 0.72) < 1e-6 && Math.Abs(charge - 0.32) < 1e-6
+                  && verdict == (run < 2 ? Chamber.Perfect : Chamber.Missed) && Math.Abs(hp0[0] - hp1[0] - 120) < 0.5 && Math.Abs(hp0[1] - hp1[1] - 120) < 0.5,
+                  $"anchored (S7): the reload {own:0.00} s (1.2), the spot {open * own:0.00}-{close * own:0.00} s (0.48-0.72), the charge {charge:0.00} s (0.32); a press at {pressedAt:0.00} s is {verdict} ({(run < 2 ? "PERFECT" : "MISSED")}); the full charge deals {L(hp0, hp1)} (120 / 120: 3500 u)");
+
+            // the release (runs 0, 1) or the 8 s cap (run 2), then the cooldown from there
+            bool rootedInRelease = true; double took, cool;
+            if (run < 2)
+            {
+                await Hold(Vary(0f, 1.5f));
+                Key(fkey); await Until(() => sn.Sl("anchor").Left <= 0.3 + 1e-6, 10);
+                double rel = sn.Clock; bool cut = sn.Sl("anchor").Left <= 0.3 + 1e-6 && sn.Sl("anchor").Left > 0;
+                await Until(() => { rootedInRelease &= sn.Sl("anchor").Left <= 0 || sn.Held == 0f; return sn.Sl("anchor").Left <= 0; });
+                took = sn.Clock - rel; cool = sn.Sl("anchor").Cool;
+                rootedInRelease &= cut;
+            }
+            else
+            {
+                await Until(() => sn.Sl("anchor").Left <= 0, 900);
+                took = sn.Clock - drop; cool = sn.Sl("anchor").Cool;
+            }
+            Key(fkey); await Until(() => sn.FailNote("anchor") != null, 10);
+            var fSaid = sn.FailNote("anchor");
+            Check((run < 2 ? Math.Abs(took - 0.3) < 0.05 && rootedInRelease : Math.Abs(took - 8.0) < 0.05) && Math.Abs(cool - 12.0) < 0.05 && fSaid == "COOLING" && sn.Held == 1f,
+                  run < 2 ? $"F again weighs the Anchor in {took:0.00} s (0.3), rooted through it {rootedInRelease}; the cooldown {cool:0.00} s from the release (12.0); F is refused {fSaid}"
+                          : $"left alone the Anchor runs out {took:0.00} s after the drop (8.0); the cooldown {cool:0.00} s (12.0); F is refused {fSaid}");
+
+            // weighed: the rail reaches 2500 u again
+            await Until(() => ActiveReload.Seated(sn.Sl("railgun")));
+            var hp2 = Hp();
+            await Fire();
+            await Hold(0.05);
+            var hp3 = Hp();
+            Check(hp2[0] - hp3[0] == 0 && Math.Abs(hp2[1] - hp3[1] - 120) < 0.5 && Math.Abs(sn.Sl("railgun").Own - 3.0) < 1e-6,
+                  $"weighed, a full charge deals {L(hp2, hp3)} (0 past 2500 u / 120) and reloads in {sn.Sl("railgun").Own:0.00} s (3.0)");
+            foreach (var f in foes) f.TakeDamage(1e12);
+            sn.Sl("anchor").Cool = 0;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        sn.Position = yonder; sn.Velocity = Vector2.Zero;
+    }
+
+    // ── SLICE 6c, RUNG 5: A GUEST'S ANCHOR (kits_v31 §7: the boost refused ANCHORED). The guest, right after its
+    // active reload, presses F through the key: once the host's word lands on its slot its own helm is rooted --
+    // W + Shift + A or D (varied) held a varied 0.8-1.4 s move it under 1 u -- and V is refused ANCHORED; F again
+    // weighs it (the slot runs out within 1 s, the host's cooldown over 11 s on it), and W then moves it.
+    async Task LaneA6cAnchorGuestChecks()
+    {
+        await SetClass(ShipClass.HeavySniper);
+        var me = Me; me.AutopilotTo = null;
+        await RealTime(() => Math.Abs(me.MaxHp - 240) < 1e-6, Wan ? 20 : 10);
+        me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+        await Wait(0.5);
+        me.Velocity = Vector2.Zero;
+        var fkey = Abilities.KeyFor(ShipClass.HeavySniper, "anchor");
+        Key(fkey);
+        await RealTime(() => me.Sl("anchor").Left > 0, Wan ? 4 : 2);
+        bool dropped = me.Sl("anchor").Left > 0;
+        await Wait(0.1);
+        var p0 = me.Position; var side = Vary(0f, 1f) < 0.5f ? global::Godot.Key.A : global::Godot.Key.D; double secs = Vary(0.8f, 1.4f);
+        KeyDown(global::Godot.Key.W); KeyDown(global::Godot.Key.Shift); KeyDown(side);
+        await Wait(secs);
+        KeyUp(side); KeyUp(global::Godot.Key.Shift); KeyUp(global::Godot.Key.W);
+        float moved = me.Position.DistanceTo(p0);
+        Key(global::Godot.Key.V); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var vSaid = me.FailNote("boost");
+        Key(fkey);
+        await RealTime(() => me.Sl("anchor").Left <= 0, Wan ? 4 : 2);
+        await Wait(Wan ? 0.6 : 0.3);
+        double cool = me.Sl("anchor").Cool;
+        var p1 = me.Position;
+        KeyDown(global::Godot.Key.W); await Wait(0.6); KeyUp(global::Godot.Key.W);
+        float after = me.Position.DistanceTo(p1);
+        Check(dropped && moved < 1f && vSaid == "ANCHORED" && me.Sl("anchor").Left <= 0 && cool > 11.0 && after > 5f,
+              $"arena guest: its own F -- the host's Anchor on its slot ({dropped}); W + Shift + {side} {secs:0.0} s move it {moved:0.00} u (none); V refused {vSaid} (ANCHORED); F again weighs it, the host's cooldown {cool:0.0} s (12, a report late); then W moves it {after:0} u");
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -7689,11 +7845,11 @@ public partial class _Test : Node
         // skipping a weapon's own actions and the open hotkeys. The weapon rows are exactly these six (point defence is passive: no row).
         var weaponRows = typeof(Ab).GetFields(BindingFlags.Public | BindingFlags.Static)
                                    .Select(f => f.GetValue(null)).OfType<AbilityDef>().Where(a => a.Weapon).Select(a => a.Id).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        Check(weaponRows.SequenceEqual(new[] { "attack", "blade", "deploy", "firemode", "guns", "recall", "reload" }),
-              $"never walled: the guns, the Warrior's blade, fire mode, the missile's reload, the wing's attack and recall, the sentry's throw and recall ({string.Join(",", weaponRows)})");
+        Check(weaponRows.SequenceEqual(new[] { "attack", "blade", "deploy", "firemode", "guns", "railgun", "recall", "reload" }),
+              $"never walled: the guns, the Warrior's blade, the Sniper's railgun, fire mode, the missile's reload, the wing's attack and recall, the sentry's throw and recall ({string.Join(",", weaponRows)})");
         // ...and the rule, on real rows in three orders: weapon rows first, walled rows first, the two interleaved
         foreach (var (kit, want) in new[] {
-            (new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Missile, Ab.Reload, Ab.Railgun }, new[] { 1, 1, 1, 3, 1, 6 }),
+            (new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Missile, Ab.Reload, Ab.Anchor }, new[] { 1, 1, 1, 3, 1, 6 }),
             (new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Hunters, Ab.Bubble, Ab.Echo }, new[] { 1, 1, 1, 3, 6, int.MaxValue }),
             (new[] { Ab.Echo, Ab.Guns, Ab.Stealth, Ab.Deploy, Ab.Hunters, Ab.FireMode }, new[] { 1, 1, 3, 1, 6, 1 }) })
         {
@@ -11867,6 +12023,7 @@ public partial class _Test : Node
             LaneA6cReloadJudgeChecks();
             await LaneA6cReloadChecks(yonder);
             await LaneA6cReloadBarChecks(yonder);
+            await LaneA6cAnchorChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -15774,6 +15931,7 @@ public partial class _Test : Node
             await LaneA6cLungeGuestChecks();                                // slice 6c: a guest's lunge (its host half: LaneA6cLungeHostChecks)
             await LaneA6cPrismGuestChecks();                                // slice 6c: a guest's prism stance (its host half: LaneA6cPrismHostChecks)
             await LaneA6cReloadGuestChecks();                               // slice 6c: a guest's active reload (its host half: LaneA6cReloadHostChecks)
+            await LaneA6cAnchorGuestChecks();                               // slice 6c: a guest's Anchor, rooted by the host's word
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.
