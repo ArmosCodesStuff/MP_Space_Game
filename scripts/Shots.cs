@@ -57,12 +57,18 @@ public class ShotDef
     public float Fuse;
     public Tag Resists;
     public double ResistShare = 1;
+    // A COMMANDED ROUND (the Dart's Pepperbox, BoreSpec): Guided, but what it steers for is its LAUNCHER'S live
+    // cursor -- TargetId is the firing pilot's NetId and the round turns toward Combat.PlayerById(it).AimPoint,
+    // on every peer (a guest's copy reads the same replicated cursor). Once within Command of that point it flies
+    // straight for good, and straight for good if the launcher is gone. 0: an ordinary row.
+    public float Command;
 }
 
 public static class Shots
 {
     // The index IS the id on the wire (Hub.NetShot), so APPEND ONLY.
-    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Flak = 8;
+    public const int Shell = 0, Slug = 1, Scrap = 2, Torpedo = 3, Missile = 4, Seeker = 5, Cruise = 6, Reflect = 7, Flak = 8,
+                     Pepper = 9;
 
     public static readonly ShotDef[] All =
     {
@@ -95,6 +101,9 @@ public static class Shots
         // everything within 70 u of the burst takes the round; a boss x0.75
         new() { Id = "flak", AtPlayers = false, Pad = 3f, Sweep = 6f, Look = ShotLook.Bullet,
                 Fuse = 70f, Resists = Tag.Boss, ResistShare = 0.75 },
+        // THE DART'S PEPPERBOX (kits_v2's card, BoreSpec): a tracer dart off a nose rail, steered onto the pilot's
+        // live cursor, straight once within 24 u of it; the first hostile body it touches, never a missile
+        new() { Id = "pepper", AtPlayers = false, Pad = 3f, Sweep = 6f, Look = ShotLook.Bullet, Guided = true, Command = 24f },
     };
 
     public static ShotDef Of(int id) => All[id >= 0 && id < All.Length ? id : Shell];
@@ -147,7 +156,7 @@ public partial class Shot : Node2D, IHittable, ITagged
     public int? Stops;                     // the firer's own count of bodies (ShotDef.Stops); null = its row's
 
     private float _flown, _puffCd;
-    private bool _spent;
+    private bool _spent, _loose;           // _loose: a commanded round flying straight for good (ShotDef.Command)
     private double _burnt;
     private readonly List<(Vector2 p, float age)> _smoke = new();
     private readonly HashSet<IHittable> _struck = new();   // every body this one has struck: each is struck once
@@ -242,6 +251,13 @@ public partial class Shot : Node2D, IHittable, ITagged
     private Vector2? GuideTo(ShotDef d)
     {
         if (DecoyPoint is { } lure) return lure;
+        if (d.Command > 0)
+        {
+            if (!_loose && Combat.PlayerById(TargetId) is PlayerShip pilot && GlobalPosition.DistanceTo(pilot.AimPoint) > d.Command)
+                return pilot.AimPoint;
+            _loose = true;
+            return null;
+        }
         if (TargetId != 0 && (d.AtPlayers ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) is { } tgt && !Targeting.Hidden(tgt))
             return tgt.Position;
         return null;

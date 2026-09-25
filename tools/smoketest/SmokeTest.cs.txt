@@ -7426,6 +7426,279 @@ public partial class _Test : Node
 
     // ── F8 A WRECK ENDS THE MOVE: wrecked 0.1-0.4 s after an unmarked press (still, sliding, pressed inside
     // the stop), the run is off that frame, Wrecked; re-boarded, nothing flies the hull from where it lay.
+    // ── SLICE 6d, THE DART'S PEPPERBOX (kits_v2's card; numbers §8 R6). Its rows and its price on literals; then,
+    // from 3 varied situations each: 45 DPS landed on a still hostile at 300-700 u within 90° of the nose; 12 +- 1
+    // launches in 2 s; the launch = nose x 520 + the ship's own velocity after a sideways slide; a target inside 750 u
+    // is reached and one past it is not; a cursor switched mid-flight lands the dart on the new mark; a wrecked
+    // launcher's darts fly straight and end; the first body on the line takes it and a seeker is flown through; the
+    // price x1.5 on the ship at a boosted 390 u/s. The Dart's hull 200 and its weapon row never walled.
+    void LaneA6dPepperRowChecks()
+    {
+        var sh = new ShipStats(ShipClass.LightDart);
+        Check(sh["hull"] == 200 && sh["pepper_damage"] == 7.5 && Math.Abs(sh["pepper_interval"] - 1.0 / 6) < 1e-9 && sh["pepper_speed"] == 520
+              && sh["pepper_range"] == 750 && sh["pepper_turn"] == 6 && sh["pepper_cap"] == 1.5 && sh["price_top"] == 260
+              && Ab.Pepperbox.Weapon && Ab.Pepperbox.Kind == AbilityKind.Hold && Abilities.TriggerOf(ShipClass.LightDart) == Ab.Pepperbox
+              && Classes.Of(ShipClass.LightDart).Abilities[0] == Ab.Pepperbox && !Classes.Of(ShipClass.LightDart).Has(Fit.Guns),
+              $"the Dart: hull {sh["hull"]:0} (200); the pepperbox {sh["pepper_damage"]:0.0} a dart every {sh["pepper_interval"]:0.000} s, {sh["pepper_speed"]:0} u/s, {sh["pepper_range"]:0} u, {sh["pepper_turn"]:0} rad/s, up to x{sh["pepper_cap"]:0.0} from {sh["price_top"]:0}; its trigger, never walled, no turret");
+        // THE PRICE on the request's literals, and 3 varied tops between them
+        var lit = new[] { (260.0, 7.5), (325.0, 9.375), (390.0, 11.25), (450.0, 11.25) };
+        bool litOk = lit.All(p => Math.Abs(Bores.Price(7.5, p.Item1, 260, 1.5) - p.Item2) < 1e-9);
+        string seen = "";
+        bool varOk = true;
+        foreach (var (lo, hi) in new[] { (100f, 259f), (261f, 389f), (391f, 600f) })
+        {
+            double top = Vary(lo, hi), got = Bores.Price(7.5, top, 260, 1.5), want = 7.5 * Math.Clamp(top / 260, 1, 1.5);
+            varOk &= Math.Abs(got - want) < 1e-9; seen += $"{top:0}->{got:0.000}; ";
+        }
+        Check(litOk && varOk, $"a dart's price: 7.5 / 9.375 / 11.25 / 11.25 at 260 / 325 / 390 / 450 u/s; varied: {seen}");
+        // THE LAUNCH: nose x 520 + the ship's own velocity, from 3 varied headings and slides (sideways included)
+        int launchOk = 0; string ls = "";
+        for (int k = 0; k < 3; k++)
+        {
+            float rot = VaryAngle();
+            var nose = Vector2.Up.Rotated(rot); var side = new Vector2(-nose.Y, nose.X);
+            var shipV = k == 0 ? side * Vary(80f, 130f) : k == 1 ? nose * Vary(150f, 260f) : -side * Vary(40f, 120f) + nose * Vary(50f, 100f);
+            var (from, v) = Bores.Muzzle(Vector2.Zero, rot, 35f, 5f, 520f, shipV);
+            bool ok = (v - (nose * 520f + shipV)).Length() < 1e-3f && from.DistanceTo(nose * 35f + side * 5f) < 1e-3f;
+            if (ok) launchOk++;
+            ls += $"{Mathf.RadToDeg(rot):0}° slide {shipV.Length():0} -> {v.Length():0} u/s; ";
+        }
+        Check(launchOk == 3, $"a dart leaves the nose rail at 520 along the nose plus the ship's own velocity, from 3 varied slides ({ls})");
+    }
+
+    // One dart's worth of trigger: held for exactly one frame, so the bore fires once (its clock was spent).
+    async Task<Shot> LaneA6dOneDart(PlayerShip dt)
+    {
+        var before = Nodes<Shot>().Where(x => x.Kind == Shots.Pepper).ToHashSet();
+        dt.Sl("pepperbox").Own = 0;
+        dt.Trigger = true;
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        dt.Trigger = false;
+        return Nodes<Shot>().FirstOrDefault(x => x.Kind == Shots.Pepper && !before.Contains(x));
+    }
+
+    async Task LaneA6dPepperChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightDart);
+        var dt = Me; bool demo = dt.Demo; dt.Demo = true; dt.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double Landed() => dt.DealtBy.GetValueOrDefault("pepper");
+
+        // 45 DPS LANDED, timed from the first dart to land: 6 s of trigger at a still hostile 300-700 u off, within 90°
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            var off = Vector2.Up.Rotated(rot + Mathf.DegToRad(Vary(-85f, 85f)));
+            var foe = HeldI(at + off * Vary(300f, 700f), Enemies.Gunship);
+            var spot = foe.Position;
+            dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero; dt.AimPoint = spot;
+            await Frame();
+            double d0 = Landed();
+            dt.Trigger = true;
+            int launches = 0; var seenShots = new HashSet<Shot>();
+            double tFirst = -1, landed0 = 0, clock = 0;
+            for (int i = 0; i < 60 * 12 && (tFirst < 0 || clock - tFirst < 6.0); i++)
+            {
+                dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero; dt.AimPoint = foe.Position = spot;
+                await Frame();
+                clock += GetProcessDeltaTime();
+                foreach (var x in Nodes<Shot>().Where(x => x.Kind == Shots.Pepper && x.Source == dt)) if (seenShots.Add(x) && clock <= 2.0) launches++;
+                if (tFirst < 0 && Landed() > d0) { tFirst = clock; landed0 = Landed(); }
+            }
+            dt.Trigger = false;
+            // the dart that landed at tFirst is the window's first; 36 more land in the 6 s after it
+            double got = Landed() - landed0, want = 45.0 * 6.0;
+            Check(tFirst >= 0 && Math.Abs(got - want) <= want * 0.03 && launches >= 11 && launches <= 13,
+                  $"the pepperbox at a still hostile {spot.DistanceTo(at):0} u off, {Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(rot, (spot - at).Angle() + Mathf.Pi / 2))):0}° off the nose: {got:0.0} landed in the 6 s after the first ({want:0} = 45 DPS, +-3%); {launches} launches in 2 s (12 +- 1)");
+            foe.TakeDamage(1e12);
+            await Wait(0.8);
+        }
+
+        // THE LAUNCH ON THE SHIP: after a sideways slide the dart's velocity is nose x 520 + the ship's own
+        for (int run = 0; run < 3; run++)
+        {
+            float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot); var side = new Vector2(-nose.Y, nose.X);
+            var slide = side * (run == 1 ? -1f : 1f) * Vary(90f, 130f) + nose * (run == 2 ? Vary(100f, 200f) : 0f);
+            dt.Position = VaryNear(yonder, 300f); dt.Rotation = rot; dt.Velocity = slide;
+            var want = nose * 520f + slide;
+            dt.AimPoint = dt.Position + want.Normalized() * 700f;
+            var shot = await LaneA6dOneDart(dt);
+            var v = shot == null ? Vector2.Zero : shot.Dir * shot.Speed;
+            Check(shot != null && Math.Abs(v.Length() - want.Length()) <= want.Length() * 0.01f && Mathf.Abs(Mathf.AngleDifference(v.Angle(), want.Angle())) < 0.03f,
+                  $"a dart fired sliding {slide.Length():0} u/s: it leaves at {v.Length():0.0} u/s on {Mathf.RadToDeg(v.Angle()):0}° (nose x 520 + the ship's = {want.Length():0.0} on {Mathf.RadToDeg(want.Angle()):0}°)");
+            dt.Velocity = Vector2.Zero;
+            await Wait(1.6);
+        }
+
+        // ITS REACH: a hostile whose near edge is inside 750 u of the rail is struck; one past it is not
+        foreach (var (lo, hi, lands) in new[] { (690f, 735f, true), (765f, 810f, false), (700f, 740f, true) })
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero;
+            var muzzle = at + nose * (dt.MyArt.Length * 0.5f);
+            var foe = HeldI(at, Enemies.Gunship);
+            float edge = Vary(lo, hi);
+            var spot = muzzle + nose * (edge + foe.HitRadius);
+            foe.Position = spot; dt.AimPoint = spot;
+            await Frame();
+            double h0 = foe.Hp;
+            await LaneA6dOneDart(dt);
+            for (int i = 0; i < 60 * 3; i++) { dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero; foe.Position = spot; await Frame(); }
+            bool hit = foe.Hp < h0;
+            Check(hit == lands, $"a still hostile whose near edge is {edge:0} u from the rail is {(hit ? "struck" : "not reached")} ({(lands ? "inside" : "past")} 750 u)");
+            foe.TakeDamage(1e12);
+        }
+
+        // THE CURSOR SWITCHED MID-FLIGHT: aimed at A, the cursor moved onto B 0.1-0.2 s later; B takes the dart, A nothing
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            float sgn = run % 2 == 0 ? 1f : -1f;
+            var aSpot = at + nose.Rotated(sgn * Mathf.DegToRad(Vary(25f, 40f))) * Vary(380f, 460f);
+            var bSpot = at + nose.Rotated(-sgn * Mathf.DegToRad(Vary(25f, 40f))) * Vary(380f, 460f);
+            var a = HeldI(aSpot, Enemies.Gunship); var b = HeldI(bSpot, Enemies.Gunship);
+            dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero; dt.AimPoint = aSpot;
+            await Frame();
+            double a0 = a.Hp, b0 = b.Hp;
+            await LaneA6dOneDart(dt);
+            double sw = Vary(0.1f, 0.2f), t = 0;
+            for (int i = 0; i < 60 * 3; i++)
+            {
+                dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero; a.Position = aSpot; b.Position = bSpot;
+                dt.AimPoint = t < sw ? aSpot : bSpot;
+                await Frame(); t += GetProcessDeltaTime();
+            }
+            Check(Math.Abs(b0 - b.Hp - 7.5) < 1e-6 && a.Hp == a0,
+                  $"a dart aimed at A with the cursor moved onto B {sw:0.00} s into its flight: B takes {b0 - b.Hp:0.0} (7.5), A {a0 - a.Hp:0.0}");
+            a.TakeDamage(1e12); b.TakeDamage(1e12);
+        }
+
+        // THE LAUNCHER WRECKED: its darts fly straight on down the heading they had, and end at their reach
+        var stasis = typeof(PlayerShip).GetField("_stasis", BindingFlags.NonPublic | BindingFlags.Instance);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero;
+            dt.AimPoint = at + nose.Rotated(Mathf.DegToRad(Vary(50f, 80f) * (run == 1 ? -1f : 1f))) * Vary(500f, 700f);
+            var shot = await LaneA6dOneDart(dt);
+            await Wait(Vary(0.05f, 0.12f));
+            dt.Restore(0, false, Vary(20f, 40f));
+            await Frame();
+            var dir0 = shot?.Dir ?? Vector2.Zero;
+            await Wait(0.3);
+            var dir1 = shot != null && IsInstanceValid(shot) ? shot.Dir : dir0;
+            await Wait(1.5);
+            bool gone = !Nodes<Shot>().Any(x => x.Kind == Shots.Pepper && x.Alive);
+            Check(shot != null && Mathf.Abs(Mathf.AngleDifference(dir0.Angle(), dir1.Angle())) < 1e-3f && gone,
+                  $"a dart whose Dart is wrecked flies straight ({Mathf.RadToDeg(Mathf.AngleDifference(dir0.Angle(), dir1.Angle())):0.00}° turned in 0.3 s) and ends at its reach, no dart left ({gone})");
+            stasis.SetValue(dt, 0.0); dt.Reboard(); dt.Hp = dt.MaxHp;
+            await Frame();
+        }
+
+        // THE FIRST BODY ON THE LINE takes it, whatever stands behind; a seeker in the way is flown through
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(); var nose = Vector2.Up.Rotated(rot);
+            dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero;
+            var nearSpot = at + nose * Vary(260f, 340f); var farSpot = at + nose * Vary(480f, 560f);
+            var nearFoe = HeldI(nearSpot, Enemies.Gunship); var farFoe = HeldI(farSpot, run == 2 ? Enemies.Webifier : Enemies.Gunship);
+            var seekerAt = at + nose * Vary(120f, 180f);
+            var seeker = Combat.Fire(Shots.Seeker, seekerAt, -nose.Rotated(Mathf.Pi / 2), 1f, 5000f, 1, hitSource: $"test:6d_seeker#{run}");
+            dt.AimPoint = farSpot;
+            await Frame();
+            double n0 = nearFoe.Hp, f0 = farFoe.Hp;
+            await LaneA6dOneDart(dt);
+            for (int i = 0; i < 60 * 2; i++) { dt.Position = at; dt.Rotation = rot; dt.Velocity = Vector2.Zero; nearFoe.Position = nearSpot; farFoe.Position = farSpot; if (IsInstanceValid(seeker)) seeker.Position = seekerAt; await Frame(); }
+            bool seekerLives = IsInstanceValid(seeker) && seeker.Alive;
+            Check(Math.Abs(n0 - nearFoe.Hp - 7.5) < 1e-6 && farFoe.Hp == f0 && seekerLives,
+                  $"the first hostile on the dart's line takes it ({n0 - nearFoe.Hp:0.0}), the one behind nothing ({f0 - farFoe.Hp:0.0}), and the seeker it passed through still flies ({seekerLives})");
+            nearFoe.TakeDamage(1e12); farFoe.TakeDamage(1e12); if (IsInstanceValid(seeker)) seeker.Intercept();
+        }
+
+        // THE PRICE ON THE SHIP: at rest x1 (7.5); boosted (top 390) x1.5 = 11.25; each from a varied heading
+        for (int run = 0; run < 3; run++)
+        {
+            float rot = VaryAngle();
+            dt.Position = VaryNear(yonder, 300f); dt.Rotation = rot; dt.Velocity = Vector2.Zero;
+            dt.AimPoint = dt.Position + Vector2.Up.Rotated(rot) * 600f;
+            string boost = dt.Drive.Id;
+            dt.Sl(boost).Left = run == 0 ? 0 : Vary(1.5f, 2.5f);
+            await Frame();
+            float top = dt.TopNow;
+            var shot = await LaneA6dOneDart(dt);
+            double want = 7.5 * Math.Clamp(top / 260.0, 1, 1.5);
+            Check(shot != null && Math.Abs(shot.Damage - want) < 1e-6 && (run == 0 ? Math.Abs(want - 7.5) < 1e-9 : Math.Abs(want - 11.25) < 1e-9),
+                  $"a dart fired at a top speed of {top:0} u/s ({(run == 0 ? "at rest" : "boosted")}) carries {shot?.Damage:0.000} ({want:0.000}: 7.5 at 260, 11.25 at 390)");
+            dt.Sl(boost).Left = 0;
+            await Wait(1.6);
+        }
+        dt.Demo = demo; dt.Trigger = false; dt.Position = yonder; dt.Velocity = Vector2.Zero;
+    }
+
+    // ── SLICE 6d, RUNG 5: A GUEST'S PEPPERBOX. The guest (LaneA6dPepperGuestChecks) flies a DART at rest, its cursor
+    // on a varied point 400-600 u off the nose, and holds the trigger 2 s: its own world shows the host's darts
+    // (cosmetic copies, Commanded onto ITS cursor) -- 12 +- 2 of them, each within 10° of the bearing to the cursor
+    // 0.3 s into its flight. The host (LaneA6dPepperHostWatch) sees its OWN copies of those darts leave the guest's
+    // nose, 7.5 each (at rest, x1), and steer onto the cursor the guest reports.
+    sealed class LaneA6dPepperSeen { public int Darts, Priced, Steered; public bool Done; public double T; }
+    LateSampler LaneA6dPepperHostWatch(LaneA6dPepperSeen seen)
+    {
+        var mine = new HashSet<Shot>();
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (seen.Done || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.LightDart } g) return false;
+            foreach (var x in Nodes<Shot>().Where(x => x.Kind == Shots.Pepper && x.Source == g && x.Alive))
+                if (mine.Add(x)) { seen.Darts++; if (Math.Abs(x.Damage - 7.5) < 1e-6) seen.Priced++; }
+            foreach (var x in mine.Where(x => IsInstanceValid(x) && x.Alive).ToList())
+                if (Mathf.Abs(Mathf.AngleDifference(x.Dir.Angle(), (g.AimPoint - x.GlobalPosition).Angle())) < Mathf.DegToRad(10f)) { seen.Steered++; mine.Remove(x); }
+            if (seen.Darts > 0) seen.T += GetProcessDeltaTime();
+            if (seen.T < 3.0) return false;
+            seen.Done = true;
+            return true;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6dPepperHostChecks(LateSampler watch, LaneA6dPepperSeen seen)
+    {
+        await RealTime(() => seen.Done, Wan ? 120 : 80);
+        watch.QueueFree();
+        Check(seen.Done && seen.Darts >= 10 && seen.Priced == seen.Darts && seen.Steered >= seen.Darts - 2,
+              $"arena host: the guest's pepperbox -- {seen.Darts} darts of the host's own (12 +- 2), {seen.Priced} of them 7.5 (at rest), {seen.Steered} steering onto the cursor the guest reports");
+    }
+    async Task LaneA6dPepperGuestChecks()
+    {
+        await SetClass(ShipClass.LightDart);
+        var me = Me; me.AutopilotTo = null; bool demo = me.Demo; me.Demo = true;
+        await RealTime(() => Math.Abs(me.MaxHp - 200) < 1e-6, Wan ? 20 : 10);           // the host's word for the hull
+        me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+        await Wait(0.4);
+        var at = me.Position; float rot = me.Rotation;
+        var aim = at + Vector2.Up.Rotated(rot + Mathf.DegToRad(Vary(-40f, 40f))) * Vary(400f, 600f);
+        var copies = new Dictionary<Shot, double>();
+        int steered = 0, judged = 0;
+        me.Trigger = true;
+        for (double t = 0; t < 2.6; t += GetProcessDeltaTime())
+        {
+            me.Position = at; me.Rotation = rot; me.Velocity = Vector2.Zero; me.AimPoint = aim;
+            if (t > 2.0) me.Trigger = false;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            foreach (var x in Nodes<Shot>().Where(x => x.Kind == Shots.Pepper && x.Cosmetic)) if (!copies.ContainsKey(x)) copies[x] = 0;
+            foreach (var x in copies.Keys.ToList())
+            {
+                if (copies[x] < 0) continue;
+                copies[x] += GetProcessDeltaTime();
+                if (copies[x] < 0.3 || !IsInstanceValid(x) || !x.Alive) continue;
+                judged++;
+                if (Mathf.Abs(Mathf.AngleDifference(x.Dir.Angle(), (aim - x.GlobalPosition).Angle())) < Mathf.DegToRad(10f) || x.GlobalPosition.DistanceTo(aim) < 30f) steered++;
+                copies[x] = -1;
+            }
+        }
+        me.Trigger = false; me.Demo = demo;
+        Check(copies.Count >= 10 && copies.Count <= 14 && steered >= judged - 1 && judged >= 8,
+              $"arena guest: its pepperbox held 2 s -- {copies.Count} of the host's darts in its world (12 +- 2), {steered} of {judged} within 10° of the bearing to its cursor 0.3 s into their flight");
+    }
+
     async Task LaneA4WreckChecks()
     {
         await SetClass(ShipClass.Destroyer);
@@ -8507,15 +8780,15 @@ public partial class _Test : Node
         was = await WearI(ShipClass.LightDart, "burst_feed_t1");
         {
             var dt = Me; string boost = dt.Drive.Id;
-            double c0 = dt.Stats["main_interval"];
+            double c0 = dt.Stats["pepper_interval"];
             dt.Sl(boost).Left = Vary(0.2f, 0.5f);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            double during = dt.Cadence("main_interval");
+            double during = dt.Cadence("pepper_interval");
             while (dt.Sl(boost).Left > 0) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await Wait(Vary(0.3f, 3.0f));
-            double after = dt.Cadence("main_interval");
+            double after = dt.Cadence("pepper_interval");
             await Wait(4.3);
-            double later = dt.Cadence("main_interval");
+            double later = dt.Cadence("pepper_interval");
             Check(NearI(during, c0, 1e-9) && NearI(after, c0 / 1.2, 1e-9) && NearI(later, c0, 1e-9),
                   $"Burst Feed T1 on a Dart: the reload {c0:0.000} s while the boost runs ({during:0.000}), {after:0.000} within 4 s of its end ({c0 / 1.2:0.000}), {later:0.000} after");
         }
@@ -9186,8 +9459,8 @@ public partial class _Test : Node
         // skipping a weapon's own actions and the open hotkeys. The weapon rows are exactly these six (point defence is passive: no row).
         var weaponRows = typeof(Ab).GetFields(BindingFlags.Public | BindingFlags.Static)
                                    .Select(f => f.GetValue(null)).OfType<AbilityDef>().Where(a => a.Weapon).Select(a => a.Id).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        Check(weaponRows.SequenceEqual(new[] { "attack", "blade", "deploy", "firemode", "guns", "railgun", "recall", "reload" }),
-              $"never walled: the guns, the Warrior's blade, the Sniper's railgun, fire mode, the missile's reload, the wing's attack and recall, the sentry's throw and recall ({string.Join(",", weaponRows)})");
+        Check(weaponRows.SequenceEqual(new[] { "attack", "blade", "deploy", "firemode", "guns", "pepperbox", "railgun", "recall", "reload" }),
+              $"never walled: the guns, the Warrior's blade, the Sniper's railgun, the Dart's pepperbox, fire mode, the missile's reload, the wing's attack and recall, the sentry's throw and recall ({string.Join(",", weaponRows)})");
         // ...and the rule, on real rows in three orders: weapon rows first, walled rows first, the two interleaved
         foreach (var (kit, want) in new[] {
             (new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Missile, Ab.Reload, Ab.Anchor }, new[] { 1, 1, 1, 3, 1, 6 }),
@@ -13382,6 +13655,9 @@ public partial class _Test : Node
             await LaneA6cTauntLatchChecks(yonder);
             await LaneA6cTauntEmplacementChecks(yonder);
             await LaneA6cCurtainChecks(yonder);
+            // ── DART: the pepperbox (slice 6d) ──
+            LaneA6dPepperRowChecks();
+            await LaneA6dPepperChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -13445,28 +13721,7 @@ public partial class _Test : Node
             foreach (var m in marks) m.TakeDamage(99999);
             await Wait(0.3);
 
-            // ── DART: untouchable through the roll, then faster and firing quicker ──
-            await SetClass(ShipClass.LightDart);
-            var dt2 = Me; dt2.Position = yonder; dt2.Velocity = Vector2.Zero; await Wait(0.2);
-            double dh0 = dt2.Hp, rof0 = dt2.Spec(false).Interval;
-            dt2.UseAbility("roll", 0); await Wait(0.1);
-            dt2.Hit(80, dt2.Position + new Vector2(0, -200), "test:roll");
-            Check(dt2.Statuses.Has(Status.Evading) && Math.Abs(dt2.Hp - dh0) < 1e-6,
-                  "through the barrel roll nothing touches it at all");
-            await Wait(1.4);
-            Check(!dt2.Statuses.Has(Status.Evading) && Math.Abs(dt2.SpeedMult - 1.6f) < 1e-6
-                  && Math.Abs(dt2.Spec(false).Interval - rof0 / 1.25) < 1e-9,
-                  $"and it comes out of it 60% faster, firing a quarter quicker ({rof0:0.000} -> {dt2.Spec(false).Interval:0.000} s)");
-            {   // ...and BOTH multipliers are the rows', not two `if`s naming slot ids by string:
-                // with EVERY one of the dart's slots running at once, the only two stats that
-                // move them are the roll's own -- 1.25x the rate of fire and 1.6x the speed.
-                foreach (var ab in Abilities.For(ShipClass.LightDart)) dt2.Sl(ab.Id).Left = 5.0;
-                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                Check(!dt2.Statuses.Has(Status.Evading) && Math.Abs(dt2.FireRate - 1.25f) < 1e-6
-                      && Math.Abs(dt2.SpeedMult - 1.6f) < 1e-6,
-                      $"with every one of its slots running, only the roll's own two stats move them ({dt2.FireRate:0.00}x rate, {dt2.SpeedMult:0.00}x speed)");
-                foreach (var ab in Abilities.For(ShipClass.LightDart)) dt2.Sl(ab.Id).Left = 0;
-            }
+            // ── DART: its pepperbox is proved in LaneA6dPepperChecks (slice 6d; the barrel roll it replaced is gone) ──
             // RATE BUFFS ADD, THEY DO NOT MULTIPLY (the owner's ruling, and the rule a sheet's bonuses
             // already follow): two x2 lifts at once are x3, not x4; x1.25 with x1.6 is x1.85, not
             // x2.0; a cut to x0.85 is x0.85; a row the sheet has not got lifts nothing; and a stack of
@@ -13776,7 +14031,7 @@ public partial class _Test : Node
                     ["whirlwind"] = sp => sp.Sl("whirlwind").Left > sp.Stats["whirl_time"] - 0.1 && sp.Stilled && sp.Statuses.Has(Status.Unwebbed),
                     ["prism"]     = sp => sp.Sl("prism").Left > sp.Stats["prism_time"] - 0.1 && sp.Prismatic && sp.Stilled && Math.Abs(sp.Held - 0.5f) < 1e-3f,
                     ["hunters"]   = sp => sp.Sl("hunters").Cool > 0 && InFlight().Count() >= sweepShots + (int)sp.Stats["hunter_count"],
-                    ["roll"]      = sp => sp.Statuses.Has(Status.Evading) && sp.Sl("roll").Left > sp.Stats["roll_time"] + sp.Stats["boost_time"] - 0.1,
+                    ["pepperbox"] = sp => sp.Trigger && Abilities.Find(sp.Class, "pepperbox").State(sp, null).Lit,
                     ["echo"]      = sp => sp.Sl("echo").Left > sp.Stats["echo_time"] - 0.1,
                     ["stealth"]   = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("stealth").Left > sp.Stats["stealth_time"] - 0.1,
                     ["anchor"]    = sp => sp.Sl("anchor").Left > sp.Stats["anchor_time"] - 0.1 && sp.Held == 0f,
@@ -17000,6 +17255,8 @@ public partial class _Test : Node
             var prismWatch = LaneA6cPrismHostWatch(prismSeen);             // slice 6c: ...and then takes a prism stance
             var reloadSeen = new LaneA6cReloadSeen();
             var reloadWatch = LaneA6cReloadHostWatch(reloadSeen);           // slice 6c: ...and then fires a railgun, timing its reloads
+            var pepperSeen = new LaneA6dPepperSeen();
+            var pepperWatch = LaneA6dPepperHostWatch(pepperSeen);           // slice 6d: ...and, after its curtain, holds a Dart's pepperbox
             await LaneBHostDrives();                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
             await LaneA6cLungeHostChecks(lungeWatch, lungeSeen);
             await LaneA6cPrismHostChecks(prismWatch, prismSeen);
@@ -17017,6 +17274,7 @@ public partial class _Test : Node
             Check(hw.Class == ShipClass.HeavyWarrior && Math.Abs(hw.MaxHp - 300) < 1e-6
                   && Abilities.For(ShipClass.HeavyWarrior).Length == Classes.Of(ShipClass.HeavyWarrior).Abilities.Length + 7,
                   $"arena host: hosting as a WARRIOR -- its stock 300 hull, no chips, its own rows, the drive and six open slots ({hw.MaxHp:0})");
+            await LaneA6dPepperHostChecks(pepperWatch, pepperSeen);          // slice 6d: the guest's pepperbox, before it refits to a freighter
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
                                  && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
             var fg = H.Ships.FirstOrDefault(s => !s.Mine);
@@ -17305,6 +17563,7 @@ public partial class _Test : Node
             await LaneA6cFlaresGuestChecks();                               // slice 6c: a guest's flares, the host's salvo on its hull
             await LaneA6cTauntGuestChecks();                                // slice 6c: a guest's taunt, the host's guard on its hull
             await LaneA6cCurtainGuestChecks();                              // slice 6c: a guest's curtain, drawn where the host laid it
+            await LaneA6dPepperGuestChecks();                               // slice 6d: a guest's pepperbox (its host half: LaneA6dPepperHostChecks)
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.

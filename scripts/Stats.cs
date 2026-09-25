@@ -371,6 +371,13 @@ public static class Dps
         Note = s => $"{s["blade_damage"]:0} to each body in its arc every {s["blade_interval"]:0.00} s",
     };
 
+    // THE DART'S PEPPERBOX at the sheet's price (x1 up to 260 u/s; the host prices each dart from its top speed)
+    public static readonly DpsSource Pepper = new()
+    {
+        Label = "Pepperbox, held", Rate = s => s["pepper_damage"] / s["pepper_interval"],
+        Note = s => $"{s["pepper_damage"]:0.0} a dart every {s["pepper_interval"]:0.000} s off two rails, up to x{s["pepper_cap"]:0.0} as the top speed climbs past {s["price_top"]:0} u/s",
+    };
+
     public static readonly DpsSource Hunters = new()
     {
         Label = "Hunter-seekers, averaged over their cooldown",

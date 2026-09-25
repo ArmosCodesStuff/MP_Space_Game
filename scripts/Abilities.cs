@@ -89,8 +89,8 @@ public class AbilityDef
     // ADD every running row that names one (PlayerShip.LiftShares, the sheet's own rule), which
     // replaced two hardcoded `if`s naming slot ids and stat ids by string. The rate reaches every
     // gun's reload -- main guns, point defence, dropped turrets, the wing's shots -- through
-    // PlayerShip.Cadence; the speed lifts its top speed and its thrust. `While` narrows it to part of a run: the dart's roll buffs nothing until the
-    // untouchable part of it is over.
+    // PlayerShip.Cadence; the speed lifts its top speed and its thrust. `While` narrows it to part of a run (a
+    // row whose lift waits on a status or a phase of its own run).
     //   The SLIDE (strafe speed and strafe thrust, PlayerShip.StrafeMult) takes StrafeStat when a row
     // names one, and its SpeedStat otherwise: the boost's slide is a row of its own (surge_strafe), so
     // gear can lift the slide without the top speed (Convoy Rig) or the top speed without the slide.
@@ -135,6 +135,9 @@ public class AbilityDef
     // charge latch, on the host).
     public ReloadSpec Reload;
     public Action<PlayerShip, double> Loose;
+    // A GUN DOWN THE NOSE (Bores.cs): set on a Hold weapon row, whose trigger fires the spec's rounds off its
+    // rails at the ship's Cadence of the row's Every (Bores.Tick, host). The Dart's Pepperbox.
+    public BoreSpec Bore;
     // A CHARGED ROW: it holds Charges (a stat id) presses; its slot's N counts those spent, and one comes back
     // every Recharge seconds (a stat id), one at a time (PlayerShip.Spend, and TickAbilities' Cool). The tether.
     public string Charges, Recharge;
@@ -510,17 +513,18 @@ public static class Ab
     };
 
     // ── the lights ───────────────────────────────────────────────────────────
-    public static readonly AbilityDef Roll = new()
+    // THE PEPPERBOX (the Dart's primary, kits_v2's card): held, two nose rails alternate, 6 darts a second
+    // (pepper_interval through Cadence); each leaves along the nose at 520 u/s plus the ship's own velocity and
+    // turns up to 6 rad/s onto the pilot's LIVE cursor (Shots "pepper", Commanded), 750 u, the first hostile
+    // body. 7.5 a dart, priced on the host at the launch: x clamp(top speed / 260, 1, 1.5).
+    public static readonly AbilityDef Pepperbox = new()
     {
-        Id = "roll", Name = "Barrel roll", Short = "ROLL", Default = Key.F,
-        Blurb = "Nothing can hit you while you roll; you come out faster and firing quicker.",
-        Press = (s, _) => s.BarrelRoll(),
-        RateStat = "boost_rof", SpeedStat = "boost_speed",
-        While = s => !s.Statuses.Has(Status.Evading),     // the boost is the part after the roll
-        Refuse = (s, _) => s.Sl("roll").Cool > 0 ? "COOLING" : null,
-        Show = (s, _) => s.Statuses.Has(Status.Evading)
-            ? new SlotState { Line = "ROLLING", Lit = true }
-            : Timed(s, "roll", "roll_cooldown", "BOOST"),
+        Weapon = true, Id = "pepperbox", Name = "Pepperbox", Short = "PEPPER", Kind = AbilityKind.Hold, Default = Key.Space,
+        Blurb = "Hold to fire: two nose rails, six darts a second, each steering onto the cursor as it flies. The faster you are going, the harder they hit: up to half again at 390 u/s.",
+        Bore = new BoreSpec { Shot = Shots.Pepper, Damage = "pepper_damage", Every = "pepper_interval", Speed = "pepper_speed",
+                              Range = "pepper_range", Turn = "pepper_turn", PriceTop = "price_top", PriceCap = "pepper_cap",
+                              Rails = new[] { -5f, 5f } },
+        Show = (s, _) => new SlotState { Line = $"x{Bores.Price(1, s.TopNow, s.Stats["price_top"], s.Stats["pepper_cap"]):0.00}", Lit = s.Trigger },
     };
 
     public static readonly AbilityDef Echo = new()

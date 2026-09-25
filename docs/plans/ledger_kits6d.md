@@ -174,3 +174,33 @@ Statuses.cs Jammed 28 / OutGuards 83 / HostOnly 86. Items.cs 100-104 (the catego
 Old-kit callers (counts, scripts + harness): LightDart SmokeTest 26 / Shots.cs.txt 4; LightEcho 19 / 1; LightWraith
 5 / 1; roll_*|BarrelRoll|Evading PlayerShip 5, Statuses 2, SmokeTest 11; echo_*|StartEcho|Detonate|Dps.Echo
 PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark PlayerShip 4, SmokeTest 4.
+
+## kits6d-J1 · PRE
+- tier opus; intent: Dart row (hull 200, learn order weapon rows then F/Q/E as they land), Pepperbox (BoreSpec + ShotDef.Command + row pepper), Ab.Roll and its rows deleted with every caller (Status.Evading KEPT: harness wire-bit checks read it; DL8).
+- HEAD 2ea09b2b4effc26028c50cce82a70673dad0d029
+- scripts/Abilities.cs 88abfd0541f772b420ad08ad43d135fdf171d775
+- scripts/Ships.cs dd6c77c19088e55fc3e815b34640d824b48d30fd
+- scripts/Shots.cs c44dd017dc8b6367e2cf09b864a1cb8363728cdf
+- scripts/PlayerShip.cs 6d41d138618c4c1423779be23acd25e651ec6e5e
+- scripts/Items.cs c25c8da8e16f9297cbe1347682b81727e53dc633
+- scripts/Stats.cs 64bf427d6f48ed692346d261a56b32ad5a29f582
+- tools/smoketest/SmokeTest.cs.txt f93a02fb2d9489c93e60da27f4f240192bff56ce
+- tools/screens/Shots.cs.txt 5bb73590976091ff0fee983dcf2a5b799baef7dc
+- new: scripts/Bores.cs
+
+## kits6d-J1 · POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- built: scripts/Bores.cs (BoreSpec + Bores.Price/Muzzle/Launch/Tick; the Rod's Expire will reuse Launch), ShotDef.Command +
+  row `pepper` (Shots.Pepper = 9, appended), AbilityDef.Bore + PlayerShip.Bored (host), Ab.Pepperbox (Weapon, Hold, Space);
+  the Dart row: Fit.None, hull 200, no turret, EVERY Dart row (pepper_*, price_top, sprint_*/rod_*, ramjet_*, sling_cooldown,
+  slip_*) so J2-J4 add behaviour only; Dps.Pepper; kit light_pepperbox (new) + light_roll_thrusters KEPT AS AN ID (save
+  compat) renamed "Sprint Thrusters", Needs sprint_time; Items role lists gain pepper_*/rod_damage/sprint_time/ramjet_time.
+  Deleted: Ab.Roll, PlayerShip.BarrelRoll, roll_*/boost_time/boost_speed/boost_rof rows, the harness's roll block + witness.
+- DL8: Status.Evading KEPT (its wire bit 16 and OutGuards row are asserted by the status-wire checks; nothing applies it
+  now). AbilityDef.While KEPT (no row sets it after the roll; 6a/6b may, and dropping it would collide on merge).
+- checks: LaneA6dPepperRowChecks (rows, hull 200, price literals + 3 varied tops, launch vector x3), LaneA6dPepperChecks
+  (45 DPS +-3% x3 with 12+-1 launches, launch after a slide x3, reach 690-740 vs 765-810, cursor A->B x3, wrecked
+  launcher straight + no orphans x3, first body / seeker flown through x3, price on ship 7.5 / 11.25 boosted x3); rung 5
+  LaneA6dPepperHostWatch/HostChecks + LaneA6dPepperGuestChecks; frame 76b_dart_pepperbox (LaneA6dPepperFrames).
+  Rewritten: walls' weaponRows (+pepperbox), sweep witness roll -> pepperbox, Burst Feed on a Dart reads pepper_interval.
+- next: kits6d-J2 (Sprint + Rod).

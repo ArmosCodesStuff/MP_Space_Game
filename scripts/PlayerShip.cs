@@ -126,7 +126,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // ── what this ship's own class brings ────────────────────────────────
 
     // WHAT LIFTS ITS RATE OF FIRE, and WHAT LIFTS ITS SPEED, right now -- the tender's overdrive,
-    // the V boost, the dart's boost, the wraith's veil. Every running ability that names a
+    // the V boost, the wraith's veil. Every running ability that names a
     // stat for one of them (AbilityDef.RateStat, AbilityDef.SpeedStat) lifts it by that figure,
     // and the row knows its own slot, so the next buff is a ROW rather than an `if` naming a slot
     // id and a stat id by string.
@@ -843,16 +843,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     // ── THE LIGHTS ──────────────────────────────────────────────────────
-    // The roll: nothing can touch it while it turns, and it comes out faster and firing quicker.
-    public void BarrelRoll()
-    {
-        if (Sl("roll").Cool > 0) return;
-        ref var r = ref Sl("roll");
-        r.Left = Stats["roll_time"] + Stats["boost_time"];      // the roll, then the boost
-        r.Cool = Cooling(Stats["roll_cooldown"]);
-        ApplyStatus(Status.Evading, Stats["roll_time"]);
-    }
-
     // The echo remembers what this ship dealt, through its own row's OnDealt (AbilityDef.OnDealt,
     // called by NoteDealt while Sl("echo").Left > 0), and puts all of it down at once, where the
     // last of it landed (Slot.At).
@@ -1174,7 +1164,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         TickAbilities(delta);
 
         if (Mine && Abilities.TriggerOf(Class)?.Reload is { } view) ActiveReload.Step(this, view, delta);
-        if (Net.Sim) { FireControl(delta); Swings(delta); DashSweeps(); ChargeLatch(delta); }
+        if (Net.Sim) { FireControl(delta); Bored(delta); Swings(delta); DashSweeps(); ChargeLatch(delta); }
         foreach (var t in _turrets) t.Tick(delta);
         for (int i = _wings.Count - 1; i >= 0; i--)
         {
@@ -1326,6 +1316,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         double share = Math.Min(1, _charge / Math.Max(1e-6, Cadence(r.Charge)));
         _charge = -1;
         def.Loose?.Invoke(this, share);
+    }
+
+    // ── a gun down the nose: every row that names a Bore (the Pepperbox), fired while the trigger holds ──
+    private void Bored(double delta)
+    {
+        bool firing = Alive && Trigger && !_status.Has(Status.Disabled) && !Stilled;
+        foreach (var def in Abilities.For(Class))
+            if (def.Bore != null) Bores.Tick(this, def, firing, delta);
     }
 
     // ── melee: every row that names a Swing (the blade, the whirlwind) ─────────

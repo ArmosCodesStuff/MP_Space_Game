@@ -93,15 +93,15 @@ public static class Items
     // ability's output, area or duration joins its role by id (the lane's ITEM ASSUMPTIONS).
     private static readonly (string role, string[] ids)[] Roles =
     {
-        ("@primary",       new[] { "main_damage", "fighter_damage", "blade_damage" }),
-        ("@primary_rate",  new[] { "main_interval", "fighter_interval", "blade_interval" }),
-        ("@primary_range", new[] { "main_range", "fighter_range", "blade_reach" }),
-        ("@tracking",      new[] { "main_turn", "fighter_turn" }),
-        ("@shot_speed",    new[] { "shell_speed", "fighter_speed" }),
+        ("@primary",       new[] { "main_damage", "fighter_damage", "blade_damage", "pepper_damage" }),
+        ("@primary_rate",  new[] { "main_interval", "fighter_interval", "blade_interval", "pepper_interval" }),
+        ("@primary_range", new[] { "main_range", "fighter_range", "blade_reach", "pepper_range" }),
+        ("@tracking",      new[] { "main_turn", "fighter_turn", "pepper_turn" }),
+        ("@shot_speed",    new[] { "shell_speed", "fighter_speed", "pepper_speed" }),
         ("@output",        new[] { "broadside_mult", "torpedo_damage", "missile_damage", "bubble_pool", "overdrive_mult",
-                                   "wave_push", "rail_damage", "hunter_damage", "echo_share", "lunge_damage", "whirl_damage" }),
+                                   "wave_push", "rail_damage", "hunter_damage", "echo_share", "lunge_damage", "whirl_damage", "rod_damage" }),
         ("@area",          new[] { "bubble_radius", "wave_range", "echo_radius", "whirl_reach", "hunter_range", "launch_range", "taunt_reach" }),
-        ("@duration",      new[] { "bubble_time", "overdrive_time", "wave_disable", "stealth_time", "roll_time", "echo_time", "whirl_time", "prism_time", "anchor_time", "tether_hold", "taunt_time" }),
+        ("@duration",      new[] { "bubble_time", "overdrive_time", "wave_disable", "stealth_time", "sprint_time", "ramjet_time", "echo_time", "whirl_time", "prism_time", "anchor_time", "tether_hold", "taunt_time" }),
     };
 
     // The stat ids a key stands for on hull `c`: a role's rows the hull has, or the id itself.

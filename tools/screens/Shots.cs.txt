@@ -435,6 +435,7 @@ public partial class _Shots : Node
         await LaneADecoyFrames();
         await LaneA6cBladeFrames();
         await LaneA6cPrismFrames();
+        await LaneA6dPepperFrames();
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -1062,6 +1063,31 @@ public partial class _Shots : Node
     }
 
     // SLICE 6c: the Warrior's blade held (its 160 u, ±55° wedge and the sweep across it), then its whirlwind (the 210 u ring).
+    // SLICE 6d: the Dart's pepperbox held 0.45 s with the cursor 40° off the nose: the darts leave the two nose rails
+    // in turn and bend onto the cursor (76b).
+    async Task LaneA6dPepperFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        Character.Class = ShipClass.LightDart; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var ds = H.GetNode<PlayerShip>("Ship_1");
+        bool demo = ds.Demo; ds.Demo = true;
+        var at = new Vector2(-900, 1100); const float rot = 0.4f;
+        cam.Zoom = new Vector2(1.6f, 1.6f);
+        ds.Trigger = true;
+        for (double t = 0; t < 0.45; t += GetProcessDeltaTime())
+        {
+            ds.Position = at; ds.Rotation = rot; ds.Velocity = Vector2.Zero;
+            ds.AimPoint = at + Vector2.Up.Rotated(rot + Mathf.DegToRad(40f)) * 420f;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        await Snap("76b_dart_pepperbox");
+        ds.Trigger = false; ds.Demo = demo;
+        await W(1.6);
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
+    }
+
     async Task LaneA6cBladeFrames()
     {
         var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
