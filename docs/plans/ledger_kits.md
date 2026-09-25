@@ -473,7 +473,7 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
   Enemies.All, AbilityDef SpeedAdd + Ramp's RampSpec table) are all reached by Net.Fingerprint's
   Plain/Table/StructRow; proven by the new BuildChecks check "the kits lane's tables are part of the
   build's fingerprint" (8 moves, each must move the hash and its own part). Rung 1 0 errors; rung 2
-  (verify -Quick) ALL CHECKS PASSED. Then version-l's 93b2c8c (docs only) merged on top.
+  (verify -Quick) ALL CHECKS PASSED. Then version-l's 8903b25 (docs only) merged on top (aa96bdd); verify -Quick ALL CHECKS PASSED at it.
 - engine-unproven: rungs 3-5 owed in the final test phase (owner ruling 2026-09-25: no engine runs
   per batch). Owed chain: quick,solo,solo,six,screens (six,six for the guest PD check), two seeds for
   every check J3-K2 added or rewrote.
