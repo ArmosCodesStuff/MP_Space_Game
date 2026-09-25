@@ -9,12 +9,10 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   and the journal, fix, relaunch: Workflow({scriptPath: <scripts>\test-phase.js, resumeFromRunId: "wf_8c62491c-3b2", args: {attempt: 2, review: []}}).
   Watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout) re-armed at each expiry while it runs.
 
-## Landed (verdict first; delete the row once its action is done)
-- rungs.ps1's array splat sent -Slot positionally (seed = slot, ports unshifted, concurrent six runs joined each other's host): fixed
-  5a568ef; attempt 4 launched. Open: bash bg3qjys30 prints attempt 4's six log heads (SEED random, box on shifted ports) -- then delete.
+## Landed (verdict first; delete the row once its action is done): none
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. Wait for task wu5xd3g1m; take its return as above. ~16:45: read tp4ar1_2/3's 2_six.log heads (SEED, box ports); delete the Landed row.
+1. Wait for task wu5xd3g1m; take its return as above (slots proved 16:40: random seeds on slot 3, box ports bound).
 2. After the release: the two-machine test (NOTES.txt) as a ledger row; the fable_report_1/2 "after the release" lists, each a lane + retrospective.
 
 ## Owner questions (one line each, with its default)

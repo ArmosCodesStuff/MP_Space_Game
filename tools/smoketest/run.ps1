@@ -186,8 +186,10 @@ try {
     $keep
   }
 
-  # the seed every role runs with: given, or each engine picks its own and prints it
-  $seedArg = if ($Seed) { @("seed=$Seed") } else { @() }
+  # the seed every role runs with: given, or ONE fresh seed for every role of this run (until 2026-09-25 each engine
+  # picked its own, so a six red could not be replayed: six@<seed> gave every role the solo's seed)
+  if (-not $Seed) { $Seed = [string](Get-Random -Minimum 1 -Maximum ([int]::MaxValue)) }
+  $seedArg = @("seed=$Seed")
   # every role reads this once (SmokeTest.cs.txt's P() helper) and shifts every port it binds,
   # joins or asserts by it -- slot 0 passes 0, byte-for-byte today's unshifted ports.
   $shiftArg = @("port-shift=$shift")
