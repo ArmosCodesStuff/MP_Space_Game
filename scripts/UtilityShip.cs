@@ -44,6 +44,8 @@ public abstract partial class UtilityShip : Node2D, IRaidTarget, ITagged
     public void TakeDamage(double d)
     {
         if (!Net.Sim || !InReach) return;
+        d = PlayerShip.ThroughBubbles(Position, d);          // a bubble over it spends first (kits6b-J3)
+        if (d <= 0) return;
         Hull -= d;
         if (Hull > 0) return;
         Hull = 0; Cargo = 0;

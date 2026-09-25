@@ -4524,6 +4524,120 @@ public partial class _Test : Node
         fr.Position = yonder; fr.Velocity = Vector2.Zero;
     }
 
+    // ── 6b · THE BUBBLE OVER EVERY FRIENDLY HULL (kits6b-J3) ─────────────────────────────────────
+    // World, host, 3 runs at varied bearings: a fresh 400 bubble (260 u). One of its own sentries 240-255 u
+    // off and one 265-285 u off; a blow of 20-60 into each: the inner one's hull is untouched and the pool
+    // pays exactly the blow, the outer one's hull pays and the pool nothing. The same for a miner of the
+    // base's fleet, the freighter parked 240-255 u and then 265-285 u from it. Nothing sits on 260 u.
+    async Task LaneA6bBubbleCoverChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.FreightHauler);
+        var fr = Me; fr.AutopilotTo = null; bool demo = fr.Demo; fr.Demo = true;
+        var mn = H.Yard.Gatherers.FirstOrDefault(g => g.Kind == GatherKind.Miner && g.InReach);
+        for (int run = 0; run < 3; run++)
+        {
+            foreach (var dp in H.Deployed.ToList()) H.DeployedTaken(dp);
+            var home = VaryNear(yonder, 200f);
+            fr.Position = home; fr.Velocity = Vector2.Zero;
+            await Wait(0.1);
+            var inner = H.Drop(fr, home + Vector2.Right.Rotated(VaryAngle()) * Vary(240f, 255f), 120);
+            var outer = H.Drop(fr, home + Vector2.Right.Rotated(VaryAngle()) * Vary(265f, 285f), 120);
+            fr.Sl("bubble").Cool = 0; fr.Sl("bubble").Left = 0; fr.Sl("bubble").Own = 0;
+            fr.UseAbility("bubble", 0);
+            double pool0 = fr.BubbleLeft, x1 = Vary(20f, 60f), x2 = Vary(20f, 60f);
+            inner.TakeDamage(x1);
+            double poolA = fr.BubbleLeft;
+            outer.TakeDamage(x2);
+            double poolB = fr.BubbleLeft;
+            Check(Math.Abs(pool0 - 400) < 1e-9 && Math.Abs(inner.Hp - 120) < 1e-9 && Math.Abs(pool0 - poolA - x1) < 1e-9
+                  && Math.Abs(outer.Hp - (120 - x2)) < 1e-9 && Math.Abs(poolB - poolA) < 1e-9,
+                  $"bubble run {run}: its own sentry {inner.Position.DistanceTo(home):0} u off takes {x1:0.0} out of the pool ({pool0:0} -> {poolA:0.0}, hull {inner.Hp:0}); one {outer.Position.DistanceTo(home):0} u off takes it on its hull ({outer.Hp:0.0}), the pool untouched ({poolB:0.0})");
+            if (mn == null) { Check(false, "bubble: a miner of the base's fleet out in the field to cover"); continue; }
+            mn.Hull = mn.MaxHull;
+            double m0 = mn.Hull, x3 = Vary(20f, 60f), x4 = Vary(20f, 60f);
+            fr.Position = mn.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(240f, 255f);
+            double poolC = fr.BubbleLeft; mn.TakeDamage(x3);
+            double inHull = mn.Hull, poolD = fr.BubbleLeft;
+            fr.Position = mn.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(265f, 285f);
+            mn.TakeDamage(x4);
+            Check(Math.Abs(inHull - m0) < 1e-9 && Math.Abs(poolC - poolD - x3) < 1e-9 && Math.Abs(mn.Hull - (m0 - x4)) < 1e-9 && Math.Abs(fr.BubbleLeft - poolD) < 1e-9,
+                  $"...a miner inside it takes {x3:0.0} out of the pool ({poolC:0.0} -> {poolD:0.0}, hull {inHull:0}); outside, {x4:0.0} on its hull ({mn.Hull:0.0} of {m0:0})");
+            mn.Hull = mn.MaxHull;
+        }
+        foreach (var dp in H.Deployed.ToList()) H.DeployedTaken(dp);
+        fr.Sl("bubble").Left = 0; fr.Sl("bubble").Own = 0; fr.Sl("bubble").Cool = 0; fr.Demo = demo;
+        fr.Position = yonder; fr.Velocity = Vector2.Zero;
+    }
+
+    // ── 6b · REDEPLOY (kits6b-J3, D41) ───────────────────────────────────────────────────────────
+    // The sheet against the request once (a 150 u ring, 1.0 s, cd 20, on E as ability 3). World, host,
+    // 3 runs: {1, 2, 3} sentries standing 300-900 u off at varied bearings, each with its own 40-110 of
+    // 120 hull, the hull at a varied heading. E: none standing at once, all still out (in flight); they
+    // land 1.0 s later (+- 0.05, timed from the press), each 150 u from where the hull stood, spaced
+    // 120 deg from the bow, carrying the hulls they had. A second press: COOLING at the sheet's 20. With
+    // none standing -- one throw only in flight -- NONE OUT, nothing cools.
+    async Task LaneA6bRedeployChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.FreightHauler);
+        var fr = Me; fr.AutopilotTo = null; bool demo = fr.Demo; fr.Demo = true;
+        var sheet = new ShipStats(ShipClass.FreightHauler);
+        Check(Math.Abs(sheet["redeploy_ring"] - 150) < 1e-9 && Math.Abs(sheet["redeploy_flight"] - 1.0) < 1e-9
+              && Math.Abs(sheet["redeploy_cooldown"] - 20) < 1e-9 && Unlocks.Nth(ShipClass.FreightHauler, 3) == Ab.Redeploy
+              && Unlocks.Nth(ShipClass.FreightHauler, 2) == Ab.Bubble && Abilities.KeyFor(ShipClass.FreightHauler, "redeploy") == global::Godot.Key.E
+              && Abilities.KeyFor(ShipClass.FreightHauler, "bubble") == global::Godot.Key.Q,
+              $"redeploy: a 150 u ring, 1.0 s, cooldown 20, on E as ability 3 (the bubble on Q as ability 2) ({sheet["redeploy_ring"]}/{sheet["redeploy_flight"]}/{sheet["redeploy_cooldown"]})");
+        for (int run = 0; run < 3; run++)
+        {
+            foreach (var dp in H.Deployed.ToList()) H.DeployedTaken(dp);
+            var home = VaryNear(yonder, 200f); float rot = VaryAngle();
+            fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot;
+            await Wait(0.1);
+            int n = run + 1;
+            var hulls = new List<double>();
+            for (int i = 0; i < n; i++)
+            {
+                double hp = Vary(40f, 110f); hulls.Add(hp);
+                H.Drop(fr, home + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 900f), hp, 120);
+            }
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot;
+            fr.Sl("redeploy").Cool = 0;
+            fr.UseAbility("redeploy", 0);
+            double pressed = fr.Clock;
+            bool folded = fr.OwnLanded().Count == 0 && fr.TurretsOut == n;
+            double landedAt = -1;
+            for (int i = 0; i < 60 * 3 && landedAt < 0; i++)
+            {
+                fr.Position = home; fr.Velocity = Vector2.Zero; fr.Rotation = rot;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                if (fr.OwnLanded().Count == n) landedAt = fr.Clock - pressed;
+            }
+            var bow = Vector2.Up.Rotated(rot);
+            var got = fr.OwnLanded();
+            bool onRing = got.All(t => Math.Abs(t.Position.DistanceTo(home) - 150f) < 3f);
+            var slots = got.Select(t => Mathf.RadToDeg(Mathf.Wrap(bow.AngleTo(t.Position - home), 0f, Mathf.Tau))).OrderBy(a => a).ToList();
+            bool spaced = slots.Select((a, k) => Math.Abs(a - 120 * k) < 2 || Math.Abs(a - 120 * k - 360) < 2).All(x => x);
+            bool kept = got.Select(t => t.Hp).OrderBy(x => x).Zip(hulls.OrderBy(x => x), (a, c) => Math.Abs(a - c) < 1e-6).All(x => x) && got.All(t => Math.Abs(t.MaxHp - 120) < 1e-9);
+            Check(folded && Math.Abs(landedAt - 1.0) < 0.05 && got.Count == n && onRing && spaced && kept,
+                  $"redeploy run {run}: {n} standing fold at once ({folded}) and land {landedAt:0.00} s later, 150 u round the hull ({onRing}) at {string.Join("/", slots.Select(a => a.ToString("0")))} deg from the bow ({spaced}), each with its own hull ({kept})");
+            fr.UseAbility("redeploy", 0);
+            Check(fr.FailNote("redeploy") == "COOLING" && Math.Abs(fr.Sl("redeploy").Cool - fr.Cooling(20)) < 1.2,
+                  $"...a second press is refused COOLING ({fr.FailNote("redeploy")}), {fr.Sl("redeploy").Cool:0.0} s of the sheet's 20");
+        }
+        foreach (var dp in H.Deployed.ToList()) H.DeployedTaken(dp);
+        await Wait(0.1);
+        fr.Sl("redeploy").Cool = 0; fr.Sl("deploy").Cool = 0;
+        fr.AimPoint = fr.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 400f);
+        fr.UseAbility("deploy", 0);
+        fr.UseAbility("redeploy", 0);
+        Check(fr.TurretsOut == 1 && fr.FailNote("redeploy") == "NONE OUT" && fr.Sl("redeploy").Cool == 0,
+              $"redeploy with one throw in flight and none standing: NONE OUT ({fr.FailNote("redeploy")}), nothing cools");
+        await Wait(1.0);
+        foreach (var dp in H.Deployed.ToList()) H.DeployedTaken(dp);
+        fr.Sl("deploy").Cool = 0; fr.Demo = demo;
+        fr.Position = yonder; fr.Velocity = Vector2.Zero;
+    }
+
     // ── 6b · TIME ON TARGET ACROSS THE WIRE (kits6b-J2, rung 5; kits_v31 8's second run) ─────────
     // HOST: the guest's freighter (three sentries standing 0-600 u off it) paints the held gunship
     // 560-700 u off (host-varied spots); the guest presses F. Every line is the host's: the gunship
@@ -10828,7 +10942,7 @@ public partial class _Test : Node
 
             fr.UseAbility("bubble", 0); await Wait(0.1);
             Check(fr.BubbleUp && Math.Abs(fr.BubbleLeft - 400) < 1e-6 && Math.Abs(fr.BubbleRadius - 260f) < 1e-3,
-                  $"F raises a bubble of 400 over 260 u ({fr.BubbleLeft:0})");
+                  $"Q raises a bubble of 400 over 260 u ({fr.BubbleLeft:0})");
             double hull0 = fr.Hp;
             fr.Hit(150, fr.Position + new Vector2(0, -200), "test:bubble1");
             Check(Math.Abs(fr.Hp - hull0) < 1e-6 && Math.Abs(fr.BubbleLeft - 250) < 1e-6,
@@ -11257,6 +11371,8 @@ public partial class _Test : Node
             await LaneASentryThrowChecks(yonder);
             await LaneA6bSpotterChecks(yonder);
             await LaneA6bTotChecks(yonder);
+            await LaneA6bBubbleCoverChecks(yonder);
+            await LaneA6bRedeployChecks(yonder);
             await LaneARaiderCallChecks(yonder);
             await LaneADecoyChecks(yonder);
             await LaneATowChecks(yonder);
@@ -11664,6 +11780,7 @@ public partial class _Test : Node
                     ["deploy"]    = sp => sp.TurretsOut == sweepTurrets + 1 && sp.Sl("deploy").Cool > 0,
                     ["bubble"]    = sp => sp.BubbleUp && Math.Abs(sp.BubbleLeft - sp.Stats["bubble_pool"]) < 0.5,
                     // time on target: the mark painted before the press (below), a line landed on it and the clock set
+                    ["redeploy"]  = sp => sp.Sl("redeploy").Cool > 0 && sp.OwnLanded().Count == 0 && sp.TurretsOut >= 1,
                     ["tot"]       = sp => sp.Sl("tot").Cool > 0 && sp.DealtBy.GetValueOrDefault(Dealt.Tot) > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Tot),
                     ["overdrive"] = sp => Math.Abs(sp.FireRate - (float)sp.Stats["overdrive_mult"]) < 1e-3f,
                     ["shockwave"] = sp => sp.Sl("shockwave").Cool > 0 && Nodes<FxNode>().Any(fx3 => fx3.Id == Fx.Wave),
@@ -11740,6 +11857,9 @@ public partial class _Test : Node
                         var abKey = Abilities.KeyFor(cls.Id, abil.Id);
                         bool isHold = abil.Kind == AbilityKind.Hold;
                         sweepShip.PaintOn(sweepMark, 5);             // every press is given the mark painted (what time on target needs)
+                        // ...and a hull that throws sentries one standing (what redeploy needs), 200-300 u off its cursor (never recalled by R)
+                        if (cls.Has(Fit.Deploy) && sweepShip.OwnLanded().Count == 0)
+                            H.Drop(sweepShip, sweepShip.AimPoint + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 300f), sweepShip.Stats["deploy_hull"]);
                         if (isHold)
                         {   // a HOLD row has no Press at all: its own key goes down and stays down
                             KeyDown(abKey);
@@ -15189,8 +15309,8 @@ public partial class _Test : Node
             // later -- so this waits for the host to have refitted its copy too.
             await RealTime(() => Math.Abs(fgm.MaxHp - 450) < 1e-6, Wan ? 20 : 10);
             Check(fgm.Class == ShipClass.FreightHauler && Math.Abs(fgm.MaxHp - 450) < 1e-6
-                  && Abilities.For(ShipClass.FreightHauler).Length == 11,
-                  $"arena guest: flying a FREIGHTER in a session -- its stock 450 hull, no chips, and the host's word for it, its spotter, sentry, time on target and bubble, its drive and six open slots ({fgm.MaxHp:0})");
+                  && Abilities.For(ShipClass.FreightHauler).Length == 12,
+                  $"arena guest: flying a FREIGHTER in a session -- its stock 450 hull, no chips, and the host's word for it, its spotter, sentry, time on target, bubble and redeploy, its drive and six open slots ({fgm.MaxHp:0})");
             // 6b (kits6b-J1, D33) LaneA6bPaintWireGuest: the host's paint reaches this guest in its own
             // freighter's slots -- the same live hostile, by id, counting down here between reports.
             await RealTime(() => fgm.Painted != null, Wan ? 30 : 20);

@@ -72,6 +72,7 @@ public partial class DeployedTurret : Node2D, IRaidTarget, ITagged, ITurretHost
     {
         if (!Net.Sim || !Alive) return;
         Popups.NoteImpact(this, Position);
+        d = PlayerShip.ThroughBubbles(Position, d);          // a bubble over it spends first (kits6b-J3)
         Hp -= d;
         if (Hp <= 0) (GetParent() as Hub)?.DeployedDown(this);
     }

@@ -843,6 +843,7 @@ public partial class _Shots : Node
             fship.Position = yard; fship.UseAbility("bubble", 0); await W(0.5);
             await Snap("79_freighter_turrets_and_bubble");
             await LaneA6bTotFrame(hub, fship, yard);
+            await LaneA6bRedeployFrame(fship, yard);
             foreach (var t in hub.Deployed.ToList()) hub.DeployedTaken(t);
             await Class(ShipClass.Battleship); await W(0.3);
             await FieldsFrames(hub, yard);
@@ -1027,6 +1028,18 @@ public partial class _Shots : Node
         fship.UseAbility("tot", 0);
         await W(0.08); await Snap("79c_tot_lines");
         mark.TakeDamage(1e12); await W(0.3);
+    }
+
+    // 6b (kits6b-J3) redeploy_ring: E folds the three sentries out and, 1.0 s later, they stand on the
+    // 150 u ring round the hull, 120 deg apart from the bow; the frame is their landing marks filling
+    // (0.6 s in), then the ring stood (1.2 s)
+    async Task LaneA6bRedeployFrame(PlayerShip fship, Vector2 yard)
+    {
+        fship.Position = yard; fship.Velocity = Vector2.Zero; fship.Rotation = 0f;
+        fship.Sl("redeploy").Cool = 0;
+        fship.UseAbility("redeploy", 0);
+        await W(0.6); await Snap("79d_redeploy_marks");
+        await W(0.6); await Snap("79e_redeploy_ring");
     }
 
     async Task LaneBDriveFrames()

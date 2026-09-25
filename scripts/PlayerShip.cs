@@ -662,6 +662,33 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Fx.Warn(new FxRaise { Id = Fx.AimZone, At = at, To = at, Size = DeployedTurret.Radius, Time = flight });
         Sl("deploy").Cool = Cooling(Stats["deploy_cooldown"]);
     }
+    // REDEPLOY (kits6b-J3, D41), on the host: every LANDED sentry of this pilot's folds (it leaves the
+    // world at once, no burst) and flies redeploy_flight to a ring redeploy_ring round the hull as it
+    // stands now, 2 pi / deploy_max apart from the bow (120 deg for three), each with the hull it had.
+    // In flight it is a throw like any other: no body, counted as out, marked where it lands.
+    public List<DeployedTurret> OwnLanded()
+    {
+        var mine = new List<DeployedTurret>();
+        if (MyHub is { } h) foreach (var t in h.Deployed) if (t.OwnerId == OwnerId) mine.Add(t);
+        return mine;
+    }
+    public void Redeploy()
+    {
+        var mine = OwnLanded();
+        if (Sl("redeploy").Cool > 0 || mine.Count == 0) return;
+        Sl("redeploy").Cool = Cooling(Stats["redeploy_cooldown"]);
+        double flight = Stats["redeploy_flight"];
+        float ring = (float)Stats["redeploy_ring"], step = Mathf.Tau / Math.Max(1, (int)Stats["deploy_max"]);
+        var bow = Vector2.Up.Rotated(Rotation);
+        for (int i = 0; i < mine.Count; i++)
+        {
+            var t = mine[i];
+            var at = Position + bow.Rotated(step * i) * ring;
+            _throws.Add((at, flight, t.Hp, t.MaxHp));
+            MyHub?.DeployedTaken(t);
+            Fx.Warn(new FxRaise { Id = Fx.AimZone, At = at, To = at, Size = DeployedTurret.Radius, Time = flight });
+        }
+    }
     // host, each frame: a throw whose flight is over lands as a turret
     private void TickThrows(double delta)
     {
@@ -694,11 +721,13 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         b.Own -= take; b.N = (int)b.Own;
         return d - take;
     }
-    // Every bubble that covers `victim` spends itself on this blow before the hull sees it.
-    private static double ThroughBubbles(PlayerShip victim, double d)
+    // Every bubble that covers `at` spends itself on this blow before the hull there sees it: EVERY
+    // friendly hull's door calls it (kits6b-J3) -- a pilot's (Guarded), a sentry's and a fleet craft's
+    // (DeployedTurret / UtilityShip.TakeDamage) -- so the bubble is a place, not a list of kinds.
+    public static double ThroughBubbles(Vector2 at, double d)
     {
         foreach (var h in Combat.Players)
-            if (d > 0 && h is PlayerShip p && p.BubbleUp && victim.Position.DistanceTo(p.Position) <= p.BubbleRadius)
+            if (d > 0 && h is PlayerShip p && p.BubbleUp && at.DistanceTo(p.Position) <= p.BubbleRadius)
                 d = p.SpendBubble(d);
         return d;
     }
@@ -1101,7 +1130,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             d *= _status.ShareOf(g.Status, g.Share);
             if (d <= 0) return 0;
         }
-        return ThroughBubbles(this, d);                                  // a bubble over it spends first
+        return ThroughBubbles(Position, d);                              // a bubble over it spends first
     }
 
     public void TakeDamage(double d) => Incoming(d);

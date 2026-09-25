@@ -273,10 +273,20 @@ public static class Ab
     public static readonly AbilityDef Bubble = new()
     {
         Id = "bubble", Name = "Bubble", Short = "BUBBLE", Default = Key.Q,
-        Blurb = "A bubble over you and everyone near: it soaks damage until its pool is spent or the time is up.",
+        Blurb = "A bubble over you and every friendly hull near -- allies, sentries, the fleet: it soaks damage until its pool is spent or the time is up.",
         Press = (s, _) => s.RaiseBubble(),
         Refuse = (s, _) => s.Sl("bubble").Cool > 0 ? "CHARGING" : null,
         Show = (s, _) => Timed(s, "bubble", "bubble_cooldown", $"UP {s.Sl("bubble").N}"),
+    };
+
+    // REDEPLOY (kits6b-J3): every sentry out folds and lands round the hull a second later.
+    public static readonly AbilityDef Redeploy = new()
+    {
+        Id = "redeploy", Name = "Redeploy", Short = "REDEPLOY", Default = Key.E,
+        Blurb = "Every sentry you have out folds up and lands in a ring round you a second later, each with the hull it had.",
+        Press = (s, _) => s.Redeploy(),
+        Refuse = (s, _) => s.Sl("redeploy").Cool > 0 ? "COOLING" : s.OwnLanded().Count == 0 ? "NONE OUT" : null,
+        Show = (s, _) => Timed(s, "redeploy", "redeploy_cooldown", "READY"),
     };
 
     public static readonly AbilityDef Overdrive = new()

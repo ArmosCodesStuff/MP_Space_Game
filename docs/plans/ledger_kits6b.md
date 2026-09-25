@@ -170,3 +170,24 @@ Done: JOB 0, J1. Next is kits6b-J2; no PRE written for it. What the next agent n
 - Checks written: LaneA6bTotChecks (solo, after LaneA6bSpotterChecks), LaneA6bTotHost/LaneA6bTotGuest (arena, after
   the decoy pair), frame 79c_tot_lines (Shots.cs.txt LaneA6bTotFrame). Test phase owes: solo x2, six x2, screens.
 - Next: kits6b-J3 (Bubble on every friendly hull + Redeploy).
+
+### kits6b-J3 · PRE · FR Bubble over every friendly hull + Redeploy -- tier opus
+- Intent: PlayerShip.ThroughBubbles(at, d) public, by position: a pilot's Guarded, DeployedTurret.TakeDamage and
+  UtilityShip.TakeDamage all spend the bubbles over them first. Ab.Redeploy (E, ability 3): every LANDED own sentry
+  folds (DeployedTaken) and rides _throws for redeploy_flight 1.0 s to a ring redeploy_ring 150 u round the hull,
+  2 pi / deploy_max apart (120 deg) from the bow, each with its hull; cd redeploy_cooldown 20; refused NONE OUT / COOLING.
+  D41: the ring is taken round the hull at the press (a throw's landing point is fixed at its throw).
+  Old truths: "F raises a bubble" message -> Q. Checks LaneA6bBubbleCoverChecks, LaneA6bRedeployChecks, frame redeploy_ring.
+- Files: Abilities.cs, PlayerShip.cs, Deployed.cs, UtilityShip.cs, Ships.cs, SmokeTest.cs.txt, Shots.cs.txt.
+- HEAD a3265f7a3d2876b8fce0b945f85c14cfb9f05d05 · 7146e4f c438f09 41fe484 4d92dd4 a250e89 640022b 9433a13 
+### kits6b-J3 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. ThroughBubbles(at, d) is by place and public: the pilot's Guarded, DeployedTurret.TakeDamage and
+  UtilityShip.TakeDamage all pay the bubbles over them first. Ab.Redeploy on E (ability 3; the freighter's list is
+  Guns, Deploy, Tot, Bubble, Redeploy); PlayerShip.OwnLanded/Redeploy (D41: the ring is taken at the press).
+- Old truths: the solo bubble message F -> Q; arena guest For(freighter).Length 11 -> 12; the witness sweep (+
+  "redeploy"; a Fit.Deploy hull is given one sentry standing 200-300 u off its cursor before each press).
+- Checks written: LaneA6bBubbleCoverChecks, LaneA6bRedeployChecks (solo, after LaneA6bTotChecks), frames
+  79d_redeploy_marks / 79e_redeploy_ring (Shots.cs.txt LaneA6bRedeployFrame). The ally case of the bubble is the arena
+  host's existing check (the host's hull inside the guest's bubble). Test phase owes: solo x2, screens.
+- Next: kits6b-J4 (Bastion mortar + the Lob primary).
