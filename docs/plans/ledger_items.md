@@ -83,3 +83,49 @@ Stat ids an item line lifts that the kits own (today's id where one exists; `?` 
   sorted by tier, a crate's tier colour, the recycler's scrap by tier).
 - **J7** docs: CHANGES.md Unreleased + Handoff, DESIGN.md (the item law, roles), final POST (what the test
   phase owes).
+
+## J1 PRE -- tier opus
+Intent: foundation + rows (see Jobs J1). HEAD 5305253. Hashes:
+  scripts/Equipment.cs dcc2ef54d70a880fe689ce3e2a16290165dba2d2
+  scripts/Ui.cs cad90afd6d0c9a98716d8cd2690d282ec339668c
+  scripts/Economy.cs 994419b74ff4b1b7fbc90d08e0c3bb4011f254ea
+  scripts/EquipmentWindow.cs 6fd9f8715e30c3d321d1dbaf24cab65c77c56970
+  scripts/Radar.cs 0d2c845a77a13d6dc94458993a6677727ff0b501
+  scripts/RecyclerPanel.cs d49f462fa515b8d2b5ec1a423323465bec184a3d
+  scripts/Yard.cs a113a6af43ba0e9244388d287024b06641e45cc5
+  scripts/Character.cs d127ed2ec2b06d48c6df59fff8c55f8d47721ae0
+  scripts/Loot.cs 77b8e410e42325f092cce77f48d3e534fb77016e
+  scripts/TioWindow.cs ad768024515d17771331cfc8526db77054bcf28c
+  scripts/Game.cs 0041e7a9e744ccba90957f8afef62aa42afb1324
+  tools/smoketest/SmokeTest.cs.txt 5e2cd742ace0e8bc1d754c2658dbf5e46756d3f7
+  tools/screens/Shots.cs.txt 740a6bba9f9f8212030798d5ed42e737da5276cc
+  scripts/Items.cs (new)
+## J1 POST
+Verdict: done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED (0 warnings, 0 findings, UNUSED 0). Own diff read.
+Files: scripts/Items.cs (new: Hulls, Tiers, Price, ItemLine, Items.Roles/IdsOf/Expand/Lines/Build), Equipment.cs (Rarity,
+Migrated, the 62 old lines and Line() deleted; ItemDef.Tier/Cat/Line; Fits by category; SheetOf/BaseOf; Sum and Describe
+expand roles), Loot.cs (J2's code landed here: BaseTier, RollTier 20/70/10, 70% own category), Ui.TierColor, Economy
+(ScrapValue deleted), Yard, RecyclerPanel, EquipmentWindow, Radar, TioWindow ("mostly T{n}"), Character.Load (no
+Migrated), Game.Version 4, Ships.cs (EveryReachStat deleted: its one caller is gone), SmokeTest.cs.txt, Shots.cs.txt.
+Checks written (engine-unproven: rungs owed in the final test phase):
+- NEW methods: ItemsLawChecks, ItemsTableChecks (catalogue, (slot, lean) dups, what fits, Par lines, caps, chip budget,
+  the stacked-share floor, every stat real on every hull it fits, kit fit, other category inert, Describe),
+  ItemsLineChecks (48 lines at T1/T5/T10 from §3.3 literals; 8 reference hull lines on 3 hulls x 3 tiers; salvage lifts
+  ups only, not the rider's +n), ItemsLootChecks (crates, base tier, 20/70/10 at L1/L20/L40, 70% own category).
+- REWRITTEN onto the new ids: SaveCoverage (round trip incl. hot_barrel_t10; tampered file; version 4 stamp),
+  ItemsNoMigrationChecks (the old "file before the destroyer" block: old ids read as nothing, no refund), RecyclerChecks
+  (scrap by tier 100/125/244/745), GearLevelChecks (Heavy Battery / Director Suite), ChipChecks (hull literals
+  1.08/1.08/1.16/1.24; Combat chip no longer costs hull), the refit fraction (Bulwark Belt T10/T1), Salvo Core on the
+  DD, the carrier's hangar block (counts via Character.Bonuses; Magazine Core T1/T5/T9 on the carrier), bombers via
+  Bonuses, the window's level purchase (Bulwark Belt +25% -> +25.75%), NeedsSaid words, K window (Magazine Core 4 +1 = 5,
+  top -17% red), L1 boss crates T1-T2, the arena/Mp guest carrier (Magazine Core T9: 6 torpedoes on the host's copy),
+  the guest's levelled Helm Drive (rudder x1.265 / x1.2725). Shots: 6b_k_stats_gear, 58_equipment_hold, 58b, 81*, 10b.
+Test phase owes for J1: rung 3 (solo) x2 seeds on all of the above; rung 4 frames 6b, 58, 58b, 10b by eye; rung 5
+(six) for the Mp carrier and Helm Drive checks. EXPECTED RED until the kits reconcile: ItemsTableChecks "every stat a
+part names is on every hull it fits" (craft_damage & the other I6 rows until J4; warp_safe/warp_rate/surge_*/
+strafe_thrust until lane B merges; flare_count; @area / @duration rows the kits' abilities do not yet join).
+DESIGN FLAG for the owner (open): a capital can pay top speed in four slots + three Combat chips = -108% (the sheet's
+x0.1 floor holds it at 10.4 u/s); the spec prices each line alone, never the stack.
+Next: J2 is now only the TIO line (done in J1) -> fold into J7; next job J3's content landed in ItemsLineChecks, so the
+next job is J4 (conditional doors), then J5 (guest-role check ItemsGuestChecks, ItemsParRowsChecks), J6 (frames beyond
+58: a crate's tier colour, the recycler list by tier), J7 (docs + final POST).

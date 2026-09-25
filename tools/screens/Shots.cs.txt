@@ -151,10 +151,11 @@ public partial class _Shots : Node
         Key(global::Godot.Key.K); await W(0.4); await Snap("5_k_keys");
         N<StatsWindow>().First().ShowPane(false); await W(0.2); await Snap("6_k_stats");
         Key(global::Godot.Key.K); await W(0.2);
-        // the same window on a carrier flying boss drops: fighters added, downsides in red
+        // the same window on a carrier flying boss drops: a torpedo added, prices in red
+        // (Heavy Battery T4, Magazine Core T9: +2 torpedoes a bomber)
         {
             var cl = Character.LoadoutFor(ShipClass.Carrier); var keep = (string[])cl.Clone();
-            cl[0] = "cv_swarm_3"; cl[4] = "cv_widebay_3";
+            cl[0] = "heavy_battery_t4"; cl[4] = "magazine_core_t9";
             Character.Class = ShipClass.Carrier; P(H, "ApplyLocalIdentity"); await W(0.3);
             Key(global::Godot.Key.K); await W(0.4);
             N<StatsWindow>().First().ShowPane(false); await W(0.2); await Snap("6b_k_stats_gear");
@@ -420,12 +421,14 @@ public partial class _Shots : Node
             Character.GearLevel.Clear(); foreach (var kv in keepLv) Character.GearLevel[kv.Key] = kv.Value;
             Character.BossCleared.Clear(); foreach (var kv in keepCl) Character.BossCleared[kv.Key] = kv.Value;
         }
-        // ...and with boss drops: an Epic shield fitted (its name in the Epic colour, its effects in
-        // words), and a hold of every class's parts, some of them doubled
+        // ...and with boss drops (ItemsFrames): a T10 shield fitted (its name in the T10 colour, its
+        // effects in words), and a hold of parts from every category at tiers 1 to 10, sorted by
+        // tier, some of them doubled -- the other categories' listed with what they need
         {
             var bl = Character.LoadoutFor(Character.Class); var keep = (string[])bl.Clone();
-            bl[2] = "sh_glass_3"; bl[6] = "chip_combat_2";
-            foreach (var id in new[] { "bs_heavy_2", "dd_seeker_3", "bs_barrage_2", "drv_racing_1", "sh_bulwark_3", "fr_flak_1", "chip_target_1", "chip_target_1", "cv_elite_3", "cv_widebay_2" })
+            bl[2] = "bulwark_belt_t10"; bl[6] = "chip_combat_t2";
+            foreach (var id in new[] { "heavy_battery_t2", "salvo_core_t7", "magazine_core_t3", "helm_drive_t1", "bulwark_belt_t5", "aegis_array_t1",
+                                       "chip_target_t1", "chip_target_t1", "hot_barrel_t10", "cargo_plating_t4", "swarm_rack_t9" })
                 Character.Stow(id);
             P(H, "ApplyLocalIdentity"); H.ToggleEquipment(); await W(0.4);
             await Snap("58_equipment_hold");
@@ -438,8 +441,8 @@ public partial class _Shots : Node
         // Engine Chip in the hold has its EQUIP greyed ("next chip slot opens at level 8")
         {
             var bl = Character.LoadoutFor(Character.Class); var keep = (string[])bl.Clone(); int keepPeak = Character.Peak;
-            Character.Peak = 4; bl[5] = "chip_combat_1"; bl[6] = "chip_armour_2";
-            Character.Stow("chip_engine_1");
+            Character.Peak = 4; bl[5] = "chip_combat_t1"; bl[6] = "chip_armour_t2";
+            Character.Stow("chip_engine_t1");
             P(H, "ApplyLocalIdentity"); H.ToggleEquipment(); await W(0.4);
             await Snap("58b_eq_chip_walls");
             H.ToggleEquipment(); await W(0.2);
@@ -507,7 +510,7 @@ public partial class _Shots : Node
             await Snap("81_equipment_base");
             ebShip.NoteCombat(); await W(0.3);
             await Snap("81b_equipment_base_in_combat");
-            foreach (var id in new[] { "bs_heavy_2", "dd_seeker_3", "sh_bulwark_3", "chip_target_1" }) Character.Stow(id);
+            foreach (var id in new[] { "heavy_battery_t2", "salvo_core_t6", "bulwark_belt_t10", "chip_target_t1" }) Character.Stow(id);
             H.ToggleEquipment(); await W(0.3);
             N<Button>(N<EquipmentWindow>().First()).First(b => b.Name == "Recycler").EmitSignal(BaseButton.SignalName.Pressed); await W(0.4);
             await Snap("81c_recycler");
@@ -564,11 +567,13 @@ public partial class _Shots : Node
             GetViewport().GetCamera2D().Zoom = new Vector2(3.2f, 3.2f);
         }
         await Close(ShipClass.Carrier, "10_carrier_closeup");
-        // a Wide Bay III: five bombers parked on the deck, three to port of the runway and two to starboard
+        // five bombers parked on the deck, three to port of the runway and two to starboard (the
+        // pilot's own share: no line moves a bomber count)
         {
             var cl = Character.LoadoutFor(ShipClass.Carrier); var keep = (string[])cl.Clone();
-            cl[4] = "cv_widebay_3";
+            Character.Bonuses["bomber_count"] = 1.5;
             await Close(ShipClass.Carrier, "10b_carrier_gear_docked");
+            Character.Bonuses.Remove("bomber_count");
             for (int k = 0; k < keep.Length; k++) cl[k] = keep[k];
             P(H, "ApplyLocalIdentity"); await W(0.2);
         }

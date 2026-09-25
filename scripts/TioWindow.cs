@@ -79,7 +79,7 @@ public partial class TioWindow : PanelContainer
                           + (first ? $" + {Missions.FirstClearExp} first clear" : "") + $" + {Missions.CompletionExp} completing, "
                         : $"You: NO EXP -- level {lv} is under half your level {Character.Level}, ")
                      + $"{Missions.BountyEach(Missions.Kind, lv, party):0} credits each.\n"
-                     + $"Parts: {Loot.CratesFor(lv)} crates, yours alone ({(lv <= 5 ? "Common" : lv <= 10 ? "Common or Rare" : "Common, Rare or Epic")}).");
+                     + $"Parts: {Loot.CratesFor(lv)} crates, yours alone (mostly T{Loot.BaseTier(lv)}).");
         Ui.SetText(_party, string.Join("\n", Hub.PartyIds.OrderBy(i => i).Select(i => $"  {Hub.PilotName(i)}   {(Hub.IsReady(i) ? "READY" : "not ready")}")));
         bool mine = Hub.IsReady(Net.LocalId);
         Ui.SetText(_ready, mine ? "READY  ✓" : "READY");
