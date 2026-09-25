@@ -8,10 +8,15 @@
 - fable-critique-2 / task w8qdfovp6 (wf_f703a3a3-c3e): testing, hand-offs + compaction, verbiage -> scratchpad/fable2/REPORT2.md,
   CLAUDE.md v2 + CLAUDE.diff.md, process/, tools/. When it lands: REPORT2 to the owner; apply at the next batch boundary; report in 3 lines.
 
+- fable-review / task wt3jwclpl (wf_3bcc353d-382): 5 Fable reviewers (cap, fr, hv, lt, net+authority) over the Opus build's checks and
+  code -> tasks. When it lands: DROP severity-1 count-only tasks ("a third check"; owner: speed, the count is Fable's judgment), pass the
+  rest as args.tasks to test-phase.js (fixed before round 1). The blanket 3+ audit stage is OFF (args.audit unset).
+
 ## Next
-1. Workflow({scriptPath: workflows/scripts/test-phase.js}): rounds a (5 chains, Haiku runners, Opus triage, fixes) -> audit merge after
-   the first green -> rounds c -> extras (frames, wan, pack -Dirty) -> bar -> release. A stop: read the row, fix, relaunch with
-   resumeFromRunId and args {attempt: 2}.
+1. When test-prep, critique-2 and fable-review have all landed: apply critique-2's test-phase.js / tester.md changes (owner: overhaul
+   permitted), then Workflow({scriptPath: workflows/scripts/test-phase.js, args: {tasks: <review tasks>}}): review fixes -> rounds a ->
+   audit merge after the first green -> rounds c -> extras -> bar -> release. A stop: read the row, fix, relaunch with resumeFromRunId
+   and args {attempt: 2, tasks: []}.
 2. After the release: frames to the owner (framesForOwner), the owed one-machine / two-machine network checks (netOwed), then the
    critique's "after this release" list (REPORT.md in scratchpad/fable; copy it to docs/plans/process_after_release.md first).
 3. Delete each lane's worktree once merged (t0..t4 belong to the test phase).

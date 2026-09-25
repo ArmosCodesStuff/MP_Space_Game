@@ -155,6 +155,10 @@ Agents (owner, 2026-09-25)
   (a retrospective with numbers from the journals), cuts reply and prompt text (the owner finds replies overly verbose), and builds a
   method that lets the owner compact at any moment with nothing lost. CLAUDE.md changes are applied at a batch boundary and reported in
   three lines.
+- (2026-09-25) Fable may OVERHAUL THE TESTING METHODOLOGY and REVIEW THE CHECKS AND CODE the Opus lanes put in place (the merged build);
+  review findings become fix tasks in the test phase (a wrong check is made to fail on the old code first, never loosened).
+- (2026-09-25, later) THE OVERHAUL'S GOAL IS SPEED: make what already happens faster. Fable decides how many checks a thing needs by
+  its risk (one may be enough where three were ruled; the "3+ per ability" rule and its blanket audit are replaced by Fable's judgment).
 
 Testing (owner, standing)
 - (2026-09-25) Once everything requested is built: 3+ tests IN THE ENGINE for every ability added through the class system (and
