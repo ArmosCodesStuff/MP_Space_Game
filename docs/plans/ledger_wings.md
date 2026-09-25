@@ -97,3 +97,12 @@ Next: J3 docs.
 lines, DPS lines (`Dps.*`) for gunships/patrol, the patrol ring + chevron (lane D F9), gunship art
 (lane H). Merge risk: the reach-sweep totals line and the Solo call site after
 LaneAHeavyRowsChecks (lane A edits nearby); CHANGES.md Handoff/Unreleased heads.
+
+### GATE FIX PRE (opus) -- the merge gate's four findings
+Intent: (1) a sortie craft still Docked when its sortie ends is Done (ShipClasses Docked case);
+(2) a guest snaps a gunship to the host's pose on Waiting->Orbit (SetNetState), guest-role check
+of the gunship path (host WingsHostSortie sends gunships from the guest's carrier; WingsGuestWatch
+asserts 2 gunships, every visible frame 240 +- 40 u of the target); (3) the old-behaviour clause
+in the wing header comment deleted; (4) `Wing.Until` exposed, and the patrol's 20 s / gunships'
+12 s asserted right after each Sortie. Files @ HEAD e2a2ed8: ShipClasses.cs 45fad2c8,
+PlayerShip.cs 1e7afc69 (untouched unless needed), SmokeTest.cs.txt 677012ad.
