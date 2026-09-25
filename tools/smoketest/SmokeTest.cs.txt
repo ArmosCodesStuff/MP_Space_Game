@@ -4085,6 +4085,81 @@ public partial class _Test : Node
         }
     }
 
+    // ── F12 · THE MELEE ARC AND THE GUARD CLAMP (lane A slice 5, kits5-J1) ─────────────────────
+    // Pure (Melee.Pick, Melee.Guard): the blade's literals (160 u, ±55°, kits_v2 Warrior card) and the
+    // whirlwind's (210 u, all round) from 3 varied spots and facings. A body well inside the wedge and one
+    // whose rim just reaches in are struck; one 2-25° outside the wedge, one past the reach and one
+    // behind are not; Stops 1 takes the nearest. The guard follows the cursor to ±90° off the nose and no
+    // further (the prism's clamp), from 3 varied noses; nothing is exactly on 55° or 90°.
+    void LaneAMeleeArcChecks()
+    {
+        const float reach = 160f, half = 55f;
+        for (int run = 0; run < 3; run++)
+        {
+            var from = new Vector2(Vary(-3000f, 3000f), Vary(-3000f, 3000f));
+            float facing = VaryAngle();
+            Vector2 At(float bearingDeg, float dist) => from + Vector2.Right.Rotated(facing + Mathf.DegToRad(bearingDeg)) * dist;
+            var pool = new List<(string name, Vector2 at, float r)>();
+            float r0 = Vary(8f, 20f), r1 = Vary(8f, 20f), r2 = Vary(8f, 20f), r3 = Vary(8f, 20f), r4 = Vary(8f, 20f);
+            pool.Add(("inside", At(Vary(-45f, 45f), Vary(40f, 90f)), r0));
+            pool.Add(("rim", At(Vary(-40f, 40f), reach + r1 - Vary(2f, 10f)), r1));
+            pool.Add(("wide", At((run % 2 == 0 ? 1 : -1) * Vary(57f, 80f), Vary(60f, 140f)), r2));
+            pool.Add(("far", At(Vary(-30f, 30f), reach + r3 + Vary(10f, 60f)), r3));
+            pool.Add(("behind", At(180f + Vary(-60f, 60f), Vary(40f, 140f)), r4));
+            var shuffled = pool.OrderBy(_ => Rng.Randi()).ToList();
+            string Names(List<(string name, Vector2 at, float r)> l) => string.Join(",", l.Select(t => t.name).OrderBy(n => n));
+            var blade = Melee.Pick(from, facing, reach, Mathf.DegToRad(half), 0, shuffled, t => t.at, t => t.r);
+            var first = Melee.Pick(from, facing, reach, Mathf.DegToRad(half), 1, shuffled, t => t.at, t => t.r);
+            var whirl = Melee.Pick(from, facing, 210f, Mathf.Pi, 0, shuffled, t => t.at, t => t.r);
+            Check(Names(blade) == "inside,rim" && first.Count == 1 && first[0].name == "inside"
+                  && new[] { "inside", "rim", "wide", "behind" }.All(n => whirl.Any(t => t.name == n)),
+                  $"a 160 u x +-55 deg arc facing {Mathf.RadToDeg(facing):0} deg strikes the body inside and the one whose rim reaches in, never one outside the wedge, past the reach or behind ({Names(blade)}); Stops 1 takes the nearest ({string.Join(",", first.Select(t => t.name))}); a 210 u whirl all round takes the one behind and the wide one ({Names(whirl)})");
+
+            float nose = VaryAngle();
+            float wideR = Mathf.DegToRad(Vary(95f, 175f)), wideL = -Mathf.DegToRad(Vary(95f, 175f)), inR = Mathf.DegToRad(Vary(5f, 85f));
+            float gR = Mathf.AngleDifference(nose, Melee.Guard(nose, nose + wideR, Mathf.Pi / 2f));
+            float gL = Mathf.AngleDifference(nose, Melee.Guard(nose, nose + wideL, Mathf.Pi / 2f));
+            float gI = Mathf.AngleDifference(nose, Melee.Guard(nose, nose + inR, Mathf.Pi / 2f));
+            Check(Mathf.Abs(gR - Mathf.Pi / 2f) < 1e-4f && Mathf.Abs(gL + Mathf.Pi / 2f) < 1e-4f && Mathf.Abs(gI - inR) < 1e-4f,
+                  $"the guard clamp, nose {Mathf.RadToDeg(nose):0} deg: a cursor {Mathf.RadToDeg(wideR):0} deg right clamps to 90 ({Mathf.RadToDeg(gR):0.0}), {Mathf.RadToDeg(-wideL):0} deg left to -90 ({Mathf.RadToDeg(gL):0.0}), {Mathf.RadToDeg(inR):0} deg is followed ({Mathf.RadToDeg(gI):0.0})");
+        }
+    }
+
+    // World (Melee.Strike, host): the pilot swings a test row (reach its own main_range, +-55 deg, the
+    // blade's 26 a blow) from 3 varied spots and headings, with a gunship in front inside its reach, one
+    // behind and one just past the reach. Only the one in front loses 26, once, and the pilot's
+    // DealtBy["melee_test"] grows by 26: the door credits the row's id.
+    async Task LaneAMeleeStrikeChecks(Vector2 yonder)
+    {
+        var pm = Me;
+        var row = new MeleeDef { Id = "melee_test", Reach = "main_range", Arc = 55f, Stops = 0 };
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            float rot = VaryAngle();
+            pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = rot;
+            float reach = (float)pm.Stats[row.Reach];
+            var nose = Vector2.Up.Rotated(rot);
+            var spots = new[] { at + nose.Rotated(Mathf.DegToRad(Vary(-40f, 40f))) * reach * Vary(0.3f, 0.7f),
+                                at - nose.Rotated(Mathf.DegToRad(Vary(-50f, 50f))) * reach * Vary(0.3f, 0.7f),
+                                at + nose.Rotated(Mathf.DegToRad(Vary(-30f, 30f))) * (reach + Vary(150f, 300f)) };
+            var foes = spots.Select(s => { var f = H.SpawnRaider(s, Enemies.Gunship); f.Hp = 1e9; return f; }).ToArray();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            for (int k = 0; k < 3; k++) foes[k].Position = spots[k];
+            pm.Position = at; pm.Rotation = rot;
+            var hp0 = foes.Select(f => f.Hp).ToArray();
+            double dealt0 = pm.DealtBy.TryGetValue(row.Id, out var dv) ? dv : 0;
+            var hit = Melee.Strike(row, pm, 26);
+            var lost = Enumerable.Range(0, 3).Select(k => hp0[k] - foes[k].Hp).ToArray();
+            double dealt = (pm.DealtBy.TryGetValue(row.Id, out var dv2) ? dv2 : 0) - dealt0;
+            Check(Math.Abs(lost[0] - 26) < 1e-6 && lost[1] == 0 && lost[2] == 0 && hit.Count == 1 && Math.Abs(dealt - 26) < 1e-6,
+                  $"a {reach:0} u +-55 deg arc swung at heading {Mathf.RadToDeg(rot):0} deg: the gunship in front loses 26, the one behind and the one past the reach nothing ({string.Join(" / ", lost.Select(l => l.ToString("0.##")))}), and DealtBy[\"melee_test\"] grows 26 ({dealt:0.##})");
+            foreach (var f in foes) f.TakeDamage(1e12);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        pm.Position = yonder; pm.Velocity = Vector2.Zero;
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -9831,6 +9906,8 @@ public partial class _Test : Node
             await LaneAMissileIdsChecks(yonder);
             LaneAChargeBandChecks();
             LaneAChargeTableHashedChecks();
+            LaneAMeleeArcChecks();
+            await LaneAMeleeStrikeChecks(yonder);
             await LaneBHelmChecks(yonder);
             await LaneBStrafeChecks(yonder);
             await LaneBBoostChecks(yonder);

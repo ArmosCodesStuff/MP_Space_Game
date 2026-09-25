@@ -44,3 +44,14 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
 - **kits5-J9** Dazzled / Jammed latch gates (OutGuard.NewLatch / KeepsLatch), CHANGES + DESIGN, final POST.
   Checks `LaneALatchGateChecks`.
 
+### kits5-J1 · PRE · F12 melee arc + guard clamp (D29) -- tier opus
+- Intent: new scripts/Melee.cs (MeleeDef, Melee.All, Pick, Strike, Guard). Checks LaneAMeleeArcChecks, LaneAMeleeStrikeChecks.
+- Files: scripts/Melee.cs (new), tools/smoketest/SmokeTest.cs.txt, this ledger.
+- HEAD af89752ffdd79077d20ea21ac7282c51a034908f · SmokeTest.cs.txt 93096537210a252c1f5955f72522ecfbeda24102
+### kits5-J1 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Melee.cs: MeleeDef {Id, Reach stat, Arc deg, Stops}, pure Pick / Guard / Nose, host Strike through
+  Dealt. No row yet (D28): Melee.All opens with the Warrior in 6c.
+- Files: scripts/Melee.cs (new); SmokeTest.cs.txt (LaneAMeleeArcChecks, LaneAMeleeStrikeChecks after
+  LaneAChargeTableHashedChecks, freighter in solo). Trap: SmokeTest.cs.txt is LF; write it in binary.
+- Next: kits5-J2.
