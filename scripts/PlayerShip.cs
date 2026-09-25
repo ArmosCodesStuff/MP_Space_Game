@@ -647,12 +647,14 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Sl("railgun").Left = Stats["rail_charge"];
     }
     // The charge is spent (the Railgun row's Expire, on the host): the band its charge reached
-    // (Charges.All["railgun"]) says how much of rail_damage goes down which line, from the nose.
+    // (Charges.Of("railgun")) says how much of rail_damage goes down which line, from the nose
+    // along the heading, as far as rail_range.
     public void FireRail()
     {
         double charged = 1 - Sl("railgun").Left / Stats["rail_charge"];
-        var (mult, line) = Charges.At(Charges.All["railgun"], charged);
-        Lines.Strike(line, this, Aim.Nose(this, MyArt.Length * 0.5f), Vector2.Up.Rotated(Rotation), Stats["rail_damage"] * mult);
+        var (mult, line) = Charges.At(Charges.Of("railgun"), charged);
+        var nose = Aim.Nose(this, MyArt.Length * 0.5f);
+        Lines.Strike(line, this, nose, nose + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"], Stats["rail_damage"] * mult);
         Sl("railgun").Cool = Cooling(Stats["rail_cooldown"]);
     }
 

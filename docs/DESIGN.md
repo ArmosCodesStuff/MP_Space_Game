@@ -610,9 +610,11 @@ first body, n = the first n, 0 = everything on its path; each body is struck onc
 the railgun, Time on target's lines and the prism's children are rows, never a new loop. Trap: a
 blow may end a body and remove it from the list being walked, so `Shot.Strike` asks for the next
 body afresh after each blow, and `Lines.Strike` picks every body before it deals the first.
-**A charged weapon reads its bands** (`Charge.cs`, `Charges.All` by ability id): the share of the full
+A line is aimed from a point at a point: an `AtTarget` row ends there (never past its Reach), any other runs its
+whole Reach through it. **A charged weapon reads its bands** (`Charge.cs`, `Charges.Of(ability id)`): the share of the full
 charge picks a multiplier and a line row; a ramp is a band flag, not code. The Sniper's active reload
-(6c) is the railgun's table rewritten, not a new path.
+(6c) is the railgun's table rewritten, not a new path. Trap: a constant table is an ARRAY of rows, never a
+dictionary -- `Net.Plain` does not hash a dictionary field, so a build whose table differed would still be admitted.
 
 ### The helm: capital ships handle like naval ships
 

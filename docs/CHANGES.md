@@ -37,9 +37,9 @@ history pick the work up from it alone. Update it in the same change as the code
 ## Handoff — read this first
 
 **2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A slice 3 built** -- F5 (a
-shot strikes each body once, `Stops`), F23 (`Lines.cs`; the railgun on it, same literals), F6 (predicted
-missiles carry a NetId on every peer; `Hub.NetMissile` changed), F7 (charge bands, `Charge.cs`). Compiles,
-rung 2 green; **engine-unproven: rungs 3 and 5 owed in the final test phase** (ledger_kits.md J11 POST).
+shot strikes each body once, `Stops`), F23 (`Lines.cs`, with `AtTarget` for Time on target; the railgun on it, same literals), F6 (predicted
+missiles carry a NetId on every peer; `Hub.NetMissile` changed), F7 (charge bands, `Charge.cs`, fingerprinted). Compiles,
+rung 2 green; **engine-unproven: rungs 3 and 5 owed in the final test phase** (ledger_kits.md J11 and J12 POST).
 Not built, by ruling: Overcharge (the Sniper's piece is the active reload). Deferred to their readers:
 F5's nine rows and its Decoyable / Command flags, `shell_turn` (D24, D27).
 
@@ -533,10 +533,12 @@ outstanding from the batch of 2026-09-23.)*
 
 A shot strikes each body it touches **once** and ends after its **Stops** bodies (every row today is 1,
 so nothing that flies behaves differently; 0 will be a piercing slug). **`Lines.cs`**: a line weapon is
-a row {Id, Width, Reach, Stops, Fx, Beam}; the railgun fires through `Lines.Strike` with its old
+a row {Id, Width, Reach, Stops, AtTarget, Fx, Beam}, aimed from a point at a point (an AtTarget row ends at
+the point, as Time on target's will); the railgun fires through `Lines.Strike` with its old
 numbers (150, 2500 x 14 u, through everything). A **predicted missile** now has an id from the
 missiles' id space, sent with its launch, the same on every peer (for the flares' decoy, slice 5).
-**Charge bands** (`Charge.cs`): what a charge fires as by how far it got; the railgun's table is its
+**Charge bands** (`Charge.cs`, an array of tables the build's fingerprint hashes, so two builds whose
+bands differ refuse each other): what a charge fires as by how far it got; the railgun's table is its
 old whole shot. **Rungs:** 1 and 2 green in the worktree; 3 and 5 owed (checks listed in the ledger).
 
 ### Class kits, lane A K3: merge gate 1's fixes (2026-09-25, worktree wt/kits)

@@ -889,3 +889,32 @@ nothing, and return status blocked with open "NOTE 4: moved to parallel lanes".
 - Rung 4: no frame owed (nothing drawn changed: the rail bar is the same row, same ends).
 - Traps to read first on a red: LaneAShotStopsChecks spawns 3 gunships per case (9 per run) and kills them;
   LaneAMissileIdsHost's three 40 s missiles land at (-7000, 7000) +- 900 u with 0 damage.
+
+### J12 · PRE · slice 3 gate fix (the opus merge gate's two findings) -- tier opus
+- Intent: (1) `Charges.All` becomes an array of rows (`ChargeTable {Id, Bands}`) so Net.Fingerprint hashes
+  it; `Charges.Of(id)`; FireRail and LaneAChargeBandChecks read through it. (2) `Lines.Strike(row, by, from,
+  to, damage)`: a row with `AtTarget` (bool, beside the Stops count -- the gate's second option, so Stops keeps
+  ShotDef's meaning) ends its segment at `to`, clamped to Reach; any other runs the full Reach along from->to.
+  Pure `Lines.End` holds that rule. FireRail passes nose + heading x rail_range (same literals).
+  Checks: NEW LaneALinesAtTargetChecks (3 varied angles: a body just past `to` untouched on an AtTarget row,
+  struck on the rail row; a target past 1500 u clamps the TOT-shaped row); NEW LaneAChargeTableHashedChecks
+  (bug fix: Charges.All and Lines.All are fingerprint parts, and 3 varied band mutants move the hash).
+- Files: scripts/Charge.cs, scripts/Lines.cs, scripts/PlayerShip.cs, tools/smoketest/SmokeTest.cs.txt,
+  docs/CHANGES.md, docs/DESIGN.md, this ledger.
+- HEAD 786ff1f754db70a26d49421b9f5a959f348007ed · Charge.cs 9f16812f97a7cffb8b8560f3a626bbaa4ad4ef15 · Lines.cs cd475f56f702573a2a9e3849e73c59aebfa0e6ce · PlayerShip.cs f61459731696350a8e47f5d39f8e34cbde92d9a6 · SmokeTest.cs.txt 61622f5c8f9518d66c0b03cae9dd1ab7e694aea0 · CHANGES.md 204300cfb70638b5185e8ff3fa0e9ca106ebd766 · DESIGN.md 1679878515e55973d882e1f1d582a5e4994e4180
+### J12 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Gate finding 1: `Charges.All` is `ChargeTable[]` ({Id, Bands}), a fingerprint part row by row;
+  `Charges.Of(id)` (null for no table) is the one reader. Gate finding 2: `Lines.Strike(row, by, from, to, damage)`;
+  `LineDef.AtTarget` (bool beside the Stops count, the gate's second option -- Stops keeps ShotDef's meaning);
+  pure `Lines.End(d, reach, from, to)` is Strike's segment. FireRail aims at nose + heading x rail_range.
+  6b adds its `tot` row {Width 14 u stat, Reach 1500 u stat, Stops 0, AtTarget true}; no Lines.cs code change.
+- Files: scripts/Charge.cs, scripts/Lines.cs, scripts/PlayerShip.cs (FireRail); SmokeTest.cs.txt (NEW
+  `LaneALinesAtTargetChecks` after LaneALinesChecks, NEW `LaneAChargeTableHashedChecks` after
+  LaneAChargeBandChecks; the rail row check also asserts !AtTarget; LaneAChargeBandChecks reads Charges.Of);
+  docs/CHANGES.md (Handoff + slice 3 Unreleased), docs/DESIGN.md.
+- Owed at rung 3 (`quick,solo,solo`), besides slice 3's list above: 3 x "a 14 u x 1500 u line that stops at its
+  target ..."; "the build's fingerprint reads the charge bands and the lines row by row"; 3 x "a build whose
+  railgun band fires xN has another fingerprint ...". Trap: the latter mutates the railgun band's Mult in place
+  and restores it in a finally (synchronous, no frame between).
+- Checkpoint: the commit after this entry. Slice 3 is complete (J8-J12).
