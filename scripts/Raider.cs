@@ -93,6 +93,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
         get => Squad?.Quarry;
         set { if (Squad != null) Squad.Quarry = value; }
     }
+    // A CALL is its squad's too (Squad.Call): host, a timed override that leaves Quarry alone
+    public void Call(Node2D by, double seconds) { if (Net.Sim) Squad?.Call(by, seconds); }
+    public Node2D CalledBy => Squad?.CalledBy;
     public bool Latched { get; private set; }
     public bool Boosting => Net.Sim ? _boosting : (_netFlags & FlagBoost) != 0;
     public float Speed { get; private set; }

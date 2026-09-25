@@ -148,3 +148,17 @@ Done: J1 (F12), J2-J3 (F11), J4 (F14 Prefer). Next is kits5-J5; no PRE written f
   recalls). The guest's `For(FreightHauler).Length == 13` was stale before this job (5 + drive + 6 = 12); now 11.
 - Files: PlayerShip.cs, Abilities.cs, Ships.cs, Hub.cs; SmokeTest.cs.txt (LaneASentryThrowChecks after LaneASentryPreferChecks).
 - Next: kits5-J6.
+### kits5-J6 · PRE · F14c: Raider.Call -- tier opus
+- Intent: Squad.Call(by, seconds): a timed target override (Pick takes the caller while it is up; the dark re-take waits;
+  at the lapse the squad re-picks, its Quarry first), CalledBy; Raider.Call / Raider.CalledBy are faces onto the squad.
+  D34: a call is the SQUAD's (a squad fights as one; Taunt calls every raider in reach, so every squad it touches).
+  D35: Taunt's x1.5 from the caller (an F4 row reading CalledBy) and the 1000 u pick land with the Taunt row (6c, D4).
+  Checks LaneARaiderCallChecks.
+- Files: scripts/Squads.cs, scripts/Raider.cs (one hunk: Call / CalledBy beside Target), SmokeTest.cs.txt, this ledger.
+- HEAD f79996d070572b339dd654999aa8785cbe2b7ac2 · Squads.cs b5bf1dbccefbede9ef35cc8f3ad3058c3cc1d09b · Raider.cs c0166966922981f9190af1b44f85c82263ccd785 · SmokeTest.cs.txt 9f97d2f64165a5fe561427504e2034c74120b9da
+### kits5-J6 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Squad.Call / CalledBy (the override applied at once with a Reform, so a latched webber lets go; the
+  lapse re-picks, Quarry first; the dark re-take waits while called); Raider.Call / CalledBy (Raider.cs: 3 lines).
+- Files: Squads.cs, Raider.cs; SmokeTest.cs.txt (LaneARaiderCallChecks after LaneASentryThrowChecks).
+- Next: kits5-J7.

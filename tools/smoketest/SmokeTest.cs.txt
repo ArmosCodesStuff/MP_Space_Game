@@ -4439,6 +4439,58 @@ public partial class _Test : Node
         await SetClass(cls0);
     }
 
+    // ── F14 · RAIDER.CALL (lane A slice 5, kits5-J6) ────────────────────────────────────────────
+    // World, host (Squad.Call through Raider.Call; Taunt's override, kits_v2 Beacon / kits_v3 3.5): a
+    // webifier hunting the pilot (its Quarry) from 250-400 u at a varied bearing, and a sentry of the
+    // pilot's 450-700 u out at another. Run 0 calls it on the way in, runs 1-2 once it is latched on the
+    // pilot. Called onto the sentry for 8-10 s: within 2 frames its target is the sentry, CalledBy says
+    // so, a latched webber lets go, and its Quarry is still the pilot; it posts and latches on the sentry
+    // inside the call. Called again for 0.5-0.8 s (a new call replaces the clock): 0.2-0.4 s past that
+    // lapse it is back on its Quarry, CalledBy is empty and the Quarry was never touched.
+    async Task LaneARaiderCallChecks(Vector2 yonder)
+    {
+        var cls0 = Character.Class;
+        await SetClass(ShipClass.FreightHauler);
+        var pm = Me; bool demo = pm.Demo; pm.Demo = true;
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        foreach (var dp in H.Deployed.ToList()) H.DeployedTaken(dp);
+        await Wait(0.3);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = VaryAngle(); pm.Hp = pm.MaxHp;
+            float wWay = VaryAngle();
+            var sentry = H.Drop(pm, at + Vector2.Right.Rotated(wWay + Vary(1.6f, 4.6f)) * Vary(450f, 700f), 1e9);
+            var w = H.SpawnRaider(at + Vector2.Right.Rotated(wWay) * Vary(250f, 400f)); w.Quarry = pm; w.Hp = 1e9;
+            async Task Frames(int n, Func<bool> until = null)
+            {
+                for (int i = 0; i < n && !(until?.Invoke() ?? false); i++)
+                { pm.Position = at; pm.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            }
+            await Frames(2);
+            if (run > 0) await Frames(60 * 6, () => w.Latched);
+            bool wasLatched = w.Latched;
+            w.Call(sentry, Vary(8f, 10f));
+            await Frames(2);
+            bool took = ReferenceEquals(w.Target, sentry) && ReferenceEquals(w.CalledBy, sentry) && ReferenceEquals(w.Quarry, pm) && !w.Latched;
+            await Frames(60 * 7, () => w.Latched && ReferenceEquals(w.Target, sentry));
+            bool posted = w.Latched && ReferenceEquals(w.Target, sentry) && ReferenceEquals(w.CalledBy, sentry);
+            Check(took && posted && (run == 0 || wasLatched),
+                  $"{(run == 0 ? "on its way in" : "latched on the pilot")}, a called webifier takes the caller within 2 frames, lets go and keeps its quarry ({took}), and posts on the caller inside the call ({posted})");
+            double again = Vary(0.5f, 0.8f);
+            w.Call(sentry, again);
+            double t0 = pm.Clock;
+            await Frames(90, () => pm.Clock - t0 >= again + Vary(0.2f, 0.4f));
+            bool back = ReferenceEquals(w.Target, pm) && w.CalledBy == null && ReferenceEquals(w.Quarry, pm);
+            Check(back, $"a {again:0.00} s call lapses and it is back on its quarry, the pilot ({(w.Target as Node2D)?.Name}, called by {(w.CalledBy as Node2D)?.Name ?? "none"})");
+            w.TakeDamage(1e12); H.DeployedTaken(sentry);
+            pm.Statuses.Clear(Status.Pinned);
+            await Wait(0.3);
+        }
+        pm.Demo = demo; pm.Position = yonder; pm.Velocity = Vector2.Zero; pm.Hp = pm.MaxHp;
+        await SetClass(cls0);
+    }
+
     // ── F12 · THE MELEE ARC AND THE GUARD CLAMP (lane A slice 5, kits5-J1) ─────────────────────
     // Pure (Melee.Pick, Melee.Guard): the blade's literals (160 u, ±55°, kits_v2 Warrior card) and the
     // whirlwind's (210 u, all round) from 3 varied spots and facings. A body well inside the wedge and one
@@ -10271,6 +10323,7 @@ public partial class _Test : Node
             await LaneAPrismRayChecks(yonder);
             await LaneASentryPreferChecks(yonder);
             await LaneASentryThrowChecks(yonder);
+            await LaneARaiderCallChecks(yonder);
             await LaneBHelmChecks(yonder);
             await LaneBStrafeChecks(yonder);
             await LaneBBoostChecks(yonder);
