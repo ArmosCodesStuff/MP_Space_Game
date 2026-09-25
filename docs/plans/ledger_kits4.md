@@ -147,7 +147,11 @@ A PRE with no POST is an interrupted job: compare the hashes, revert half-made e
   - Watch (rewritten, 4 args now: the point and the picks): every `doAbility.Invoke` / `doAb.Invoke` line of the sweeps and the walls.
 - **Rung 5 (`six`, twice)**: NEW (kits4-J5) in the arena pair: ahost's LaneA4HostPointCheck, "arena host: the guest's F,
   its row taking a point, lands the guest's cursor in this copy's slot" (the aguest's bubble press, LaneA4GuestPointPress,
-  lent TakesPoint on both peers). Watch GuestWalls' "RequestAbility" by string (now 4 args: the point and the picks).
+  lent TakesPoint on both peers). NEW (kits4-J6), same pair, same press: ahost's LaneA4HostPointCheck, "arena host: the
+  guest's F, its row taking targets, sends 3 picks and this copy holds the 2 living ones in the order sent, the unknown
+  1900 dropped" (the press also lent TakesTargets on both peers, the host lends the freighter's cap 1 -> 3; picks =
+  practice hulks 3, 1 around the unknown NetIds.Dummy + 900). Watch GuestWalls' "RequestAbility" by string (now 4 args:
+  the point and the picks).
 - **Rung 4**: no frame (nothing drawn changed).
 
 ### kits4-J5 · PRE · kits4 gate fix (the opus merge gate's four findings) -- tier opus
