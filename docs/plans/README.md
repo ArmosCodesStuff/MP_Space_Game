@@ -134,6 +134,9 @@ Agents (owner, 2026-09-25)
 - Run several engine and game instances at once: "my PC can handle it no prob" (Ryzen 7 7700, 16 threads, 47 GB). Engine slots
   (tools/rungs.ps1 -Slots) make it safe; the limit was shared folders and ports, never the PC.
 
+- (2026-09-25) Kits slices build SIDE BY SIDE in their own worktrees; ITEMS build alongside slice 6, then a reconcile pass checks and
+  corrects every item against the built kits. Never skip a review; be efficient wherever the outcome does not suffer.
+
 Testing (owner, standing)
 - (2026-09-25) Once everything requested is built: 3+ tests IN THE ENGINE for every ability added through the class system (and
   every drive row), on top of typecheck, verify, the smoke and screens runs and the bar; an audit maps each ability to its checks.
