@@ -1,6 +1,5 @@
-# Coordinator state -- last event 15:10: review fixes net merged (a83572d); lt retrying (rvlt_c on slot 0, 15:08); then round 1.
-# The test phase runs as task wbbiuayve (resumed at 14:41 with the fails file collapsing repeated lines, 59669ac). The baseline
-# solo has 41 fails + 1 throw, the cap/fr merges added 2 throws (round 1's triage fixes FAIL LANEs first).
+# Coordinator state -- last event 16:52: round 1 (attempt 4, 68ad42c) ran all 5 chains, triage running; a Fable code-read agent started.
+# Baseline reds: solo 41 fails + 1 throw at slot 0, 206 + 3 thrown lanes at slot 1, six ~240 + 3 lanes, screens 5 exc / LINT 2.
 Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
