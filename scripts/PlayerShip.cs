@@ -1040,13 +1040,22 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Fx.Raise(Fx.Emp, at, reach);
     }
 
-    public void GoDark()
+    // THE VEIL (the Wraith's F, DL3; host): Untargetable for veil_time (its SpeedStat lifts the top while it runs), and the
+    // next main volley primed at veil_break (Prime). Firing ends it (Ab.Veil's OnFire): Unveil.
+    public void Veil()
     {
-        if (Sl("stealth").Cool > 0) return;
-        ref var s = ref Sl("stealth");
-        s.Left = Stats["stealth_time"]; s.Cool = Cooling(Stats["stealth_cooldown"]);
+        ref var s = ref Sl("veil");
+        if (s.Cool > 0) return;
+        s.Left = Stats["veil_time"]; s.Cool = Cooling(Stats["veil_cooldown"]);
         ApplyStatus(Status.Untargetable, s.Left);
+        Prime(Stats["veil_break"]);
     }
+    public void Unveil() { Sl("veil").Left = 0; _status.Clear(Status.Untargetable); }
+    // THE NEXT MAIN VOLLEY'S MULTIPLE (host): FireControl spends it on the first volley that leaves, then it is 1 again.
+    public void Prime(double mult) => _primed = mult;
+    public double Primed => _primed;
+    public const float VeiledAlpha = 0.35f;
+    private double _primed = 1;
 
     public void OrderStrike(IHittable t)
     {
@@ -1449,8 +1458,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _gunCd -= delta;
         for (int n = 0; _gunCd <= 0 && n < 32; n++)
         {
-            if (Staggered) { _mains[_nextBarrel % _mains.Count].Shoot(); _nextBarrel = (_nextBarrel + 1) % _mains.Count; }
-            else foreach (var m in _mains) m.Shoot();
+            // a running row that a shot ends (the Veil) hears it first; a primed volley (Prime) goes at its multiple, once
+            double k = 1;
+            if (Net.Sim)
+            {
+                foreach (var def in Abilities.For(Class)) if (def.OnFire != null && Sl(def.Id).Left > 0) def.OnFire(this);
+                k = _primed; _primed = 1;
+            }
+            if (Staggered) { _mains[_nextBarrel % _mains.Count].Shoot(k); _nextBarrel = (_nextBarrel + 1) % _mains.Count; }
+            else foreach (var m in _mains) m.Shoot(k);
             _gunCd += step;
         }
     }
@@ -1787,9 +1803,11 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             GetParent().AddChild(_pod);
         }
         else if (Alive && IsInstanceValid(_pod)) { _pod.QueueFree(); _pod = null; }
-        // stasis: a cold, pulsing blue; no turrets
+        // stasis: a cold, pulsing blue; no turrets. Unpickable (the Veil, Status.Untargetable, on every peer from the host's
+        // status bits): the hull at VeiledAlpha, a shimmer
         if (_sprite != null)
-            _sprite.Modulate = Alive ? Main : new Color(0.45f, 0.62f, 0.95f, 0.55f + 0.12f * Mathf.Sin(Time.GetTicksMsec() / 300f));
+            _sprite.Modulate = !Alive ? new Color(0.45f, 0.62f, 0.95f, 0.55f + 0.12f * Mathf.Sin(Time.GetTicksMsec() / 300f))
+                             : Targeting.Hidden(this) ? new Color(Main, VeiledAlpha + 0.06f * Mathf.Sin(Time.GetTicksMsec() / 120f)) : Main;
         foreach (var t in _turrets) t.Visible = Alive;
     }
 

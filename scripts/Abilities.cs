@@ -87,6 +87,9 @@ public class AbilityDef
     // stores the damage and where it landed in its own slot (PlayerShip.Sl("reverb").Own / .At)
     // rather than NoteDealt knowing the reverb by name.
     public Action<PlayerShip, IHittable, double, string> OnDealt;
+    // WHAT THIS ROW DOES WHEN ITS SHIP FIRES ITS MAIN GUNS, WHILE IT RUNS (host, PlayerShip.FireControl, before the volley
+    // leaves): the Veil ends. Null: every other row.
+    public Action<PlayerShip> OnFire;
 
     // WHILE IT RUNS, what it lifts. A row that speeds a ship's guns or its hull up names the stat
     // id that says by how much (x2: twice as fast); PlayerShip.FireRate and PlayerShip.SpeedMult
@@ -629,17 +632,19 @@ public static class Ab
         Show = (s, _) => Timed(s, "emp", "emp_cooldown", "READY"),
     };
 
-    public static readonly AbilityDef Stealth = new()
+    // THE WRAITH'S VEIL (DL3): 5 s nothing hostile can pick it (it can still be hit), x1.35 top speed, and the next volley
+    // x3 -- fired from inside it, which ends it, or the first after; 18 s
+    public static readonly AbilityDef Veil = new()
     {
-        Id = "stealth", Name = "Stealth", Short = "STEALTH", Default = Key.F,
-        Blurb = "While the veil is up nothing hostile can pick you: whatever was coming for you goes elsewhere, or gives up.",
-        // what the veil itself is worth, x1.00 each until a part moves one (Ships.cs, the wraith)
-        RateStat = "stealth_rof", SpeedStat = "stealth_speed",
-        Press = (s, _) => s.GoDark(),
-        Refuse = (s, _) => s.Sl("stealth").Cool > 0 ? "COOLING" : null,
+        Id = "veil", Name = "Veil", Short = "VEIL", Default = Key.F,
+        Blurb = "For five seconds nothing hostile can pick you, and you run faster. Your next volley hits three times as hard; firing drops the veil.",
+        SpeedStat = "veil_speed",
+        Press = (s, _) => s.Veil(),
+        OnFire = s => s.Unveil(),
+        Refuse = (s, _) => s.Sl("veil").Cool > 0 ? "COOLING" : null,
         Show = (s, _) => s.Statuses.Has(Status.Untargetable)
-            ? new SlotState { Line = $"UNSEEN {s.Statuses.Left(Status.Untargetable):0.0}s", Lit = true }
-            : Timed(s, "stealth", "stealth_cooldown", "READY"),
+            ? new SlotState { Line = $"VEILED {s.Statuses.Left(Status.Untargetable):0.0}s", Lit = true }
+            : Timed(s, "veil", "veil_cooldown", "READY"),
     };
 
     // The shape nearly every timed ability shows: running (lit, with its own word), cooling

@@ -623,7 +623,7 @@ public static class Classes
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Reverb, Ab.Rewind, Ab.Emp } },
         new() { Id = ShipClass.LightWraith, Name = "WRAITH", Ready = true, Fit = Fit.Guns,
             Blurb = "An ambusher: its scattergun is murder point blank and half again from behind. While its veil is up nothing hostile can pick it.",
-            Hint = "WRAITH  ·  mouse aims the scattergun, x1.5 from behind",
+            Hint = "WRAITH  ·  mouse aims the scattergun, x1.5 from behind  ·  F veil",
             Drive = Drives.Boost,
             Shot = Shots.Pellet,
             Nums = new() {
@@ -640,7 +640,7 @@ public static class Classes
             Weapons = new[] { Dps.Main },
             Kit = new[] {
                 ItemDef.Own(GearSlot.Weapon, "light_scattergun", "Ambush Scattergun", "the scattergun: its pellets, their rate and their reach", "scatter_pellets"),
-                ItemDef.Own(GearSlot.Utility, "light_stealth_veil", "Stealth Veil", "how long nothing can pick it", "stealth_time"),
+                ItemDef.Own(GearSlot.Utility, "light_stealth_veil", "Veil Emitter", "how long nothing can pick it", "veil_time"),
             },
             Rows = new StatRow[] {
                 // THE SCATTERGUN'S VOLLEY (TurretSpec.Pellets / Fan): seven pellets fanned +-10 deg
@@ -649,22 +649,17 @@ public static class Classes
                 // BACKSTAB (the passive, PlayerShip.Backstab): x1.5 on a blow landed within 60 deg of a heading target's tail
                 new() { Group = "Backstab", Id = "backstab_mult", Label = "From behind",   Base = 1.5, Unit = "x", Dec = 2 },
                 new() { Group = "Backstab", Id = "backstab_arc",  Label = "Behind within", Base = 60, Unit = "deg", Dec = 0 },
-                new() { Group = "Stealth", Id = "stealth_time", Label = "Unseen for", Base = 5, Unit = "s", Dec = 1 },
-                // WHAT IT DOES WHILE IT IS UNSEEN, x1.00 each: the veil changes nothing about the
-                // ship until a part moves one of them, so a wraith with no veil gear is exactly
-                // the ship it was. They are read the way the dart's boost is read -- the ability
-                // row names them (Ab.Stealth's SpeedStat and RateStat) and PlayerShip.SpeedMult
-                // and FireRate add up every running row that names one. The veil had two
-                // numbers, which is not a family: two of its four lines had nothing to trade.
-                new() { Group = "Stealth", Id = "stealth_speed", Label = "Top speed, unseen",    Base = 1, Unit = "x", Dec = 2 },
-                new() { Group = "Stealth", Id = "stealth_rof",   Label = "Rate of fire, unseen", Base = 1, Unit = "x", Dec = 2 },
-                new() { Group = "Stealth", Id = "stealth_cooldown", Label = "Cooldown", Base = 20, Unit = "s", Dec = 1, Inverse = true },
+                // THE VEIL (DL3): 5 s unpickable at x1.35 top (added to the boost's shares: x1.85), the next volley x3; 18 s
+                new() { Group = "Veil", Id = "veil_time",     Label = "Unseen for",       Base = 5, Unit = "s", Dec = 1 },
+                new() { Group = "Veil", Id = "veil_speed",    Label = "Top speed, veiled", Base = 1.35, Unit = "x", Dec = 2 },
+                new() { Group = "Veil", Id = "veil_break",    Label = "The volley out of it", Base = 3, Unit = "x", Dec = 1 },
+                new() { Group = "Veil", Id = "veil_cooldown", Label = "Cooldown",          Base = 18, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 Texture = "res://light_wraith_hull.png", Length = 70f, HalfWidth = 14.97f,
                 Mains = new Vector2[] { new(0.0f, -10.5f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
-            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Stealth } },
+            Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Veil } },
     };
 
     private static readonly Dictionary<ShipClass, ClassDef> ById = All.ToDictionary(c => c.Id);

@@ -8899,6 +8899,121 @@ public partial class _Test : Node
         wt.Demo = demo; wt.Velocity = Vector2.Zero;
     }
 
+    // ── SLICE 6d: THE WRAITH'S VEIL (DL3): 5 s nothing hostile can pick it (still hit), x1.35 top (x1.85 = 481 with the
+    // boost), the next volley x3 -- fired inside it, which ends it, or the first after; 18 s; learned first (F).
+    void LaneA6dVeilRowChecks()
+    {
+        var st = new ShipStats(ShipClass.LightWraith);
+        var vl = Abilities.Find(ShipClass.LightWraith, "veil");
+        Check(st["veil_time"] == 5 && st["veil_speed"] == 1.35 && st["veil_break"] == 3 && st["veil_cooldown"] == 18
+              && vl?.SpeedStat == "veil_speed" && vl?.RateStat == null && vl?.OnFire != null && vl?.Default == global::Godot.Key.F
+              && Unlocks.Nth(ShipClass.LightWraith, 1) == Ab.Veil && Items.IdsOf("@duration", ShipClass.LightWraith).Contains("veil_time"),
+              $"the Veil row: {st["veil_time"]:0} s (5), top x{st["veil_speed"]:0.00} (1.35), the volley out of it x{st["veil_break"]:0} (3), {st["veil_cooldown"]:0} s (18), on F, ability 1");
+    }
+
+    async Task LaneA6dVeilChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.LightWraith);
+        var wt = Me; bool demo = wt.Demo; wt.Demo = true; wt.AutopilotTo = null;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double Landed() => wt.DealtBy.GetValueOrDefault("pellet");
+        void Ready() { wt.Sl("veil").Left = 0; wt.Sl("veil").Cool = 0; wt.Unveil(); wt.Prime(1); }
+        int n = 0;
+
+        // UNPICKABLE 5 s, STILL HIT, x1.35 TOP, 18 s: at a varied spot, a boss's slug from a varied side lands in full on
+        // the veiled hull; hidden at 4.7 s, seen at 5.3 s; top 351 while it runs, 260 after; a press while cooling refused
+        for (int run = 0; run < 3; run++)
+        {
+            Ready();
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            wt.Position = at; wt.Rotation = rot; wt.Velocity = Vector2.Zero; wt.Hp = wt.MaxHp;
+            await Wait(0.3);
+            wt.UseAbility("veil", 0); await Frame();
+            double clock = 0; bool hidden = true; float topIn = wt.TopNow;
+            var from = at + Vector2.Right.Rotated(VaryAngle()) * Vary(40f, 70f); double blow = Vary(8f, 20f), hp0 = wt.Hp;
+            Combat.Fire(Shots.Slug, from, at - from, 300f, 200f, blow, hitSource: $"test:6d_veil#{++n}");
+            for (; clock < 4.7; clock += GetProcessDeltaTime()) { wt.Position = at; wt.Velocity = Vector2.Zero; hidden &= Targeting.Hidden(wt); await Frame(); }
+            double took = hp0 - wt.Hp;
+            for (; clock < 5.3; clock += GetProcessDeltaTime()) { wt.Position = at; wt.Velocity = Vector2.Zero; await Frame(); }
+            bool seen = !Targeting.Hidden(wt); float topOut = wt.TopNow; double cool = wt.Sl("veil").Cool;
+            wt.UseAbility("veil", 0); await Frame();
+            Check(hidden && seen && Math.Abs(took - blow) < 1e-6 && Mathf.Abs(topIn - 351f) < 0.5f && Mathf.Abs(topOut - 260f) < 0.5f
+                  && Math.Abs(cool - (18 - clock)) < 0.1 && !Targeting.Hidden(wt) && wt.Sl("veil").Left <= 0,
+                  $"veiled at {at.DistanceTo(yonder):0} u off: hidden to 4.7 s {hidden}, seen at 5.3 s {seen}; a slug of {blow:0.0} from {from.DistanceTo(at):0} u landed {took:0.00}; top {topIn:0.0} (351) veiled, {topOut:0.0} (260) after; cooling {cool:0.0} s (18 from the press), a press refused");
+            wt.Hp = wt.MaxHp;
+        }
+
+        // WITH THE BOOST: the shares add, x1.85 = 481, at three varied spots and headings
+        for (int run = 0; run < 3; run++)
+        {
+            Ready(); wt.Sl("boost").Left = 0; wt.Sl("boost").Cool = 0;
+            wt.Position = VaryNear(yonder, 300f); wt.Rotation = VaryAngle(); wt.Velocity = Vector2.Zero;
+            await Wait(0.3);
+            wt.UseAbility("veil", 0); Key(global::Godot.Key.V);
+            for (int i = 0; i < 30 && wt.Sl("boost").Left <= 0; i++) await Frame();
+            float top = wt.TopNow;
+            Check(wt.Sl("boost").Left > 0 && wt.Sl("veil").Left > 0 && Mathf.Abs(top - 481f) < 0.5f,
+                  $"veiled and boosted: top {top:0.0} (481 = 260 x (1 + 0.5 + 0.35))");
+            wt.Sl("boost").Left = 0; wt.Sl("boost").Cool = 0; wt.Velocity = Vector2.Zero;
+        }
+
+        // THE VOLLEY OUT OF IT, x3 ONCE: a held gunship 60-100 u off, nose on the Wraith (no backstab), a varied bearing.
+        // Fired INSIDE the veil (run 0 and 2: the veil ends on that volley) or the first AFTER it lapsed (run 1): the
+        // first volley lands 147 (49 x3), the next 49
+        for (int run = 0; run < 3; run++)
+        {
+            Ready();
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(60f, 100f);
+            var foe = HeldI(spot, Enemies.Gunship);
+            void Hold() { wt.Position = at; wt.Rotation = rot; wt.Velocity = Vector2.Zero; wt.AimPoint = spot; foe.Position = spot; foe.Rotation = Aim.Face(spot, at); }
+            bool inside = run != 1;
+            wt.UseAbility("veil", 0);
+            for (double t = 0; t < (inside ? 1.0 : 5.4); t += GetProcessDeltaTime()) { Hold(); await Frame(); }
+            bool veiledAtFire = Targeting.Hidden(wt);
+            double d0 = Landed(), clock = 0, tFirst = -1; bool endedOnShot = false;
+            var before = Nodes<Shot>().ToHashSet();
+            wt.Trigger = true;
+            for (int i = 0; i < 60 * 3 && tFirst < 0; i++)
+            {
+                Hold(); await Frame(); clock += GetProcessDeltaTime();
+                if (!endedOnShot && Nodes<Shot>().Any(x => x.Kind == Shots.Pellet && x.Source == wt && !before.Contains(x)))
+                    endedOnShot = !Targeting.Hidden(wt) && wt.Sl("veil").Left <= 0;
+                if (Landed() > d0) tFirst = clock;
+            }
+            for (; clock < tFirst + 0.35; clock += GetProcessDeltaTime()) { Hold(); await Frame(); }
+            double first = Landed() - d0;
+            for (; clock < tFirst + 1.1; clock += GetProcessDeltaTime()) { Hold(); await Frame(); }
+            double second = Landed() - d0 - first;
+            wt.Trigger = false;
+            Check(tFirst >= 0 && NearI(first, 147) && NearI(second, 49) && veiledAtFire == inside && endedOnShot && wt.Primed == 1,
+                  $"the volley {(inside ? "fired inside the veil" : "fired after it lapsed")} ({spot.DistanceTo(at):0} u): {first:0.0} (147 = 49 x3), the next {second:0.0} (49); veiled when fired {veiledAtFire}, unveiled by the shot {endedOnShot}");
+            foe.TakeDamage(1e12);
+            await Wait(0.8);
+        }
+
+        // THE VEIL AND THE BACKSTAB MULTIPLY: from inside the rear arc (up to 50 deg off the tail) the volley out of the veil
+        // lands 220.5 (49 x3 x1.5), at three varied headings
+        for (int run = 0; run < 3; run++)
+        {
+            Ready();
+            var r = HeldI(VaryNear(yonder, 300f), Enemies.Gunship); float rrot = VaryAngle();
+            var at = r.Position + (-Vector2.Up.Rotated(rrot)).Rotated(Mathf.DegToRad(Vary(-50f, 50f))) * Vary(70f, 100f);
+            void Hold() { wt.Position = at; wt.Rotation = Aim.Face(at, r.Position); wt.Velocity = Vector2.Zero; wt.AimPoint = r.Position; r.Rotation = rrot; }
+            wt.UseAbility("veil", 0);
+            for (double t = 0; t < 1.0; t += GetProcessDeltaTime()) { Hold(); await Frame(); }
+            double d0 = Landed();
+            wt.Trigger = true; Hold(); await Frame(); wt.Trigger = false;
+            for (double t = 0; t < 0.5; t += GetProcessDeltaTime()) { Hold(); await Frame(); }
+            double got = Landed() - d0;
+            Check(NearI(got, 220.5), $"the volley out of the veil from behind a raider heading {Mathf.RadToDeg(rrot):0}: {got:0.0} (220.5 = 49 x3 x1.5)");
+            r.TakeDamage(1e12);
+            await Wait(0.5);
+        }
+        Ready();
+        wt.Demo = demo; wt.Velocity = Vector2.Zero;
+    }
+
     // ── SLICE 6d, RUNG 5: A GUEST'S PEPPERBOX. The guest (LaneA6dPepperGuestChecks) flies a DART at rest, its cursor
     // on a varied point 400-600 u off the nose, and holds the trigger 2 s: its own world shows the host's darts
     // (cosmetic copies, Commanded onto ITS cursor) -- 12 +- 2 of them, each within 10° of the bearing to the cursor
@@ -10776,7 +10891,7 @@ public partial class _Test : Node
         foreach (var (kit, want) in new[] {
             (new[] { Ab.Guns, Ab.FireMode, Ab.Broadside, Ab.Missile, Ab.Reload, Ab.Anchor }, new[] { 1, 1, 1, 3, 1, 6 }),
             (new[] { Ab.Attack, Ab.Recall, Ab.Bombers, Ab.Hunters, Ab.Bubble, Ab.Reverb }, new[] { 1, 1, 1, 3, 6, int.MaxValue }),
-            (new[] { Ab.Reverb, Ab.Guns, Ab.Stealth, Ab.Deploy, Ab.Hunters, Ab.FireMode }, new[] { 1, 1, 3, 1, 6, 1 }) })
+            (new[] { Ab.Reverb, Ab.Guns, Ab.Veil, Ab.Deploy, Ab.Hunters, Ab.FireMode }, new[] { 1, 1, 3, 1, 6, 1 }) })
         {
             var got = kit.Select(a => Unlocks.AbilityAt(kit, a)).ToArray();
             Check(got.SequenceEqual(want) && Unlocks.AbilityAt(kit, Ab.Reboard) == 1,
@@ -13361,7 +13476,7 @@ public partial class _Test : Node
                   && Equipment.Default(ShipClass.HeavySniper)[0] == "heavy_railgun"
                   && Equipment.Default(ShipClass.LightWraith)[4] == "light_stealth_veil"
                   && Classes.All.Where(c => c.Ready).All(c => Equipment.Default(c.Id).Length == 11 && Equipment.Default(c.Id).Skip(5).All(x => x == "")),
-                  "the defaults: common parts in five slots, every one of the twelve classes starts with mounts it can actually wear -- a carrier's Fighter Hangars, a sniper's Railgun Mount, a wraith's Stealth Veil -- and six empty chip slots");
+                  "the defaults: common parts in five slots, every one of the twelve classes starts with mounts it can actually wear -- a carrier's Fighter Hangars, a sniper's Railgun Mount, a wraith's Veil Emitter -- and six empty chip slots");
             var bsE = new ShipStats(ShipClass.Battleship, Equipment.Bonuses(ShipClass.Battleship, Equipment.Default(ShipClass.Battleship), 14, NoLevels));
             var cvE = new ShipStats(ShipClass.Carrier, Equipment.Bonuses(ShipClass.Carrier, Equipment.Default(ShipClass.Carrier), 14, NoLevels));
             Check(Math.Abs(bsE["hull"] - 300) < 1e-6 && Math.Abs(bsE["main_damage"] - 17.9) < 1e-6 && Math.Abs(cvE["hull"] - 200) < 1e-6
@@ -14985,6 +15100,8 @@ public partial class _Test : Node
             LaneA6dScatterRowChecks();
             await LaneA6dScatterChecks(yonder);
             await LaneA6dBackstabChecks(yonder);
+            LaneA6dVeilRowChecks();
+            await LaneA6dVeilChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -15093,7 +15210,7 @@ public partial class _Test : Node
             var hunter = H.SpawnRaider(VaryNear(yonder, 500f)); hunter.Hp = 4000;
             for (int i = 0; i < 60 * 4 && hunter.Target != wt; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(hunter.Target == wt, "a raider comes for the wraith");
-            wt.UseAbility("stealth", 0);
+            wt.UseAbility("veil", 0);
             for (int i = 0; i < 30 && hunter.Target == wt; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(wt.Statuses.Has(Status.Untargetable) && hunter.Target != wt && Targeting.Hidden(wt),
                   "and the moment it goes dark the raider lets go of it");
@@ -15365,7 +15482,7 @@ public partial class _Test : Node
                     ["reverb"]    = sp => sp.Sl("reverb").Left > sp.Stats["reverb_time"] - 0.1,
                     ["rewind"]    = sp => sp.Sl("rewind").Cool > sp.Stats["rewind_cooldown"] - 0.1,
                     ["emp"]       = sp => sp.Sl("emp").Cool > sp.Stats["emp_cooldown"] - 0.1,
-                    ["stealth"]   = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("stealth").Left > sp.Stats["stealth_time"] - 0.1,
+                    ["veil"]      = sp => sp.Statuses.Has(Status.Untargetable) && sp.Sl("veil").Left > sp.Stats["veil_time"] - 0.1,
                     ["anchor"]    = sp => sp.Sl("anchor").Left > sp.Stats["anchor_time"] - 0.1 && sp.Held == 0f,
                     ["tether"]    = sp => sp.Sl("tether").N == 1 && sp.Sl("tether").Cool > sp.Stats["tether_recharge"] - 0.1 && H.Laid.Any(z => z.OwnerId == sp.OwnerId),
                     ["flares"]    = sp => sp.Sl("flares").Cool > sp.Stats["flare_cooldown"] - 0.1 && H.Salvos.Any(sv2 => sv2.At.DistanceTo(sp.Position) < 5f),

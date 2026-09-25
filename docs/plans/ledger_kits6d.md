@@ -423,3 +423,27 @@ PlayerShip 9, Stats 2, Dealt 1, Fx 1, Items 3, SmokeTest 42; stealth_*|GoDark Pl
   the stat x3; strafe across the tail x1.5 every volley x3); frame 78b_wraith_scatter (LaneA6dWraithFrames). Rewritten: the
   kit-carry check (21 parts, light_main_gun Echo only, pepperbox Dart, scattergun Wraith).
 - next: kits6d-J9 (Veil).
+
+## kits6d-J9 · PRE
+- tier opus; intent: Veil (DL3): Ab.Stealth -> Ab.Veil (id veil, F): 5 s Untargetable (AbilityDef.Wears), top x1.35 (SpeedStat veil_speed, additive with the boost: x1.85 = 481), the next volley primed x3 (AbilityDef.Primes veil_break, spent by FireControl on the first volley veiled or after), firing ends the run (AbilityDef.FireEnds; host); cooldown 18. Rows stealth_* deleted; Items @duration -> veil_time; kit part id light_stealth_veil kept (a save id), named Veil Emitter, Needs veil_time. **DL13** the primed volley waits for the first volley after the press, however long (the card: 'the first volley fired out of it').
+- HEAD 80e13863c6d76e89262e74dc0840cfac5496b6c4
+- scripts/Abilities.cs b07b3d0ab60413a789154b93910dceb4fc8dc40f
+- scripts/PlayerShip.cs 12bfb05a796b80e72acc6a03aac0eccd13df5d92
+- scripts/Ships.cs f773a39450f236765c299741fc55ed8c013f1853
+- scripts/Items.cs f642b448b20697225deebcdff2bb3937d0ab3f2f
+- tools/smoketest/SmokeTest.cs.txt 0e8f4cc542b2723cde6f0424d67a22f9dbba072b
+- tools/screens/Shots.cs.txt 9128a95d8e58e01fdf05f8d1a10722bb8c9194bc
+
+## kits6d-J9 · POST
+- verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final test phase.
+- built: Ab.Stealth -> Ab.Veil (id veil, F, SpeedStat veil_speed); PlayerShip.Veil (host: Untargetable veil_time, cool 18, Prime
+  veil_break), Unveil, Prime/Primed (the next main volley's multiple, spent once by FireControl); AbilityDef.OnFire (a running
+  row hears its ship's main volley first, host: the Veil ends); the veiled hull drawn at PlayerShip.VeiledAlpha 0.35 with a
+  shimmer on every peer (status bits). Rows veil_time 5 / veil_speed 1.35 / veil_break 3 / veil_cooldown 18; stealth_* deleted;
+  Items @duration veil_time; kit light_stealth_veil (save id kept) -> "Veil Emitter", Needs veil_time. DL13 (the prime waits for
+  the first volley after the press).
+- checks: LaneA6dVeilRowChecks, LaneA6dVeilChecks (hidden 4.7 / seen 5.3, a slug lands in full, top 351 / 260, cool 18, refused
+  x3; veil + boost 481 x3; the volley out of it 147 then 49, inside (ends it) and after it lapsed x3; veil x backstab 220.5 x3);
+  frame 78c_wraith_veil. Rewritten: walls-by-position (Ab.Veil), the defaults' message (Veil Emitter), the tour's press (veil),
+  sweep witness ["veil"].
+- next: kits6d-J10 (Venom).

@@ -1169,7 +1169,8 @@ public partial class _Shots : Node
         cam.Zoom = z0;
     }
 
-    // SLICE 6d: the Wraith's scattergun a moment after a volley from behind a raider -- seven pellets fanned +-10 deg (78b).
+    // SLICE 6d: the Wraith's scattergun a moment after a volley from behind a raider -- seven pellets fanned +-10 deg (78b);
+    // the veiled hull (78c).
     async Task LaneA6dWraithFrames()
     {
         var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
@@ -1192,6 +1193,14 @@ public partial class _Shots : Node
         ws.Trigger = false;
         await Snap("78b_wraith_scatter");
         foe.TakeDamage(1e12);
+        // the veiled hull (78c): faded to PlayerShip.VeiledAlpha, shimmering, beside a raider that cannot pick it
+        await W(0.8);
+        ws.Sl("veil").Cool = 0; ws.UseAbility("veil", 0);
+        var near = H.SpawnRaider(at + new Vector2(170, -60), Enemies.Webifier); near.Hp = 1e9; near.ApplyStatus(Status.Disabled, 30);
+        await W(0.3);
+        ws.Position = at; ws.Rotation = rot; ws.Velocity = Vector2.Zero;
+        await Snap("78c_wraith_veil");
+        near.TakeDamage(1e12); ws.Unveil(); ws.Sl("veil").Cool = 0;
         ws.Demo = demo; ws.Velocity = Vector2.Zero;
         await W(0.8);
         Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
