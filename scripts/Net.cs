@@ -116,6 +116,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     private void OnAuthenticating(long id)
     {
         if (_isHost && Pending.Find((int)id) is { } e) { _rowOf[(int)id] = e.Row; Pending.Remove((int)id); }
+        if (_times.TryGetValue(_isHost ? (int)id : _joinId, out var t)) t.Connected = Time.GetTicksMsec();
         ((SceneMultiplayer)Multiplayer).SendAuth((int)id, BitConverter.GetBytes(Claimed(Pretend.Auth)));
     }
     private void OnPeerJoined(long id) => OnPeer((int)id, true);
@@ -152,6 +153,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
         PumpLetGo();
         PumpSession();
         Beat(delta);
+        SampleBacklog(delta);
         // Every attempt has a hard deadline of its own: a typed address 12 s from JOIN (5 for a retry), a
         // pasted invite the reply window and the host's time to link from the moment its reply was made.
         if (Connecting && _deadline > 0 && Time.GetTicksMsec() >= _deadline) { Failed(_joinRow == Rendezvous.Paste ? ReplyRanOut : CouldNotReach); return; }
@@ -330,6 +332,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     {
         if (_isHost || !_inSession || !Connecting) return;
         Connecting = false;
+        if (_times.TryGetValue(_joinId, out var t)) t.Admitted = Time.GetTicksMsec();
         RpcId(1, nameof(NetWelcomed));
         Say($"Connected as player {_localId}.");
         Admitted?.Invoke();
@@ -347,7 +350,9 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     private void NetWelcomed()
     {
         int from = Multiplayer.GetRemoteSenderId();
-        if (_isHost && Players.ContainsKey(from)) _heard.Add(from);
+        if (!_isHost || !Players.ContainsKey(from)) return;
+        _heard.Add(from);
+        if (_times.TryGetValue(from, out var t)) t.Admitted = Time.GetTicksMsec();
     }
     public static bool Hears(int peer) => I != null && I._heard.Contains(peer);
     // The host's one way to send to every guest outside a world's own traffic (which waits for the
@@ -373,7 +378,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     {
         if (!IsOnline || _peerGone) return;
         var peers = _isHost ? _heard.ToList() : new List<int> { 1 };
-        foreach (int p in peers) _silence[p] = Link.Quiet(_silence.GetValueOrDefault(p), delta);
+        foreach (int p in peers) _longestQuiet = System.Math.Max(_longestQuiet, _silence[p] = Link.Quiet(_silence.GetValueOrDefault(p), delta));
         _beatClock += delta;
         if (_beatClock * 1000 >= Link.BeatMs)
         {
@@ -574,12 +579,19 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
         Players.Clear(); Players[1] = new PlayerInfo();
         int from = Rendezvous.ListenFrom;
         Rendezvous.ListenFrom = port;
-        foreach (var row in Rendezvous.Paths) row.Open(this);
+        foreach (var row in Rendezvous.Paths)
+        {
+            try { row.Open(this); }
+            catch (System.Net.Sockets.SocketException) { }   // not even a port the OS picks: invites carry on without the listener
+        }
         Rendezvous.ListenFrom = from;
         int at = Rendezvous.ListenPort;
-        Addresses = new List<string> { $"Same network: {Adapters.Lan()}:{at}" }
+        Addresses = at == 0 ? new List<string>() : new List<string> { $"Same network: {Adapters.Lan()}:{at}" }
             .Concat(Adapters.Overlays().Select(o => $"On {o.name}: {o.ip}:{at}")).ToList();
-        Say("Hosting. INVITE A FRIEND makes a code for one friend. Friends on this network or on Radmin VPN can type an address below instead.");
+        // the listener's port as it came out: hosting and invites carry on either way (§6.1)
+        Say("Hosting. INVITE A FRIEND makes a code for one friend. Friends on this network or on Radmin VPN can type an address below instead."
+            + (at == 0 ? " No port could be opened for typed addresses, so friends join by invite only."
+               : port != 0 && at != port ? $" Port {port} is taken on this PC, so friends typing an address use port {at}." : ""));
         SessionChanged?.Invoke();
         return true;
     }
@@ -611,7 +623,6 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
     private const string NoStunHost = " No STUN server answered, so this invite works only on your network and over Radmin VPN.";
     // The newest invite not yet answered, as text: what COPY puts on the clipboard ("" for none).
     public string LastInvite => Pending.All.LastOrDefault(e => e.Code.Length > 0 && e.Stage == Rendezvous.Stage.Waiting)?.Code ?? "";
-    public void CopyInvite() { if (LastInvite.Length > 0) Rendezvous.Copy(LastInvite); }
 
     public Task<Rendezvous.Record> Invite(Rendezvous.Record knock) =>
         MakeInvite(Rendezvous.Address, knock.Guest, knock.Name, null) ?? Task.FromResult<Rendezvous.Record>(null);
@@ -663,6 +674,7 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
         }
         catch (FormatException) { Say("That code is damaged or cut off: copy the whole message again."); return; }
         e.Stage = Rendezvous.Stage.Linking; e.Until = Time.GetTicksMsec() + Link.LinkMs;
+        Times(e.Id).Reply = Time.GetTicksMsec();
         if (reply.Name.Length > 0) e.Name = reply.Name;
         Say($"{Who(e)} is joining…");
     }
@@ -721,8 +733,10 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
             try { invite = Rendezvous.Sdp.Strip(Rendezvous.Kind.Invite, e.Conn.Sdp, e.Conn.Lines); }
             catch (FormatException x) { Hang(e.Id); Say($"Could not make an invite: {x.Message}."); done.TrySetResult(null); continue; }
             invite.Id = e.Id; invite.Proto = Protocol; invite.Build = Game.Build; invite.Name = Character.Name; invite.NoStun = e.Conn.NoStun;
-            Fit(invite, row);
+            int dropped = Fit(invite, row);
             if (row == Rendezvous.Paste) { e.Code = Rendezvous.Encode(invite); Rendezvous.Copy(e.Code); }
+            Made("invite", e.Id, row, e.Conn, dropped, invite);
+            var t = Times(e.Id); t.Row = row.Id; t.Invite = now;
             done.TrySetResult(invite);
             then?.Invoke(e);
         }
@@ -756,7 +770,9 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
             try { reply = Rendezvous.Sdp.Strip(Rendezvous.Kind.Reply, _answer.Sdp, _answer.Lines); }
             catch (FormatException x) { answered.TrySetException(x); return; }
             reply.Id = inv.Id; reply.Name = Character.Name; reply.NoStun = _answer.NoStun;
-            Fit(reply, _joinRow);
+            int dropped = Fit(reply, _joinRow);
+            Made("reply", inv.Id, _joinRow, _answer, dropped, reply);
+            var t = Times(inv.Id); t.Row = _joinRow.Id; t.Invite = _attemptAt; t.Reply = now; _joinId = inv.Id;
             if (_joinRow == Rendezvous.Paste)
             {
                 ReplyCode = Rendezvous.Encode(reply); ReplyAt = now;
@@ -780,10 +796,68 @@ public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
         _ => $"no answer in {Link.LinkMs / 1000} s",
     };
     // THE FIT RULE with this PC's own addresses: an overlay's and the LAN's are ranked above the rest.
-    private static void Fit(Rendezvous.Record r, Rendezvous.IRendezvousPath row)
+    private static int Fit(Rendezvous.Record r, Rendezvous.IRendezvousPath row)
     {
         var overlays = Adapters.Overlays().Select(o => System.Net.IPAddress.Parse(o.ip)).ToList();
-        Rendezvous.Fit(r, row, overlays, System.Net.IPAddress.Parse(Adapters.Lan()));
+        return Rendezvous.Fit(r, row, overlays, System.Net.IPAddress.Parse(Adapters.Lan()));
+    }
+
+    // ── COPY NETWORK REPORT (§6.3) ───────────────────────────────────────────
+    // What a player pastes to the developer when a join did not work: this build, where the session
+    // stands, every code this game made (its STUN row and how long, what the fit rule dropped, how long
+    // the code is), every join's times, the most that waited per NetChannels row, the longest silence.
+    // Kept for the whole game, not the session: the report is copied after a failure, offline.
+    private readonly List<string> _made = new();
+    private sealed class JoinTimes { public string Row = ""; public ulong Invite, Reply, Connected, Admitted; }
+    private readonly Dictionary<int, JoinTimes> _times = new();
+    private int _joinId;                                  // a guest's own id: the invite's, the key of its join's times
+    private readonly Dictionary<int, int> _peakBacklog = new();
+    private double _longestQuiet, _backlogClock;
+    private const int ReportKeeps = 16;                   // codes and joins, the newest
+    private JoinTimes Times(int id)
+    {
+        if (_times.TryGetValue(id, out var t)) return t;
+        if (_times.Count >= ReportKeeps) _times.Remove(_times.MinBy(kv => kv.Value.Invite).Key);
+        return _times[id] = new JoinTimes();
+    }
+    private void Made(string kind, int id, Rendezvous.IRendezvousPath row, Link.Gather g, int dropped, Rendezvous.Record r)
+    {
+        string stun = g.Row >= 0 && !g.NoStun ? $"STUN {Link.Servers[g.Row].Url} answered" : row.Stun ? "no STUN row answered" : "no STUN row asked";
+        _made.Add($"{kind} {id} by {row.Id}: {stun}, sealed in {g.DoneAt - g.Began} ms; the fit dropped {dropped} candidates; {row.Measure(r)} long");
+        if (_made.Count > ReportKeeps) _made.RemoveAt(0);
+    }
+    // Four times a second: the most waiting on each row of each live link (Link.Backlog).
+    private void SampleBacklog(double delta)
+    {
+        if (!IsOnline || _peer is not WebRtcMultiplayerPeer mp) return;
+        _backlogClock += delta;
+        if (_backlogClock < 0.25) return;
+        _backlogClock = 0;
+        _rows ??= Link.Channels().Count;
+        foreach (int p in _isHost ? _heard : new HashSet<int> { 1 })
+            for (int ch = 1; ch <= _rows; ch++)
+                _peakBacklog[ch] = System.Math.Max(_peakBacklog.GetValueOrDefault(ch), Link.Backlog(mp, p, ch));
+    }
+    private int? _rows;
+    public string Report()
+    {
+        string At(JoinTimes t, ulong at) => at == 0 ? "never" : $"+{at - t.Invite} ms";
+        var rowName = typeof(NetChannels).GetFields().Where(f => f.IsLiteral).ToDictionary(f => (int)f.GetRawConstantValue(), f => f.Name);
+        var r = new System.Text.StringBuilder();
+        r.AppendLine($"WARSHIPS NETWORK REPORT · build {Game.Build} ({Protocol:x8}) · {Time.GetDatetimeStringFromSystem()}");
+        r.AppendLine(Connecting ? $"joining {_joinTarget}" : !IsOnline ? "offline" : _isHost ? $"hosting: {Players.Count} players, {Pending.Count} invites pending"
+                     : $"a guest of {_joinTarget}, joined by {JoinedBy}");
+        r.AppendLine(Rendezvous.ListenPort == 0 ? "typed addresses: no listener" : $"typed addresses: {string.Join("; ", Addresses)}");
+        r.AppendLine($"STUN rows: {string.Join(", ", Link.Servers.Select(s => s.Url))}; the next walk starts at row {Link.StunFirst + 1}");
+        r.AppendLine($"reply window {Link.ReplyWindowS} s; clipboard pickup on");
+        r.AppendLine($"round trip {RoundTrip * 1000:0} ms; longest silence from a peer {_longestQuiet:0.00} s (row {NetChannels.Beat}, the beat)");
+        r.AppendLine("peak backlog by row: " + (_peakBacklog.Count == 0 ? "none measured"
+                     : string.Join(", ", _peakBacklog.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key} {rowName.GetValueOrDefault(kv.Key, "stream")} {kv.Value} B"))));
+        foreach (var m in _made) r.AppendLine(m);
+        foreach (var (id, t) in _times.OrderBy(kv => kv.Value.Invite))
+            r.AppendLine($"join {id} by {t.Row}: invite made +0 ms, reply {(_isHost ? "taken" : "made")} {At(t, t.Reply)}, connected {At(t, t.Connected)}, admitted {At(t, t.Admitted)}");
+        r.Append($"last: {LastStatus}");
+        return r.ToString();
     }
 
     // ── joining ──────────────────────────────────────────────────────────────

@@ -1018,3 +1018,25 @@ heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu on
   text + fresh invite; the 15-min expiry text; CANCEL from full frees a place; the report's lines; COPY
   NETWORK REPORT on the clipboard; the hint literal; the guest's countdown-ran-out text + MAKE A FRESH
   REPLY at 3 varied invites; the connection-closed text); Shots frames 51, 52, 60, 61.
+
+#### R3 POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED (0 findings, UNUSED ANYWHERE: 0).
+  engine-unproven: rungs owed in the final test phase (3, 4 with LINT: 0, 5).
+- Net: HOST's line carries the listener's outcome (moved: " Port {p} is taken on this PC, so friends typing an
+  address use port {at}."; none: " No port could be opened for typed addresses, so friends join by invite
+  only."), a SocketException from the OS-picked port no longer escapes Host; `Report()` (build, session,
+  addresses, STUN rows + the walk's start, "reply window 30 s; clipboard pickup on", round trip + the beat's
+  longest silence, peak backlog per NetChannels row sampled 4/s, a line per code made with its STUN row, ms,
+  fit drops and length, a line per join with invite/reply/connected/admitted times, the last status);
+  `CopyInvite` deleted (the pending list's COPY replaces it).
+- SessionMenu: the pending list (`PendingList`, a row `Invite{id}` per entry: who, stage, COPY, CANCEL);
+  COPY NETWORK REPORT (`CopyReport`); INVITE stays pressable when full (it says how to free a place).
+- Hints "multiplayer": §6.3's literal. Game.cs already read `netBusy` (no change).
+- Shots: 51_invite_ready, 52_reply_countdown, 60_reply_expired, 61_join_failed (51_address_hidden gone; a
+  hermetic session: no STUN rows, the run's own clipboard).
+- checks written (not run): solo `R3WordsChecks` (listener moved at 3 varied bases, 1-3 ports taken; a free
+  port adds nothing; the Linking deadline's text + fresh invite; the 15-min expiry; the report's lines; COPY
+  NETWORK REPORT; CANCEL from full; the hint; the guest's reply + countdown label, the countdown-ran-out text,
+  MAKE A FRESH REPLY answering the same invite, at 2 varied invites; the closed-connection text).
+- Not checkable in one process: the "no port could be opened" text (every port and the OS's own taken).
+- next: R4.

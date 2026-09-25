@@ -5721,6 +5721,7 @@ public partial class _Test : Node
             Check(hullBack && placed && heldStasis && Me.Alive, $"a returning pilot is put back: its hull, its place, or its stasis with the time it had left ({hullBack}, {placed}, {heldStasis})");
             Me.Place(backAt, backRot); Me.Hp = Me.MaxHp;
             await R2SwitchChecks();
+            await R3WordsChecks();
 
             // ANOTHER PLAYER'S SHIP, as this peer draws it: owned by peer 2, so it only follows what
             // it is told. Three things went wrong over the internet. A warp's landing flash never
@@ -10254,6 +10255,155 @@ public partial class _Test : Node
         await RealTime(() => Net.I.NetworkIdle, 3);
         Check(Net.I.NetworkIdle && Net.I.Pending.Count == 0 && Rendezvous.ListenPort == 0,
               $"back offline: every invite hung up, the listener closed, nothing left running ({Net.I.Pending.Count} pending, port {Rendezvous.ListenPort})");
+    }
+
+    // ── WEBRTC, R3: WHAT THE PLAYER READS (§6), THE PANEL'S LIST, COPY NETWORK REPORT (§6.3) ──────────
+    // Solo. Each §6 sentence whose path runs in one process, read literally: the listener moved off a taken
+    // port; a reply whose connection never came up (its 12 s moved to now) and the fresh invite it brings;
+    // an invite unanswered for 15 min (its birth moved back); CANCEL on the pending list freeing a place;
+    // the report's lines and its button; the hint; and the guest's side -- a reply whose countdown ran out,
+    // MAKE A FRESH REPLY, and a connection that closed.
+    static System.Net.Sockets.TcpListener Occupy(int port)
+    {
+        var l = new System.Net.Sockets.TcpListener(System.Net.IPAddress.IPv6Any, port);
+        l.Server.DualMode = true;
+        l.Start();
+        return l;
+    }
+    T PanelOf<T>(string name) where T : Node => GetTree().Root.FindChild(name, true, false) as T;
+    async Task R3WordsChecks()
+    {
+        const string Hosting = "Hosting. INVITE A FRIEND makes a code for one friend. Friends on this network or on Radmin VPN can type an address below instead.";
+        Net.I.GoOffline(); await RealTime(() => Net.I.NetworkIdle, 3);
+        // THE LISTENER MOVED: 1 to 3 ports taken where it starts, from three varied bases
+        var moved = new List<string>();
+        for (int k = 0; k < 3; k++)
+        {
+            int port = P(27141 + 10 * k + Rng.RandiRange(0, 4)), taken = Rng.RandiRange(1, 3);
+            var held = new List<System.Net.Sockets.TcpListener>();
+            try
+            {
+                for (int i = 0; i < taken; i++) held.Add(Occupy(port + i));
+                Net.I.Host(port);
+                int at = Rendezvous.ListenPort;
+                bool ok = at == port + taken && Net.I.LastStatus == $"{Hosting} Port {port} is taken on this PC, so friends typing an address use port {at}."
+                          && Net.I.Addresses.Count > 0 && Net.I.Addresses[0].EndsWith($":{at}");
+                moved.Add(ok ? "ok" : $"{port} with {taken} taken: {at}; {Net.I.LastStatus}");
+            }
+            catch (System.Net.Sockets.SocketException e) { moved.Add($"{port}: could not take it for the check ({e.Message})"); }
+            Net.I.GoOffline(); await RealTime(() => Net.I.NetworkIdle, 3);
+            foreach (var l in held) l.Stop();
+        }
+        Check(moved.All(m => m == "ok"), $"a taken port moves the listener to the next free one, and HOST's line says which ({string.Join("; ", moved)})");
+        Net.I.Host(P(27172));
+        Check(Net.I.LastStatus == Hosting && Rendezvous.ListenPort == P(27172), $"a free port adds nothing to HOST's line ({Net.I.LastStatus})");
+
+        // A REPLY WHOSE CONNECTION NEVER CAME UP: its 12 s moved to now; the friend gets a fresh invite
+        var heard = new List<string>();
+        void Heard(string line) => heard.Add(line);
+        Net.I.Status += Heard;
+        Net.I.Invite();
+        await RealTime(() => Net.I.LastInvite.Length > 0, 6);
+        var inv = Rendezvous.Find(Net.I.LastInvite, Rendezvous.Kind.Invite);
+        var answer = VaryRecord(Rendezvous.Kind.Reply);
+        answer.Id = inv?.Id ?? 0; answer.Candidates.Clear(); answer.Name = "Friend" + Rng.RandiRange(10, 99);
+        Net.I.TakeCode(Message(Rendezvous.Encode(answer)));
+        if (Net.I.Pending.Find(answer.Id) is { } linking) linking.Until = Time.GetTicksMsec();
+        const string RanOut = "). Their reply may have run out: a reply works for 30 s. A new invite for them: COPY.";
+        await RealTime(() => heard.Any(l => l.StartsWith($"{answer.Name} could not get through (") && l.EndsWith(RanOut)), 6);
+        var fresh = Net.I.Pending.All.FirstOrDefault(e => e.Name == answer.Name);
+        Check(inv != null && Net.I.Pending.Find(answer.Id) == null && fresh is { Stage: Rendezvous.Stage.Waiting, Row: "paste" } && fresh.Code.Length > 0
+              && heard.Any(l => l.StartsWith($"{answer.Name} could not get through (") && l.EndsWith(RanOut)),
+              $"a reply whose connection is not up 12 s after it was taken: hung up, and a fresh invite for that friend, one COPY away ({heard.LastOrDefault()})");
+        // AN INVITE NOBODY ANSWERED FOR 15 MIN
+        var old = Net.I.Pending.All.First(e => e.Stage == Rendezvous.Stage.Waiting);
+        int oldId = old.Id;
+        old.Made = unchecked(Time.GetTicksMsec() - 900_000UL - (ulong)Rng.RandiRange(0, 60_000));
+        await RealTime(() => Net.I.Pending.Find(oldId) == null, 2);
+        Check(Net.I.Pending.Find(oldId) == null && heard.Contains("An invite from 15 min ago ran out unused."),
+              $"an invite unanswered for 15 min is hung up and says so ({heard.LastOrDefault()})");
+        // THE REPORT: this build, the session, every code made, the join's times, the window, the pickup
+        string report = Net.I.Report();
+        string[] wanted =
+        {
+            $"WARSHIPS NETWORK REPORT · build {Game.Build} ({Net.Protocol:x8})", "hosting: 1 players", "typed addresses: Same network: ",
+            "reply window 30 s; clipboard pickup on", $"invite {answer.Id} by paste: ", "; the fit dropped ", $"join {answer.Id} by paste: invite made +0 ms, reply taken +",
+            "peak backlog by row: ", $"longest silence from a peer ",
+        };
+        var missing = wanted.Where(w => !report.Contains(w, StringComparison.Ordinal)).ToList();
+        Check(missing.Count == 0, $"COPY NETWORK REPORT names the build, the session, each code made and each join's times ({string.Join(" | ", missing)} missing from: {report.Replace("\n", " / ")})");
+        // ...and its button puts it on the clipboard
+        Clip = "";
+        PanelOf<Button>("CopyReport")?.EmitSignal(BaseButton.SignalName.Pressed);
+        Check(Clip.StartsWith("WARSHIPS NETWORK REPORT · build "), $"COPY NETWORK REPORT copies the report ({(Clip.Length > 40 ? Clip[..40] : Clip)})");
+        // CANCEL on the pending list frees a place: filled to the full, then one cancelled
+        for (int k = 0; k < 8 && !Net.I.Full; k++)
+        {
+            int before = Net.I.Pending.Count;
+            Net.I.Invite();
+            await RealTime(() => Net.I.Pending.All.All(e => e.Code.Length > 0) || Net.I.Pending.Count == before, 6);
+        }
+        await Wait(0.1);
+        var list = PanelOf<VBoxContainer>("PendingList");
+        var rows = list == null ? new List<HBoxContainer>() : Nodes<HBoxContainer>(list).Where(r => r.Name.ToString().StartsWith("Invite")).ToList();
+        int pick = Rng.RandiRange(0, Math.Max(0, rows.Count - 1));
+        int full = Net.I.Pending.Count;
+        var cancel = rows.Count > pick ? Nodes<Button>(rows[pick]).FirstOrDefault(b => b.Name == "Cancel") : null;
+        int cancelled = rows.Count > pick && int.TryParse(rows[pick].Name.ToString()["Invite".Length..], out int cid) ? cid : 0;
+        cancel?.EmitSignal(BaseButton.SignalName.Pressed);
+        Check(rows.Count == full && cancel != null && !Net.I.Full && Net.I.Pending.Count == full - 1 && Net.I.Pending.Find(cancelled) == null,
+              $"the pending list has a line per invite, and CANCEL on one frees its place ({rows.Count} lines for {full}; {Net.I.Pending.Count} left)");
+        Net.I.Status -= Heard;
+        // THE HINT (§6.3)
+        Check(Hints.All["multiplayer"].Body == "HOST THIS WORLD, then INVITE A FRIEND and send them the code. To join, paste an invite into JOIN and send back the reply it copies.",
+              $"the multiplayer hint says how invites work ({Hints.All["multiplayer"].Body})");
+        Net.I.GoOffline(); await RealTime(() => Net.I.NetworkIdle, 3);
+
+        // THE GUEST: three invites from a host that never takes the reply. Each reply copied with its
+        // countdown; the countdown run out (moved to now); MAKE A FRESH REPLY; the last one's connection closed.
+        var deadline = typeof(Net).GetField("_deadline", BindingFlags.NonPublic | BindingFlags.Instance);
+        var guestSaid = new List<string>();
+        for (int k = 0; k < 3; k++)
+        {
+            var hostInv = VaryRecord(Rendezvous.Kind.Invite);
+            hostInv.Proto = Net.Protocol; hostInv.Build = Game.Build;
+            // somewhere that never answers: the box's silent port, not a stranger's address
+            hostInv.Candidates = new List<Rendezvous.Candidate> { VaryCandidate(Rendezvous.Via.Host, System.Net.IPAddress.Loopback) with { Port = P(19482) } };
+            string name = hostInv.Name;
+            bool joined = Net.I.Join(Message(Rendezvous.Encode(hostInv)));
+            await RealTime(() => Net.I.ReplyCode.Length > 0, 6);
+            string first = Net.I.ReplyCode, copied = Net.I.LastStatus;
+            bool told = copied == $"Reply copied. Send it to {name} now: they have 30 s to take it."
+                                  + (hostInv.NoStun ? $" This invite works only on {name}'s network or over Radmin VPN." : "");
+            await Wait(0.1);
+            bool shown = PanelOf<Label>("ReplyCode") is { } shownLbl && shownLbl.Text.StartsWith(first) && shownLbl.Text.Contains(" s left for the host to take it");
+            if (k < 2)
+            {
+                deadline.SetValue(Net.I, Time.GetTicksMsec());
+                await RealTime(() => !Net.I.Connecting, 2);
+                bool ranOut = Net.I.LastStatus == $"{name} did not connect within 30 s of your reply. MAKE A FRESH REPLY and send that one, or ask them for a new invite. Playing offline.";
+                await Wait(0.1);
+                var freshBtn = PanelOf<Button>("FreshReply");
+                bool offered = freshBtn != null && freshBtn.Visible && Net.I.FreshFrom.Length > 0;
+                await Wait(1.1);                                      // the panel's one press a second
+                freshBtn?.EmitSignal(BaseButton.SignalName.Pressed);
+                await RealTime(() => Net.I.ReplyCode.Length > 0 && Net.I.ReplyCode != first, 6);
+                bool again = Net.I.Connecting && Net.I.ReplyCode.Length > 0 && Net.I.ReplyCode != first && Rendezvous.Find(Net.I.ReplyCode, Rendezvous.Kind.Reply)?.Id == hostInv.Id;
+                guestSaid.Add(joined && told && shown && ranOut && offered && again ? "ok" : $"{name}: joined {joined}, told {told} ({copied}), shown {shown}, ran out {ranOut} ({Net.I.LastStatus}), offered {offered}, again {again}");
+            }
+            else
+            {
+                // the connection closed under it: over at once, not at the end of the countdown
+                var answerConn = (Link.Gather)typeof(Net).GetField("_answer", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Net.I);
+                answerConn?.Conn?.Close();
+                await RealTime(() => !Net.I.Connecting, 2);
+                bool closed = Net.I.LastStatus == $"Could not get through to {name}: the connection was closed. Try again with you hosting, or use Radmin VPN (radmin-vpn.com). Playing offline.";
+                guestSaid.Add(joined && told && shown && closed && Net.I.FreshFrom.Length > 0 ? "ok" : $"{name}: joined {joined}, told {told}, shown {shown}, closed {closed} ({Net.I.LastStatus})");
+            }
+            Net.I.GoOffline(); await RealTime(() => Net.I.NetworkIdle, 3);
+        }
+        Check(guestSaid.All(g => g == "ok"),
+              $"a guest's reply is copied with its countdown; the countdown run out says so and offers MAKE A FRESH REPLY, which answers the same invite again; a closed connection says so at once ({string.Join("; ", guestSaid)})");
     }
 
     // ── WEBRTC, R2c: THE ROLES MOVED (§10.2, §10.3) ─────────────────────────────────────────────────

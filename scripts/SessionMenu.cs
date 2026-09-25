@@ -1,4 +1,5 @@
 using Godot;
+using System.Linq;
 
 // Host, join, or play offline -- folded behind one button so it does not take up
 // the screen. The button always shows where you stand (offline, hosting, guest)
@@ -70,8 +71,10 @@ public partial class SessionMenu : CanvasLayer
         // virtual one type instead.
         _invite = Ui.Btn("INVITE A FRIEND", () => Limited(() => Net.I?.Invite()), "Invite");
         _options.AddChild(_invite);
-        _copyInvite = Ui.Btn("COPY INVITE", () => Net.I?.CopyInvite(), "CopyInvite");
-        _options.AddChild(_copyInvite);
+        // THE PENDING LIST: one line per invite not yet connected, its code one COPY away, and CANCEL,
+        // which frees its place (the full text sends the host here)
+        _pending = Ui.VBox(4, "PendingList");
+        _options.AddChild(_pending);
         _reply = new LineEdit { Name = "ReplyBox", PlaceholderText = "paste a friend's reply here", CustomMinimumSize = new Vector2(300, 0) };
         _reply.TextSubmitted += t => { _reply.ReleaseFocus(); Net.I?.TakeCode(t); _reply.Text = ""; };
         _options.AddChild(_reply);
@@ -87,6 +90,8 @@ public partial class SessionMenu : CanvasLayer
         _options.AddChild(_replyShown);
         _fresh = Ui.Btn("MAKE A FRESH REPLY", () => Limited(() => Net.I?.FreshReply()), "FreshReply");
         _options.AddChild(_fresh);
+        // what a player pastes to the developer when a join did not work (§6.3)
+        _options.AddChild(Ui.Btn("COPY NETWORK REPORT", () => { if (Net.I != null) Rendezvous.Copy(Net.I.Report()); }, "CopyReport"));
         if (Net.I != null) { Net.I.Status += OnStatus; Net.I.SessionChanged += Refresh; Net.I.PlayerJoined += OnPeers; Net.I.PlayerLeft += OnLeft; }
         Refresh();
     }
@@ -114,8 +119,9 @@ public partial class SessionMenu : CanvasLayer
         Refresh();
         bool hosting = n != null && Net.IsHost && Net.IsOnline;
         _invite.Visible = hosting; _reply.Visible = hosting; _addresses.Visible = hosting;
-        _invite.Disabled = locked || !hosting || n.Full;
-        _copyInvite.Visible = hosting && n.LastInvite.Length > 0;
+        _invite.Disabled = locked || !hosting;                 // pressed when full, it says how to free a place
+        _pending.Visible = hosting;
+        if (hosting) ListPending(n);
         if (hosting) Ui.SetText(_addresses, string.Join("\n", n.Addresses));   // Ui.SetText: only when changed -- MSDF glyphs re-shape
         bool replying = n != null && n.Connecting && n.ReplyCode.Length > 0;
         _replyShown.Visible = replying;
@@ -142,7 +148,31 @@ public partial class SessionMenu : CanvasLayer
 
     private void DoJoin() { if (Link.Available) Net.I?.Join(_addr.Text); }
 
-    private Button _hostBtn, _joinBtn, _offBtn, _reconnect, _invite, _copyInvite, _fresh;
+    // Rebuilt only when an entry comes, goes or changes stage.
+    private string _listed = "";
+    private void ListPending(Net n)
+    {
+        string now = string.Join(",", n.Pending.All.Select(e => $"{e.Id}:{e.Stage}:{e.Code.Length > 0}"));
+        if (now == _listed) return;
+        _listed = now;
+        foreach (var c in _pending.GetChildren()) c.QueueFree();
+        foreach (var e in n.Pending.All)
+        {
+            var row = Ui.HBox(6, $"Invite{e.Id}");
+            string who = e.Name.Length > 0 ? e.Name : e.Row == Rendezvous.Paste.Id ? "an invite" : "a typed address";
+            var what = Ui.Lbl($"{who} · {(e.Stage == Rendezvous.Stage.Waiting ? "waiting for a reply" : "joining…")}", Ui.Small, Ui.Dim);
+            what.CustomMinimumSize = new Vector2(190, 0);
+            what.ClipText = true;
+            row.AddChild(what);
+            int id = e.Id; string code = e.Code;
+            if (code.Length > 0) row.AddChild(Ui.Btn("COPY", () => Rendezvous.Copy(code), "Copy"));
+            row.AddChild(Ui.Btn("CANCEL", () => Net.I?.Hang(id), "Cancel"));
+            _pending.AddChild(row);
+        }
+    }
+
+    private Button _hostBtn, _joinBtn, _offBtn, _reconnect, _invite, _fresh;
+    private VBoxContainer _pending;
     private Button[] _sessionBtns;
     private Label _missing, _addresses, _replyShown;
     private LineEdit _reply;

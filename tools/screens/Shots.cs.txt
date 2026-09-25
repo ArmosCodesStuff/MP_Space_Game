@@ -315,13 +315,32 @@ public partial class _Shots : Node
             await Snap("50_base_defence"); bs3.Visible = true;
             rz.TakeDamage(99999); zp.SetValue(H, z0); bs3.Position = keepB; bs3.Velocity = Vector2.Zero; await W(0.3);
         }
-        // hosting: the panel as a host sees it, the typed addresses under INVITE A FRIEND (R3 replaces this
-        // with 51_invite_ready and 52_reply_countdown)
+        // THE MULTIPLAYER PANEL (network_webrtc.md §6): the host's -- an invite ready, the pending list and
+        // the typed addresses -- then a guest's: its reply and countdown, the countdown run out with MAKE A
+        // FRESH REPLY, and a typed address nothing answers. A hermetic session: no STUN server is asked (the
+        // invite says so), and the codes go to a clipboard of this run's own.
         {
+            Link.Servers = System.Array.Empty<Link.StunRow>();
+            string clip = "";
+            Rendezvous.Copy = t => clip = t; Rendezvous.Clipboard = () => clip;
+            var toggle = N<Button>().First(b => b.Name == "NetToggle");
+            bool wasOpen = toggle.ButtonPressed;
+            toggle.ButtonPressed = true;
             // base 27140, not 27015: P(27015) on slot n is the smoketest host's port on slot n-1; 27140+100k is in no smoketest band (bound, never asserted)
             Net.I.Host(P(27140)); await W(0.5);
-            await W(0.3); await Snap("51_address_hidden");
+            Net.I.Invite(); await W(0.8);
+            await Snap("51_invite_ready");
+            string invite = Net.I.LastInvite;
             Net.I.GoOffline(); await W(0.5);
+            Net.I.Join(invite); await W(1.0);
+            await Snap("52_reply_countdown");
+            typeof(Net).GetField("_deadline", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(Net.I, Time.GetTicksMsec()); await W(0.5);
+            await Snap("60_reply_expired");
+            Net.I.GoOffline(); await W(0.3);
+            Net.I.Join($"127.0.0.1:{P(27140)}"); await W(1.0);   // the session above is closed: nothing listens there now
+            await Snap("61_join_failed");
+            Net.I.GoOffline(); await W(0.5);
+            toggle.ButtonPressed = wasOpen;
         }
         // a raid: two patrols in from the map's edge, and the HUD's count
         {
