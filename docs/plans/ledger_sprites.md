@@ -55,3 +55,25 @@ in this lane; the main session owes rungs 3 and 4 (listed at the end).
 - Trap found: a run of make_ships rewrites the capitals' and turrets' PNGs with different bytes;
   `git checkout` them after a run unless their block changed (written into DESIGN.md Art).
 - Next: J2 bosses.
+
+### J2 bosses -- PRE
+- Intent: BossType derives from HullArt (Sprite -> Texture, + Tint, + Nozzles listed); Rusty
+  Bucket frigate_a (nose Right, L 360, tint 0.33/0.25/0.26), Drake flagship (nose Right, L 420,
+  tint 0.52/0.35/0.29); HW 70 / 90 kept (the Drake's 310 stands); nozzles 2 / 5 listed, not drawn.
+- Start: e00ba7a80178ef40106c20cf520a9ed8b0ea2e58 (= J1's commit)
+- Files: tools/make_ships.ps1 5404844429ca · scripts/Missions.cs e1afdde80028 · scripts/Boss.cs
+  28201da9b48b · boss_raider.png d01762233989 · boss_drake.png a0a3e4624364 ·
+  tools/smoketest/SmokeTest.cs.txt 143c458d16de · tools/screens/Shots.cs.txt 21ca86be138b ·
+  docs/DESIGN.md 80fc0d91e800 · docs/CHANGES.md 9d9a30a43907
+
+### J2 bosses -- POST
+- Verdict: `-Quick` ALL CHECKS PASSED. Rungs 3/4 owed.
+- Files: make_ships.ps1 (2 rows), Missions.cs (BossType : HullArt; tints; nozzles), Boss.cs
+  (Fit(Type)), boss_raider.png, boss_drake.png, SmokeTest (Trimmed helper; 1 new check, 2 rewritten,
+  2 hand-made rows renamed), DESIGN.md, CHANGES.md.
+- Commit: the J2 commit (hash = J3's Start).
+- **D8** A boss's bells are listed on its row (2 / 5, the count check) but not drawn: bosses drew no
+  flame before and the spec does not ask for one.
+- **D9** Boss tints are sprites.md Q5's literals. On the new grey (mean L 0.65) they draw at ~0.65x
+  the old average colour, i.e. darker; the brighter alternative is in CHANGES Known broken.
+- Next: J3 fleet.

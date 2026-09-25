@@ -570,6 +570,12 @@ $Finished = @(
     # the title screen's Web (MenuFoe), at the webifier's length
     @{ Src = 'crescent_a.png'; Nose = 'Down'; Out = 'enemy_light_tier_2.png'; Length = 34
        Nozzles = @(@(218.5, 320, 51), @(351.5, 320, 51)) }
+    # the bosses (Missions.Bosses): no moving turrets, so their painted guns stay; their bells are
+    # listed (a boss draws no flame)
+    @{ Src = 'frigate_a.png'; Nose = 'Right'; Out = 'boss_raider.png'; Length = 360
+       Nozzles = @(@(115, 610, 66), @(218.5, 610, 65)) }
+    @{ Src = 'flagship.png'; Nose = 'Right'; Out = 'boss_drake.png'; Length = 420
+       Nozzles = @(@(184.5, 1358, 67), @(266, 1356, 66), @(346.5, 1300, 51), @(422, 1355, 64), @(520, 1355, 72)) }
 )
 $Turns = @{ Up = 0; Right = 1; Down = 2; Left = 3 }
 $Made = @()

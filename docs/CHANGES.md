@@ -467,6 +467,26 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### The bosses wear the owner's new sprites, each in a tint (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+The Rusty Bucket is the pack's `frigate_a` and the Drake Bastion its `flagship`, at their lengths (360,
+420) and half-widths (70, 90), so every hit size and the Drake's 310 u throw literal stand. The pack is
+grey, so each boss row carries a tint, the average colour of the art it replaced (sprites.md Q5): the
+Rusty (0.33, 0.25, 0.26), the Drake (0.52, 0.35, 0.29). The Rusty's white skull went with its old art.
+`BossType` derives from `HullArt` (its `Sprite` is `Texture`) and lists its bells (2 and 5); a boss
+draws no flame, as before. Their painted guns stay: a boss has no moving turret.
+
+**Checks:** "a boss's hull, art and approach are its row's" rewritten (`Texture`, not `Sprite`); new "a
+boss wears its tint on the pack's grey art, trimmed, its bells listed"; "level 2 is the Drake Bastion"
+now also asserts its sprite's tint. The harness's two hand-made boss rows name `Texture`. The trim test
+is one helper, `Trimmed`, which the raider check now uses too.
+
+**Known broken (J2):** UNPROVEN at rung 3 (the three checks above) and rung 4 (frames 38, 39, 42,
+62-66 by eye). The tints are the old art's AVERAGE colour, and the new grey averages 0.65 under the
+drawing, so both bosses draw at about 0.65x that colour: darker than before. If the frames read too
+dark, the tint that keeps the old average is the row's divided by 0.65: Rusty (0.51, 0.38, 0.40),
+Drake (0.80, 0.54, 0.45).
+
 ### The raiders wear the owner's new sprites, one flame to a bell (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
 
 The six raider rows and the title screen's Web now wear the pack in `art_source/pack_2026-09-24/`

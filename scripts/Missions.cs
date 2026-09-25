@@ -40,12 +40,13 @@ public static class Missions
     // for the same reason: BEHAVIOUR is code, geometry and art are data. There is no Make: every
     // boss is the one Boss class reading this row, where each was a subclass of its own with the
     // sprite, the length and the half-width written into it as abstract members.
-    public class BossType
+    // Its ART -- Texture, Length, Tint and the Nozzles its art has (listed: a boss draws no flame)
+    // -- is the HullArt it derives from (Sprites.cs). HalfWidth is how it is hit, not its art.
+    public class BossType : HullArt
     {
         public string Id, Name;
         public double Hull;
-        public string Sprite;
-        public float Length, HalfWidth;
+        public float HalfWidth;
         public float HoldOff = 650f;        // unlocked, it closes to about this and no nearer
         public float CloseSpeed = 30f;      // ...at this, ponderously
         public float TurnRate = 0.3f;       // its native turn (rad/s)
@@ -58,10 +59,13 @@ public static class Missions
         // the name above it is free. The code that holds its moves is Lancer.cs for the same
         // reason: it is named for the id on disk, not for the words on the screen.
         new() { Id = "silver_lancer", Name = "RUSTY BUCKET", Hull = 760,
-                Sprite = "res://boss_raider.png",          // raider red, a white skull on its centre
+                Texture = "res://boss_raider.png", Tint = new Color(0.33f, 0.25f, 0.26f),   // a rusted red
+                Nozzles = new Nozzle[] { new(-30.30f, 178.81f, 39.21f), new(31.19f, 178.81f, 38.61f) },
                 Length = 360f, HalfWidth = 70f, Moves = Lancer.Moves },
         new() { Id = "drake_bastion", Name = "DRAKE BASTION", Hull = 700,
-                Sprite = "res://boss_drake.png",
+                Texture = "res://boss_drake.png", Tint = new Color(0.52f, 0.35f, 0.29f),    // a scorched bronze
+                Nozzles = new Nozzle[] { new(-53.82f, 209.38f, 20.78f), new(-28.54f, 208.76f, 20.47f), new(-3.57f, 191.39f, 15.82f),
+                                         new(19.85f, 208.45f, 19.85f), new(50.25f, 208.45f, 22.33f) },
                 Length = 420f, HalfWidth = 90f, Moves = Drake.Moves },
     };
     // The boss of a level: every peer works it out from the replicated level alone.

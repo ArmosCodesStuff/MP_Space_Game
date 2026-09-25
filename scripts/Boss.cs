@@ -219,7 +219,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         // make the second boss of a session faster than the first. Done here, once, so not one of
         // the twenty-odd places that read a move has to know the level exists.
         _slots = Type.Moves.Select(m => new Slot { M = Scaled(m, Missions.Level), Due = m.First }).ToArray();
-        AddChild(Sprites.Fit(Type.Sprite, Length));
+        AddChild(Sprites.Fit(Type));
         ZIndex = 4;
         Combat.Hostiles.Add(this);
     }

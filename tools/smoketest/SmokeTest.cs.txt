@@ -14,6 +14,13 @@ public partial class _Test : Node
     int fails = 0;
     void Check(bool ok, string what) { GD.Print((ok ? "PASS " : "FAIL ") + what); if (!ok) fails++; }
     async Task Wait(double s) => await ToSignal(GetTree().CreateTimer(s), "timeout");
+    // A HULL TEXTURE TRIMMED TO ITS DRAWING (tools/make_ships.ps1): it fills 98.5% of its height
+    // and reaches a side within 2 px, so a row's Length is the drawn hull, nose to tail.
+    static bool Trimmed(string texture)
+    {
+        var im = Assets.Load<Texture2D>(texture).GetImage(); var u = im.GetUsedRect();
+        return u.Size.Y >= 0.985f * im.GetHeight() && Math.Min(u.Position.X, im.GetWidth() - u.End.X) <= 2;
+    }
     // A HERMETIC NETWORK. Every host in this harness used to search the real network for a router
     // and ask a real web service for the public address, so two checks passed in the sandbox the
     // harness was born in and failed on every real machine -- and now that the game maps ports
@@ -4633,8 +4640,7 @@ public partial class _Test : Node
             // spine and the pod's tail are not bells), every one at the stern.
             {
                 var arts = Enemies.All.Select(e => e.Texture).Append("res://enemy_light_tier_2.png");
-                var loose = arts.Where(t => { var im = Assets.Load<Texture2D>(t).GetImage(); var u = im.GetUsedRect();
-                                              return u.Size.Y < 0.985f * im.GetHeight() || Math.Min(u.Position.X, im.GetWidth() - u.End.X) > 2; }).ToList();
+                var loose = arts.Where(t => !Trimmed(t)).ToList();
                 int[] bells = { 2, 2, 2, 2, 2, 2 };   // webifier, gunship, talon, pod, cross, lancerkin
                 var hvArt = hv.GetChildren().OfType<Sprite2D>().First();
                 Check(loose.Count == 0 && Enemies.All.Select(e => e.Nozzles.Length).SequenceEqual(bells)
@@ -5147,7 +5153,7 @@ public partial class _Test : Node
                 var snHeavy = H.SpawnRaider(SnAround(Vary(0.3f, 0.4f), Vary(1.6f, 2.4f)), Enemies.Gunship);
                 var snType = Missions.Bosses[0];
                 var snPost = new Boss { Hub = H, Position = SnAround(Vary(0.5f, 0.65f), Vary(-2.4f, -1.6f)),
-                                        Type = new Missions.BossType { Id = "post", Name = "POST", Hull = 100000, Sprite = snType.Sprite,
+                                        Type = new Missions.BossType { Id = "post", Name = "POST", Hull = 100000, Texture = snType.Texture,
                                                                        Length = snType.Length, HalfWidth = snType.HalfWidth,
                                                                        CloseSpeed = 0f, TurnRate = 0f, Moves = System.Array.Empty<BossMove>() } };
                 AddChild(snPost);                                        // its _Ready puts it among the hostiles
@@ -6590,11 +6596,18 @@ public partial class _Test : Node
                       $"a boss's moves are a table of rows, in the order a frame resolves them ({string.Join(",", lan.Moves.Select(m => m.Id))} / {string.Join(",", dra.Moves.Select(m => m.Id))})");
                 // its art, its shape and what it closes on are the row's too, as EnemyDef carries
                 // a raider's -- they were abstract members of a boss class each
-                Check(lan.Hull == 760 && lan.Length == 360f && lan.HalfWidth == 70f && lan.Sprite == "res://boss_raider.png"
-                      && dra.Hull == 700 && dra.Length == 420f && dra.HalfWidth == 90f && dra.Sprite == "res://boss_drake.png"
+                Check(lan.Hull == 760 && lan.Length == 360f && lan.HalfWidth == 70f && lan.Texture == "res://boss_raider.png"
+                      && dra.Hull == 700 && dra.Length == 420f && dra.HalfWidth == 90f && dra.Texture == "res://boss_drake.png"
                       && lan.HoldOff == 650f && lan.CloseSpeed == 30f && Math.Abs(lan.TurnRate - 0.3f) < 1e-6
                       && dra.HoldOff == 650f && dra.CloseSpeed == 30f && Math.Abs(dra.TurnRate - 0.3f) < 1e-6,
                       "a boss's hull, art and approach are its row's: 760 / 360 / 70 and 700 / 420 / 90, both closing to 650 u at 30 u/s and turning at 0.3 rad/s");
+                // THE PACK'S ART ON THE BOSSES: grey art, so each wears a tint -- the average colour of
+                // the art it replaced (the Rusty's rusted red, the Drake's scorched bronze) -- each
+                // texture is trimmed to its drawing, and its bells are listed off the art: the Rusty's
+                // two, the Drake's five (four and a shorter one on the keel).
+                Check(lan.Tint == new Color(0.33f, 0.25f, 0.26f) && dra.Tint == new Color(0.52f, 0.35f, 0.29f)
+                      && Trimmed(lan.Texture) && Trimmed(dra.Texture) && lan.Nozzles.Length == 2 && dra.Nozzles.Length == 5,
+                      $"a boss wears its tint on the pack's grey art, trimmed, its bells listed (Rusty {lan.Nozzles.Length}, Drake {dra.Nozzles.Length})");
                 var gn = L("guns");
                 Check(gn.Way == MoveWay.Bolt && gn.Every == 1.2 && gn.First == 2.0 && gn.Damage == 3.6 && gn.Find == 900f
                       && gn.Waits == MoveWait.Nothing && !gn.Busy && !gn.Super && gn.Source == "boss:guns"
@@ -6653,7 +6666,7 @@ public partial class _Test : Node
                 // ...AND A BOSS'S MOVES COME FROM ITS ROW, NOT FROM ITS CLASS. There is one Boss
                 // class now: given the Lancer's hull with the DRAKE'S Moves, the boss built from
                 // that row schedules the Drake's moves and knows nothing of the Lancer's.
-                var mixed = new Missions.BossType { Id = "mixed", Name = "MIXED", Hull = 100, Sprite = lan.Sprite,
+                var mixed = new Missions.BossType { Id = "mixed", Name = "MIXED", Hull = 100, Texture = lan.Texture,
                                                     Length = lan.Length, HalfWidth = lan.HalfWidth, Moves = dra.Moves };
                 var proof = new Boss { Hub = H, Type = mixed, Position = boss.Position + new Vector2(0, -6000) };
                 AddChild(proof);                                  // _Ready builds its slots from the row
@@ -7118,8 +7131,9 @@ public partial class _Test : Node
                 var me3 = Me; me3.MaxHp = 5000; me3.TakeDamage(-(5000 - me3.Hp)); me3.Velocity = Vector2.Zero; me3.Rotation = 0f;
                 var dspr = dk?.GetChildren().OfType<Sprite2D>().FirstOrDefault();
                 Check(dk != null && dk.Type.Id == "drake_bastion" && dk.Type.Name == "DRAKE BASTION" && Math.Abs(dk.MaxHp - 700 * Missions.S(2)) < 1e-6
-                      && dspr != null && dspr.Texture.ResourcePath.EndsWith("boss_drake.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 420f) < 0.5f,
-                      $"level 2 is the Drake Bastion: 700 hull x the level's scale, 420 u long ({dk?.Type.Name}, {dk?.MaxHp:0})");
+                      && dspr != null && dspr.Texture.ResourcePath.EndsWith("boss_drake.png") && Math.Abs(dspr.Texture.GetHeight() * dspr.Scale.Y - 420f) < 0.5f
+                      && dspr.Modulate == new Color(0.52f, 0.35f, 0.29f),
+                      $"level 2 is the Drake Bastion: 700 hull x the level's scale, 420 u long, in its scorched bronze ({dk?.Type.Name}, {dk?.MaxHp:0}, {dspr?.Modulate})");
                 if (dk != null)
                 {
                     // ITS CLOCKS: a throw every 30 s from 6 s, the shotgun every 15 s from 17 s -- 11 s after a
