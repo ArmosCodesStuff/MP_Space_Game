@@ -9,7 +9,7 @@ using System.Collections.Generic;
 // cleared with the world (Combat.Clear), or a second session in one process carries the first's.
 public static class NetIds
 {
-    public const int Dummy = 1000, Player = 2000, Boss = 3000, Enemy = 5000, Missile = 10000, Deployed = 20000, Menu = 30000, Emplacement = 40000;
+    public const int Dummy = 1000, Player = 2000, Boss = 3000, Enemy = 5000, Missile = 10000, Deployed = 20000, Menu = 30000, Emplacement = 40000, Decoy = 50000;
 
     // HOW WIDE EACH SPACE IS, beside its base. The counter had no ceiling and a seat no bound, so
     // the 5000th enemy of a session was 10000 -- a MISSILE's number -- and all five kinds share one
@@ -18,7 +18,7 @@ public static class NetIds
     private static readonly Dictionary<int, int> Widths = new()
     {
         [Dummy] = 1000, [Player] = 1000, [Boss] = 2000, [Enemy] = 5000,
-        [Missile] = 10000, [Deployed] = 10000, [Menu] = 10000, [Emplacement] = 1000,
+        [Missile] = 10000, [Deployed] = 10000, [Menu] = 10000, [Emplacement] = 1000, [Decoy] = 1000,
     };
     private static int Wide(int space) => Widths.TryGetValue(space, out var w) && w > 1 ? w : 1000;
 

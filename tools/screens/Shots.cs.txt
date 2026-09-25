@@ -379,6 +379,7 @@ public partial class _Shots : Node
         await Close(ShipClass.Destroyer, "9d_destroyer_closeup");
         await Close(ShipClass.Battleship, "9_battleship_closeup");
         await LaneBDriveFrames();
+        await LaneADecoyFrames();
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -973,6 +974,24 @@ public partial class _Shots : Node
     // ring, in the amber-to-red band with its 2 s / 4 s / 6 s ticks, the ghost's "+640 u · DISABLED
     // 4.3 s" and the slot's WARP readout; then the landing flash, and the hull bar's DISABLED. Then a
     // dart's boost: BOOST 2.1 s on its slot and the hull bar, and BOOST n s while it cools.
+    // F14 decoys (lane A slice 5, kits5-J7): a flare salvo alight round the pilot, and a raid missile's
+    // red mark pulled off the hull onto one of the flares
+    async Task LaneADecoyFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        var ps = H.GetNode<PlayerShip>("Ship_1");
+        ps.Position = new Vector2(-900, 1100); ps.Rotation = 0.6f; ps.Velocity = Vector2.Zero;
+        cam.Zoom = new Vector2(0.7f, 0.7f);
+        H.Flares(ps.Position, ps.Rotation);
+        await W(0.8);
+        H.ThrowMissile(new MissileSpec { Side = Missiles.Raid, Damage = 0, Blast = 90f, Flight = 2.5 },
+                       ps.Position + new Vector2(900, -300), ps.Position + new Vector2(40, 30), 0);
+        await W(0.3); await Snap("43_lanea_flares_pull_a_mark");
+        await W(5.0);
+        cam.Zoom = z0;
+    }
+
     async Task LaneBDriveFrames()
     {
         var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;

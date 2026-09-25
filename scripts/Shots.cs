@@ -48,6 +48,9 @@ public class ShotDef
     // A PRISM MAY TURN IT BACK (F11, Prism.cs): a round of this row caught on a guard is fired back as a
     // friendly Reflect round (Shot.Strike). The siege's cruise missile never is.
     public bool Reflectable;
+    // A DECOY MAY TURN IT (F14, Decoys.cs): a hostile guided row a burning point lures onto itself. The
+    // siege's cruise missile never is.
+    public bool Decoyable;
 }
 
 public static class Shots
@@ -71,7 +74,7 @@ public static class Shots
                 MarkEveryPeer = true, Look = ShotLook.Missile, Heavy = true },
         // fired AT the pilots, and the one thing point defence exists for
         new() { Id = "seeker",  AtPlayers = true,  Pad = 4f,  Sweep = 0f, Burst = 0.5, Smoke = true, Guided = true,
-                Interceptable = true, MarkEveryPeer = true, Look = ShotLook.Missile, Reflectable = true },
+                Interceptable = true, MarkEveryPeer = true, Look = ShotLook.Missile, Reflectable = true, Decoyable = true },
         // A CRUISE MISSILE: slow, long-legged and guided, fired AT the pilots -- and a target in its
         // own right. Its body carries a hull (Tag.Hulled, not Tag.Missile), so every gun, blow, wing
         // and seeker a pilot has may bring it down and point defence wears it down rather than
@@ -154,6 +157,12 @@ public partial class Shot : Node2D, IHittable, ITagged
     public bool HostileFire => Def.AtPlayers;
     public bool Heavy => Def.Heavy;
     public bool IsMissile => Def.Look == ShotLook.Missile;
+    // LURED (Hub.NetDecoy, on every peer): it steers for this point instead of its target, and bursts
+    // there, harmlessly, once within `_catch` of it. Sticky.
+    public bool Decoyable => Def.Decoyable;
+    public Vector2? DecoyPoint { get; private set; }
+    private float _catch;
+    public void DecoyTo(Vector2 point, float catchRadius) { DecoyPoint = point; _catch = catchRadius; }
     public void TakeDamage(double d)
     {
         if (!Net.Sim || _spent) return;
@@ -202,11 +211,9 @@ public partial class Shot : Node2D, IHittable, ITagged
         // it -- it flies on down the heading it had, and still strikes whatever it touches (Strike
         // asks nobody's stealth); the target seen again, it homes again. A guest's copy reads the
         // same status bits, which the host sends every peer for every ship.
-        if (d.Guided && TurnRate > 0 && TargetId != 0
-            && (d.AtPlayers ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) is { } tgt
-            && !Targeting.Hidden(tgt))
-        {   // guided: the nose turns toward the target at TurnRate, and never snaps
-            float want = (tgt.Position - GlobalPosition).Angle(), have = Dir.Angle();
+        if (d.Guided && TurnRate > 0 && GuideTo(d) is { } spot)
+        {   // guided: the nose turns toward the target (or its lure) at TurnRate, and never snaps
+            float want = (spot - GlobalPosition).Angle(), have = Dir.Angle();
             Dir = Dir.Rotated(Mathf.Clamp(Mathf.AngleDifference(have, want), -TurnRate * dt, TurnRate * dt));
             Rotation = Aim.Along(Dir);
         }
@@ -217,8 +224,17 @@ public partial class Shot : Node2D, IHittable, ITagged
         if (d.Smoke) { _puffCd -= dt; if (_puffCd <= 0) { _puffCd += PuffEvery; _smoke.Add((GlobalPosition - Dir * 8f, 0f)); } }
 
         Shots.Sweep(from, GlobalPosition, d.Sweep, p => Strike(p, d));
+        if (!_spent && DecoyPoint is { } lure && GlobalPosition.DistanceTo(lure) <= _catch) Intercept();   // burst on the lure
         if (!_spent && _flown >= Range) End();
         QueueRedraw();
+    }
+    // What a guided body steers for: its lure once it has one, else its target while it is seen.
+    private Vector2? GuideTo(ShotDef d)
+    {
+        if (DecoyPoint is { } lure) return lure;
+        if (TargetId != 0 && (d.AtPlayers ? Combat.PlayerById(TargetId) : Combat.ById(TargetId)) is { } tgt && !Targeting.Hidden(tgt))
+            return tgt.Position;
+        return null;
     }
 
     // What it touches at `p`, and what that costs. True when it has ENDED: it struck its last body

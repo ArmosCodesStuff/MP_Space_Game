@@ -162,3 +162,27 @@ Done: J1 (F12), J2-J3 (F11), J4 (F14 Prefer). Next is kits5-J5; no PRE written f
   lapse re-picks, Quarry first; the dark re-take waits while called); Raider.Call / CalledBy (Raider.cs: 3 lines).
 - Files: Squads.cs, Raider.cs; SmokeTest.cs.txt (LaneARaiderCallChecks after LaneASentryThrowChecks).
 - Next: kits5-J7.
+### kits5-J7 · PRE · F14d: decoys -- the flares spawn row, NetDecoy, point guidance, the dazzle -- tier opus
+- Intent: new scripts/Decoys.cs (DecoyDef rows, Decoys.All "flares": 6 at 180 u, 0.6 s coast, 5 s life, lure 500, mark
+  300 with >= 1.0 s left, dazzle 150 for 4 s after; pure Points / Nearest; host Tick; DecoySalvo node); Spawns row Decoy
+  (appended, index 3) on a new NetIds.Decoy space; ShotDef.Decoyable (seeker; never cruise); Shot point guidance
+  (DecoyTo: turns at its own rate, bursts harmlessly within the row's Catch); MissileSide.Decoyable (the raid's);
+  Hub.Decoy / NetDecoy(id, point) moves a shot or a predicted blast (its host landing point, its visual and its mark)
+  on every peer; Hub.Flares(at, heading) pops a salvo (the 6c ability calls it). Checks LaneADecoyChecks,
+  rung 5 LaneADecoyHostChecks / LaneADecoyGuestChecks, a Shots.cs.txt frame.
+- D36: the salvo's 5 s is its whole life from the pop (kits_v2's proof: present at 4.9 s, gone at 5.1 s); it lures
+  from the pop, coasting out over the first 0.6 s. D37: a moved mark jumps to the flare (the slide is 6c's drawing).
+- Files: scripts/Decoys.cs (new), Shots.cs, Missiles.cs, Hub.cs, Spawned.cs, Ids.cs, SmokeTest.cs.txt, Shots.cs.txt, this ledger.
+- HEAD dc7372588041aa9c266de64605eb04d83077d709 · Shots.cs f477175950bfe48c7bde60cfe9bdc34013d9ae41 · Missiles.cs ad3c2e754786c89c0094b2db053bfc48f66b721d · Hub.cs 72bfa7fa73fd4cfd912354c588bfa52aab097f34 · Spawned.cs c639289c278b41425c6f49f48ad4134368a982fd · Ids.cs 27b8929f08dc8de4b0873f3dd0b183460a2b8eca · SmokeTest.cs.txt d12fc7e4a9c210d2ff895c3c2be541e88d3680a8 · Shots.cs.txt 8d63b2b342f7062f74266e599d0b4df59589f079
+### kits5-J7 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase. Decoys.cs (DecoyDef, Decoys.All "flares", pure Points / Nearest, host Tick: lure, mark, dazzle, the
+  salvo's end; DecoySalvo draws on every peer); Spawns.Decoy = 3 on NetIds.Decoy (50000, width 1000); ShotDef.Decoyable
+  (seeker) + Shot.DecoyTo / DecoyPoint / GuideTo (bursts via Intercept within Catch 30 u); MissileSide.Decoyable (raid)
+  + MissileVisual.Retarget; Hub.Flares, Hub.Decoy + NetDecoy (moves a shot, a host blast, its visual and its circle),
+  Hub.Blasts, ThrowMissile returns the id. Every rule reads the resting points (D36).
+- Wire: a new RPC (Hub.NetDecoy), a new spawn kind (3) and NetIds space: the protocol fingerprint moves.
+- Files: Decoys.cs (new), Shots.cs, Missiles.cs, Hub.cs, Spawned.cs, Ids.cs; SmokeTest.cs.txt (LaneADecoyChecks after
+  LaneARaiderCallChecks; rung 5 LaneADecoyHostChecks after the host's 45-into-a-turret check, LaneADecoyGuestChecks
+  after the guest's); Shots.cs.txt (LaneADecoyFrames, frame 43_lanea_flares_pull_a_mark, after LaneBDriveFrames).
+- Next: kits5-J8.

@@ -1210,6 +1210,7 @@ public partial class Hub : Node2D
     public IReadOnlyList<Raider> Raiders => ((SpawnSet<Raider>)_sets[Spawns.Raider]).Live;
     public IReadOnlyList<DeployedTurret> Deployed => ((SpawnSet<DeployedTurret>)_sets[Spawns.Turret]).Live;
     public IReadOnlyList<Emplacement> Emplacements => ((SpawnSet<Emplacement>)_sets[Spawns.Emplacement]).Live;
+    public IReadOnlyList<DecoySalvo> Salvos => ((SpawnSet<DecoySalvo>)_sets[Spawns.Decoy]).Live;
 
     // host: mint an id from this kind's space, build it, and tell this world
     public Node2D Spawn(int kind, Vector2 at, int n = 0, double a = 1, double b = 1)
@@ -1324,9 +1325,12 @@ public partial class Hub : Node2D
     // flare pulling its landing mark aside (F14's NetDecoy) -- names it by that id.
     private readonly List<(Vector2 at, double left, int from, MissileSpec shot, int id)> _blasts = new();
     public int BlastsPending => _blasts.Count;
-    public void ThrowMissile(MissileSpec m, Vector2 from, Vector2 at, int fromId)
+    // every blast in the air: its id, its side, where it will land and how long it has left
+    public IEnumerable<(int id, int side, Vector2 at, double left)> Blasts
+    { get { foreach (var b in _blasts) yield return (b.id, b.shot.Side, b.at, b.left); } }
+    public int ThrowMissile(MissileSpec m, Vector2 from, Vector2 at, int fromId)
     {
-        if (!Net.IsHost) return;
+        if (!Net.IsHost) return 0;
         int id = Combat.NextMissileId();
         _blasts.Add((at, m.Flight, fromId, m, id));
         // the circle it marks, as every warning is marked: a row of Fx.All, on every peer -- red
@@ -1334,6 +1338,35 @@ public partial class Hub : Node2D
         Fx.Warn(new FxRaise { Id = Missiles.Of(m.Side).Mark, At = at, To = at, Size = m.Blast, Time = m.Flight });
         ShowMissile(m.Side, from, at, m.Flight, m.Blast, id);
         ToWorld(nameof(NetMissile), m.Side, from, at, m.Flight, m.Blast, id);
+        return id;
+    }
+
+    // ── DECOYS (Decoys.cs) ────────────────────────────────────────────────────
+    // host: a salvo of a Decoys.All row's points round `at`, the first astern of `rot` (the 6c
+    // ability's press). Everything it does after the pop is Decoys.Tick's.
+    public DecoySalvo Flares(Vector2 at, float rot, int row = Decoys.Flares) =>
+        Spawn(Spawns.Decoy, at, row, rot, 0) as DecoySalvo;
+    // host: one shot or predicted missile, named by its id, turned onto `point` -- on every peer
+    public void Decoy(int id, Vector2 point, float catchRadius)
+    {
+        if (!Net.IsHost) return;
+        ApplyDecoy(id, point, catchRadius);
+        ToWorld(nameof(NetDecoy), id, point, catchRadius);
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetDecoy(int id, Vector2 point, float catchRadius) => ApplyDecoy(id, point, catchRadius);
+    private void ApplyDecoy(int id, Vector2 point, float catchRadius)
+    {
+        if (Combat.ById(id) is Shot sh) sh.DecoyTo(point, catchRadius);
+        for (int i = 0; i < _blasts.Count; i++)
+            if (_blasts[i].id == id) { var b = _blasts[i]; b.at = point; _blasts[i] = b; }
+        foreach (var c in GetChildren())
+        {
+            if (c is not MissileVisual mv || mv.NetId != id) continue;
+            var was = mv.To; int mark = Missiles.Of(mv.Side).Mark;
+            mv.Retarget(point);
+            foreach (var w in Fx.Warnings.ToList()) if (w.Id == mark && w.Position.DistanceTo(was) < 1f) w.Position = point;   // its circle
+        }
     }
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetMissile(int side, Vector2 from, Vector2 at, double flight, float blast, int id) =>
@@ -1613,6 +1646,7 @@ public partial class Hub : Node2D
         if (Net.IsHost && Session.Places.Count > 0) ExpireHolds();
         if (Net.IsHost) _raids.Tick(delta);
         if (Net.IsHost) TickBlasts(delta);
+        if (Net.IsHost) Decoys.Tick(this);
         TickMission(delta);
         var me = MyShip;
         if (Music.I != null)

@@ -4491,6 +4491,164 @@ public partial class _Test : Node
         await SetClass(cls0);
     }
 
+    // ── F14 · DECOYS: THE FLARES ROW, NETDECOY, POINT GUIDANCE AND THE DAZZLE (lane A slice 5, kits5-J7) ──
+    // Pure: the row's literals (kits_v2's Sniper card: 6 flares, 180 u, 0.6 s out, 5 s, lure 500, mark 300
+    // with 1.0 s left, dazzle 150 for 4 s); 3 salvos at varied rotations: 6 points 180 +- 5 u out, 60 deg
+    // apart, the first dead astern; a probe 490 u straight out from a point is lured onto it, one 510 u out
+    // is not. World, host, 3 runs from varied spots and rotations: a seeker (25) launched at the pilot
+    // 700-900 u off, the salvo popped 0-0.4 s later: it is lured and bursts on a flare, the pilot takes 0;
+    // a raid missile marked on the pilot (180 u from every flare, 2-3 s up) moves onto a flare; one marked
+    // 315-400 u beyond every flare stays; one within 300 u of a flare with 0.6-0.9 s left stays; one thrown
+    // 4.2-4.5 s after the pop (1.5-2.5 s up) moves and still lands there after the salvo is gone; the salvo
+    // stands at 4.9 s and is gone at 5.1 s. Dazzle, 3 runs: a held webifier 149 u out from a flare is
+    // DAZZLED, one 151 u out is not; taken 400 u clear it is still dazzled 3.6-3.8 s later and not 4.2-4.4 s later.
+    async Task LaneADecoyChecks(Vector2 yonder)
+    {
+        var fl = Decoys.Of(Decoys.Flares);
+        Check(fl.Count == 6 && Math.Abs(fl.Ring - 180f) < 1e-4f && Math.Abs(fl.Coast - 0.6) < 1e-9 && Math.Abs(fl.Life - 5) < 1e-9
+              && Math.Abs(fl.Lure - 500f) < 1e-4f && Math.Abs(fl.Mark - 300f) < 1e-4f && Math.Abs(fl.MarkLeft - 1.0) < 1e-9
+              && Math.Abs(fl.Dazzle - 150f) < 1e-4f && Math.Abs(fl.DazzleFor - 4) < 1e-9 && Shots.Of(Shots.Seeker).Decoyable
+              && !Shots.Of(Shots.Cruise).Decoyable && Missiles.Of(Missiles.Raid).Decoyable && !Missiles.Of(Missiles.Outpost).Decoyable,
+              "the flares row is kits_v2's card: 6 flares 180 u out in 0.6 s for 5 s, lure 500 u, mark 300 u with 1.0 s left, dazzle 150 u for 4 s; the seeker and the raid's missile are decoyable, the cruise missile and the outpost's are not");
+        for (int run = 0; run < 3; run++)
+        {
+            var c = new Vector2(Vary(-3000f, 3000f), Vary(-3000f, 3000f));
+            float rot = VaryAngle();
+            var pts = Decoys.Points(fl, c, rot, fl.Coast + Vary(0.1f, 4f));
+            bool ring = pts.Length == 6 && pts.All(p => Math.Abs(p.DistanceTo(c) - 180f) < 5f)
+                        && Enumerable.Range(0, 6).All(i => Math.Abs(Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference((pts[i] - c).Angle(), (pts[(i + 1) % 6] - c).Angle()))) - 60f) < 1f)
+                        && (pts[0] - c).Normalized().Dot(Vector2.Down.Rotated(rot)) > 0.999f;
+            int k = (int)Vary(0f, 5.99f);
+            var outward = (pts[k] - c).Normalized();
+            bool near = Decoys.Nearest(pts, pts[k] + outward * 490f, fl.Lure) is { } got && got.DistanceTo(pts[k]) < 0.01f;
+            bool far = Decoys.Nearest(pts, pts[k] + outward * 510f, fl.Lure) == null;
+            Check(ring && near && far,
+                  $"a salvo at rotation {Mathf.RadToDeg(rot):0} deg: 6 points 180 u out, 60 deg apart, the first dead astern ({ring}); 490 u out from one is lured onto it ({near}), 510 u is not ({far})");
+        }
+
+        var cls0 = Character.Class;
+        await SetClass(ShipClass.HeavySniper);                   // 120 u long: a flare's blast 180 u off never reaches it
+        var pm = Me; bool demo = pm.Demo; pm.Demo = true;
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        foreach (var sv in H.Salvos.ToList()) H.Down(Spawns.Decoy, sv, burst: false, float.NaN);
+        await Wait(0.3);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = VaryAngle(); pm.Hp = pm.MaxHp;
+            double hp0 = pm.Hp, low = pm.Hp;
+            var from = at + Vector2.Right.Rotated(VaryAngle()) * Vary(700f, 900f);
+            var sk = Combat.Fire(Shots.Seeker, from, at - from, 135f, 4000f, 25, targetId: pm.NetId, turnRate: 2f, hull: 1e9);
+            Vector2 skEnd = from;
+            async Task Frames(double seconds)
+            {
+                double t = pm.Clock + seconds;
+                while (pm.Clock < t)
+                {
+                    if (GodotObject.IsInstanceValid(sk) && sk.Alive) skEnd = sk.GlobalPosition;
+                    pm.Position = at; pm.Velocity = Vector2.Zero; low = Math.Min(low, pm.Hp);
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                }
+            }
+            await Frames(Vary(0f, 0.4f));
+            var salvo = H.Flares(pm.Position, pm.Rotation);
+            double pop = pm.Clock;
+            var rest = salvo.Resting;
+            await Frames(0.7);
+            MissileSpec Spec(double flight) => new() { Side = Missiles.Raid, Damage = 42, Blast = 90f, Flight = flight };
+            var far0 = at + Vector2.Right.Rotated(VaryAngle()) * 1500f;
+            int j = (int)Vary(0f, 5.99f);
+            var outJ = (rest[j] - at).Normalized();
+            var onPilot = at;
+            var beyond = rest[j] + outJ * Vary(315f, 400f);
+            var late = rest[(j + 3) % 6] + (rest[(j + 3) % 6] - at).Normalized() * Vary(100f, 200f);
+            int m1 = H.ThrowMissile(Spec(Vary(2f, 3f)), far0, onPilot, 0);
+            int m2 = H.ThrowMissile(Spec(Vary(2f, 3f)), far0, beyond, 0);
+            int m3 = H.ThrowMissile(Spec(Vary(0.6f, 0.9f)), far0, late, 0);
+            await Frames(0.05);
+            Vector2 AtOf(int id) => H.Blasts.Where(b => b.id == id).Select(b => b.at).DefaultIfEmpty(new Vector2(float.NaN, float.NaN)).First();
+            bool moved = rest.Any(p => p.DistanceTo(AtOf(m1)) < 1f)
+                         && Nodes<MissileVisual>().Any(mv => mv.NetId == m1 && rest.Any(p => p.DistanceTo(mv.To) < 1f));
+            bool stayed = AtOf(m2).DistanceTo(beyond) < 0.01f && AtOf(m3).DistanceTo(late) < 0.01f;
+            Check(moved && stayed,
+                  $"a raid missile marked on the pilot, 180 u from every flare, is pulled onto one, its missile too ({moved}); one {rest.Min(p => p.DistanceTo(beyond)):0} u from the nearest flare and one {late.DistanceTo(rest[(j + 3) % 6]):0} u off with under 1.0 s left stay ({stayed})");
+            await Frames(pop + Vary(4.2f, 4.5f) - pm.Clock);
+            int m4 = H.ThrowMissile(Spec(Vary(1.5f, 2.5f)), far0, onPilot, 0);
+            await Frames(0.05);
+            bool lateMoved = rest.Any(p => p.DistanceTo(AtOf(m4)) < 1f);
+            await Frames(pop + 4.9 - pm.Clock);
+            bool standing = H.Salvos.Contains(salvo);
+            await Frames(pop + 5.1 - pm.Clock);
+            bool gone = !H.Salvos.Contains(salvo);
+            for (int i = 0; i < 60 * 6 && (sk.Alive || H.BlastsPending > 0); i++)
+            {
+                if (GodotObject.IsInstanceValid(sk) && sk.Alive) skEnd = sk.GlobalPosition;
+                pm.Position = at; pm.Velocity = Vector2.Zero; low = Math.Min(low, pm.Hp);
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            bool lured = !sk.Alive && sk.DecoyPoint is { } lp && rest.Any(p => p.DistanceTo(lp) < 1f) && skEnd.DistanceTo(lp) < 60f;
+            Check(lured && low >= hp0 - 1e-6 && lateMoved && standing && gone && H.BlastsPending == 0,
+                  $"a seeker launched {from.DistanceTo(at):0} u off is lured onto a flare and bursts there ({lured}); a mark thrown 4.2-4.5 s after the pop moves too ({lateMoved}) and lands on its flare after the salvo is gone (standing at 4.9 s {standing}, gone at 5.1 s {gone}); the pilot took {hp0 - low:0.0} (0)");
+        }
+
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            pm.Position = at; pm.Velocity = Vector2.Zero;
+            var c = at + Vector2.Right.Rotated(VaryAngle()) * Vary(1200f, 1400f);
+            var salvo = H.Flares(c, VaryAngle());
+            var rest = salvo.Resting;
+            await Wait(0.7);
+            int k = (int)Vary(0f, 5.99f);
+            Raider Held(Vector2 spot) { var w = H.SpawnRaider(spot); w.Hp = 1e9; w.ApplyStatus(Status.Disabled, 30); return w; }
+            var inR = Held(rest[k] + (rest[k] - c).Normalized() * 149f);
+            var outR = Held(rest[(k + 3) % 6] + (rest[(k + 3) % 6] - c).Normalized() * 151f);
+            for (int i = 0; i < 3; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool dz = inR.Statuses.Has(Status.Dazzled), notDz = !outR.Statuses.Has(Status.Dazzled);
+            inR.Position = c + (rest[k] - c).Normalized() * (180f + 400f + 150f);
+            double left = Vary(3.6f, 3.8f);
+            await Wait(left);
+            bool still = inR.Statuses.Has(Status.Dazzled);
+            await Wait(Vary(4.2f, 4.4f) - left);
+            bool lapsed = !inR.Statuses.Has(Status.Dazzled);
+            Check(dz && notDz && still && lapsed,
+                  $"a held webifier 149 u from a flare is dazzled ({dz}), one 151 u out is not ({notDz}); taken clear it stays dazzled {left:0.0} s later ({still}) and not past 4 s ({lapsed})");
+            inR.TakeDamage(1e12); outR.TakeDamage(1e12);
+            foreach (var sv in H.Salvos.ToList()) H.Down(Spawns.Decoy, sv, burst: false, float.NaN);
+            await Wait(0.2);
+        }
+        pm.Demo = demo; pm.Position = yonder; pm.Velocity = Vector2.Zero; pm.Hp = pm.MaxHp;
+        await SetClass(cls0);
+    }
+
+    // ── F14 · NETDECOY ON THE WIRE (lane A slice 5, kits5-J7), rung 5 ────────────────────────────
+    // Host: a flare salvo 1400-1600 u off its own hull at a varied rotation (clear of both pilots), and a
+    // raid missile (no damage) marked 200-260 u from its centre, 2.5-3 s up: on the host the mark goes onto
+    // a flare within 2 frames. Guest (LaneADecoyGuestChecks): the salvo stands at the host's spots (each of
+    // its 6 points derived here from the one seed), and the missile's mark arrives moved onto one of them.
+    async Task LaneADecoyHostChecks(PlayerShip hw)
+    {
+        var c = hw.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(1400f, 1600f);
+        var salvo = H.Flares(c, VaryAngle());
+        var mark = c + Vector2.Right.Rotated(VaryAngle()) * Vary(200f, 260f);
+        int id = H.ThrowMissile(new MissileSpec { Side = Missiles.Raid, Damage = 0, Blast = 90f, Flight = Vary(2.5f, 3f) },
+                                c + Vector2.Right.Rotated(VaryAngle()) * 1200f, mark, 0);
+        for (int i = 0; i < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var landAt = H.Blasts.Where(b => b.id == id).Select(b => b.at).FirstOrDefault();
+        Check(salvo != null && salvo.Resting.Any(p => p.DistanceTo(landAt) < 1f),
+              $"arena host: a raid missile marked {mark.DistanceTo(c):0} u from a salvo's centre is pulled onto a flare here, {salvo?.Resting.Min(p => p.DistanceTo(landAt)):0.0} u off one");
+    }
+    async Task LaneADecoyGuestChecks()
+    {
+        await RealTime(() => H.Salvos.Count > 0 && Nodes<MissileVisual>().Any(mv => H.Salvos[0].Resting.Any(p => p.DistanceTo(mv.To) < 1f)), Wan ? 20 : 12);
+        var salvo = H.Salvos.FirstOrDefault();
+        var mine = salvo == null ? null : Decoys.Points(salvo.Def, salvo.At, salvo.Rot, salvo.Def.Coast);
+        bool pulled = salvo != null && Nodes<MissileVisual>().Any(mv => salvo.Resting.Any(p => p.DistanceTo(mv.To) < 1f));
+        bool circle = salvo != null && Fx.Warnings.Any(w => w.Id == Missiles.Of(Missiles.Raid).Mark && salvo.Resting.Any(p => p.DistanceTo(w.Position) < 1f));
+        Check(salvo != null && mine.Length == 6 && pulled && circle,
+              $"arena guest: the host's flare salvo stands here at the 6 spots its seed gives ({salvo != null}), and the raid missile's mark arrives pulled onto one of them, its missile ({pulled}) and its red circle ({circle})");
+    }
+
     // ── F12 · THE MELEE ARC AND THE GUARD CLAMP (lane A slice 5, kits5-J1) ─────────────────────
     // Pure (Melee.Pick, Melee.Guard): the blade's literals (160 u, ±55°, kits_v2 Warrior card) and the
     // whirlwind's (210 u, all round) from 3 varied spots and facings. A body well inside the wedge and one
@@ -10324,6 +10482,7 @@ public partial class _Test : Node
             await LaneASentryPreferChecks(yonder);
             await LaneASentryThrowChecks(yonder);
             await LaneARaiderCallChecks(yonder);
+            await LaneADecoyChecks(yonder);
             await LaneBHelmChecks(yonder);
             await LaneBStrafeChecks(yonder);
             await LaneBBoostChecks(yonder);
@@ -13979,6 +14138,7 @@ public partial class _Test : Node
             hurtT.TakeDamage(45);
             Check(Math.Abs(hurtT.Hp - 75) < 1e-6 && Math.Abs(hurtT.MaxHp - 120) < 1e-6,
                   $"arena host: 45 into one of the guest's turrets leaves 75 of 120 ({hurtT.Hp:0})");
+            await LaneADecoyHostChecks(hw);
             // THE BUBBLE IS OVER SOMEBODY ELSE. The pool is the GUEST's and the blow lands on the
             // HOST's hull: PlayerShip.ThroughBubbles reads Combat.Players, and until now no check
             // had ever had two pilots in it.
@@ -14281,6 +14441,7 @@ public partial class _Test : Node
             var hurtHere = H.Deployed.FirstOrDefault(t => t.Hp < 119);
             Check(hurtHere != null && Math.Abs(hurtHere.Hp - 75) < 0.01 && Math.Abs(hurtHere.MaxHp - 120) < 1e-6,
                   $"arena guest: the 45 the host put into one of its turrets arrives -- {hurtHere?.Hp:0} of {hurtHere?.MaxHp:0}, and a bar to draw it");
+            await LaneADecoyGuestChecks();
             fgm.UseAbility("bubble", 0);                       // F
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             bool ownBubble = fgm.BubbleUp;
