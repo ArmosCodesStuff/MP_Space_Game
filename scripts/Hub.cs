@@ -204,7 +204,7 @@ public partial class Hub : Node2D
         // on the scope, so four pylons were four things a pilot could only find by flying at them.
         foreach (var e in Emplacements)
             if (IsInstanceValid(e))
-                yield return new ScopeMark(e.Label, e.Position, e.HitRadius, MarkShape.Diamond, new Vector2(3.5f, 4f), e.Def.Main);
+                yield return new ScopeMark(e.Label, e.Position, e.HitRadius, MarkShape.Diamond, new Vector2(3.5f, 4f), e.Def.Tint);
     }
 
     public Boss Boss { get; private set; }

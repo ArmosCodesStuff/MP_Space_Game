@@ -7,20 +7,15 @@
 # tint (the row's Tint). Nothing is redrawn, resampled, sharpened or shaded: a rerun gives the same
 # pixels. It prints every mark and nozzle of the row in world units, for the row in the game.
 #
-# LINE DRAWINGS on paper (the capitals, until their slice): turned nose-up, made symmetrical,
-# redrawn at twice size, sharpened, cut out of the paper and halved.
+# THE TURRETS (the pack has none), from the one line drawing left, art_source\turret.png:
 #
-#   carrier_player.png   the carrier                 art_source\carrier.png
-#   battleship_hull.png  the battleship, its four painted turrets painted over (the moving turrets
-#                        sit where they stood)       art_source\battleship.png
-#   destroyer_hull.png   the destroyer               art_source\destroyer.png
 #   turret_main.png      the main turret, barrels up, pivot at the sheet's centre (every class's,
 #                        and the heavy raiders')     art_source\turret.png
 #   turret_pd.png        the point-defence turret: the main turret's look, round and single-
 #                        barrelled -- drawn here, at the main turret's scale
 #
 # Run: powershell -ExecutionPolicy Bypass -File tools\make_ships.ps1 [-Preview <png>]
-param([string]$Preview = '', [double]$BattleshipTurrets = 2.5, [double]$DestroyerTurrets = 1.3085, [double]$CarrierTurrets = 1.9178)
+param([string]$Preview = '')
 $ErrorActionPreference = 'Stop'
 $Root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $Src = Join-Path $Root 'art_source'
@@ -167,13 +162,6 @@ public class Sheet
         return o;
     }
 
-    // back to bare paper
-    public void Blank(int x0, int y0, int x1, int y1)
-    {
-        for (int y = Math.Max(0, y0); y <= Math.Min(H - 1, y1); y++)
-            for (int x = Math.Max(0, x0); x <= Math.Min(W - 1, x1); x++) L[y * W + x] = 1f;
-    }
-
     // painted over, x0..x1 by y0..y1, with the columns of a clean stretch from cleanX on, repeated
     // every `period`: for a band whose lines all run along it (a hull's spine)
     public void PatchColumns(int x0, int y0, int x1, int y1, int cleanX, int period)
@@ -289,54 +277,6 @@ public class Sheet
         for (int i = 0; i < L.Length; i++) L[i] = C01((L[i] - black) / (white - black));
     }
 
-    static bool[] Dilate(bool[] m, int w, int h, int r)
-    {
-        var t = new bool[m.Length]; var o = new bool[m.Length];
-        var pre = new int[Math.Max(w, h) + 1];
-        for (int y = 0; y < h; y++)
-        {
-            for (int x = 0; x < w; x++) pre[x + 1] = pre[x] + (m[y * w + x] ? 1 : 0);
-            for (int x = 0; x < w; x++) t[y * w + x] = pre[Math.Min(w, x + r + 1)] - pre[Math.Max(0, x - r)] > 0;
-        }
-        for (int x = 0; x < w; x++)
-        {
-            for (int y = 0; y < h; y++) pre[y + 1] = pre[y] + (t[y * w + x] ? 1 : 0);
-            for (int y = 0; y < h; y++) o[y * w + x] = pre[Math.Min(h, y + r + 1)] - pre[Math.Max(0, y - r)] > 0;
-        }
-        return o;
-    }
-
-    // THE PAPER CUT AWAY. A flood runs in from the sheet's edge over light pixels, but never within
-    // `seal` px of ink, so a gap in an outline cannot let it into the hull; then Unmix; then Specks.
-    public void CutOut(float paper, int seal, int band, float minIsland)
-    {
-        int n = W * H;
-        var ink = new bool[n];
-        for (int i = 0; i < n; i++) ink[i] = L[i] < paper;
-        var near = Dilate(ink, W, H, seal);
-        var q = new Queue<int>();
-        var bg = new bool[n];
-        for (int x = 0; x < W; x++) { Seed(bg, near, q, x, 0); Seed(bg, near, q, x, H - 1); }
-        for (int y = 0; y < H; y++) { Seed(bg, near, q, 0, y); Seed(bg, near, q, W - 1, y); }
-        while (q.Count > 0)
-        {
-            int i = q.Dequeue(), x = i % W, y = i / W;
-            if (x > 0) Seed(bg, near, q, x - 1, y);
-            if (x < W - 1) Seed(bg, near, q, x + 1, y);
-            if (y > 0) Seed(bg, near, q, x, y - 1);
-            if (y < H - 1) Seed(bg, near, q, x, y + 1);
-        }
-        for (int i = 0; i < n; i++) if (bg[i]) A[i] = 0f;
-        Unmix(band);
-        Specks(minIsland);
-    }
-    void Seed(bool[] bg, bool[] near, Queue<int> q, int x, int y)
-    {
-        int i = y * W + x;
-        if (bg[i] || near[i]) return;
-        bg[i] = true; q.Enqueue(i);
-    }
-
     // The light edge between the transparent and the solid ink, up to `band` px deep, un-mixed from
     // the white it was drawn on: black, at 1 - lightness. The outline then reads clean on any
     // background, and a sliver of paper left inside a cut is gone.
@@ -362,26 +302,6 @@ public class Sheet
             if (A[i] <= 0f) { L[i] = 0f; continue; }
             if (dist[i] > 0) { A[i] = Math.Min(A[i], C01(1f - L[i])); L[i] = 0f; }
         }
-    }
-
-    // specks: every island of cover smaller than `minIsland` of the sheet goes
-    public void Specks(float minIsland)
-    {
-        int n = W * H; var lab = new int[n]; var sizes = new List<int> { 0 };
-        var q = new Queue<int>();
-        for (int s = 0; s < n; s++)
-        {
-            if (lab[s] != 0 || A[s] < 0.05f) continue;
-            int id = sizes.Count, count = 0; lab[s] = id; q.Enqueue(s);
-            while (q.Count > 0)
-            {
-                int i = q.Dequeue(), x = i % W, y = i / W; count++;
-                int[] nb = { x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1 };
-                foreach (int j in nb) if (j >= 0 && lab[j] == 0 && A[j] >= 0.05f) { lab[j] = id; q.Enqueue(j); }
-            }
-            sizes.Add(count);
-        }
-        for (int i = 0; i < n; i++) if (lab[i] != 0 && sizes[lab[i]] < minIsland * n) A[i] = 0f;
     }
 
     // everything outside `shape` transparent (drawn anti-aliased): for art lifted out of a busier
@@ -451,26 +371,6 @@ public class Sheet
             }
         foreach (var p in Marks) o.Marks.Add(new PointF(p.X / 2f, p.Y / 2f));
         return o;
-    }
-
-    // THE WHOLE TREATMENT for a hull on paper: nose-up (turned a quarter anticlockwise when it lies
-    // nose-right), symmetric, worked at twice `finalH` tall, sharpened (by the enlargement's own
-    // blur), levelled, cut out, trimmed, halved.
-    public static Sheet Hull(Sheet s, bool turn, int finalH, bool keepLeft) { return Hull(s, turn, finalH, keepLeft, 0.9f, 0.16f, 0.9f, 1f); }
-    public static Sheet Hull(Sheet s, bool turn, int finalH, bool keepLeft, float widen) { return Hull(s, turn, finalH, keepLeft, 0.9f, 0.16f, 0.9f, widen); }
-    // (a small drawing, enlarged a long way, takes a harder sharpening and a lower black point,
-    // which thins its lines back towards the drawing's; `widen` stretches it across, the length kept)
-    public static Sheet Hull(Sheet s, bool turn, int finalH, bool keepLeft, float sharpen, float black, float white, float widen)
-    {
-        if (turn) s = s.TurnLeft();
-        float axis = s.FindAxis();
-        int w = (int)Math.Round(s.W * 2.0 * finalH / s.H * widen), h = 2 * finalH;
-        float kx = (float)w / s.W, k = (float)h / s.H;
-        s = s.Resize(w, h).Mirror(axis * kx, keepLeft);
-        s.Sharpen(0.6f * k, sharpen);
-        s.Levels(black, white);
-        s.CutOut(0.8f, Math.Max(1, (int)Math.Round(k)), (int)Math.Round(k) + 2, 0.0004f);
-        return s.Trim(4).Half();
     }
 
     // THE POINT-DEFENCE TURRET, drawn at working size: the main turret's look -- white plate, black
@@ -559,7 +459,9 @@ $Finished = @(
        Nozzles = @(@(82, 588, 63), @(193, 588, 63)) }
     @{ Src = 'fighter_tri_a.png'; Nose = 'Up'; Out = 'enemy_talon_hull.png'; Length = 40
        Nozzles = @(@(61.5, 264, 23), @(147.5, 264, 23)) }
-    @{ Src = 'drone_sensor.png'; Nose = 'Up'; Out = 'enemy_pod_hull.png'; Length = 52
+    # drone_sensor.png is ONE game file on TWO rows (D18): the Pod (Enemies.All) below and the siege's
+    # shield pylon (Emplacements.All), at each row's own Length
+    @{ Src = 'drone_sensor.png'; Nose = 'Up'; Out = 'drone_sensor.png'; Length = 52
        Nozzles = @(,@(130, 241, 37)) }
     @{ Src = 'gunship_h.png'; Nose = 'Left'; Out = 'enemy_cross_hull.png'; Length = 120
        Marks = [ordered]@{ turret = @(161, 445); housing = @(191, 445) }
@@ -598,6 +500,38 @@ $Finished = @(
     @{ Src = 'fighter_g.png'; Nose = 'Right'; Out = 'wing_bomber.png'; Length = 28.125
        Marks = [ordered]@{ launch = @(16.5, 232) }
        Nozzles = @(@(105.5, 446, 33), @(204.5, 446, 33)) }
+    # the siege (Emplacements.All): the pirate base, the owner's pick ("the crescent hull is the
+    # pirate base"). It carries no guns of its own and draws no flame, so no marks or nozzles;
+    # Out keeps the game's existing res:// path, so nothing else moves
+    @{ Src = 'crescent_b.png'; Nose = 'Up'; Out = 'pirate_base.png'; Length = 483 }
+    # the 12 player classes (Classes.All), hull art only -- hit sizes (HalfWidth) unchanged (Q1).
+    # The battleship's 6 painted twin housings are patched clean of their barrels (Q4: painted guns
+    # under a moving turret are painted out on player hulls); 4 of the 6 -- the two forward rows,
+    # both flanks -- carry the real Mains (Q3's default); the aft flanking pair and the 3 centre
+    # (keel) turrets stay painted, unarmed. Every other class keeps today's mount literals except
+    # where noted (POST): the new art's own landmark is a clear match for the old one.
+    @{ Src = 'battleship_bb05.png'; Nose = 'Left'; Out = 'battleship_hull.png'; Length = 378
+       Marks = [ordered]@{ main1 = @(118.9, 231.2); main2 = @(118.9, 305.8); pd = @(50.2, 517.8) }
+       Patches = @(
+           @(105,183,133,239, 94,6), @(199,183,227,239, 188,6),
+           @(105,258,133,314, 94,6), @(199,258,227,314, 188,6),
+           @(75,325,120,410, 124,6), @(212,325,257,410, 205,6)
+       ) }
+    @{ Src = 'carrier_a.png'; Nose = 'Right'; Out = 'carrier_player.png'; Length = 283.5
+       Marks = [ordered]@{ pdflank = @(92.5, 338.5) } }
+    @{ Src = 'destroyer_dd22.png'; Nose = 'Right'; Out = 'destroyer_hull.png'; Length = 212.625
+       Marks = [ordered]@{ main1 = @(132.5, 235.6); main2 = @(132.5, 315.4); pd = @(55.2, 285.5) } }
+    @{ Src = 'cargo_2.png'; Nose = 'Left'; Out = 'freight_hauler_hull.png'; Length = 230 }
+    @{ Src = 'cargo_3.png'; Nose = 'Left'; Out = 'freight_tender_hull.png'; Length = 230 }
+    @{ Src = 'frigate_c.png'; Nose = 'Right'; Out = 'freight_bastion_hull.png'; Length = 230
+       Marks = [ordered]@{ main = @(168, 425) } }
+    @{ Src = 'fighter_unit_c.png'; Nose = 'Right'; Out = 'heavy_sniper_hull.png'; Length = 120 }
+    @{ Src = 'fighter_unit_b.png'; Nose = 'Left'; Out = 'heavy_warrior_hull.png'; Length = 120 }
+    @{ Src = 'fighter_e.png'; Nose = 'Left'; Out = 'heavy_warden_hull.png'; Length = 120 }
+    @{ Src = 'fighter_unit_d.png'; Nose = 'Left'; Out = 'light_dart_hull.png'; Length = 70 }
+    @{ Src = 'fighter_f.png'; Nose = 'Left'; Out = 'light_echo_hull.png'; Length = 70
+       Marks = [ordered]@{ main = @(168, 75) } }
+    @{ Src = 'fighter_unit_a.png'; Nose = 'Right'; Out = 'light_wraith_hull.png'; Length = 70 }
 )
 $Turns = @{ Up = 0; Right = 1; Down = 2; Left = 3 }
 $Made = @()
@@ -605,6 +539,10 @@ foreach ($row in $Finished) {
     $bm = New-Object System.Drawing.Bitmap (Join-Path $Pack $row.Src)
     try { $s = [Sheet]::Finished($bm) } finally { $bm.Dispose() }
     for ($i = 0; $i -lt $Turns[$row.Nose]; $i++) { $s = $s.TurnLeft() }
+    # PAINTED GUNS UNDER A MOVING TURRET, painted out (Q4): each Patches entry is
+    # (x0,y0,x1,y1,cleanX,period), NOSE-UP frame px, run before the marks so a mark can still
+    # land inside the patched area
+    if ($row.Patches) { foreach ($p in $row.Patches) { $s.PatchColumns($p[0], $p[1], $p[2], $p[3], $p[4], $p[5]) } }
     $keel = if ($row.Keel) { [float]$row.Keel } else { $s.CoverAxis() }
     $names = @()
     if ($row.Marks) { foreach ($m in $row.Marks.GetEnumerator()) { $s.Mark($m.Value[0], $m.Value[1]); $names += $m.Key } }
@@ -621,40 +559,6 @@ foreach ($row in $Finished) {
     }
     $Made += ,@($s, $row)
 }
-
-# ── the carrier, 283.5 u (25% smaller than the battleship): nose up already ──
-$c = Load 'carrier.png'
-$c.Mark(124, 301.5)          # 0  the centre of the runway, where bombers land
-$c.Mark(71, 301.5)           # 1  the port deck, beside the runway: the bays' line
-$c.Mark(97, 301.5)           # 2  the runway's port edge
-$c.Mark(124, 60)             # 3  the runway's bow end, where a bomber lifts off
-$c.Mark(22, 238)             # 4  the middle port sponson: a point-defence turret
-$c.Mark(121, 588)            # 5  the stern block: the third point-defence turret (clear of the bow,
-                             #    where a bomber lifting off passes over)
-$c.Mark(44, 301.5)           # 6  the hull's port side (the sponsons are outboard of it)
-$c = [Sheet]::Hull($c, $false, 1134, $true)
-Out-Sheet $c 'carrier_player.png'
-0..6 | ForEach-Object { "  carrier mark $_ : $(U $c $_ 283.5)" }
-
-# ── the battleship, 378 u: drawn nose-right, twice as wide, then 35% and 25% larger (the owner's) ──
-$b = Load 'battleship.png'
-$b.Blank(255, 0, 318, 14); $b.Blank(705, 292, 780, 307)          # two pieces of the next drawing on the sheet
-foreach ($t in @(@(200, 310), @(383, 512), @(684, 800), @(1008, 1120))) { $b.PatchColumns($t[0], 114, $t[1], 190, 1215, 117) }
-foreach ($m in @(1055, 735, 435, 254)) { $b.Mark($m, 152) }        # 0-3 the main turrets, bow to stern
-$b.Mark(125, 112)                                                   # 4  point defence, on the stern's port quarter
-$b.Mark(700, 80)                                                    # 5  the hull's port side, amidships
-$b = [Sheet]::Hull($b, $true, 1512, $true, 2)
-Out-Sheet $b 'battleship_hull.png'
-0..5 | ForEach-Object { "  battleship mark $_ : $(U $b $_ 378)" }
-
-# ── the destroyer, 212.625 u (25% smaller than the carrier): drawn nose-right ──
-$d = Load 'destroyer.png'
-$d.Mark(195, 48.5); $d.Mark(97, 48.5)                               # 0-1 main turrets: the fore spine, the central plate
-$d.Mark(45, 33)                                                     # 2  point defence, aft to port
-$d.Mark(130, 16)                                                    # 3  the hull's port side
-$d = [Sheet]::Hull($d, $true, 850, $true)
-Out-Sheet $d 'destroyer_hull.png'
-0..3 | ForEach-Object { "  destroyer mark $_ : $(U $d $_ 212.625)" }
 
 # ── the main turret: lifted out of its drawing (a flood would stop at the hull lines behind it),
 #    barrels up, the housing's centre the pivot. 12 u across the housing at the battleship's
@@ -688,16 +592,15 @@ Out-Sheet $p 'turret_pd.png'
 "  pd turret: ring {0:0.00} u; pivot to muzzle {1:0.00} u" -f 3.0, (($p.Marks[0].Y - $p.Marks[1].Y) * $tk)
 
 if ($Preview) {
-    # every hull at 3 px/u on a dark field, in the default hull colour, the turrets in the accent
-    # on the marks, the carrier with five bombers parked, a 10 u grid to measure by
+    # every hull at 2 px/u on a dark field, in the default hull colour, the turrets in the accent
+    # on the marks, a 15 u grid to measure by
     $ppu = 2.0
     $main = [System.Drawing.Color]::FromArgb(255, 153, 153, 153); $acc = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
     $bg = [System.Drawing.Color]::FromArgb(255, 11, 15, 24)
-    $ships = @(@($c, 283.5), @($b, 378.0), @($d, 212.625))
+    $ships = @()
     foreach ($m in $Made) { $ships += ,@($m[0], [double]$m[1].Length, $m[1]) }
-    $bsT = $BattleshipTurrets; $ddT = $DestroyerTurrets; $cvT = $CarrierTurrets     # each class's turret scale, x the battleship's first
     $Wp = 60; foreach ($s in $ships) { $Wp += [int]($s[0].W * $s[1] / $s[0].H * $ppu) + 60 }
-    $Hp = [int](378 * $ppu) + 80
+    $Hp = [int](($ships | ForEach-Object { $_[1] } | Measure-Object -Maximum).Maximum * $ppu) + 80
     $out = New-Object System.Drawing.Bitmap $Wp, $Hp
     $g = [System.Drawing.Graphics]::FromImage($out)
     $g.Clear($bg); $g.InterpolationMode = 'HighQualityBicubic'; $g.SmoothingMode = 'AntiAlias'; $g.PixelOffsetMode = 'HighQuality'
@@ -705,7 +608,6 @@ if ($Preview) {
     for ($x = 0; $x -lt $Wp; $x += 30) { $g.DrawLine($grid, $x, 0, $x, $Hp) }
     for ($y = 0; $y -lt $Hp; $y += 30) { $g.DrawLine($grid, 0, $y, $Wp, $y) }
     $tm = $t.Tinted($acc); $tp = $p.Tinted($acc)
-    $bomber = New-Object System.Drawing.Bitmap (Join-Path $Root 'wing_bomber.png')
     function Place($bmp, [double]$cx, [double]$cy, [double]$w, [double]$h, [double]$deg) {
         $st = $g.Save(); $g.TranslateTransform([float]$cx, [float]$cy); $g.RotateTransform([float]$deg)
         $g.DrawImage($bmp, [float](-$w / 2), [float](-$h / 2), [float]$w, [float]$h); $g.Restore($st)
@@ -716,20 +618,6 @@ if ($Preview) {
         $hb = $sh.Tinted($main); Place $hb $cx $cy $w $hh 0; $hb.Dispose()
         $u = $len / $sh.H * $ppu
         function At($i) { @(($cx + ($sh.Marks[$i].X - $sh.W / 2) * $u), ($cy + ($sh.Marks[$i].Y - $sh.H / 2) * $u)) }
-        $tw = $t.W * $tk * $ppu; $th = $t.H * $tk * $ppu; $pw = $p.W * $tk * $ppu
-        if ($sh -eq $b) { 0..3 | ForEach-Object { $q = At $_; Place $tm $q[0] $q[1] ($tw * $bsT) ($th * $bsT) ($(if ($_ -eq 3) { 180 } else { 0 })) }
-                          $q = At 4; Place $tp $q[0] $q[1] ($pw * $bsT) ($pw * $bsT) 0; Place $tp (2 * $cx - $q[0]) $q[1] ($pw * $bsT) ($pw * $bsT) 0 }
-        if ($sh -eq $d) { 0..1 | ForEach-Object { $q = At $_; Place $tm $q[0] $q[1] ($tw * $ddT) ($th * $ddT) 0 }
-                          $q = At 2; Place $tp $q[0] $q[1] ($pw * $ddT) ($pw * $ddT) 0; Place $tp (2 * $cx - $q[0]) $q[1] ($pw * $ddT) ($pw * $ddT) 0 }
-        if ($sh -eq $c) {
-            $q = At 4; Place $tp $q[0] $q[1] ($pw * $cvT) ($pw * $cvT) 0; Place $tp (2 * $cx - $q[0]) $q[1] ($pw * $cvT) ($pw * $cvT) 0
-            $q = At 5; Place $tp $q[0] $q[1] ($pw * $cvT) ($pw * $cvT) 0
-            $bay = At 1; $bl = 28.125 * 0.65 * $ppu
-            foreach ($row in -1, 0, 1) { foreach ($sd in -1, 1) { if ($row -eq 1 -and $sd -eq 1) { continue }
-                $bx = if ($sd -lt 0) { $bay[0] } else { 2 * $cx - $bay[0] }
-                Place $bomber $bx ($bay[1] + $row * 46.69 * $ppu) ($bl * $bomber.Width / $bomber.Height) $bl 0 } }
-            $q = At 3; Place $bomber $q[0] $q[1] (28.125 * $ppu * $bomber.Width / $bomber.Height) (28.125 * $ppu) 0
-        }
         if ($s.Count -gt 2) {
             # a finished row: a main turret on each 'turret' mark, as wide as its 'housing' mark says;
             # every other mark a cyan cross; each nozzle a red bar the bell's width on its aft rim
@@ -755,7 +643,7 @@ if ($Preview) {
         }
         $x0 += $w + 60
     }
-    $bomber.Dispose(); $tm.Dispose(); $tp.Dispose(); $g.Dispose()
+    $tm.Dispose(); $tp.Dispose(); $g.Dispose()
     $out.Save($Preview); $out.Dispose()
     "preview: $Preview"
 }

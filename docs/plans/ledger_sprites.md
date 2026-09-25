@@ -428,3 +428,87 @@ interceptor_a/_b (+ the old spares cargo_1, fighter_tri_b). Jobs: J3c re-map, J4
   confirmed: `HalfWidth` unchanged on both siege rows (base 330, pylon 150) means both stay circles
   (L <= 2 HW) through the length change (483, 300), so no hit-shape check is needed for that alone.
   `art_source/pack_2026-09-24/crescent_b.png` and `drone_sensor.png` both present.
+
+### J4 siege -- PRE
+- Intent: re-art only (the Mounts idea is dead, per the correction above): `EmplacementDef : HullArt`
+  (Sprite->Texture, Main->Tint; HalfWidth and Trim stay its own). Base: crescent_b (no turn), Out
+  `pirate_base.png` (keeps the res:// path), L 560 -> 483. Pylon: NO new $Finished row -- shares the
+  Pod's own file, renamed `enemy_pod_hull.png` -> `drone_sensor.png` in the same edit (one output for
+  both rows, D18), L 220 -> 300; both HalfWidths (330/150) unchanged (Combat.KeelCovers: L <= 2 HW
+  stays true at the new lengths, no hit-shape check owed, confirmed in Job P's POST). Retire the 4 old
+  files (2 root game textures, 2 art_source hand-drawings) to retired/art/. One harness check (the
+  siege wears the pack, trimmed, at its new lengths, the pylon on the Pod's own file); one new frame
+  (the site, wide).
+- Model tier: sonnet (a named re-art from a ledger with literals already measured in sprites.md).
+- Start: fad1ee641f634c4e67dd5cd7161d8b62b1ea479e
+- Files (hash-object): tools/make_ships.ps1 8489c33d5e101062ca324321b53f586de1119e7e ·
+  scripts/Enemies.cs a32fd1683da178975638fc213f91b9c53945aa9e · scripts/Emplacements.cs
+  b7df20d31f3a20fe29da54ec15a665993d913661 · tools/smoketest/SmokeTest.cs.txt
+  7348908a1ccba07d4e382e6838727c386f9e51c2 · tools/screens/Shots.cs.txt
+  7a8457d12c400829a44a122caf50728110ca3940 · docs/plans/sprites.md
+  86c0da1a39a95c4f5305a97ff116c2404471b6ce · docs/DESIGN.md 80132c39f55e6ff95c6e17062448089c974fbfaf ·
+  docs/CHANGES.md 73af5b2f91924e9a068461723861f31b10de8c94 · art_source/pirate_base.png
+  2eca0859c24c36963bab6cad2ae140d06438f3c3 · art_source/pirate_pylon.png
+  edab7835dd1ed007af646218f2ec25399df0fd4c · pirate_base.png 7737470b2295199f3897092090101ccdce266edb ·
+  pirate_pylon.png 732d51c85f909a432b4a68d2e08036977ecc8485
+
+## COORDINATOR NOTE 2 (2026-09-25): summary.txt is UTF-16
+The runner (scratchpad rungs.ps1) writes summary.txt with PowerShell 5.1 Tee-Object, i.e. UTF-16LE with a BOM.
+A bash grep/cat or a bash poll loop on it NEVER matches "ALL GREEN" or "STOPPED" and waits forever. Read it with
+powershell Get-Content (it reads the BOM), or wait for the rungs.ps1 process itself to exit instead of polling the file.
+Kill any poll loop you left running on an earlier tag.
+
+## RESUMED 2026-09-25 (opus agent; the owner moved every agent to Opus 5.5). Found: HEAD fad1ee6, ~41
+uncommitted paths: J4's edits (no POST) and J5 started without a PRE.
+
+### J4 siege -- POST
+- Verdict: edits match the PRE's plan exactly (EmplacementDef : HullArt, base crescent_b 483 into
+  pirate_base.png, pylon on the Pod's file renamed enemy_pod_hull.png -> drone_sensor.png at 300,
+  HalfWidths 330/150, 3 old files retired to retired/art/ -- the base's game file keeps its path, so
+  3 not 4; Hub.cs's scope mark Main -> Tint followed). Rung evidence for this state: chain j4_1
+  (quick,solo,solo,screens ALL GREEN, seeds 11400714819323517975 / 11400714819323513398, 109 frames
+  LINT 0) ran after these edits; the lane's end chain re-proves.
+- Files now: Emplacements.cs 52f48a949a1c · Enemies.cs a538027ec52e · Hub.cs e823ee45ccb9 ·
+  Shots.cs.txt 801fe856380c (frame 67a_siege_site) · SmokeTest (check "the base wears crescent_b ...")
+  · make_ships.ps1 (drone_sensor Out, crescent_b row) · pirate_base.png · drone_sensor.png · docs.
+- Commit: ONE commit with J5 (make_ships.ps1, SmokeTest.cs.txt and the docs carry both jobs).
+- Checks: new "the base wears crescent_b at 483 u ... and the pylon the Pod's own art at 300 u".
+
+### J5 player ships -- PRE (written after the fact: a sonnet writer started it with no PRE)
+- Model tier: opus (owner, 2026-09-25). Plan: the J5 entry (~line 107).
+- Start: fad1ee641f634c4e67dd5cd7161d8b62b1ea479e
+- FOUND DONE (kept: matches the plan): 12 $Finished player rows in make_ships.ps1 (sources/turns per
+  sprites.md 1), BB Patches over the 6 painted twins, the line-drawing blocks and Blank/Dilate/CutOut/
+  Seed/Specks/Hull deleted (Load/Paper stay: the turret uses them), 12 PNGs regenerated, Ships.cs
+  mounts moved on BB (4 flanking twins, PD aft domes, k 1.9), carrier flank PD, DD (keel + flank
+  domes), Bastion main (stern ring), Echo main; tools/finish_ships.ps1 and art_unused/art_4x deleted;
+  battleship/carrier/destroyer drawings retired; CLAUDE.md + README.md command lines; DESIGN.md;
+  SmokeTest battleship + carrier checks rewritten.
+- Hashes found: Ships.cs 02335a00e9ec · make_ships.ps1 bc7191f6b8cb · SmokeTest c5c094412e62 ·
+  CLAUDE.md 84b724c0bba1 · README.md 0ae780ff31b3 · DESIGN.md bb5eec4126a3 · CHANGES.md ca715731cfca ·
+  sprites.md 16a38fd3d047 · battleship_hull a106f353da46 · carrier_player 4992a0049a85 · destroyer_hull
+  070317fe80ec · freight_hauler 115bb45fd1b5 · freight_tender 03676bbe746f · freight_bastion
+  d301cc7688c5 · heavy_sniper 822cad7158dd · heavy_warrior 5b068bb76ae5 · heavy_warden a181e2201bae ·
+  light_dart 4d719d3bcc39 · light_echo af1ec6dc2af0 · light_wraith 0005d7b9fe2d
+- TO FINISH: make_ships.ps1's stale header and its -Preview block (still reads the deleted $c/$b/$d
+  and the per-class turret params); Ships.cs's stale "line art" comment; a rerun of make_ships proving
+  the PNGs reproduce; every mount read against its art; a NEW check (all 12 classes wear trimmed pack
+  art at their lengths; the destroyer's mains on the keel); CHANGES.md J5 entry + Handoff.
+
+### J5 player ships -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. Rungs 3/4 in the end chain.
+- Kept (matched the plan): every edit listed in the PRE. Finished: make_ships.ps1's header and
+  -Preview (the deleted capitals' $c/$b/$d and turret params gone); Ships.cs's art comment; a rerun
+  of make_ships reproduced all 12 hulls + drone_sensor + pirate_base byte for byte (the turrets,
+  procedural, restored with git checkout per DESIGN's trap); CHANGES.md J5 entry, Handoff, the stale
+  line-art open questions.
+- Seats read against the art by eye (scratch overlay of every Mains/Pds + the carrier's bays and
+  runway): all on a painted feature; the carrier's bays sit on the white beside the runway.
+- Mount literals moved (kits lane, merge note): BB Mains (+-23.99,-74.28/-36.27), Pds (+-58.99,
+  71.73), TurretTexScale 1.9/5.5, MainBarrel 23.18, PdBarrel 10.45, PdRing 5.7; Carrier Pds[0..1]
+  (+-30.01,-0.21); DD Mains (0.20,-14.20/17.81), Pds (+-30.81,5.82); Bastion Mains (0,53.48); Echo
+  Mains (0,-23.39).
+- Commit: ONE commit with J4 (shared files). Checks: new "all 12 classes wear trimmed pack art, hit
+  half-beams unchanged, the destroyer's mains on its keel"; rewritten the battleship hull + seats
+  (mains' Y now asserted too) and the carrier sprite line.
+- Next: A3 merge version-l.

@@ -94,7 +94,7 @@ public static class Enemies
 
         // A POD is slow and hard to shift -- it webs from further out and takes a while to kill.
         new() { Id = "pod", Name = "Pod", Way = EnemyWay.Pin,
-                Texture = "res://enemy_pod_hull.png", Tint = PodTint,
+                Texture = "res://drone_sensor.png", Tint = PodTint,   // shared with the siege's pylon (D18)
                 Nozzles = new Nozzle[] { new(-0.21f, 23.27f, 7.76f) },               // its one stern vent
                 Length = 52f, HitShare = 0.45f, Hull = 60, Dps = 0.7, Cruise = 78f,
                 BoostMult = 3.5f, Reach = 130f, Beam = Beam.LightRaider },

@@ -298,7 +298,6 @@ typecheck\typecheck.ps1 · dotnet build · tools\analyse\run.ps1 · python tools
 tools\smoketest\run.ps1 [-Solo|-Wan|-Seed <n>]
 tools\screens\run.ps1            # sweep; trust LINT: 0 for layout, read a frame only for new art
 tools\make_ships.ps1             # ship sprites from art_source\
-tools\finish_ships.ps1           # shade, upscale, detail a sprite
 python tools\make_sounds.py      # boss/ability sounds
 python tools\map.py · tools\snapshot.ps1 · tools\manifest.ps1
 ```

@@ -745,7 +745,7 @@ public partial class _Shots : Node
         }
         // THE PIRATE BASE SIEGE: the Drake put down, home by RETURN, the siege chosen and in. The
         // base's one weapon: its red lane to the pilot, then the cruise missile that follows it 1.5 s
-        // later, snapped 3 s out of the barrel (about 400 u from the base's centre: past its 280 u
+        // later, snapped 3 s out of the barrel (about 400 u from the base's centre: past its 241.5 u
         // of art and short of the ship's nose, so it is drawn over neither) -- the SECOND pair, once
         // the pilot is parked 700 u under the base (the first went up for the spot it arrived on,
         // and is taken out of the air). One turret on the base, none on a pylon. The garrison's
@@ -764,8 +764,14 @@ public partial class _Shots : Node
             if (pb != null)
             {
                 var ssh = H.GetNode<PlayerShip>("Ship_1");
-                ssh.Position = pb.Position + new Vector2(0, 700); ssh.Velocity = Vector2.Zero; ssh.Rotation = 0f;
                 var szp = typeof(Hub).GetProperty("ZoomLevel"); float sz0 = (float)szp.GetValue(H);
+                // THE SITE, WIDE: the base and its four pylons on the diagonal (Emplacements.PirateBase),
+                // at the wheel's own widest zoom -- crescent_b (the base) and drone_sensor (the
+                // pylons, the same file the Pod wears) at their new lengths (483 / 300)
+                ssh.Position = pb.Position + new Vector2(200, 150); ssh.Velocity = Vector2.Zero; ssh.Rotation = 0f;
+                szp.SetValue(H, Hub.DefaultZoom / Hub.ZoomOutMax);
+                await W(1.5); await Snap("67a_siege_site");
+                ssh.Position = pb.Position + new Vector2(0, 700); ssh.Velocity = Vector2.Zero; ssh.Rotation = 0f;
                 szp.SetValue(H, 0.62f);
                 await W(2.0);
                 foreach (var c in H.GetChildren().OfType<Shot>().Where(x => x.Kind == Shots.Cruise).ToList()) c.Intercept();

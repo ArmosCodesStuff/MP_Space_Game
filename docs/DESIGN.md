@@ -498,8 +498,8 @@ Recorded here so every chunk builds from the written word, not from memory.
 - **Hull colour** is the hull. **Accent colour** is the turrets, engines and lighting: turrets,
   plumes on the player's ship and everything it launches, shields, PD arcs. Utility ships' engines
   are always light yellow (`Plume.Utility`). Missiles keep their smoke. The defaults are a **grey
-  hull (0.6, 0.6, 0.6) and a white accent**, the owner's; the hulls are grey line art that the hull
-  colour multiplies.
+  hull (0.6, 0.6, 0.6) and a white accent**, the owner's; the hulls are the pack's grey art (`Sprites.Fit`
+  by way of `ClassArt`, same as every other row) that the hull colour multiplies.
 - **Fighters** fly strafing runs: 3 shots, through the target by 1.2× its diameter, turn, repeat;
   they live inside the carrier when docked. **Bombers** park small on its deck, facing the bow.
 
@@ -724,23 +724,23 @@ under the base. A route or a range that moves must keep the 500.
 
 ### Art
 
-- **Every hull is made by `tools/make_ships.ps1`** from `art_source/` (a `.gdignore` keeps Godot out),
-  from one of two sources. **The pack** (`art_source/pack_2026-09-24/`: the owner's 34 finished, shaded
-  sprites; which entity wears which is `docs/plans/sprites.md`): each `$Finished` row turns one file
-  nose-up by quarter turns (never mirrored: the lettering and the asymmetric hulls would flip), trims it
-  to the drawing with the keel on the centre column, and writes it grey on transparent. Nothing is
-  redrawn, so a rerun gives the same pixels. It prints the row's marks (a turret, a housing's edge) and
-  its **nozzles** (each bell's aft rim and width) in world units, for the row in the game. Every hull
-  row derives from **`HullArt`** (Sprites.cs: Texture, Length, Tint, Nozzles) and draws one flame per
-  bell. **The line drawings** (the capitals, until their slice): turned nose-up, made **exactly
-  symmetrical** (the half on one side of the line the drawing is most nearly symmetrical about,
-  reflected), redrawn at twice its final size, sharpened by its own enlargement's blur, cut out of its
-  paper and halved. Grey on transparent either way: the hull colour tints a hull, the accent a turret,
-  the row's `Tint` a raider. The sprites it replaced are in `retired/` (also ignored).
-- **Trap: a run of make_ships.ps1 rewrites EVERY file it makes**, and the line-drawing blocks do not
-  come out byte-identical on another machine (GDI+'s bicubic resize). After a run, `git checkout` any
-  line-drawing output (carrier_player, battleship_hull, destroyer_hull, turret_main, turret_pd) whose
-  block you did not change.
+- **Every hull is made by `tools/make_ships.ps1`** from **the pack** (`art_source/pack_2026-09-24/`:
+  the owner's 34+ finished, shaded sprites; which entity wears which is `docs/plans/sprites.md`), the
+  ONLY source since the capitals' slice (J5) retired the last line drawings. Each `$Finished` row turns
+  one file nose-up by quarter turns (never mirrored: the lettering and the asymmetric hulls would
+  flip), patches out any painted gun under a moving turret (`Sheet.PatchColumns`, a clean strip of the
+  SAME housing tiled over the barrel -- player hulls only, Q4), trims it to the drawing with the keel
+  on the centre column, and writes it grey on transparent. Nothing is redrawn or resampled, so a rerun
+  gives the same pixels. It prints the row's marks (a turret, a housing's edge) and its **nozzles**
+  (each bell's aft rim and width) in world units, for the row in the game. Every hull row derives from
+  **`HullArt`** (Sprites.cs: Texture, Length, Tint, Nozzles) and draws one flame per bell; `ClassArt`
+  (`PlayerShip`'s twelve rows) carries the same Texture/Length plus its own `HalfWidth`, turret mounts
+  and scale (no Nozzles: a class's engine plume is one point, `EngineInset`, not a bell list). The
+  sprites every source replaced are in `retired/` (also ignored).
+- **Trap: a run of make_ships.ps1 rewrites EVERY file it makes.** The `$Finished` rows are pixel-stable
+  (no resampling), but `turret_main.png`/`turret_pd.png` are still drawn procedurally and do not come
+  out byte-identical on another machine (GDI+'s bicubic resize) -- `git checkout` them after a run
+  unless the turret-drawing block itself changed.
 - **Hit sizes never follow the art** -- but a boss's do. A raider is hit on its row's `HitShare` of its
   Length, a class on its `HalfWidth`; the pack re-arted every raider with neither moving. The bosses
   are `Missions.BossSize` (2, the owner's "2 or 3x") times their art's measure, Length, HalfWidth and
@@ -752,12 +752,26 @@ under the base. A route or a range that moves must keep the 500.
   telegraph (`BossType.Size` x `Reach`, at use in `Boss.cs`): it is drawn round the hull itself, so the
   Lancer's shockwave reaches 680 u (340 x 2), the owner's open question, 2026-09-25, resolved as a
   default.
-- **Carrier**: the runway down the centre, the bays on the white either side of it, three sponsons a
-  flank; point defence on the two middle sponsons and the stern block (the bow is where bombers lift
-  off). **Battleship**: its four painted turrets are painted over from a clean stretch of its spine
-  (the spine's lines all run along it), and the four moving main turrets stand where they stood; point
-  defence on the stern quarters. **Destroyer**: main turrets on the fore spine and the central plate,
-  point defence on the stern quarters, the turrets at 0.8x.
+- **The 12 player classes** (`Classes.All`, `Ships.cs`), the pack (J5), hit sizes (`HalfWidth`)
+  UNCHANGED throughout (Q1) -- the art moved, the collider and the shield did not. **Battleship**
+  (`battleship_bb05`): 6 painted twin housings down the spine; the 4 flanking ones (the two forward
+  rows, both sides) carry the real moving mains, their painted barrels patched clean, the aft flanking
+  pair patched too but left unarmed; the 3 centre (keel) turrets are decoration, untouched (Q3's
+  default); point defence on the aft domes. **Carrier** (`carrier_a`): point defence's two flank
+  turrets re-seated on the new hull; the third (stern) turret and the whole deck (`BayX`/`BayY`/
+  `BaySpacing`/`RunwayBow`/`EngineInset`) kept at today's figures -- the old and new hulls read close
+  enough in proportion that a bomber still parks and lifts off correctly proved, but this is the
+  LOWEST-confidence row here (re-measure if the owner sees it sit wrong). **Destroyer**
+  (`destroyer_dd22`): both main mounts moved onto the keel gun cluster near the bow, point defence
+  re-seated on the flank domes. **Freighter/Tender/Sniper/Warrior/Warden/Dart/Wraith**: today's mount
+  literals landed on a sensible feature of their new hull by eye (the freight ships' forward "claw" or
+  spotter mount, the fighters' prow or wing roots) and were left as they were -- only their `Texture`
+  moved. **Bastion** (`frigate_c`): its one main moved from the bow to the stern, onto the ring turret
+  its new art actually draws (today's forward mount had nothing there to sit on); point defence kept.
+  **Echo** (`fighter_f`): its one main moved forward a little, onto the paired barrels its new art
+  draws on both wings (the flavour text, "fires twice"; still one game mount, front and centre of the
+  pair). Every moved literal is one row's `Mains`/`Pds`, printed by the tool from a mark on the turned
+  art -- see the row's own comment in `tools/make_ships.ps1`.
   **Raiders** (the pack): the webifier `fighter_swept`, the gunship `frigate_b` (its turret on its
   painted twin), the talon `fighter_tri_a`, the pod `drone_sensor` (a round drone; its one bell the stern vent), the cross `gunship_h` (the gunship's
   hull with the rack stripped; its turret on the clean aft deck), the lancerkin `frigate_d` (its turret
@@ -781,13 +795,14 @@ under the base. A route or a range that moves must keep the 500.
   smaller, round, single-barrelled turret in the same style, drawn by the tool (`turret_pd.png`). Each
   class mounts them at its own scale (`ClassArt.TurretTexScale`).
 - **Unused art** (21 carried-over sprites nothing references) lives in `art_unused/`, which has a
-  `.gdignore` so Godot never imports it. Kept deliberately, at the developer's request, and so is
-  `art_unused/art_4x/`: five hulls at twice and the two turrets at four times the resolution the
-  game loads. **Anything NOT under a `.gdignore` ships.** The export preset takes `all_resources`,
-  so every file Godot imports goes into the `.pck` whether or not anything loads it -- which is
-  how that art (13 MB of PNG, about 3 MB once imported) and 45 `.translation` files Godot made
-  out of `version/*.csv` rode in every release. `version/` has a `.gdignore` of its own for that
-  reason.
+  `.gdignore` so Godot never imports it. Kept deliberately, at the developer's request. **Anything NOT
+  under a `.gdignore` ships**, which is why `art_unused/art_4x/` -- five OLD line-art hulls at twice
+  and the two OLD turrets at four times the resolution the game loaded, all superseded by the pack --
+  was deleted rather than kept (Q9), along with `tools/finish_ships.ps1` (the line-art shading tool it
+  was made for; both commands dropped from CLAUDE.md and `docs/README.md`'s command lists in this
+  commit). The export preset takes `all_resources`, so every file Godot imports goes into the `.pck`
+  whether or not anything loads it -- which is how 45 `.translation` files Godot made out of
+  `version/*.csv` rode in every release. `version/` has a `.gdignore` of its own for that reason.
 - **Background** (`stars.png`): 1024 px, seamless (stars near an edge wrap), on a screen-space layer
   at −100. Client-side only.
 - **Mount offsets are measured, not placed by eye**: the tool carries each mount through every step

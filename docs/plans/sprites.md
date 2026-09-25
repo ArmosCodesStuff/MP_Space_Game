@@ -91,7 +91,7 @@ bomber fighter_g. carrier_b is the pirate-carrier boss spare. ≈ widths on thos
 | Rusty Bucket | frigate_a | 90° CCW | 360 → **720** (2x, the owner, 2026-09-25) | 174 → 380 | A rounded "bucket" bow, with turrets bolted on beside cargo |
 | Drake Bastion | flagship | 90° CCW | 420 → **840** (2x) | 191 → 434 | The largest and most detailed sprite |
 
-### Siege (tinted `Main`)
+### Siege (`EmplacementDef : HullArt`, tinted)
 
 | entity | sprite | rotation | final L | drawn width (u) | why |
 |---|---|---|---|---|---|
@@ -256,7 +256,9 @@ Slice 1, the foundations:
   `EmplacementDef.Main`) becomes `HullArt.Tint`, and `Gatherer.Length` moves onto the row;
 - `Sprites.Fit(HullArt)` replaces the 4 copies of `Length / GetHeight`;
 - `Plume` draws the nozzle list, which deletes `EngineInset` and the Hauler's inline array;
-- `EmplacementDef.Mounts` replaces `Guns` and `GunRing`;
+- **superseded (J4):** `EmplacementDef` keeps its ONE `Gun` at its centre -- the base carries no
+  guns of its own and a pylon answers with none, so there was never a `Guns`/`GunRing`/`Mounts` to
+  replace; J4 was a re-art only (Sprite -> Texture, Main -> Tint, L 560 -> 483 / 220 -> 300);
 - the Hauler's pods, PD and Extent, and the Gatherer's beam point and Extent, move to rows;
 - `TargetDummy` reads the webifier row;
 - `MenuFoe` always tints.

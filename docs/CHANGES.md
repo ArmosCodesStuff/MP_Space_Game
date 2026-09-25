@@ -62,8 +62,9 @@ at a time, by the main session's scratch `rungs.ps1`):
   `static readonly int[]`) is hashed live by `Net.Fingerprint` -- two pilots with different upgrades
   could refuse each other. The writer fixes it as J9c after J10; it wants the text after "parts moved
   since the run began" from the two seam lines of the 8760795 run. Then J11 (record).
-- **art (sprites):** J1-J3b + a73d26e green (rung 3 x2, 108 frames). The writer is on J3c (the owner's
-  picks, README), J3d (bosses 2x, hit size too), J4 siege, J5 hulls.
+- **art (sprites):** every entity wears the pack: J1-J3d, the siege (J4) and the 12 player hulls (J5);
+  bosses 2x with the Rusty Bucket's shockwave ring scaled; the Drake framed by moving the camera, never
+  past the wheel's own zoom-out (the owner's ruling). Merge chain: see `docs/plans/ledger_sprites.md`.
 - The owner's casting page: https://claude.ai/artifact/G1HZfHe3ipoKdgUWy964hb (db `picks/current`).
 - New agents follow CLAUDE.md 2b.4 (lowest trusted tier, `model` set explicitly).
 
@@ -284,14 +285,14 @@ From the 2026-09-24 triage (the WarShips_Version_L fork):
   acquisition ranks, as point defence always has. Default: as built.
 
 From the line-art batch (the WarShips_Version_L fork):
-- **"25% larger / smaller" was read as every dimension** (lengths 378, 283.5, 212.6 u). The battleship's
-  turrets are 2.5x, not scaled with the rest alone, to keep the drawing's turret-to-hull proportion on the
-  doubled beam. Parked bombers are 65% to fill the bigger deck.
-- **The sprites are as sharp as the drawings allow**: they are small (250-600 px), so they are enlarged,
-  sharpened and cleaned but not redrawn. A clean-line redraw was tried and made fine detail blotchy.
-  Larger source drawings would make sharper ships.
+- **"25% larger / smaller" was read as every dimension** (lengths 378, 283.5, 212.6 u). Parked bombers
+  are 65% to fill the deck.
 - **Turrets wear the accent colour** (white by default), not the hull's -- the accent was already named
-  "turrets, engines, trim", and on the line art a turret in the hull colour disappears into it.
+  "turrets, engines, trim", and on grey art a turret in the hull colour disappears into it.
+- **The 12 player hulls' seats (J5, the pack)**: the battleship's mains on the 4 forward flanking twins
+  (k 1.9, was 2.5), the carrier's deck (bays, runway) kept at its old figures on carrier_a, the
+  bastion's main on the stern centre between its two painted twins, the other seats unmoved. The kits
+  lane may re-seat them. Default: as built.
 - **Point defence "on the back"** is the stern quarters on the battleship and the destroyer; the carrier's
   third PD moved to its stern block, clear of the bow where bombers lift off.
 - **Bombers take off on their own 0.83 s clock**, beside the fighters' rather than sharing it, and land
@@ -490,6 +491,43 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### The 12 player hulls wear the pack (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+Every class's hull is a `$Finished` row of `tools/make_ships.ps1` now (sources and turns:
+`docs/plans/sprites.md` section 1); hit half-beams unchanged (Q1). The battleship's six painted twins
+have their barrels patched out (`Sheet.PatchColumns`, Q4); its four mains sit on the forward flanking
+four, point defence on the aft domes. The destroyer's mains moved onto its keel gun cluster, point
+defence onto the flank domes; the carrier's flank point defence onto carrier_a's sponsons; the
+bastion's and the echo's one main onto what their art draws. The line-drawing code (`Hull`, `CutOut`,
+`Dilate`, `Seed`, `Specks`, `Blank`), `tools/finish_ships.ps1`, `art_unused/art_4x/` and the three
+capitals' drawings (-> `retired/art/`) are gone.
+
+**Checks:** new -- "all 12 classes wear trimmed pack art, hit half-beams unchanged, the destroyer's
+mains on its keel"; rewritten -- the battleship's hull and turret seats, the carrier's sprite line.
+
+### The siege wears the pack too (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+A re-art, not a new mechanic: `EmplacementDef` moves onto `HullArt` (`Sprite` -> `Texture`, `Main` ->
+`Tint`; `HalfWidth` and `Trim` -- the health-bar accent -- stay its own, as no table's hit size moves
+for wearing new art). The pirate base wears `crescent_b`, the owner's pick ("the crescent hull is the
+pirate base"), trimmed to its drawing at 483 u (was 560, hand-drawn). The shield pylon wears the SAME
+file the Pod wears -- `drone_sensor.png`, one game texture on two rows (the Pod's own re-art, J3c) --
+at its own 300 u (was 220). Both hit radii (330 / 150) are unchanged: `Combat.KeelCovers` keeps both a
+circle of its half-width through the length change (L <= 2 HW at both the old and new lengths), so no
+hit-shape check is owed for the re-art alone. Retired: `pirate_base.png` and `pirate_pylon.png`'s old
+hand-drawn source drawings (`art_source/`, -> `retired/art/`) and the old `pirate_pylon.png` game
+texture (unused once the pylon shares the Pod's file); the base's game file keeps its name
+(`pirate_base.png`) and is simply overwritten by the tool.
+
+**Checks:** new -- "the siege wears the pack too" (both textures trimmed, their new lengths, the
+pylon's texture equal to the Pod's, both hit radii unchanged). Existing siege checks (the base's one
+launcher, the four pylons' shield, the garrison wave) untouched: nothing about the fight moved.
+
+**Screens:** new frame `67a_siege_site` (the base and its four pylons, wide, at the wheel's own
+widest zoom) -- read by eye: crescent_b's horns read forward on the base, the pylons read as the same
+round drone the Pod is elsewhere, each in its own tint. `67`/`67b`/`67c` (the missile drama) re-read
+at the new art, unchanged in behaviour.
 
 ### The bosses are twice as big (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
 
