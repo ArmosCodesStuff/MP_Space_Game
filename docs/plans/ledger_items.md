@@ -182,3 +182,15 @@ host's copy of the guest carrier and on the guest's own copy: Magazine Core T9 t
 craft rows x1, tracking onto the dummy x1); NEW ItemsParRowsChecks (rung 3: Tiers / Equipment salvage / Loot rows
 equal numbers_v2.py's GROW, UP1, MULT1, CHIP1, STEP, LADDER, BAND, own 0.70, scrap; BaseTier at 7 levels).
 Next: J6 frames, J7 docs + final POST.
+
+## J6 PRE -- tier opus
+Intent: the item UI frames beyond J1's (6b, 58, 58b, 81c recycler by tier, 62 crates in tier colour already
+cover the list by tier and the crate colour): a K stats frame of the Conditions group a conditional line fills.
+HEAD f72a96c. Hashes:
+  tools/screens/Shots.cs.txt ef87838b08ae877fce2afa25e085d9510e555015
+## J6 POST
+Verdict: done. typecheck 0 errors; verify -Quick ALL CHECKS PASSED. Own diff read. Shots.cs.txt only.
+Frames written (engine-unproven: rung 4 owed, read by eye once): NEW 6d_k_stats_conditions (a Dart in Redline T10,
+Reset Core T5, Ablative Skin T9: the K stats Conditions group). J1's 81c (recycler by tier), 58/58b (the hold) and
+62 (crates in Ui.TierColor) are the rest of the item UI.
+Next: J7 docs + final POST.

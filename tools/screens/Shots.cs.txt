@@ -163,6 +163,18 @@ public partial class _Shots : Node
             for (int k = 0; k < keep.Length; k++) cl[k] = keep[k];
             Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.3);
         }
+        // the same window on a Dart wearing three conditional lines (Redline T10, Reset Core T5, Ablative
+        // Skin T9): the CONDITIONS group, each row x1 + its share, Ablative's row past its 40% ceiling
+        {
+            var dl = Character.LoadoutFor(ShipClass.LightDart); var keep = (string[])dl.Clone();
+            dl[0] = "redline_t10"; dl[4] = "reset_core_t5"; dl[2] = "ablative_skin_t9";
+            Character.Class = ShipClass.LightDart; P(H, "ApplyLocalIdentity"); await W(0.3);
+            Key(global::Godot.Key.K); await W(0.4);
+            N<StatsWindow>().First().ShowPane(false); await W(0.2); await Snap("6d_k_stats_conditions");
+            Key(global::Godot.Key.K); await W(0.2);
+            for (int k = 0; k < keep.Length; k++) dl[k] = keep[k];
+            Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.3);
+        }
         // THE ABILITY WALLS (Unlocks) at level 1: a walled key's row in K says the level that opens it, and
         // the bar below draws it in the quiet box, LOCKED · L3 (once a class carries an ability 2 and 3)
         {
