@@ -29,6 +29,7 @@ using System.Collections.Generic;
 //                 wave but a blockade -- is the base's perimeter, which is where they always went
 //   Crew          rows of (an enemy named outright OR a way to draw one, how many, where they sit,
 //                 and a Sweep that bends a line into a vee)
+//   Doctrine      how its squads fly (Squads.All; null: patrol)
 //   Mission       a Garrison row: which mission kind it answers (null: any)
 //   Exp, FormFor  what a kill pays (x EnemyDef.Exp; 0 nothing), and seconds of form-up before commit
 //   HullShare     the share of its row's hull each of them is built with
@@ -114,6 +115,8 @@ public sealed class WaveDef
     // holding a place wants, so only a blockade fills this in.
     public float Hold;
     public WaveCrew[] Crew;
+    // HOW ITS SQUADS FLY (Squads.All): null is the patrol's -- hold a ring, take what comes within 2000 u
+    public SquadDoctrine Doctrine;
     // WHICH MISSION a Garrison row answers (Missions.Kinds[].Id); null answers any. Waves.For
     // enforces it: without it a bounty's clock would have drawn the siege's rows.
     public string Mission;
@@ -175,18 +178,19 @@ public static class Waves
     }
 
     // ── the two ways a crew row says WHICH enemy ─────────────────────────────
-    private static WaveCrew Draw(EnemyWay way, int nth, Func<WaveBrief, int> count, Vector2 at, Vector2 step)
-        => new(Drawn, way, nth, count, at, step);
+    private static WaveCrew Draw(EnemyWay way, int nth, Func<WaveBrief, int> count, Vector2 at, Vector2 step, float sweep = 0f)
+        => new(Drawn, way, nth, count, at, step, sweep);
     private static WaveCrew Named(int kind, Func<WaveBrief, int> count, Vector2 at, Vector2 step)
         => new(kind, EnemyWay.Pin, 0, count, at, step);
 
-    // THE PLAIN SQUAD: three pinners in a row 40 u apart, and one standoff 90 u behind them.
-    // This was Hub.SpawnPatrol's whole composition, written out in code with `lights` and `heavy`
-    // as arguments -- which is why nothing could ever bring two of either.
+    // THE PLAIN SQUAD: three pinners in a vee -- point (0,-40), wings (+-60,-10) -- and one standoff
+    // close astern at (0,60): every slot within 62 u of the squad's spot. This was Hub.SpawnPatrol's
+    // whole composition, written out in code with `lights` and `heavy` as arguments -- which is why
+    // nothing could ever bring two of either.
     private static readonly WaveCrew[] Patrol =
     {
-        Draw(EnemyWay.Pin, 0, _ => 3, Vector2.Zero, new Vector2(40f, 0f)),
-        Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(0f, 90f), Vector2.Zero),
+        Draw(EnemyWay.Pin, 0, _ => 3, new Vector2(0f, -40f), new Vector2(60f, 0f), 30f),
+        Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(0f, 60f), Vector2.Zero),
     };
     // an escort's pinners: as many as its threat asks for, in the same 40 u row
     private static readonly WaveCrew HuntPin =
@@ -216,7 +220,7 @@ public static class Waves
         new() { Id = "hunt", Trigger = WaveTrigger.Hunt, When = b => b.Index % 2 == 0,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
-                HullShare = _ => HunterHull,
+                HullShare = _ => HunterHull, Doctrine = Squads.Gank,
                 Strength = b => ThreatStrength(b.Threat), Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin } },
 
@@ -224,7 +228,7 @@ public static class Waves
         new() { Id = "hunt_heavy", Trigger = WaveTrigger.Hunt, When = b => b.Index % 2 == 1,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
-                HullShare = _ => HunterHull,
+                HullShare = _ => HunterHull, Doctrine = Squads.Gank,
                 Strength = b => ThreatStrength(b.Threat), Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin, Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(0f, 90f), Vector2.Zero) } },
 
@@ -234,7 +238,7 @@ public static class Waves
         new() { Id = "hunt_mixed", Trigger = WaveTrigger.Hunt, When = b => b.Index % 2 == 0 && b.Index >= 6,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
-                HullShare = _ => HunterHull,
+                HullShare = _ => HunterHull, Doctrine = Squads.Gank,
                 Strength = b => ThreatStrength(b.Threat), Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin, Draw(EnemyWay.Pin, 1, _ => 2, new Vector2(0f, -70f), new Vector2(40f, 0f)) } },
 
@@ -243,7 +247,7 @@ public static class Waves
         new() { Id = "hunt_twin", Trigger = WaveTrigger.Hunt, When = b => b.Index % 2 == 1 && b.Index >= 9,
                 Squads = 1, SquadsPerPilot = 1,
                 Form = WaveForm.Fan, Turn = 0.35f, Alternate = true,
-                HullShare = _ => HunterHull,
+                HullShare = _ => HunterHull, Doctrine = Squads.Gank,
                 Strength = b => ThreatStrength(b.Threat), Agility = b => ThreatAgility(b.Threat),
                 Crew = new[] { HuntPin,
                                Draw(EnemyWay.Standoff, 0, _ => 1, new Vector2(-60f, 90f), Vector2.Zero),

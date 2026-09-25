@@ -8,11 +8,11 @@
 // One rhythm, 30 s long (all damage x the level's and party's scale):
 //   GUNS       always: 3.6 every 1.2 s (3 DPS) at the nearest ship within 900 u
 //   DEATH BEAM every 30 s, in three steps, the boss holding position through all of them:
-//              ESCORTS OUT: two escorts go for the nearest pilot to web it; the boss turns to
-//                face that pilot -- the only turning the beam allows, and only now.
-//              CHARGE: once the web has actually PINNED the pilot (this cycle's escorts under way;
-//                or, the escorts all down, once their web would have landed; or when they are
-//                overdue), a red line down the nose for 6 s. From here to the beam's end it is
+//              ARMED: it waits on a web; the boss turns to face the nearest pilot -- the only
+//                turning the beam allows, and only now. Its craft are its fight's adds (squad wave 1).
+//              CHARGE: once ANY web has pinned the pilot (an add's included), or 5 s armed with
+//                none, a red line down the nose for 6 s -- never less than the escape floor for the
+//                webs on the pilot (0.6 s to leave once stripped). From here to the beam's end it is
 //                HARD LOCKED: no turn, no move -- the line shown is the line fired, and the way
 //                out is to leave it.
 //              LIVE: 3 s along that line, checking every 0.25 s: 50 each time it lands on a ship
@@ -43,18 +43,16 @@ public static class Lancer
                 Damage = 15, Speed = 135f, Range = 1920f, Turn = 1.4f, Size = 2f, Muzzle = 14f,
                 Cue = "boss_trident", Source = DamageSource.LancerMissiles },
 
-        // THE DEATH BEAM. Its escorts are two Webifiers 45 degrees to port and starboard, launched
-        // 130 u off the hull (was HalfWidth + 60), 3 hull each -- 3 s at one point-defence turret,
-        // so a pilot can clear them inside the charge -- boosting for the charge's whole 6 s. The
-        // charge starts on the PIN; with every escort dead, 1 s past their predicted web; at the
-        // outside 1 s past that, and never later than 5 s (under the 6 s that would push the beam
-        // into the ram's slot). Then 6 s of red line, 10000 u long and 70 u wide, and 3 s of burn
-        // judged every 0.25 s for 50. Only ITSELF holds it off: a beam already running.
+        // THE DEATH BEAM. Armed, it waits on a web on its target -- any web: its two old escorts are
+        // the fight's squad wave 1 (Waves.All "bounty_adds") -- and never longer than 5 s (under the
+        // 6 s that would push the beam into the ram's slot). Then 6 s of red line, 10000 u long and
+        // 70 u wide, never shorter than the escape floor (2 s + 55/46 x pinner hull / (0.7 x 57.6)
+        // + 0.6 s: raids v2, numbers §2.1), and 3 s of burn judged every 0.25 s for 50. Only ITSELF
+        // holds it off: a beam already running.
         new() { Id = "beam", Way = MoveWay.Beam, Waits = MoveWait.Itself, Busy = true, Super = true,
                 Every = 30, First = 6.0, Windup = 6.0, Live = 3.0, Tick = 0.25,
                 Damage = 50, Reach = 10000f, Width = 70f,
-                Escorts = 2, EscortKind = Enemies.Webifier, EscortAngle = 45f, EscortOut = 130f,
-                EscortHull = 3, WebGrace = 1.0, WebSlack = 1.0, ArmMax = 5.0,
+                ArmMax = 5.0, Escape = 0.6, React = 2.0, StripShare = 55.0 / 46.0, StripDps = 0.7 * 57.6,
                 Cue = "boss_beam_charge", Strike = "boss_beam", Source = DamageSource.LancerBeam },
 
         // THE RAM, 15 s after each beam: 1.5 s of red line 900 u long and 140 u wide (the hull's

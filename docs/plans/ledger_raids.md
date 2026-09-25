@@ -40,3 +40,23 @@ HEAD 3576d7d. Files: Missiles.cs 5fabd6a7, Raider.cs ae7dd1a1, Missions.cs e1afd
 Checks: RaidsFoundationChecks (ExpFor literals, light 6 / heavy 18, Garrison routing N14, Lead.Jumped x3, vee slots,
 AddsFloor 2/0); rewritten: the siege clock check (bounty 0/30, siege 12/25). Raider.Worth moved to J5 (unused till then).
 engine-unproven: rungs owed in the final test phase (solo x2).
+Job list revised at J2: the escort removal and the beam's start/floor moved INTO J2 (the Raider rewrite deletes
+the escort internals, so Boss could not compile between them). J3 = bounty_adds + garrison slots; J4 = EXP pay;
+J5 = guest checks + look; J6 = record.
+## J2 PRE -- tier opus -- Squads.cs, Raider flies from its squad, Raids owns squads + post book, escorts deleted,
+the beam charges on ANY pin (s.Target.Pinned) or ArmMax 5 s, the live escape floor.
+(PRE written after the edits, a process slip: no interruption happened.) HEAD 1b1cbc5. Files at HEAD: Boss 85c742d6,
+Hub d10481a4, Lancer 08ac0402, Raider 9691fc7a, Raids 0630bbc6, Waves c788f02e, MenuFoe 7e5b57f3, Shots 20b45d75,
+SmokeTest 70a30bf0; Squads.cs new.
+## J2 POST -- done. typecheck 0 errors; quick ALL PASSED. Hub hunks: SpawnRaider(Squad), Squads/Posts/FormSquad
+faces, one comment. Lancer hunk: the beam row's escort fields -> ArmMax + floor fields. MenuFoe: one comment.
+Checks new: RaidsSquadChecks (N1+N2 vee closes as one / still-or-moving pinned in 6 s, wire bits 1/4/8 + id bits
+8-23 on the host, N5 warp, N4 leader + light lost, N3 twelve on one hull, N6 heavy never pins L1/20/40, N9 sticky,
+N10 hide/return, N17 book empty); 6b rewritten (N8 lone heavy, N7 missile only on a pin, 700 burn cap at 2250 u);
+arena beam block rewritten (arms, launches nothing; ANY pin starts it; floor literals 4.08/4.82/4.20/7.94; floor
+at start with 5 webs; live floor stretch + 0.6 s after strip; overdue 5 s; PD kills a webifier; adds go with
+the boss + 0 squads/posts); rewritten callers: lane-A burn/out-door clears, blockade Station/Circuit, patrol ids,
+raid squad ids + "4200 u" text. Frames: 49a_squad_inbound, 49b_squad_lock_lines, 49_heavy_astern_missile (was
+49_heavy_waiting_missile). Deleted: Raider.HeavyReach, Boss escorts/EscortsAt/LaunchEscorts, Raider escort/patrol.
+Known broken (for CHANGES): a stretched wind-up replaces the host's lane; a guest keeps its first lane (its
+strike sound early). engine-unproven: rungs owed in the final test phase (solo x2, screens: 49a/49b/49).
