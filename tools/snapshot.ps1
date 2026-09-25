@@ -30,7 +30,9 @@ $final = @($fixed)
 # have quietly dropped verify.ps1 and tools/find-godot.ps1 the moment they were added.
 # .bat and .sln are in the list because a master copy has to rebuild a RUNNABLE clone: PLAY.bat
 # is how the thing is started and Warships.sln is what `dotnet build` resolves at the root.
-$code = @($tracked | Where-Object { $_ -match '\.(cs|sh|ps1|py|bat|sln|tscn|csproj|godot|editorconfig)$' -or $_ -match '\.cs\.txt$' })
+# .gdextension: the vendored plugin's descriptor, trimmed to the libraries vendored beside it (the DLLs
+# themselves are binary and come from the plugin's release, Link.Plugin).
+$code = @($tracked | Where-Object { $_ -match '\.(cs|sh|ps1|py|bat|sln|tscn|csproj|godot|editorconfig|gdextension)$' -or $_ -match '\.cs\.txt$' })
 # THE DIRECTORIES ARE DISCOVERED TOO, and that is the whole point of the paragraph above. They
 # used to be four hard-coded buckets -- root, scripts/, typecheck/, tools/ -- which is the SAME
 # mistake the comment warns about, one level up: a file in any fifth directory matched $code,

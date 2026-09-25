@@ -1083,3 +1083,22 @@ heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu on
   docs/DESIGN.md 8545bdea, docs/README.md c6c0a1c1, docs/CHANGES.md 599d498b, ledger 03c6ea59.
 - checks: packaging has no engine rung in this lane: `pack.ps1 -Dirty` (the export check) and the
   one-machine check are the test phase's (not this lane); rung 6 reads the manifest/snapshot.
+
+#### R5 POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED (0 control characters). The five
+  edited scripts parse (PowerShell's own parser). engine-unproven: `pack.ps1 -Dirty`, the one-machine check
+  and rung 6 are the test phase's.
+- pack.ps1: tools\import.ps1 -Require the plugin before the export; refuses an export without
+  libwebrtc_native.windows.template_release.x86_64.dll; the seven LICENSE.* into `licences\` before the
+  listing (runtime part); NOTES [PLAYING WITH A FRIEND] (+ the privacy line, W = 30) and [THIRD-PARTY].
+  install.ps1: `Missing` (every `in=` file present), asked by step 2 and after unpacking. play.ps1: the
+  import once (when extension_list.cfg lacks the plugin), by the console build; -Two's text names invites.
+  snapshot.ps1: `.gdextension` in the master copy.
+- Record: DESIGN (internet play rewritten for WebRTC; getting back in by row; goodbye; deadlines; traps:
+  the UPnP/loopback ones deleted, round trip, GetPeer, Link.Hang, pre-handshake drop, the 8 s stall, rows,
+  WebRTC close, no ICE restart, the seal, one STUN row per connection; the harness's network; the file
+  table), README ("Playing with a friend", the install's presence check, Testing multiplayer), CHANGES
+  (Handoff paragraph, the player summary, Unreleased entry with Known broken = §10.5 + the no-port text).
+- Defaults recorded: [THIRD-PARTY] wording written here (v1 §8.4 is not in the repo); the release's file
+  count and size are left to the next pack (README says so).
+- LANE DONE: S2, R2 (a-c), R3, R4, R5 built; nothing run on the engine.
