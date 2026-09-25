@@ -47,6 +47,13 @@ R throw and recall, LaneADecoyHost/GuestChecks). The class keys that call these 
 Taunt, the Grapnel) are slice 6's. Wire: Lines +2 rows, Shots.Reflect = 7, Status.Parrying, Spawns.Decoy = 3,
 NetIds.Decoy, Hub.NetDecoy (the protocol fingerprint moves). Detail and decisions D28-D37: `docs/plans/ledger_kits5.md`.
 
+**2026-09-25 (worktree `WarShips_wt_items`, branch `wt/items`): lane I, items by hull category, built
+J1-J6; compiles, rung 2 green. engine-unproven: rungs owed in the final test phase** (solo x2, six x2,
+screens). 48 lines x 10 tiers (`Items.cs`), rarity deleted, Loot on tiers, conditional doors, save format
+4 with no migrations. EXPECTED RED at rung 3 until the kits reconcile: `ItemsTableChecks` "every stat a part
+names is on every hull it fits" (`flare_count`, `@area` / `@duration` rows the kits add). Detail and the
+kit assumptions the reconcile job checks: `docs/plans/ledger_items.md` (J7 POST; J8 the merge gate's three fixes).
+
 **2026-09-25 (worktree `WarShips_wt_raids`, branch `wt/raids`): lane G, raids v2 -- squads and a boss
 fight's adds, J1-J6 + the merge gate's fixes (GFa, GFb) built; compiles, rung 2 green. engine-unproven:
 every rung 3-5 check below is owed in the final test phase** (solo x2, six x2 for the guest checks, screens
@@ -607,6 +614,41 @@ the bow, hauled up to 3 s and hurled 600 u/s up to 900 u; the first hostile it s
 **Known broken:** engine-unproven (rungs 3-5 owed). A guest's sentries do not see the paint yet (host-only until 6b).
 A pulled mark jumps to its flare rather than sliding (the slide is 6c's drawing).
 
+### Items by hull category, lane I (2026-09-25, worktree wt/items)
+
+**The law (`Items.cs`, replacing the 62 rarity lines, `Rarity` and `Equipment.Migrated`).** A part is a
+LINE of one hull category -- capital 11, freighter 10, heavy 11, light 10 -- or one of 6 chips for every
+hull, at ten tiers (`{stem}_t{n}`): its ups x1.10 a tier from the T1 lean (+25% power, +20% a
+multiplier, 18% reach, 22% top, 8% a chip, 12.5% an unpriced unconditional line), its price fixed. A
+rider adds +1 to a count (+2 from T6 on a count of 6, T9 on 4). Lines lift ROLES (`@primary`, `@output`,
+`@area`, ...) that expand onto the rows the hull has. Fit: slot, then category. Scrap 100 x 1.25^(t-1);
+`Ui.TierColor` colours a part by tier. **Loot**: base tier 1 + (L-1)/4, rolled 20 / 70 / 10 around it,
+70% from the pilot's own category. **Save format 4**: older files are greyed out; nothing migrated,
+nothing refunded.
+
+**Conditional lines** lift a sheet row at x1, read at one door: Escort Hunter / Hunter Chip (craft),
+Executioner (target under 35%), Redline (own hull under 50%), Spin-up Feed (+5% a second on one target to
++25%), Burst Feed (primary rate for 4 s after the boost), Reset Core (a kill cuts every cooldown left),
+Ablative Skin (hits under 10% of the hull, ceiling 40%), Web Breaker (a web shorter and weaker, ceiling
+60%). Escort Hunter's tracking lifts point defence only: the main guns follow the cursor.
+
+**Gate fixes (J8).** Web Breaker now acts on a real latch: the pin holds in 2 s rounds, pinned (1 - cut)
+of each (T1: 1.5 s held, 0.5 s free, the latch still on); before, it only trimmed the latch's 0.25 s
+tail. The echo's blast is weighed once (`Items.Repeats`): Redline T10 no longer squares on it (x2.53).
+The boost's slide has its own row, `surge_strafe` (x1.5): Convoy Rig lifts it alone, so a freighter's
+boosted top speed stays x1.5; Burner Drive's `surge_lift` is now top speed and thrust only.
+
+**Checks:** new `ItemsLawChecks`, `ItemsTableChecks`, `ItemsLineChecks`, `ItemsLootChecks`,
+`ItemsParRowsChecks`, `ItemsDoorChecks`, `ItemsEchoChecks`, `ItemsBoostLiftChecks` (rung 3), `ItemsGuestChecks` (rung 5), frame
+`6d_k_stats_conditions`; about 20 rewritten onto the new ids (the save round trip at version 4, the
+old ids read as nothing, recycler, gear levels, chips, the guest carrier's Magazine Core T9), frames 6b,
+58, 58b, 81c, 10b. **Rungs:** 1 and 2 in the worktree; none of it has run on the engine.
+
+**Known broken:** `ItemsTableChecks` "every stat a part names is on every hull it fits" is red until the
+kits reconcile (`flare_count`; `@area` / `@duration` rows of abilities the kits have not built). A
+capital that pays top speed in four slots and three Combat chips reaches -108%, which the x0.1 floor
+holds (a design flag for the owner: §3 prices each line alone, never the stack).
+
 ### Raids v2, lane G: squads in formation and a boss fight's adds (2026-09-25, worktree wt/raids)
 
 Raiders fly in **squads** (`Squads.cs`, new): a doctrine row (`lone`, `patrol`, `gank`), a formation (the
@@ -755,7 +797,7 @@ relocation the host makes, a report from a peer not yet counted in the host's wo
 are never priced; a release while the slot cools jumps nothing); 20 s from the jump. The pilot sees the safe ring, the
 charge ring, the amber-to-red band with 2 s / 4 s / 6 s ticks, the landing ghost and its readout; the
 slot and the hull bar read `WARP 1850 u`, `DISABLED 2.8 s`, `WARP 12 s`. **Boost** (the nine): tap V --
-+50% top speed, thrust and slide for 3 s (one F1 lift, `surge_lift`), 15 s from the press; refused
++50% top speed and thrust (`surge_lift`) and +50% slide (`surge_strafe`) for 3 s, 15 s from the press; refused
 ANCHORED (a hold of x0) and in stasis; allowed webbed, where the web's 20% is taken after the lift.
 The host's speed clamp reads a report held to hypot(top, strafe) x 1.1. The title battleship dodges on
 the same warp, held to 500 u. Hints: warp, boost, strafe; the controls line names the drive.

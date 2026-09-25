@@ -242,3 +242,12 @@ Done: J1 (F12), J2-J3 (F11), J4 (F14 Prefer). Next is kits5-J5; no PRE written f
   ProveReach deploy_range (SentryAt at the pilot's own spot, polls up to 2 s for the landing); frame 79 (three
   cursors 180 u apart, thrown from the yard, 0.9 s after the last throw before the bubble and the snap).
 - Files: SmokeTest.cs.txt, Shots.cs.txt, this ledger.
+
+## MERGE version-l (669c5a3) into wt/kits5 (9f8365f)
+- PRE: merge of version-l (lane I items, raids, net2, wings, kits merged). Conflicts: scripts/PlayerShip.cs,
+  docs/CHANGES.md. No wire id, enum value or slot index taken by both.
+- scripts/PlayerShip.cs: union. Kept this lane's Prismatic/GuardAngle and the paint (F14) beside lane I's Web
+  Breaker ApplyStatus (the pin's own hold clock) and HoldWeb; the host tick runs `_status.Tick; HoldWeb;` then the
+  paint clock and TickThrows.
+- docs/CHANGES.md: both Handoff entries and both Unreleased sections kept (kits5, then items).
+- POST: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. Next: merge into version-l.

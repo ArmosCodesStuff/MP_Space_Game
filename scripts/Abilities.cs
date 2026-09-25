@@ -80,7 +80,10 @@ public class AbilityDef
     // gun's reload -- main guns, point defence, dropped turrets, the wing's shots -- through
     // PlayerShip.Cadence; the speed lifts its top speed and its thrust. `While` narrows it to part of a run: the dart's roll buffs nothing until the
     // untouchable part of it is over.
-    public string RateStat, SpeedStat;
+    //   The SLIDE (strafe speed and strafe thrust, PlayerShip.StrafeMult) takes StrafeStat when a row
+    // names one, and its SpeedStat otherwise: the boost's slide is a row of its own (surge_strafe), so
+    // gear can lift the slide without the top speed (Convoy Rig) or the top speed without the slide.
+    public string RateStat, SpeedStat, StrafeStat;
     public Func<PlayerShip, bool> While;
     // WHILE IT RUNS, what it HOLDS the helm to: a share taken after the lifts are summed
     // (PlayerShip.Held), so no speed lift moves a held hull. 0 roots it, heading included; 0.5

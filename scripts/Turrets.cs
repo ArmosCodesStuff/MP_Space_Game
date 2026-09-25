@@ -107,7 +107,7 @@ public partial class Turret : Node2D
     // cursor within the wind-up; the host names that rate, and the faster of the two wins.
     private float RotSpeed
     {
-        get { var s = S; return PointDefense ? s.Turn : Mathf.Max(s.Turn, Host.FastSwing); }
+        get { var s = S; return PointDefense ? s.Turn * (Host.Credit?.TrackingOn(Target) ?? 1f) : Mathf.Max(s.Turn, Host.FastSwing); }
     }
 
     private Sprite2D _sprite;          // the turret's own sprite (TurretSpec.Texture)

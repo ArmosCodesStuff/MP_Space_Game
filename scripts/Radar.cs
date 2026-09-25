@@ -77,7 +77,7 @@ public partial class Radar : Control
         foreach (var rock in Hub.Rocks) { var p = P(rock.Position); if (Inside(p)) DrawCircle(p, 1.2f, new Color(0.55f, 0.45f, 0.35f, 0.8f)); }
         if (IsInstanceValid(Hub.Boss)) { var p = P(Hub.Boss.Position); if (Inside(p)) DrawCircle(p, 6f, new Color(1f, 0.3f, 0.25f)); }   // the boss
         foreach (var cr in Hub.Crates)                                     // this pilot's crates: only its own exist here
-            if (IsInstanceValid(cr)) { var p = P(cr.Position); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(2, 2), new Vector2(4, 4)), Ui.RarityColor(Equipment.ById(cr.Item)?.Rarity ?? Rarity.Common)); }
+            if (IsInstanceValid(cr)) { var p = P(cr.Position); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(2, 2), new Vector2(4, 4)), Ui.TierColor(Equipment.ById(cr.Item)?.Tier ?? 1)); }
         // EVERY MARK THE SCOPE CAN POINT AT, from the one table _GuiInput picks from: the home
         // landmarks, the mission portal while it is open, and the turrets a freighter left out.
         // A row here is a row there: nothing is pickable without a glyph.

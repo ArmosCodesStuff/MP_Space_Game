@@ -589,13 +589,6 @@ public static class Classes
     // every weapon stat any class has: what a part that lifts "every weapon" reaches
     public static IReadOnlyDictionary<string, double> ReachOf(ShipClass c) => Of(c).Reach;
     public static IReadOnlyDictionary<string, double> CycleOf(ShipClass c) => Of(c).Cycle;
-    // Every reach id any class declares, for a part that lifts "every weapon's range".
-    public static IEnumerable<string> EveryReachStat()
-    {
-        var seen = new SortedSet<string>();
-        foreach (var c in All) foreach (var k in c.Reach.Keys) seen.Add(k);
-        return seen;
-    }
     public static IEnumerable<string> EveryDamageStat()
     {
         var seen = new SortedSet<string>();
