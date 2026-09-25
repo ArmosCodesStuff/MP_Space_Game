@@ -10,10 +10,8 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   Watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout) re-armed at each expiry while it runs.
 
 ## Landed (verdict first; delete the row once its action is done)
-- Slot proof dbg6_s2/s3: two six at once on slots 2+3 return verdicts, and showed that rungs.ps1's array splat sent -Slot positionally
-  (seed = slot, ports unshifted, concurrent six runs joined each other's host): fixed 5a568ef, attempt 3 stopped, attempt 4 launched.
-  Open: prove on attempt 4's six logs (SEED random on slots 1-3, box bound on shifted ports); "4/6 runs finished" (ahost/aguest time
-  out at 150 s on slot 0 too) is for triage, not env.
+- rungs.ps1's array splat sent -Slot positionally (seed = slot, ports unshifted, concurrent six runs joined each other's host): fixed
+  5a568ef; attempt 4 launched. Open: bash bg3qjys30 prints attempt 4's six log heads (SEED random, box on shifted ports) -- then delete.
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task wu5xd3g1m; take its return as above. ~16:45: read tp4ar1_2/3's 2_six.log heads (SEED, box ports); delete the Landed row.
