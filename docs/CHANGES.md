@@ -36,6 +36,11 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_wings`, branch `wt/wings`): kits lane E (wings, F13 widened)
+built; compiles, rung 2 green; engine-unproven: rungs 3, 4 and 5 owed in the final test phase.**
+`Wings.All` rows `gunship` (2) and `patrol` (3), the Orbit way, the ring pick, `PlayerShip.Sortie`;
+the Carrier's E and Q keys that call it are lane A slice 6a's. Detail: `docs/plans/ledger_wings.md`.
+
 **2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A J1-J7 + K1 built and
 version-l merged in (K2); compiles, rung 2 green. engine-unproven: rungs 3-5 owed in the final test
 phase** (owner: build first, test once at the end). J6/J7's earlier solo runs (kits_j67a/b) FAILED
@@ -514,6 +519,30 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Class kits, lane E: the carrier's gunships and patrol, F13 widened (2026-09-25, worktree wt/wings)
+
+The machinery the Carrier's E (warp gunships) and Q (Supercarrier) will use; slice 6a adds only the
+class's ability rows and calls `PlayerShip.Sortie(kind, target)`. **Gunships** (`Wings.All[2]`, the
+new `WingWay.Orbit`): `gunship_count` 2 to a target, sent only at one inside `gunship_leash` 3000 u
+(checked at launch only), they WARP onto a `gunship_orbit` 240 u circle round it and fire a hitscan
+2.5 every 0.25 s (10 DPS each) for `gunship_time` 12 s, then warp out, or at once if it dies. The
+**patrol** (`Wings.All[3]`): the fighter's own count, gun, speed and turn, circling the carrier
+`patrol_orbit` 300 u out for `patrol_time` 20 s and taking whatever `Turret.RankIn` puts first among
+what `Targeting.Patrol` (the Sentry row: nothing forbidden, a dummy as a fallback) chooses inside
+`patrol_range` 600 u of the carrier, measured to the hull's edge -- **missiles first** (kits_v31
+§3.2); it does not rest, and it is amber. `patrol_range` is on the Carrier's Reach list. A wing hit is
+credited by its row id through `Dealt.Deal` ("fighter", "patrol", "gunship"; `Dealt.Fighter` is
+gone). On the wire the state code carries the craft's row (x1000) and a guest adds and drops sortie
+craft to match the host's report: no new RPC.
+
+**Checks:** new `WingsRowsChecks`, `WingsPatrolChecks`, `WingsGunshipChecks` (solo, 3 seeded spots
+each), `WingsHostSortie` + `WingsGuestWatch` (six roles), frames `10e_carrier_patrol` and
+`10f_carrier_gunships`; the reach sweep gains `patrol_range` and its totals 13/31 -> 14/32.
+**Rungs:** 1 and 2 only.
+
+**Known broken:** nothing known; nothing here has run on the engine. Gunship art borrows the
+bomber's airframe until lane H casts one; the patrol's 600 u ring and chevron are lane D / 6a.
 
 ### Class kits, lane A J7: heavy rows, F20 (2026-09-25, worktree wt/kits)
 

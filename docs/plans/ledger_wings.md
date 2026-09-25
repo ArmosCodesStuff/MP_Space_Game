@@ -78,3 +78,22 @@ Checks written: guest role `WingsGuestWatch` (started beside pdWatch, awaited af
 host `WingsHostSortie(g)` (started after the guest-PD block, awaited before the host's 15 s stay);
 frames `10e_carrier_patrol`, `10f_carrier_gunships` (`WingsFrames`, after 10d) in Shots.cs.txt.
 Next: J3 docs.
+
+### J3 PRE (opus) -- docs: CHANGES.md Handoff + Unreleased. HEAD e4442d0, CHANGES.md 599d498b.
+### J3 POST: quick ALL CHECKS PASSED at this commit. Engine-unproven: rungs owed in the final test phase.
+**What the final test phase owes (lane E):**
+- rung 3 `solo,solo` (two seeds): WingsRowsChecks, WingsPatrolChecks (3 runs: launch gaps, the
+  300 u circle, the 600 u ring in/out, +8% chip, seeker over light, 6 craft out, sortie end),
+  WingsGunshipChecks (3 runs: 3000 u refusal, warp to 240 u, 80 +- 12 landed in 4 s credited
+  "gunship", split by anchor with the patrol, end, target death), the reach sweep's `patrol_range`
+  case and its 14 / 32 totals. Also watch the existing carrier narrative (fighter launches, strafing,
+  bombers) and the damage-door checks: the wing's credit id and FitWings' bomber index changed.
+- rung 4 `screens`: frames `10e_carrier_patrol`, `10f_carrier_gunships` read by eye once (amber
+  patrol on its circle; steel gunships round the heavy); LINT 0 (the stats window has two new
+  groups, Gunships and Patrol).
+- rung 5 `six,six`: host `WingsHostSortie` (patrol on the guest's carrier downs a seeker) and guest
+  `WingsGuestWatch` (2 x fighter_count craft here, amber, seeker gone here too, > 160 u out).
+**Open for 6a / others:** the E/Q ability rows, `gunship_cooldown` 25 / `super_cooldown` 30, slot
+lines, DPS lines (`Dps.*`) for gunships/patrol, the patrol ring + chevron (lane D F9), gunship art
+(lane H). Merge risk: the reach-sweep totals line and the Solo call site after
+LaneAHeavyRowsChecks (lane A edits nearby); CHANGES.md Handoff/Unreleased heads.
