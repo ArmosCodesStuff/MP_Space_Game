@@ -186,3 +186,19 @@ Done: J1 (F12), J2-J3 (F11), J4 (F14 Prefer). Next is kits5-J5; no PRE written f
   LaneARaiderCallChecks; rung 5 LaneADecoyHostChecks after the host's 45-into-a-turret check, LaneADecoyGuestChecks
   after the guest's); Shots.cs.txt (LaneADecoyFrames, frame 43_lanea_flares_pull_a_mark, after LaneBDriveFrames).
 - Next: kits5-J8.
+### kits5-J8 · PRE · F19: tow and hurl -- tier opus
+- Intent: new scripts/Towing.cs (TowRow table, row "grapnel": 160 u off the bow, 0.5 s reel, 3 s haul, 600 u/s, 900 u,
+  60 a body, x2 for a heavy thrown; ITowable; TowState; host Tow / Hurl / Step: the reel, the haul, the hurl swept with
+  Shots.Sweep + IHittable.Covers, the first hostile ends it, both take the impact through Dealt ("hurl", credited to
+  the tower)); Raider : ITowable, its Towed state checked before its AI (Raider.cs: one hunk beside Disabled);
+  Targeting.Immovable = Boss|Structure|Dummy. The Grapnel's key and its swing are 6a's (D28). Checks LaneATowChecks.
+- Files: scripts/Towing.cs (new), Raider.cs, Targeting.cs, Dealt.cs, SmokeTest.cs.txt, this ledger.
+- HEAD 20d1dbf79f26023cb3b24173f9cf827ee45d9fd3 · Raider.cs a21bb08a3ecd536c08c6d294e874bbbfdbb8f0e1 · Targeting.cs 6e49ade498064628b49daf437b77b4c7cae5dd67 · Dealt.cs 41b4059a79b35bcb273b8548164c319c52385cc7 · SmokeTest.cs.txt 870adfedf83ef6cf1a804e4867165a0fa43e3f1d
+### kits5-J8 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED (one IDE0005 fixed on the second pass).
+  engine-unproven: rungs owed in the final test phase. Towing.cs (TowRow table, row "hurl"; ITowable; TowState; pure
+  Impact / Bow; host Tow / Hurl / Step); Raider : ITowable, Towed checked after the status tick and before Disabled and
+  the squad AI (Raider.cs: 3 lines); Targeting.Immovable. No wire change (the raider packet carries the position).
+- Files: Towing.cs (new), Raider.cs, Targeting.cs; SmokeTest.cs.txt (LaneATowChecks after LaneADecoyChecks). Dealt.cs untouched
+  (the row's Id is the weapon id).
+- Next: kits5-J9.

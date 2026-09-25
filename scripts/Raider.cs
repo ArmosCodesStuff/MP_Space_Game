@@ -19,7 +19,7 @@ using Godot;
 //                 pinned, and its row's missile -- only at a PINNED target -- lands where the target
 //                 WILL be when the row's flight ends (EnemyDef.MissileFlight): a red circle marks it.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMember
+public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMember, ITowable
 {
     public Hub Hub;
     // WHICH enemy this is: a row of Enemies.All. The index is what goes on the wire.
@@ -96,6 +96,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
     // A CALL is its squad's too (Squad.Call): host, a timed override that leaves Quarry alone
     public void Call(Node2D by, double seconds) { if (Net.Sim) Squad?.Call(by, seconds); }
     public Node2D CalledBy => Squad?.CalledBy;
+    public TowState Towed { get; set; }            // F19 (Towing.cs): held off a bow or hurled from it; host
     public bool Latched { get; private set; }
     public bool Boosting => Net.Sim ? _boosting : (_netFlags & FlagBoost) != 0;
     public float Speed { get; private set; }
@@ -206,6 +207,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused, ISquadMembe
         if (!Alive) return;
         _status.Tick(delta);
         _boosting = false;
+        if (Towed != null) { Speed = 0; Latched = false; if (!Towing.Step(this, this, delta)) Towed = null; QueueRedraw(); return; }   // towed: off its post
         if (_status.Has(Status.Disabled) || Squad == null) { Speed = 0; Latched = false; QueueRedraw(); return; }   // stunned: it sits there
         var from = Position;
         var t = Target;

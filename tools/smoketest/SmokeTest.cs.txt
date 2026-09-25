@@ -4649,6 +4649,93 @@ public partial class _Test : Node
               $"arena guest: the host's flare salvo stands here at the 6 spots its seed gives ({salvo != null}), and the raid missile's mark arrives pulled onto one of them, its missile ({pulled}) and its red circle ({circle})");
     }
 
+    // ── F19 · TOW AND HURL (lane A slice 5, kits5-J8) ────────────────────────────────────────────
+    // The row is kits_v3 3.2's TOW / HURL: 160 u off the bow, reeled in 0.5 s, hauled up to 3 s, hurled at
+    // 600 u/s up to 900 u, 60 to each body (120 when a heavy is thrown). Immovable takes a practice dummy,
+    // never a raider. World, host (Towing.Tow / Step through Raider's Towed state), 3 runs, a {webifier,
+    // gunship, talon} hooked at VaryNear {150, 400, 699} u, the pilot at a varied rotation: 0.5 s + 2 frames
+    // after the hook it is 160 +- 10 u off the bow, and while hauled it never latches and the pilot takes
+    // nothing. Then: run 0 is hurled at once down the bow at a held webifier 300 u further on: both lose 60
+    // (a light thrown) and the pilot's DealtBy["hurl"] grows 120; run 1 (the gunship, a heavy) the same at
+    // 120 each; run 2 is left to the haul's end: thrown at 3.0 +- 0.05 s after the hook, it strikes nothing
+    // and flies 900 +- 12 u.
+    async Task LaneATowChecks(Vector2 yonder)
+    {
+        var tw = Towing.Of(Towing.Grapnel);
+        var dummy = H.GetNodeOrNull<TargetDummy>("TargetDummy1");
+        Check(Math.Abs(tw.Offset - 160f) < 1e-4f && Math.Abs(tw.Reel - 0.5) < 1e-9 && Math.Abs(tw.Haul - 3) < 1e-9
+              && Math.Abs(tw.Speed - 600f) < 1e-4f && Math.Abs(tw.Reach - 900f) < 1e-4f
+              && Math.Abs(Towing.Impact(tw, false) - 60) < 1e-9 && Math.Abs(Towing.Impact(tw, true) - 120) < 1e-9
+              && dummy != null && Targeting.Immovable.Hits(dummy),
+              "the tow row is the card's: 160 u off the bow in 0.5 s, 3 s hauled, 600 u/s to 900 u, 60 a body and 120 when a heavy is thrown; a practice dummy is immovable (a hook swings round it)");
+        var pm = Me; bool demo = pm.Demo; pm.Demo = true;
+        // what the hurl lands, body by body, counted at the door (a gun of the pilot's may also be firing)
+        var hurled = new Dictionary<IHittable, double>();
+        void OnLanded(IHittable h, double d, string w) { if (w == tw.Id) hurled[h] = hurled.GetValueOrDefault(h) + d; }
+        Dealt.Landed += OnLanded;
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.3);
+        var kinds = new[] { Enemies.Webifier, Enemies.Gunship, Enemies.Talon };
+        var dists = new[] { 150f, 400f, 699f };
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            float rot = VaryAngle();
+            pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = rot; pm.Hp = pm.MaxHp;
+            double low = pm.Hp;
+            var c = H.SpawnRaider(VaryNear(at, dists[run]), kinds[run]); c.Hp = 1e9;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool immovable = Targeting.Immovable.Hits(c);
+            bool hooked = Towing.Tow(c, pm, pm);
+            double t0 = pm.Clock;
+            bool latched = false;
+            async Task Hold(double until)
+            {
+                while (pm.Clock - t0 < until)
+                {
+                    pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = rot; low = Math.Min(low, pm.Hp); latched |= c.Latched;
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                }
+            }
+            await Hold(0.5 + 2.0 / 60);
+            float off = c.Position.DistanceTo(Towing.Bow(pm, 160f));
+            Check(hooked && !immovable && off < 10f && c.Towed != null,
+                  $"a {c.Def.Id} hooked {dists[run]:0} u off is held 160 u off the bow 0.5 s later ({off:0.0} u from the spot), and a raider is never immovable ({immovable})");
+            if (run < 2)
+            {
+                var fwd = Vector2.Up.Rotated(rot);
+                var victim = H.SpawnRaider(Towing.Bow(pm, 160f) + fwd * 300f); victim.Hp = 1e9; victim.ApplyStatus(Status.Disabled, 30);
+                await Hold(0.7);
+                hurled.Clear(); double dealt0 = pm.DealtBy.GetValueOrDefault("hurl");
+                Towing.Hurl(c);
+                for (int i = 0; i < 120 && c.Towed != null; i++) { pm.Position = at; pm.Velocity = Vector2.Zero; low = Math.Min(low, pm.Hp); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                double want = c.Heavy ? 120 : 60;
+                double cLost = hurled.GetValueOrDefault(c), vLost = hurled.GetValueOrDefault(victim), credited = pm.DealtBy.GetValueOrDefault("hurl") - dealt0;
+                Check(c.Towed == null && Math.Abs(cLost - want) < 1e-6 && Math.Abs(vLost - want) < 1e-6 && Math.Abs(credited - 2 * want) < 1e-6
+                      && !latched && low >= pm.MaxHp - 1e-6,
+                      $"hurled down the bow, the {(c.Heavy ? "heavy" : "light")} {c.Def.Id} strikes the raider 300 u on: each takes {want} ({cLost:0}, {vLost:0}), the pilot is credited {credited:0} as \"hurl\"; while hauled it never webbed and the pilot took nothing ({!latched}, {pm.MaxHp - low:0.0})");
+                victim.TakeDamage(1e12);
+            }
+            else
+            {
+                double hurledAt = double.NaN; Vector2 start = c.Position; hurled.Clear();
+                for (int i = 0; i < 60 * 6 && c.Towed != null; i++)
+                {
+                    if (double.IsNaN(hurledAt) && c.Towed is { Flung: true }) { hurledAt = pm.Clock - t0; start = Towing.Bow(pm, 160f); }
+                    pm.Position = at; pm.Velocity = Vector2.Zero; pm.Rotation = rot; latched |= c.Latched;
+                    await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                }
+                float flew = start.DistanceTo(c.Position);
+                Check(Math.Abs(hurledAt - 3.0) < 0.05 && Math.Abs(flew - 900f) < 12f && hurled.Count == 0 && !latched,
+                      $"left to the haul's end it is thrown {hurledAt:0.00} s after the hook (3.0) and, striking nothing, flies {flew:0} u (900) and takes nothing");
+            }
+            c.TakeDamage(1e12);
+            await Wait(0.2);
+        }
+        Dealt.Landed -= OnLanded;
+        pm.Demo = demo; pm.Position = yonder; pm.Velocity = Vector2.Zero; pm.Hp = pm.MaxHp;
+    }
+
     // ── F12 · THE MELEE ARC AND THE GUARD CLAMP (lane A slice 5, kits5-J1) ─────────────────────
     // Pure (Melee.Pick, Melee.Guard): the blade's literals (160 u, ±55°, kits_v2 Warrior card) and the
     // whirlwind's (210 u, all round) from 3 varied spots and facings. A body well inside the wedge and one
@@ -10483,6 +10570,7 @@ public partial class _Test : Node
             await LaneASentryThrowChecks(yonder);
             await LaneARaiderCallChecks(yonder);
             await LaneADecoyChecks(yonder);
+            await LaneATowChecks(yonder);
             await LaneBHelmChecks(yonder);
             await LaneBStrafeChecks(yonder);
             await LaneBBoostChecks(yonder);

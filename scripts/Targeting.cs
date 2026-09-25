@@ -66,6 +66,8 @@ public static class Targeting
     // a throw -- which happens on the host alone -- would put two copies of one body a throw apart
     // (audit P5).
     public static readonly TargetFilter Throwable = new(forbid: Tag.Missile | Tag.Hulled | Tag.Structure | Tag.Dummy);
+    // WHAT A HOOK SWINGS ROUND rather than tows (the Grapnel, Towing.cs): a boss, a structure, a dummy
+    public static readonly TargetFilter Immovable = new(require: Tag.Boss | Tag.Structure | Tag.Dummy);
     // WHAT A TURRET LEFT STANDING TAKES: anything hostile -- a missile, a raider of any weight, a
     // boss, a station -- ranked as point defence ranks (Turret.Rank), so missiles and small craft
     // still come first. Point defence's own filter would keep it off a heavy, a boss and a pylon,
