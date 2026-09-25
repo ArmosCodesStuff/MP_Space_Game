@@ -130,6 +130,8 @@ Sprites
 Agents (owner, 2026-09-25)
 - BUILD EVERYTHING, THEN TEST (2026-09-25): no engine run until every planned lane is built and merged; per job the compiler
   (typecheck, verify -Quick) and a read of the code; per lane an opus code gate. Then all the testing at once. (CLAUDE.md top.)
+- (2026-09-25) Proceed and push when due (a green bar, both branches) without asking; the coordinator's recommendations are
+  approved. Save tokens: each agent gets a task no other agent has; no duplicate agents on one objective unless truly needed.
 - Every agent runs Opus 5.5, "just to be safe" (replaces the earlier "lowest tier you can trust"); effort still set per call.
 - Run several engine and game instances at once: "my PC can handle it no prob" (Ryzen 7 7700, 16 threads, 47 GB). Engine slots
   (tools/rungs.ps1 -Slots) make it safe; the limit was shared folders and ports, never the PC.

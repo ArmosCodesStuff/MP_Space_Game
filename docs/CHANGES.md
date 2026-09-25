@@ -36,6 +36,12 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_drives`, branch `wt/drives`): kits lane B -- drives, helm,
+strafe (F21, F22, F24) -- built J1-J6; compiles, rung 2 green. engine-unproven: rungs owed in the final
+test phase** (solo x2, six x2, screens); J7 fixed the merge gate's five findings. V is the class's drive (`Drives.cs`): a held warp on the
+capitals, a boost on the nine; Shift + A/D strafe on the nine; capitals 88/99/117, freighters 120.
+Detail and what the test phase owes: `docs/plans/ledger_drives.md` (J6 POST).
+
 **2026-09-25 (worktree `WarShips_wt_curve`, branch `wt/curve`): lane F, the curve, built J1-J5;
 compiles, rung 2 green. engine-unproven: rungs 3-5 owed in the final test phase.** Par.cs replaces
 x1.025 a level; boss rows 3222 / 2968 and the cut; siege rows; raider Strength is a level; skip +2;
@@ -221,7 +227,8 @@ offered too.
 | Input | Does |
 |---|---|
 | W / S | ahead / astern (thrust along the keel only) |
-| A / D | rudder. Turns on a radius; does nothing with no way on. No strafing. |
+| A / D | rudder. Turns on a radius; almost stopped it pivots slowly. |
+| Shift + A / D | slide sideways, the nose held (the nine; a capital has no slide: Shift changes nothing) |
 | Mouse | aims the main guns (battleship, destroyer). The hull does not follow it. |
 | **Left-click** | **select** the hostile under the cursor — or, while placing, **confirm**. Never attacks. |
 | Right-click | cancel a placement. Nothing else. |
@@ -230,7 +237,7 @@ offered too.
 | Mouse wheel | zoom: 33% further out to 1.5× closer |
 | Y | free camera: arrow keys or the screen edge move it (5000 u tether); Y again returns |
 | L | pilot: level, EXP, points and upgrades |
-| V | warp (every capital ship; 3 s warm-up, 30 s cooldown; aims at the jump) |
+| V | the class's drive: capitals HOLD to warp (1 s spool, 800 u/s to a safe 2400 u, +900 at most, disabled 2 s per 300 u over, 20 s); the nine TAP to boost (+50% top, thrust and slide for 3 s, 15 s) |
 | Click the radar | select an enemy there, or make a landmark or pilot a waypoint |
 | Left-click a building | its menu (TIO: WARP TO TARGET; base: BASE) |
 | B | base menu: upgrades, and REFIT (the only way to change class, name or colours; costs 10%) |
@@ -532,6 +539,46 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Class kits, lane B: drives, helm and strafe -- F21, F22, F24 (2026-09-25, worktree wt/drives)
+
+**F22 helm rows.** The capitals are cut and lean on the warp: battleship 88 u/s (thrust 47, astern
+20/30), carrier 99 (`CarrierTop`, which moves its four rows), destroyer 117 (63, 27/40.5). The three
+freighters lose the warp and go 85 -> 120 (63.5, 28.2/42.4). Every thrust moved with its top, so each
+hull reaches its top in the time it did; turning is unchanged.
+
+**F24 the slide.** Helm rows `strafe_speed` / `strafe_thrust` (0 on the sheet: the capitals never
+slide, read from the stat): lights 130 at 520, heavies 95 at 380, freighters 60 at 120. Hold Shift and
+A/D slide the hull, the nose held; Shift is a fixed key. A web or Disabled leaves no slide; holds
+multiply after the lifted sum (`PlayerShip.StrafeTop`), so a hold of x0 roots it.
+
+**F21 the drives (`Drives.cs`, replacing PlayerShip's warp block and the single "warp" card).** Every
+hull names a drive (`ClassDef.Drive`); `Abilities.For` appends its row, so it has a slot on the wire
+and the bar, fixed on V, never walled. **Warp** (battleship, carrier, destroyer): hold V -- 1.0 s spool,
+then 800 u/s to a safe 2400 u, stopping 900 over; release to jump along the bow or short of a target or
+waypoint the bow is on; past the ring the hull lands DISABLED 2 s per 300 u over (the owner locks at
+once; the host prices what it sees -- a fallen charge bit, or any snap over 600 u with no bit; a
+relocation the host makes, a report from a peer not yet counted in the host's world, and a re-board
+are never priced; a release while the slot cools jumps nothing); 20 s from the jump. The pilot sees the safe ring, the
+charge ring, the amber-to-red band with 2 s / 4 s / 6 s ticks, the landing ghost and its readout; the
+slot and the hull bar read `WARP 1850 u`, `DISABLED 2.8 s`, `WARP 12 s`. **Boost** (the nine): tap V --
++50% top speed, thrust and slide for 3 s (one F1 lift, `surge_lift`), 15 s from the press; refused
+ANCHORED (a hold of x0) and in stasis; allowed webbed, where the web's 20% is taken after the lift.
+The host's speed clamp reads a report held to hypot(top, strafe) x 1.1. The title battleship dodges on
+the same warp, held to 500 u. Hints: warp, boost, strafe; the controls line names the drive.
+
+**Checks:** new `LaneBHelmChecks`, `LaneBStrafeChecks`, `LaneBWarpChecks`, `LaneBBoostChecks` (rung 3),
+`LaneBHostDrives` (+ `LaneBWorldEntryChecks`: world entry, re-board) / `LaneBGuestDrives` (rung 5);
+in `LaneBWarpChecks` the pairs a broadside mid-charge, a carrier's fighters through the warp's disable,
+and a cooldown arriving mid-hold; frames 40, 40b, 41, 41b, 42, 42b (`LaneBDriveFrames`,
+rung 4); rewritten: the battleship/destroyer/carrier speed literals, the title ship's hop, the drive's
+hint card, the snap flash, the bar sequences and `Abilities.For` lengths (+1 for the drive).
+**Rungs:** 1 and 2 in the worktree. None of it has run on the engine.
+
+**Known broken:** nothing known; all of it is engine-unproven. `Enemies.cs:30`'s raider cruise (100)
+is now faster than the battleship (88) and the carrier (99): its comment is stale and the number is
+lane A/G's to settle. The host prices a warp's distance, not its cooldown: a modified client could
+chain charged jumps inside 20 s and pay only for distance.
 
 ### The curve, lane F (2026-09-25, worktree wt/curve)
 

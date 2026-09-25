@@ -294,14 +294,7 @@ public partial class _Shots : Node
         }
         await Close(ShipClass.Destroyer, "9d_destroyer_closeup");
         await Close(ShipClass.Battleship, "9_battleship_closeup");
-        // warp: the charge building, then the flash where it lands (and the hull bar's WARP readout)
-        {
-            var ws = H.GetNode<PlayerShip>("Ship_1");
-            typeof(PlayerShip).GetField("_warpCd", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(ws, 0.0);
-            ws.Velocity = Vector2.Zero; ws.StartWarp();
-            await W(2.2); await Snap("40_warp_charging");
-            await W(0.95); await Snap("41_warp_arrival");      // the camera cuts to the ship on a jump
-        }
+        await LaneBDriveFrames();
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -909,5 +902,36 @@ public partial class _Shots : Node
         }
         GD.Print("SWEEP DONE");          // the runner fails without it: a cut-off sweep must never pass as clean
         Game.Quit();                     // the game's own way out, as a player leaves
+    }
+
+    // ── LANE B · THE DRIVES, as drawn (Drives.Draw, the drive's slot and the hull bar's readout) ──
+    // The battleship holds V (a driver's hold, DriveHeld: the text box Close() focused locks the keys):
+    // at 2.6 s the charge ring inside the faint safe ring, the ghost and "1280 u"; at 4.8 s past the
+    // ring, in the amber-to-red band with its 2 s / 4 s / 6 s ticks, the ghost's "+640 u · DISABLED
+    // 4.3 s" and the slot's WARP readout; then the landing flash, and the hull bar's DISABLED. Then a
+    // dart's boost: BOOST 2.1 s on its slot and the hull bar, and BOOST n s while it cools.
+    async Task LaneBDriveFrames()
+    {
+        var cam = GetViewport().GetCamera2D(); var z0 = cam.Zoom;
+        H.ClearSelection();
+        var ws = H.GetNode<PlayerShip>("Ship_1");
+        ws.Position = new Vector2(-900, 1100); ws.Rotation = 0f; ws.Velocity = Vector2.Zero; ws.Sl("warp").Cool = 0;
+        cam.Zoom = new Vector2(0.2f, 0.2f);                               // the whole 3300 u band in view
+        ws.DriveHeld = true; ws.PressDrive();
+        await W(2.6); await Snap("40_warp_charging");
+        await W(2.2); await Snap("40b_warp_overshoot_band");
+        ws.DriveHeld = false;
+        cam.Zoom = new Vector2(0.9f, 0.9f);
+        await W(0.15); await Snap("41_warp_arrival");                    // the camera cuts to the ship on a jump
+        await W(0.8); await Snap("41b_warp_disabled");
+        for (int i = 0; i < 60 * 8 && ws.Disabled; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        Character.Class = ShipClass.LightDart; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var bs = H.GetNode<PlayerShip>("Ship_1");
+        bs.Position = new Vector2(-900, 1100); bs.Rotation = 0f; bs.Velocity = Vector2.Zero; bs.Sl("boost").Cool = 0;
+        bs.PressDrive();
+        await W(0.9); await Snap("42_boost_running");
+        await W(3.0); await Snap("42b_boost_cooling");
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        cam.Zoom = z0;
     }
 }

@@ -20,10 +20,13 @@ public partial class MainMenu : Node2D
     // anything: these are the numbers that make the scene read.
     private const double BroadsideEvery = 5.0;        // its broadside, back every five seconds
     private const double AoeEvery = 15.0, AoeWarn = 8.0;   // an area shot every 15 s, telegraphed for 8
-    private const float AoeRadius = 260f, WarpHop = 500f;
-    // It starts the jump with 4 s to go and the warp takes 3, so it lands ONE SECOND before the
-    // shot arrives. Dodging by a whole second reads as a dodge; dodging by a frame reads as luck.
-    // HOW LONG BEFORE THE SHOT IT STARTS TO MOVE: its own warm-up, plus the time its own rudder
+    private const float AoeRadius = 260f;
+    // THE DODGE IS THE PILOT'S WARP (Drives.cs), held until the charge reads this far: the spool,
+    // then the battleship's own rate (1.0 + 500 / 800 = 1.6 s), and released. There is no second warp.
+    public const float DodgeHop = 500f;
+    // It lands a second before the shot arrives. Dodging by a whole second reads as a dodge;
+    // dodging by a frame reads as luck.
+    // HOW LONG BEFORE THE SHOT IT STARTS TO MOVE: its own hold, plus the time its own rudder
     // needs for a half turn, because the jump goes along the keel and the turn IS the aim. It was
     // a flat 4 s, which was enough only while the turn was read as degrees and the hull barely
     // moved; at the rate a battleship really turns, a half turn is 2.9 s and 4 s left it clearing
@@ -32,7 +35,8 @@ public partial class MainMenu : Node2D
     // turn did not need -- so without this a dodge that happened to need the full half turn cleared
     // the blast by nothing at all, which is not a scene, it is a coin toss.
     private const double DodgeSpare = 1.0;
-    private double DodgeAt => PlayerShip.WarpWarmup + Mathf.Pi / System.Math.Max(0.1, _cap.Stats["turn_rate"]) + DodgeSpare;
+    private double DodgeAt => Drives.Spool + DodgeHop / System.Math.Max(1, _cap.Stats["warp_rate"])
+                              + Mathf.Pi / System.Math.Max(0.1, _cap.Stats["turn_rate"]) + DodgeSpare;
     private const double GunRange = 620;
     // Home further off the bow than this and the pilot turns the hull itself before handing it to
     // the autopilot: past it, Autopilot.Capital's rudder is hard over anyway and its throttle falls
@@ -143,8 +147,7 @@ public partial class MainMenu : Node2D
         _cap.SetProgress(null, Unlocks.Top);
         // Retuned AFTER Init and SetProgress: each rebuilds the sheet from the class and would discard it.
         _cap.Stats.SetBase("broadside_cooldown", BroadsideEvery);
-        _cap.WarpHop = WarpHop;
-        _cap.WarpEvery = AoeEvery - AoeWarn;      // ready again before the next area shot is called
+        _cap.Stats.SetBase("warp_cooldown", AoeEvery - AoeWarn);   // a row override: ready again before the next area shot is called
 
         // Its turrets and shells all go through Combat, exactly as in the hub.
         Combat.OnFlash = (a, b, beam) => { _shots.Add(new Shot { A = a, B = b, T = 0.15 }); Sfx.Beam(a, b, Beam.Of(beam)); };
@@ -254,7 +257,7 @@ public partial class MainMenu : Node2D
             if (_aoeLeft <= 0) _aoeLeft = -1;
             // With DodgeAt to go it turns its bow AWAY from the impact and jumps: the warp goes
             // along the keel, so the turn is the aim. Both are the ship's own -- its turn rate,
-            // its warm-up -- which is why the numbers here are a scene, not a cheat.
+            // its hold -- which is why the numbers here are a scene, not a cheat.
             else if (_aoeLeft <= DodgeAt && !_dodged)
             {
                 var away = (_cap.Position - _aoeAt);
@@ -262,13 +265,15 @@ public partial class MainMenu : Node2D
                 _cap.AutopilotTo = null;
                 TurnTowards(Aim.Along(away), delta);
                 if (Mathf.Abs(Mathf.AngleDifference(_cap.Rotation, Aim.Along(away))) < 0.25f)
-                    _dodged = _cap.StartWarp();
+                    _cap.DriveHeld = _dodged = _cap.PressDrive();   // hold V...
             }
         }
+        // ...and let go once the charge reads the hop
+        if (!_cap.Charging || _cap.ChargeReach >= DodgeHop) _cap.DriveHeld = false;
 
         // ── back to station, or face the fight ──
         bool dodging = _aoeLeft > 0 && _aoeLeft <= DodgeAt;
-        if (!dodging && !_cap.Warping)
+        if (!dodging && !_cap.Charging)
         {
             if (_cap.Position.DistanceTo(_centre) > 40f)
             {
