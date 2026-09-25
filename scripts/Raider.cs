@@ -43,7 +43,7 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     // sees it stop because the host stops sending it anywhere.
     private StatusSet _status;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status st, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(st, seconds, share); }
+    public void ApplyStatus(Status st, double seconds, double share = double.NaN) { if (Net.Sim && StatusSet.Reaches(st, Tags)) _status.Apply(st, seconds, share); }
     public float Length => Def.Length;
     // a raid's raiders are as strong as the boss that was failed: S(L) = 1.025^(L-1) (Missions.S)
     public double Strength = 1;          // S(L) (was "Scale", which hid Node2D.Scale)
@@ -190,7 +190,13 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
     }
     public static float Gap(Vector2 from, Node2D t) =>
         from.DistanceTo(t.Position) - Extent(t, (from - t.Position).Normalized());
-    void Strike(Node2D t, double d) => (t as IRaidTarget)?.Hit(d, Position, $"raider:{NetId}");
+    // EVERY LASER BLOW, light's or heavy's, goes out through the door (StatusSet.Out): a gun whose
+    // statuses take it to nothing lands nothing, and starts no gap on the hull it would have hit
+    void Strike(Node2D t, double d)
+    {
+        d = _status.Out(d, OutKind.Gun);
+        if (d > 0) (t as IRaidTarget)?.Hit(d, Position, $"raider:{NetId}");
+    }
 
     public override void _Process(double delta)
     {
@@ -332,7 +338,9 @@ public partial class Raider : Node2D, IHittable, ITagged, IStatused
             }
         }
         _missileCd -= delta;
-        if (Def.Missiles && _missileCd <= 0 && Position.DistanceTo(Target.Position) <= Def.MissileRange)
+        // HELD while a status holds its throw (StatusSet.HoldsThrow): the clock keeps its zero, and
+        // it throws the frame the status lapses
+        if (Def.Missiles && _missileCd <= 0 && !_status.HoldsThrow && Position.DistanceTo(Target.Position) <= Def.MissileRange)
         {   // at where it WILL be: its velocity carried the whole flight forward -- from ITS row's
             // reach, on its row's cadence, for its row's damage
             _missileCd = Def.MissileEvery;

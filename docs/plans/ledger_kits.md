@@ -186,6 +186,39 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
   still coasts on its speed with no thrust and no turn.
 - Checkpoint: the commit after this entry ("Kits lane A job 1b"). Next: slice 2 (Handover 3, J4).
 
+### J4 · PRE · F17, the outgoing door (OutGuards)
+- Intent: D16. `Status.Suppressed 64 / Dazzled 128 / Jammed 256`, `StatusSet.HostOnly` masked out of
+  `Bits`; `StatusSet.OutGuards` rows {Status, Gun, Move, Super, HoldsThrow, Bosses}; the door
+  `StatusSet.Out(d, OutKind)` + `HoldsThrow`; `Boss.Out(move)` replaces the six
+  `m.Damage * DamageMult` sites; `Raider.Strike` (both lasers) and `Emplacement.Spec` (its gun) go
+  through the door; the heavy's missile throw is held; a boss refuses a status whose row says
+  `Bosses = false`. Checks: `LaneAOutDoorChecks` (table + bits + webifiers + gunship hold),
+  `LaneAOutDoorBossChecks` (Lancer arena, beside the burn clock), `LaneAOutDoorBaseChecks` (siege).
+- Files: scripts/Statuses.cs, Boss.cs, Raider.cs, Emplacements.cs; tools/smoketest/SmokeTest.cs.txt;
+  docs/CHANGES.md; docs/DESIGN.md; this ledger.
+- Start: 7cf773943a18bae3605bddf28dee7e767c2a0752
+- Hashes: Statuses aab38ab7 · Boss d19b3df4 · Raider 49bea117 · Emplacements a158ce08 ·
+  SmokeTest 8ecb4f3b · CHANGES d2837272 · DESIGN 5c8418a0
+
+### J4 · POST
+- Verdict: rung 2 (`verify.ps1 -Quick`) ALL CHECKS PASSED (0 errors, 0 warnings, UNUSED 0). No engine rung.
+- Files: Statuses.cs (3 statuses, `OutKind`, `OutGuard`, `OutGuards`, `HostOnly`, `Reaches`, `Out`,
+  `HoldsThrow`, `Bits` masked), Boss.cs (`Out(m)` at the six sites, ApplyStatus through `Reaches`),
+  Raider.cs (Strike through the door; the throw held; ApplyStatus through `Reaches`), Emplacements.cs
+  (Spec through the door; ApplyStatus through `Reaches`), SmokeTest (3 methods + 3 calls), CHANGES,
+  DESIGN (tables row).
+- **D22** "Bosses immune" is a tag on the row (`OutGuard.Spares = Tag.Boss`), read by the door users'
+  ApplyStatus through `StatusSet.Reaches(s, Tags)`: a spared status is never put on the thing, so a
+  Dazzled / Jammed boss is unchanged by construction (its rows' Move / Super are 1 all the same).
+  PlayerShip / Deployed / UtilityShip ApplyStatus are not gated: no row spares a player-side tag.
+- **D23** A raider blow the door takes to 0 (Jammed) is not struck at all, so it starts no 0.52 s gap on
+  the hull; a Jammed emplacement still fires a 0-damage round (the EMP's "guns silenced" is 6d's).
+- Harness timing note (applies to every lane A check): a continuation after `await Wait(x)` runs at the
+  END of a frame (timers run after `_process`); after `await ToSignal(ProcessFrame)` at the START of the
+  next, before any `_process`. So `Wait` then one ProcessFrame await spans NO node `_process`: a rate
+  read across it is 0 (that is job 1c's cause).
+- Checkpoint: the commit after this entry ("Kits lane A J4"). Next: job 1c (coordinator), then J5.
+
 ## Engine rungs owed to the main session (run in the worktree, rebased, one engine at a time)
 
 | after | rung | seeds | look for (PASS lines) |

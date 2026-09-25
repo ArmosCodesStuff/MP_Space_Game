@@ -8,10 +8,10 @@ using System.Collections.Generic;
 // THE HOST DECIDES. A guest counts nothing down: it is sent the bits (PlayerShip's state) and
 // shows them. A status with no time left is simply absent.
 // THESE VALUES ARE THE WIRE FORMAT (StatusSet.Bits). Never renumber one that is here.
-// A sixth status takes 32, and 32 is free: Shielded held it, was declared "a pool absorbs damage
-// before the hull", and was never set, read or implemented by anything -- the only such pool is
-// the freighter's bubble, which is Sl("bubble") and PlayerShip.ThroughBubbles. No packet ever
-// carried it, so deleting it left 1..16 untouched and no gap below them.
+// The next status that a guest must see takes 32, and 32 is free: Shielded held it, was declared
+// "a pool absorbs damage before the hull", and was never set, read or implemented by anything --
+// the only such pool is the freighter's bubble, which is Sl("bubble") and PlayerShip.ThroughBubbles.
+// 64 and up are HOST-ONLY (StatusSet.HostOnly): the host resolves them and no packet carries them.
 [System.Flags]
 public enum Status
 {
@@ -23,6 +23,27 @@ public enum Status
     Untargetable = 4,    // nothing hostile may choose it (stealth)
     Hardened = 8,        // taking less: by the share its applier gave (StatusSet.Apply), else the row's
     Evading = 16,        // the next hits miss outright
+    Suppressed = 64,     // its guns weakened, its throws held (StatusSet.OutGuards; host-only)
+    Dazzled = 128,       // blinded: its throws held (StatusSet.OutGuards; host-only; never on a boss)
+    Jammed = 256,        // its guns silenced, its throws held (StatusSet.OutGuards; host-only; never on a boss)
+}
+
+// WHICH OF A HOSTILE'S BLOWS the outgoing door is scaling (StatusSet.Out): a gun of a craft or a
+// structure, a boss's move, or a boss's super (the moves its skinny bar counts down to).
+public enum OutKind { Gun, Move, Super }
+
+// WHAT A STATUS DOES TO WHAT ITS HOLDER DEALS, as a row: the "weaken what shoots" statuses were
+// to be three gates in three weapons, and are one table read by one door (StatusSet.Out). A NEW
+// ROW: the status, what it multiplies each kind of blow by (1 lets it all through, 0 stops it),
+// whether it holds a launcher's throw (the clock keeps its zero; it throws at the lapse), and
+// the kinds of thing it never reaches at all (Spares: a boss is immune to Dazzled and Jammed, so
+// they are never on it and its Move and Super are 1).
+public struct OutGuard
+{
+    public Status Status;
+    public double Gun, Move, Super;
+    public bool HoldsThrow;
+    public Tag Spares;
 }
 
 // WHAT A STATUS DOES TO A BLOW, as a row. PlayerShip.Guarded walks this table. THE SHARE COMES
@@ -49,6 +70,44 @@ public struct StatusSet
         new() { Status = Status.Evading,  Share = 0 },      // the dart's roll: it is not there to be hit
         new() { Status = Status.Hardened, Share = 0.5 },    // half of it, unless the applier says otherwise
     };
+
+    // THE OUTGOING DOOR'S ROWS (kits_v2 §5, F17): every hostile blow -- a raider's laser, a boss's
+    // move, a structure's gun -- is multiplied by the row of each status on the thing that deals
+    // it, and a launcher's throw waits while any row that holds it is on.
+    public static readonly OutGuard[] OutGuards =
+    {
+        new() { Status = Status.Suppressed, Gun = 0.5, Move = 0.7, Super = 1.0, HoldsThrow = true },
+        new() { Status = Status.Dazzled,    Gun = 1.0, Move = 1.0, Super = 1.0, HoldsThrow = true, Spares = Tag.Boss },
+        new() { Status = Status.Jammed,     Gun = 0.0, Move = 1.0, Super = 1.0, HoldsThrow = true, Spares = Tag.Boss },
+    };
+    // never on the wire: the host resolves them, and a guest has nothing that reads them
+    public const Status HostOnly = Status.Suppressed | Status.Dazzled | Status.Jammed;
+
+    // WHETHER A STATUS CAN BE PUT ON A THING OF THESE TAGS at all: no OutGuards row spares it
+    public static bool Reaches(Status s, Tag on)
+    {
+        foreach (var g in OutGuards) if (g.Status == s && (g.Spares & on) != 0) return false;
+        return true;
+    }
+
+    // THE OUTGOING DOOR: what a blow of this kind comes to, from a thing carrying these statuses
+    public double Out(double d, OutKind kind)
+    {
+        if (_left == null) return d;
+        foreach (var g in OutGuards)
+            if (Has(g.Status)) d *= kind switch { OutKind.Gun => g.Gun, OutKind.Move => g.Move, _ => g.Super };
+        return d;
+    }
+    // ...and whether a launcher carrying them must hold its throw
+    public bool HoldsThrow
+    {
+        get
+        {
+            if (_left == null) return false;
+            foreach (var g in OutGuards) if (g.HoldsThrow && Has(g.Status)) return true;
+            return false;
+        }
+    }
 
     private Dictionary<Status, double> _left;
     private Dictionary<Status, double> _share;       // the share an applier named, while it lasts (host only)
@@ -81,14 +140,14 @@ public struct StatusSet
         }
     }
 
-    // on the wire: one int, so a guest shows what the host resolved
+    // on the wire: one int, so a guest shows what the host resolved -- less what is host-only
     public int Bits
     {
         get
         {
             int b = 0;
             if (_left != null) foreach (var kv in _left) if (kv.Value > 0) b |= (int)kv.Key;
-            return b;
+            return b & ~(int)HostOnly;
         }
     }
     // a guest takes the host's word: held for a packet's worth of time, replaced by the next

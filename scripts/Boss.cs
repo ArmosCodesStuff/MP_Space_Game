@@ -119,11 +119,14 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     public Tag Tags => Tag.Boss;
     // A bastion's shockwave cannot throw a boss, so it holds it still instead (Status.Disabled):
     // it neither moves nor acts while it lasts. The host decides; guests simply stop being told
-    // to move it.
+    // to move it. A status an OutGuards row spares a boss (Dazzled, Jammed) is never put on it.
     private StatusSet _status;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(s, seconds, share); }
+    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim && StatusSet.Reaches(s, Tags)) _status.Apply(s, seconds, share); }
     public bool Held => _status.Has(Status.Disabled);
+    // WHAT A MOVE LANDS FOR: its row's damage on the level's and the party's scale, through the
+    // outgoing door (StatusSet.Out) as a super or not. Every blow a move deals is this, once.
+    private double Out(BossMove m) => _status.Out(m.Damage * DamageMult, m.Super ? OutKind.Super : OutKind.Move);
     public double Hp { get; set; }              // a property, not a field: IQuarry asks for it
     public bool Alive => Hp > 0;
     public int NetId => Id;
@@ -475,7 +478,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         {
             case MoveWay.Bolt:
                 if (!Sees(s.Target)) break;
-                s.Target.Hit(m.Damage * DamageMult, Position, m.Source);
+                s.Target.Hit(Out(m), Position, m.Source);
                 Combat.Flash(nose, s.Target.Position, m.Beam);
                 break;
             case MoveWay.Shoot:
@@ -484,7 +487,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                 foreach (float a in Fan(s.Aim, m))
                 {
                     var dir = Vector2.Right.Rotated(a);
-                    Combat.Fire(m.Shot, nose + dir * m.Muzzle, dir, m.Speed, m.Range, m.Damage * DamageMult, m.Radius,
+                    Combat.Fire(m.Shot, nose + dir * m.Muzzle, dir, m.Speed, m.Range, Out(m), m.Radius,
                                 Shots.Of(m.Shot).Guided && Sees(s.Target) ? s.Target.NetId : 0, m.Turn,
                                 hitSource: m.Source, size: m.Size, variant: k++);
                 }
@@ -494,7 +497,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             case MoveWay.Dash: s.At = Phase.Firing; break;
             case MoveWay.Ring:
                 foreach (var p in _hittable)
-                    if (p.Position.DistanceTo(s.To) <= m.Reach + p.HitRadius) p.Hit(m.Damage * DamageMult, s.To, m.Source);
+                    if (p.Position.DistanceTo(s.To) <= m.Reach + p.HitRadius) p.Hit(Out(m), s.To, m.Source);
                 break;
             case MoveWay.Throw: s.At = Phase.Firing; break;
         }
@@ -516,13 +519,13 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                     var (la, lb) = Segment(m.Id);
                     foreach (var p in _hittable)
                         if (Combat.DistToSegment(p.Position, la, lb) <= m.Width / 2f + p.HitRadius)
-                            p.Hit(m.Damage * DamageMult, Position, m.Source);
+                            p.Hit(Out(m), Position, m.Source);
                     if (--s.Left <= 0) s.At = Phase.Idle;   // its last judgement ends it (Judgements)
                 }
                 break;
             case MoveWay.Dash:
                 Position = Position.MoveToward(s.To, m.Speed * (float)delta);
-                foreach (var p in _hittable) if (Covers(p.Position, p.HitRadius)) p.Hit(m.Damage * DamageMult, Position, m.Source);
+                foreach (var p in _hittable) if (Covers(p.Position, p.HitRadius)) p.Hit(Out(m), Position, m.Source);
                 if (Position.DistanceTo(s.To) < 1f) s.At = Phase.Idle;
                 break;
             case MoveWay.Throw:
@@ -596,7 +599,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         s.To = s.From + (s.Spot - s.From).Normalized() * m.Reach;
         int variant = s.Fired % 2;                                            // the two bodies ThrownRock draws
         _rock = new ThrownRock { Boss = this, From = s.From, To = s.To, Hold = m.Windup, Flight = m.Flight,
-                                 Damage = m.Damage * DamageMult, Radius = m.Radius, Variant = variant };
+                                 Damage = Out(m), Radius = m.Radius, Variant = variant };
         GetParent().AddChild(_rock);
         if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetRock), s.From, s.To, m.Windup, m.Flight, m.Radius, variant);
     }

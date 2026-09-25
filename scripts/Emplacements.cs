@@ -142,7 +142,7 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
 
     private StatusSet _status;
     public StatusSet Statuses => _status;
-    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim) _status.Apply(s, seconds, share); }
+    public void ApplyStatus(Status s, double seconds, double share = double.NaN) { if (Net.Sim && StatusSet.Reaches(s, Tags)) _status.Apply(s, seconds, share); }
     private bool Held => _status.Has(Status.Disabled);
 
     // UP WHILE ANYTHING OF ITS SHIELDING ROW STILL STANDS. Every peer works this out from the
@@ -169,10 +169,12 @@ public partial class Emplacement : Node2D, IQuarry, ITagged, IStatused, ITurretH
     public System.Collections.Generic.IReadOnlyList<Turret> Siblings => _mounts;
     public void NoteDealt(double d, Vector2 at) { }
     public PlayerShip Credit => null;
+    // read as each round leaves (Turret.Shoot), so its damage goes out through the door
+    // (StatusSet.Out) with whatever is on this hull at that moment
     public TurretSpec Spec(bool pd)
     {
         var s = Def.Gun.GetValueOrDefault();
-        s.Damage *= _dmg;
+        s.Damage = _status.Out(s.Damage * _dmg, OutKind.Gun);
         s.Hull *= _hull;
         return s;
     }

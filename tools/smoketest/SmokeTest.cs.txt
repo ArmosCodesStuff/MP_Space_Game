@@ -1690,6 +1690,189 @@ public partial class _Test : Node
         }
     }
 
+    // THE OUTGOING DOOR (F17): every hostile blow is scaled by the OutGuards row of each status on
+    // whatever deals it, and a launcher's throw waits while one holds it. The table against the
+    // sign-off's literals once (kits_v2 §5); then, from three seeded spots, three webifiers latched
+    // on one pilot, each given a different one of the three statuses (a different one at each spot)
+    // the frame after a blow of 1 lands, the hull each takes over the next 3.5 s read (its next
+    // three blows, the window's end half a second from the fourth); then a gunship at a seeded edge,
+    // its throw due as Suppressed goes on for a seeded 0.6-1.4 s: nothing thrown while it holds, the
+    // throw the frame it lapses (a frame or two of play).
+    async Task LaneAOutDoorChecks(Vector2 yonder)
+    {
+        var rows = StatusSet.OutGuards.ToDictionary(g => g.Status);
+        bool Row(Status s, double gun, double move, double super, bool holds, Tag spares) =>
+            rows.TryGetValue(s, out var g) && g.Gun == gun && g.Move == move && g.Super == super && g.HoldsThrow == holds && g.Spares == spares;
+        var two = new StatusSet(); two.Apply(Status.Pinned, 1); two.Apply(Status.Suppressed, 1);
+        var four = new StatusSet(); foreach (var s in new[] { Status.Pinned, Status.Suppressed, Status.Dazzled, Status.Jammed }) four.Apply(s, 1);
+        Check(rows.Count == 3 && Row(Status.Suppressed, 0.5, 0.7, 1.0, true, Tag.None) && Row(Status.Dazzled, 1.0, 1.0, 1.0, true, Tag.Boss)
+              && Row(Status.Jammed, 0.0, 1.0, 1.0, true, Tag.Boss)
+              && (int)Status.Suppressed == 64 && (int)Status.Dazzled == 128 && (int)Status.Jammed == 256 && two.Bits == 1 && four.Bits == 1,
+              $"the outgoing door's table: Suppressed x0.5 guns, x0.7 a boss's move, x1.0 its super; Dazzled x1.0, Jammed x0 -- all three hold a throw, neither of the last two reaches a boss; 64 / 128 / 256 and host-only (Pinned + Suppressed on the wire: {two.Bits}; all four: {four.Bits})");
+
+        var me = Me; double reach = PdReachOff(me);                     // the RAIDERS on trial, not the pilot's point defence
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await Wait(0.3);
+        var shares = new[] { (st: Status.Suppressed, share: 0.5), (st: Status.Jammed, share: 0.0), (st: Status.Dazzled, share: 1.0) };
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            me.Position = at; me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+            await Wait(0.1);
+            var webs = new List<Raider>();
+            for (int k = 0; k < 3; k++) { var w = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f)); w.Quarry = me; webs.Add(w); }
+            for (int i = 0; i < 60 * 6 && !webs.All(w => w.Latched); i++) { me.Position = at; me.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double Dealt(Raider w) => me.DamageBySource.GetValueOrDefault($"raider:{w.NetId}");
+            var last = webs.Select(Dealt).ToArray();
+            var anchor = new[] { -1, -1, -1 }; var blow0 = new double[3]; var start = new double[3]; var got = new double[3];
+            for (int f = 0; f < 60 * 8 && anchor.Any(a => a < 0 || f <= a + 210); f++)
+            {
+                me.Position = at; me.Velocity = Vector2.Zero;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                for (int k = 0; k < 3; k++)
+                {
+                    double now = Dealt(webs[k]);
+                    if (anchor[k] < 0 && now > last[k] + 1e-9)
+                    {   // a blow just landed: its status goes on now, a whole second before the next
+                        anchor[k] = f; blow0[k] = now - last[k]; start[k] = now;
+                        webs[k].ApplyStatus(shares[(k + run) % 3].st, 6.0);
+                    }
+                    else if (anchor[k] >= 0 && f == anchor[k] + 210) got[k] = now - start[k];
+                    last[k] = now;
+                }
+            }
+            bool ok = true; var said = new List<string>();
+            for (int k = 0; k < 3; k++)
+            {
+                var (st, share) = shares[(k + run) % 3];
+                bool one = anchor[k] >= 0 && Math.Abs(blow0[k] - 1.0) < 1e-9 && Math.Abs(got[k] - 3 * share) < 1e-6
+                           && webs[k].Latched && webs[k].Statuses.Has(st);
+                ok &= one;
+                said.Add($"{st} {webs[k].Position.DistanceTo(at):0} u off: {got[k]:0.00} (want {3 * share:0.0}{(one ? "" : $"; first blow {blow0[k]:0.00}, latched {webs[k].Latched}")})");
+            }
+            Check(ok, $"a webifier's laser goes out through the door: three latched on a pilot, each after a blow of 1, land over their next 3 blows -- {string.Join("; ", said)}");
+            foreach (var w in webs) w.TakeDamage(1e12);
+            await Wait(0.3);
+        }
+
+        var cdField = typeof(Raider).GetField("_missileCd", BindingFlags.NonPublic | BindingFlags.Instance);
+        List<FxNode> Rings() => Nodes<FxNode>().Where(t => t.Id == Fx.WarnZone && Math.Abs(t.Radius - Raider.BlastRadius) < 0.1f).ToList();
+        for (int run = 0; run < 3; run++)
+        {
+            // the pilot just outside the raid's edge at a seeded bearing, the gunship on the edge
+            // spot nearest it -- where an unpinned target keeps it -- 300 to 450 u off: inside its 500
+            var spot = Hub.BasePos + Vector2.Right.Rotated(VaryAngle()) * (Hub.RaidEdge + Vary(300f, 450f));
+            void HoldPilot() { me.Position = spot; me.Velocity = Vector2.Zero; }
+            HoldPilot(); me.Rotation = VaryAngle(); await Wait(0.1); HoldPilot();
+            var hv = H.SpawnRaider(Raider.EdgeSpot(spot), Enemies.Gunship); hv.Quarry = me;
+            for (int i = 0; i < 30 && hv.Target != me; i++) { HoldPilot(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            double hold = Vary(0.6f, 1.4f);
+            var seen = Rings().ToHashSet();
+            cdField.SetValue(hv, 0.0); hv.ApplyStatus(Status.Suppressed, hold);
+            double t0 = me.Clock, lapsedAt = -1, thrownAt = -1;
+            int lapse = -1, thrown = -1; bool whileHeld = false;
+            for (int f = 0; f < 60 * 3 && thrown < 0; f++)
+            {
+                HoldPilot();
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                bool on = hv.Statuses.Has(Status.Suppressed);
+                if (lapse < 0 && !on) { lapse = f; lapsedAt = me.Clock - t0; }
+                if (Rings().Any(x => !seen.Contains(x))) { thrown = f; thrownAt = me.Clock - t0; whileHeld = on; }
+            }
+            Check(lapse >= 0 && thrown >= lapse && thrown - lapse <= 2 && !whileHeld && lapsedAt >= hold - 0.05,
+                  $"a Suppressed gunship {hv.Position.DistanceTo(me.Position):0} u off holds its missile, due, for its {hold:0.00} s -- lapsed at {lapsedAt:0.00} s, thrown at {thrownAt:0.00} s ({thrown - lapse} frames after; {(whileHeld ? "THROWN WHILE HELD" : "nothing while held")})");
+            hv.TakeDamage(1e12);
+            await Wait(0.2);
+        }
+        me.Stats.SetBase("pd_range", reach);
+    }
+
+    // THE OUTGOING DOOR ON A BOSS (F17): Suppressed takes its moves to x0.7 and leaves its supers
+    // whole; Dazzled and Jammed never reach it. Every clock held, three times: the pilot at a
+    // seeded spot inside the Lancer's shockwave (45, not a super) and at a seeded reach and offset
+    // down its beam (50 a judgement, a super), each started by hand and read off the hull it takes.
+    async Task LaneAOutDoorBossChecks(Boss boss, PlayerShip me)
+    {
+        Check(StatusSet.Reaches(Status.Suppressed, Tag.Boss) && !StatusSet.Reaches(Status.Dazzled, Tag.Boss) && !StatusSet.Reaches(Status.Jammed, Tag.Boss)
+              && StatusSet.Reaches(Status.Jammed, Tag.Light) && StatusSet.Reaches(Status.Dazzled, Tag.Heavy) && StatusSet.Reaches(Status.Jammed, Tag.Structure),
+              "Suppressed reaches a boss; Dazzled and Jammed reach craft and structures, never a boss");
+        var held = boss.Type.Moves.ToDictionary(m => m.Id, m => boss.S(m.Id).Due);
+        foreach (var m in boss.Type.Moves) { boss.S(m.Id).Due = 999; boss.S(m.Id).At = Boss.Phase.Idle; }
+        foreach (var r in H.Raiders.Where(r => r.IsEscort).ToList()) r.TakeDamage(999);
+        me.Hp = me.MaxHp;                                                 // three runs take about 380
+        var wave = boss.S("wave"); var beam = boss.S("beam");
+        await Wait(0.6);
+        double Took(string source) => me.DamageBySource.GetValueOrDefault(source);
+        async Task<double> WaveLands(Vector2 at)
+        {
+            double was = Took(wave.M.Source);
+            wave.Due = 0.01;
+            for (int i = 0; i < 30 && wave.At != Boss.Phase.Winding; i++) { me.Position = at; me.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            wave.T = 0.01;                                                // its ring is up: it lands on its next tick
+            for (int i = 0; i < 30 && Took(wave.M.Source) <= was + 1e-9; i++) { me.Position = at; me.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            wave.Due = 999;
+            return Took(wave.M.Source) - was;
+        }
+        for (int run = 0; run < 3; run++)
+        {
+            boss.ApplyStatus(Status.Suppressed, Vary(4f, 6f));
+            var waveAt = boss.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 280f);
+            double sWave = await WaveLands(waveAt);
+            await Wait(0.6);
+            boss.Rotation = VaryAngle();
+            float reach = Vary(350f, 900f), off = Vary(-15f, 15f);
+            double was = Took(beam.M.Source), sBeam = 0;
+            beam.At = Boss.Phase.Winding; beam.T = 0.01;
+            for (int i = 0; i < 30 && sBeam <= 0; i++)
+            {
+                var (la, lb) = boss.Segment("beam"); var dir = (lb - la).Normalized();
+                me.Position = la + dir * reach + dir.Orthogonal() * off; me.Velocity = Vector2.Zero;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                sBeam = Took(beam.M.Source) - was;
+            }
+            beam.At = Boss.Phase.Idle;                                    // one judgement is all this reads
+            bool suppressed = boss.Statuses.Has(Status.Suppressed);
+            boss.Statuses.Clear(Status.Suppressed);
+            await Wait(0.6);
+            boss.ApplyStatus(Status.Dazzled, Vary(4f, 6f)); boss.ApplyStatus(Status.Jammed, Vary(4f, 6f));
+            bool refused = !boss.Statuses.Has(Status.Dazzled) && !boss.Statuses.Has(Status.Jammed);
+            var plainAt = boss.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(150f, 280f);
+            double pWave = await WaveLands(plainAt);
+            Check(suppressed && refused && Math.Abs(sWave - 31.5) < 1e-6 && Math.Abs(sBeam - 50) < 1e-6 && Math.Abs(pWave - 45) < 1e-6,
+                  $"a Suppressed boss: its shockwave on a pilot {waveAt.DistanceTo(boss.Position):0} u off lands {sWave:0.0} (45 x 0.7 = 31.5), its beam (a super) {reach:0} u down the line {sBeam:0.0} (50); Dazzled and Jammed put on nothing ({refused}), and the next shockwave {plainAt.DistanceTo(boss.Position):0} u off lands {pWave:0.0} (45)");
+            await Wait(0.6);
+        }
+        foreach (var m in boss.Type.Moves) boss.S(m.Id).Due = held[m.Id];
+    }
+
+    // THE OUTGOING DOOR ON A STRUCTURE (F17): the pirate base's launcher, Suppressed, fires a round
+    // that carries half its level-3 damage (126 x the level's scale). From three seeded bearings in
+    // reach, any warning up spent first, its clock made due by hand; read off the round as it leaves.
+    async Task LaneAOutDoorBaseChecks(Emplacement pbase, PlayerShip bs)
+    {
+        var lf = BindingFlags.NonPublic | BindingFlags.Instance;
+        var cd = typeof(Emplacement).GetField("_cd", lf); var marked = typeof(Emplacement).GetField("_marked", lf);
+        var fired = new List<Shot>(); var hook = Combat.ShotFired;
+        Combat.ShotFired = s => { hook?.Invoke(s); if (s.Kind == Shots.Cruise && s.HostileFire && s.Position.DistanceTo(pbase.Position) < 400f) fired.Add(s); };
+        double full = 126 * Missions.DamageMult(3, 1);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = pbase.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(1700f, 2300f);
+            void HoldAt() { foreach (var r in H.Raiders.ToList()) H.RaiderDown(r); bs.Position = at; bs.Velocity = Vector2.Zero; }
+            foreach (var c in Nodes<Shot>().Where(x => x.Kind == Shots.Cruise && x.Alive).ToList()) c.Intercept();
+            for (int i = 0; i < 60 * 3 && (int)marked.GetValue(pbase) != 0; i++) { HoldAt(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            fired.Clear();
+            pbase.ApplyStatus(Status.Suppressed, Vary(4f, 6f)); cd.SetValue(pbase, 0.0);
+            for (int i = 0; i < 60 * 4 && fired.Count == 0; i++) { HoldAt(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            var round = fired.FirstOrDefault();
+            Check(round != null && Math.Abs(round.Damage - full * 0.5) < 1e-6 && pbase.Statuses.Has(Status.Suppressed),
+                  $"a Suppressed base's launcher, the pilot {at.DistanceTo(pbase.Position):0} u off: its round carries {round?.Damage ?? -1:0.00} (126 x {Missions.DamageMult(3, 1):0.000} x 0.5 = {full * 0.5:0.00})");
+            round?.Intercept();
+            pbase.Statuses.Clear(Status.Suppressed);
+        }
+        Combat.ShotFired = hook;
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -5834,6 +6017,7 @@ public partial class _Test : Node
             await LaneADisabledChecks(yonder);
             await LaneAPassivePdChecks(yonder);
             await LaneAPdRepickChecks(yonder);
+            await LaneAOutDoorChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);
@@ -7182,6 +7366,7 @@ public partial class _Test : Node
                 me2.Position = boss.Position + new Vector2(0, 500); me2.Velocity = Vector2.Zero;
             }
             await LaneABurnClockChecks(boss, me2);
+            await LaneAOutDoorBossChecks(boss, me2);
             // ── STEALTH STOPS THE BOSS CHOOSING, NEVER HITTING, AND NEVER STOPS THE FIGHT ──
             // Its pilots were ONE list, the seen one: a solo pilot who went dark emptied it and the
             // boss stopped closing, turning and counting every clock it had until the pilot came
@@ -7940,6 +8125,7 @@ public partial class _Test : Node
                     // clock restarts as a warning goes up, round or no round
                     Check(spentLaneAt > 0 && lanes.Count > 0 && Math.Abs(lanes[0].t - spentLaneAt - gun.Interval) < 0.1,
                           $"the warning after one an EMP's hold spent goes up {gun.Interval:0} s after it, round or no round ({(lanes.Count > 0 && spentLaneAt > 0 ? $"{lanes[0].t - spentLaneAt:0.00} s" : "never")})");
+                    await LaneAOutDoorBaseChecks(pbase, bs);
                     bs.Stats.SetBase("pd_range", bsReach);
                     if (classWas != ShipClass.Battleship) await SetClass(classWas);
                 }

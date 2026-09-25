@@ -1421,6 +1421,7 @@ produced, and what each one replaced.
 | `Turrets.cs` → `ITurretHost` | what a gun is bolted to | a turret that could only belong to a `PlayerShip` |
 | `Tags.cs` | what a thing IS | `h is Torpedo`, `h is Raider r && !r.Heavy`, `HitRadius < 20f` |
 | `Statuses.cs` | what is being DONE to a thing | a bool and a timer per class, per effect |
+| `Statuses.cs` → `StatusSet.OutGuards` | what a status does to what its holder DEALS (a share per kind of blow, a held throw, the tags it spares), read by one door, `StatusSet.Out` | three "weaken what shoots" gates planned for three weapons; `m.Damage * DamageMult` written out at six boss sites |
 | `Ids.cs` | an id space per kind | six hardcoded bases with six private counters |
 | `Shots.cs` → `Shots.All` | a projectile: who it hits, how its path is tested, how it ends, how it looks | `Shell.cs`, `Slug.cs`, `Torpedo.cs` — three classes, one copy each of the same sweep, lifetime and hit, and three launch RPCs |
 | `Fx.cs` → `Fx.All` | an effect: a shape, a colour, a life | one `Explosion` node, and everything else drawn as spokes of laser flashes because that was the only drawing a guest ever saw |

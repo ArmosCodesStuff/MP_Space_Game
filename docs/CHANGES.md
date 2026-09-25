@@ -468,6 +468,33 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Class kits, lane A J4: the outgoing door, F17 (2026-09-25, worktree wt/kits)
+
+Every hostile blow now leaves through one door: `StatusSet.Out(d, OutKind)` multiplies it by the
+`StatusSet.OutGuards` row of each status on whatever deals it (Statuses.cs). Three rows, the sign-off's
+(kits_v2 §5): **Suppressed** x0.5 guns, x0.7 a boss's move, x1.0 its super; **Dazzled** x1.0;
+**Jammed** x0. All three hold a launcher's throw (`HoldsThrow`: the clock keeps its zero and it throws
+the frame the status lapses); Dazzled and Jammed spare bosses (`Spares = Tag.Boss`: `StatusSet.Reaches`
+refuses them on a boss, a raider or a structure whose tags a row spares).
+- The statuses: `Suppressed = 64`, `Dazzled = 128`, `Jammed = 256`, host-only (`StatusSet.HostOnly`,
+  masked out of `Bits`). Nothing in the game applies them yet: DD Suppress (6a), SN Flares (6c) and EC
+  EMP (6d) will. The latch half of the table (no new latch / web dropped) is slice 5's.
+- The door's users: `Boss.Out(move)` replaces the six `m.Damage * DamageMult` sites (bolt, fired body,
+  ring, beam, dash, thrown body); `Raider.Strike` (the light's and the heavy's laser; a blow the door
+  takes to nothing is not struck); `Emplacement.Spec` (its gun, read as each round leaves); the heavy's
+  missile throw is held.
+
+**Checks:** new `LaneAOutDoorChecks` (the table against its literals, the bits; from three seeded spots
+three webifiers latched on one pilot, each given a different status the frame after a blow of 1, land
+1.5 / 0 / 3 over their next three blows; from three seeded edge bearings a gunship's due throw held for
+a seeded 0.6-1.4 s of Suppressed and thrown the frame it lapses), `LaneAOutDoorBossChecks` (Lancer
+arena, three seeded spots: a Suppressed shockwave 31.5, a Suppressed beam judgement 50, Dazzled and
+Jammed refused and the next shockwave 45), `LaneAOutDoorBaseChecks` (siege, three seeded bearings: a
+Suppressed base's round carries 126 x the level-3 scale x 0.5).
+**Rungs:** 1 and 2 in the worktree (ledger_kits.md J4); rung 3 owed on two seeds. Host-only: no rung 5.
+
+**Known broken:** nothing known; rung 3 has not run on this commit.
+
 ### Class kits, lane A job 1b: rung 3's four fails at ad19fd8 (2026-09-25, worktree wt/kits)
 
 Rung 3 at ad19fd8 (seed 11400714819323522083) failed four checks. Two were bugs in the game, one
