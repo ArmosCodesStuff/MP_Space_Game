@@ -794,3 +794,49 @@ bash heredoc holding C# `$"..."` text failed to parse once); read/write with new
   (13 channels with Beat Reliable on 12 and the stream on 13; 16 data channels each end; the highest
   row 13; ChannelOf with the beat's two RPCs on 12 and the stream on 13; the backlog text row 13).
 - next: R2b, the switch.
+
+### HANDOFF for the fresh agent (R2b onward) -- this agent stopped at ~140k after R2a
+Read: the net2 HANDOFF above (S2 facts), this R2a POST, plan §3.1-3.9, §6, §7 (Net/Link/Rendezvous/
+SessionMenu/Adapters/GodotStub rows + "Deleted in R2's edit"), §9, §10.2-10.4, §13 R2. Rendezvous.cs
+449-757 (rows, `Pending`/`Entry`, `IHostDesk`/`IGuestDesk`, Listener, Dial, `Clipboard`) is the contract
+Net implements: Net becomes BOTH desks (host: `Pending`, `Full`, `Invite(knock)` = a `Link.Gather`
+with `stun:false`, `Hang(id)`, `Replied(reply)`, `Refused`; guest: `Knock()`, `Answer(invite)`).
+Landmarks as of 143788c:
+- Net.cs (~1040 lines): ENet in `Hang` (~185), `OnConnected`'s `Link(host,12000)`, `Link(ENetPacketPeer,int)`
+  + its comment (~333-347; delete, then `global::Link` -> `Link` everywhere in Net), `_lettingGo`'s
+  `(ENetMultiplayerPeer, until, server)` + `PumpLetGo` (~403-415, body -> WebRtcMultiplayerPeer polled
+  until `GetPeers()` empty or 2 s, then Close; `server` flag and Host()'s loop over it deleted),
+  the whole "internet hosting" block (`Reach`, `InternetAddress`, `LanAddress`, `OverlayAddresses`,
+  `Ipv6Address`, `_hops`, `_hostGen`, `RouterJob`, `Describe`, `IsPublic`, `Reachable`, `AskPublicIp`,
+  `FreeIpReq`, `StaleMappingsClosed`, `RouterResult`, `TryDecide`, `PublicIpService`, `Firewall`) ~484-660,
+  `Host()` ~662, `ConnectTo` ~771 (ENet client -> `Join(text)` by `Rendezvous.PathFor`: paste row ->
+  `Start(text, this)`; address row -> Dial), `Shutdown`'s ENet let-go ~808-823, `OnPeer`'s `Link(guest,
+  10000)` ~842, `NetworkIdle` (-> no peer, no let-go, no listener). `CouldNotReach`: "use the host's room
+  code" -> "ask the host for an invite code". `PretendProtocol` -> `PretendAt` flags `Code | Auth` (+ the
+  pretend proto) per §3.8; harness users at SmokeTest ~11225-11231 (and Shots none).
+- Rendezvous.Entry grows `Conn` (WebRtcPeerConnection or the Gather), `Name`, `Made` (ulong ms) in R2b.
+- Router.cs -> Adapters.cs: keep only `Lan()`, `Overlays()`, `GlobalIpv6()` if Fit uses it, `IsIpv4`
+  if still called; delete Fake, Hop, Report, Open, Close, FrontCandidates, IsCarrierGrade, IsShared.
+- SessionMenu.cs (153 lines): COPY ADDRESS + reveal (lines 69-84, 110-122) go; add INVITE A FRIEND
+  (hosting only), the reply box (a LineEdit -> `Net.I.TakeCode`), the pending list minimal, address labels
+  "Same network: {lan}:{Rendezvous.ListenPort}" / "On {name}: {ip}:{port}"; the JOIN box takes invite or
+  address; the guest's reply text + countdown + MAKE A FRESH REPLY.
+- Game.cs:86 `routerBusy` -> `netBusy` (§7 row); Hub.cs:1340 comment names ENet (reword); Hub.cs:1620 ok.
+- GodotStub.cs:148 `ENetMultiplayerPeer` -> minimal `WebRtcMultiplayerPeer`/`WebRtcPeerConnection` stub.
+- Harness SmokeTest.cs.txt, lines naming ENet/Router/reach (delete or rewrite each): 22-119 (header
+  comment, `NoRouterNoInternet`, `RouterScenarios`: DELETE, keep `P()`), 125 `HostAt` (drop the Wan +1000
+  offset), 149-169 (`Drop` -> `Link.Hang` deferred; the throttle helper), 1221, 1317 (`GetMaxChannels`
+  -> `Link.Channels().Length`, rule `r <= opened`), 1359-1380, 5704-5743 and 5840-5848 (reveal/describe
+  checks: delete), 6056, 10602, 10885, 11063-11113 (throttle checks: delete), 11425, 11435, 11611, 11686.
+  Roles per §10.3: `guest` joins by INVITE via the courier files (R1's courier: grep `Courier`/`invite-`),
+  `guest2` by address (other-build knock refused over TCP, then `PretendAt.Auth` refused in-band, then
+  joins); `aguest` address retries unchanged. Owed checks: `Net.I.JoinedBy` row per guest; paste guest's
+  drop with no retry in 20 s + host's fresh invite + return into its held place WITH the rejoin token;
+  the live-holder replacement (S2b owed); solo typed failures (127.0.0.1:9 "Nothing is hosting at" < 3 s;
+  127.0.0.1:19481 "No answer from ... in 12 s" 11.8-12.6 s).
+- run.ps1:226-227 starts fakeigd (delete + fakeigd.py); tools/rungs.ps1:25 comment names fakeigd's port;
+  wan.py:2 mentions; Shots.cs.txt 321-325 (51-52's describe block: R3 replaces with 51_invite_ready /
+  52_reply_countdown; R2b must at least delete the Router/Describe lines so it compiles).
+Env: `.\verify.ps1 -Quick` is at the REPO ROOT (not tools\). Commit messages: write the file with
+`[IO.File]::WriteAllText(path, text, (New-Object Text.UTF8Encoding $false))` -- Out-File's BOM lands in the
+subject. Harness `Vary` takes floats (`Vary(3f, 20f)`).
