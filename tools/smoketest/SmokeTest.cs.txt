@@ -3128,6 +3128,231 @@ public partial class _Test : Node
     // ── THE RECYCLER: a hold turned back into salvage, and a lock so it cannot eat what you fly ──
     // A part could not be got rid of at all before this: a hold filled with commons a pilot would
     // never fit again, and salvage had nothing to buy but a refit and gear levels.
+    // ── LANE E · WINGS (F13 widened, kits_v31 §3.2 / kits_v3 §3.1): the gunship and patrol rows, the
+    // Orbit way, the ring pick. The keys that send them are 6a's (the Carrier's E and Q); these checks
+    // send them through PlayerShip.Sortie, the one door those keys will use.
+    void WingsRowsChecks()
+    {
+        var gs = Wings.Of(WingKind.Gunship); var pt = Wings.Of(WingKind.Patrol); var fi = Wings.Of(WingKind.Fighter);
+        var cv = new ShipStats(ShipClass.Carrier);
+        // the wire id is the index: gunship 2, then patrol 3 (kits_v3 §3.1)
+        Check(Wings.All.Length == 4 && Wings.All[2].Id == "gunship" && Wings.All[3].Id == "patrol"
+              && gs.Way == WingWay.Orbit && gs.Sortie && pt.Sortie && !fi.Sortie && !Wings.Of(WingKind.Bomber).Sortie,
+              $"Wings.All: fighter 0, bomber 1, gunship 2 (the Orbit way), patrol 3 -- both sorties, the fitted two not ({string.Join(" ", Wings.All.Select(w => w.Id))})");
+        Check(cv["gunship_count"] == 2 && cv["gunship_orbit"] == 240 && cv["gunship_time"] == 12 && cv["gunship_leash"] == 3000
+              && Math.Abs(cv["gunship_damage"] / cv["gunship_interval"] - 10) < 1e-9,
+              $"warp gunships: 2 a target, a 240 u orbit, 12 s, sent inside 3000 u, 10 DPS each ({cv["gunship_damage"]} / {cv["gunship_interval"]} s)");
+        // "Every number is the fighter's": the patrol reads the fighter's own stat ids, so what lifts one lifts both
+        Check(cv["patrol_range"] == 600 && cv["patrol_orbit"] == 300 && cv["patrol_time"] == 20
+              && pt.CountStat == fi.CountStat && pt.SpeedStat == fi.SpeedStat && pt.DamageStat == fi.DamageStat
+              && pt.IntervalStat == fi.IntervalStat && pt.TurnStat == fi.TurnStat && pt.RangeStat == fi.RangeStat
+              && pt.BurstStat == null && pt.EngageStat == "patrol_range" && pt.ToHull
+              && Classes.Of(ShipClass.Carrier).Reach.ContainsKey("patrol_range"),
+              "the patrol: a 600 u ring measured to the hull, circling 300 u out, 20 s, on the fighter's own count, gun, speed and turn, no rest -- and its ring on the carrier's Reach list");
+        // THE PATROL'S ORDER IS THE TURRET'S: in flight 0, small craft 1, the rest 2, a dummy 3 (a fallback)
+        var f = Targeting.Patrol;
+        var mis = new StandIn { Tags = Tag.Missile }; var lt = new StandIn { Tags = Tag.Light };
+        var hv = new StandIn { Tags = Tag.Heavy }; var dm = new StandIn { Tags = Tag.Dummy };
+        Check(f.Chooses(mis) && f.Chooses(hv) && f.Chooses(dm) && f.IsFallback(dm) && !f.IsFallback(mis)
+              && Turret.RankIn(f, mis) == 0 && Turret.RankIn(f, lt) == 1 && Turret.RankIn(f, hv) == 2 && Turret.RankIn(f, dm) == 3
+              && !Targeting.WingPrey.Chooses(mis),
+              $"Targeting.Patrol takes a missile (WingPrey never does), ranked missile {Turret.RankIn(f, mis)} < light {Turret.RankIn(f, lt)} < heavy {Turret.RankIn(f, hv)} < dummy {Turret.RankIn(f, dm)}, the dummy a fallback");
+    }
+
+    // THE PATROL, flown: from three seeded spots and headings, a carrier parked with its point defence
+    // out of reach (the patrol on trial). Launched 0.83 s apart, fighter_count of them; circling
+    // 300 u out; a light whose hull edge is inside 600 u engaged, one outside not; +8% on the ring
+    // takes one at 612-640; a seeker coming in is taken OVER the light it is on and downed before it
+    // lands, credited "patrol"; the fitted fighters attack a target 1400 u out with the patrol up (6
+    // craft out); the sortie ends at its LifeStat and every patrol craft is home and freed.
+    async Task WingsPatrolChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Carrier);
+        var cv = Me; double pdWas = PdReachOff(cv);
+        var ringStat = cv.Stats.All.First(x => x.Id == "patrol_range");
+        List<Wing> Patrol() => Nodes<Wing>().Where(w => w.Carrier == cv && w.Kind == WingKind.Patrol && !w.Done).ToList();
+        Raider Mark(Vector2 at) { var l = H.SpawnRaider(at); l.Hp = 9000; l.ApplyStatus(Status.Disabled, 60); return l; }
+        try
+        {
+            for (int run = 0; run < 3; run++)
+            {
+                var at = VaryNear(yonder, 300f); float head = VaryAngle();
+                void Hold() { cv.Position = at; cv.Velocity = Vector2.Zero; cv.Rotation = head; }
+                async Task Frame() { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                Hold(); await Wait(0.2);
+                cv.RecallWing();
+                if (run == 1) cv.Stats.SetBase("fighter_count", 4);          // a Hangars part's +1: the patrol reads the fighter's count
+                int want = (int)cv.Stats["fighter_count"];
+                int sent = cv.Sortie(WingKind.Patrol);
+                var pat = Patrol();
+                for (int i = 0; i < 60 * 6 && pat.Any(w => w.LaunchedAt < 0); i++) await Frame();
+                var outs = pat.Select(w => w.LaunchedAt).Where(t => t >= 0).OrderBy(t => t).ToList();
+                double gap = 99; for (int g = 1; g < outs.Count; g++) gap = Math.Min(gap, outs[g] - outs[g - 1]);
+                Check(sent == want && pat.Count == want && outs.Count == want && gap >= 0.83 - 1e-9 && gap < 0.83 + 0.05,
+                      $"run {run + 1}: the patrol is fighter_count craft ({want}), out of the hangar 0.83 s apart ({sent} sent, smallest gap {gap:0.000} s)");
+                if (run == 1) cv.Stats.SetBase("fighter_count", 3);
+                // circling the carrier 300 u out: the frames after every craft has settled into the circle
+                for (int i = 0; i < 60 * 8 && !pat.All(w => w.FighterPhase == "Circle"); i++) await Frame();
+                await Wait(1.5); Hold();
+                float lo = 9999f, hi = 0f;
+                for (int i = 0; i < 90; i++) { await Frame(); foreach (var w in pat) { float d = w.Position.DistanceTo(at); lo = Mathf.Min(lo, d); hi = Mathf.Max(hi, d); } }
+                Check(pat.All(w => w.FighterPhase == "Circle") && lo > 300 - 40 && hi < 300 + 40,
+                      $"run {run + 1}: with nothing in its ring the patrol circles the carrier 300 u out ({lo:0}-{hi:0} u)");
+                // THE RING, measured to the hull's edge: one light well inside, then one well outside
+                var bearing = VaryAngle();
+                var inL = Mark(at + Vector2.Right.Rotated(bearing) * 1f);
+                inL.Position = at + Vector2.Right.Rotated(bearing) * (Vary(560f, 590f) + inL.HitRadius);
+                bool took = false;
+                for (int i = 0; i < 60 * 3 && !took; i++) { await Frame(); took = pat.Any(w => ReferenceEquals(w.Engaging, inL)); }
+                Check(took, $"run {run + 1}: a light whose hull edge is {Wings.Reach(cv, Wings.Of(WingKind.Patrol), inL):0} u from the carrier (inside 600) is engaged");
+                inL.TakeDamage(1e12);
+                var outL = Mark(at + Vector2.Right.Rotated(bearing + Vary(1.2f, 2.4f)) * 1f);
+                outL.Position = at + Vector2.Right.Rotated(bearing + Vary(1.2f, 2.4f)) * (Vary(612f, 640f) + outL.HitRadius);
+                bool touched = false;
+                for (int i = 0; i < 60 * 2; i++) { await Frame(); touched |= pat.Any(w => ReferenceEquals(w.Engaging, outL)); }
+                Check(!touched, $"run {run + 1}: one whose hull edge is {Wings.Reach(cv, Wings.Of(WingKind.Patrol), outL):0} u out (past 600) is not");
+                // a Targeting Chip's +8% (648 u) takes that one in
+                ringStat.Bonus += 0.08;
+                bool chip = false;
+                for (int i = 0; i < 60 * 3 && !chip; i++) { await Frame(); chip = pat.Any(w => ReferenceEquals(w.Engaging, outL)); }
+                ringStat.Bonus -= 0.08;
+                Check(chip && Math.Abs(cv.Stats["patrol_range"] - 600) < 1e-9,
+                      $"run {run + 1}: with +8% on the ring (648 u) the one at {Wings.Reach(cv, Wings.Of(WingKind.Patrol), outL):0} u is engaged");
+                // MISSILES COME FIRST: a light engaged inside the ring, then a seeker from inside it at the carrier
+                outL.Position = at + (outL.Position - at).Normalized() * (Vary(250f, 450f) + outL.HitRadius);
+                for (int i = 0; i < 60 * 3 && !pat.Any(w => ReferenceEquals(w.Engaging, outL)); i++) await Frame();
+                double credit0 = cv.DealtBy.GetValueOrDefault("patrol"); int down0 = Shot.Intercepted; double hull0 = cv.Hp;
+                var from = at + Vector2.Right.Rotated(VaryAngle()) * Vary(480f, 560f);
+                var sk = Combat.Fire(Shots.Seeker, from, at - from, 135f, 4000f, 25, targetId: cv.NetId, turnRate: 2f);
+                int turnedIn = -1; float downAt = -1f;
+                for (int i = 0; i < 60 * 6 && sk.Alive; i++)
+                {
+                    await Frame();
+                    if (turnedIn < 0 && pat.Any(w => ReferenceEquals(w.Engaging, sk))) turnedIn = i + 1;
+                    if (sk.Alive) downAt = sk.Position.DistanceTo(at);
+                }
+                Check(turnedIn > 0 && turnedIn <= 2 && !sk.Alive && Shot.Intercepted > down0 && cv.Hp >= hull0
+                      && cv.DealtBy.GetValueOrDefault("patrol") > credit0,
+                      $"run {run + 1}: a seeker fired at the carrier from {from.DistanceTo(at):0} u is taken over the light the patrol was on (in {turnedIn} frames) and brought down {downAt:0} u out, before it lands, credited \"patrol\" ({cv.DealtBy.GetValueOrDefault("patrol") - credit0:0.0}; hull {hull0:0.#} -> {cv.Hp:0.#})");
+                outL.TakeDamage(1e12);
+                // THE FITTED WING WITH IT: the fighters still attack a target 1400 u out, so 6 craft are out
+                if (run == 0)
+                {
+                    var far = Mark(at + Vector2.Right.Rotated(VaryAngle()) * Vary(1350f, 1420f));
+                    cv.OrderAttack(far);
+                    int outNow = 0;
+                    for (int i = 0; i < 60 * 6 && outNow < 6; i++)
+                    { await Frame(); outNow = Nodes<Wing>().Count(w => w.Carrier == cv && (w.Kind == WingKind.Fighter || w.Kind == WingKind.Patrol) && !w.Inside); }
+                    bool fightersAt = false;
+                    for (int i = 0; i < 60 * 8 && !fightersAt; i++)
+                    { await Frame(); fightersAt = Nodes<Wing>().Any(w => w.Carrier == cv && w.Kind == WingKind.Fighter && w.Position.DistanceTo(far.Position) < 400f); }
+                    bool patrolHome = Patrol().All(w => w.Position.DistanceTo(at) < 600f + 150f);
+                    Check(outNow == 6 && fightersAt && patrolHome && cv.WingCount(WingKind.Fighter) == 3,
+                          $"the first wing still attacks a target {at.DistanceTo(far.Position):0} u out with the patrol up: {outNow} craft out, the fighters at it ({fightersAt}), the patrol still round the carrier ({patrolHome})");
+                    cv.RecallWing(); far.TakeDamage(1e12);
+                }
+                // THE END: at its LifeStat (cut to 3 s from here, the row's 20 being proved above) every patrol craft flies
+                // home and is freed; the fitted fighters are untouched
+                foreach (var w in Patrol()) w.SendOut(null, cv.Clock + 3);
+                for (int i = 0; i < 60 * 2; i++) await Frame();
+                bool stillOut = Patrol().Count == want;
+                for (int i = 0; i < 60 * 10 && Patrol().Count > 0; i++) await Frame();
+                Check(stillOut && Patrol().Count == 0 && cv.WingCount(WingKind.Patrol) == 0 && cv.WingCount(WingKind.Fighter) == 3,
+                      $"run {run + 1}: the sortie ends at its time -- out 2 s before it, then home and freed ({cv.WingCount(WingKind.Patrol)} left); the 3 fitted fighters are kept");
+            }
+        }
+        finally
+        {
+            cv.Stats.SetBase("pd_range", pdWas); cv.Stats.SetBase("fighter_count", 3);
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        }
+    }
+
+    // THE GUNSHIPS, flown: from three seeded spots, gunship_count warped onto a 240 u circle round a
+    // target the carrier sent them at (inside 3000 u; one past it refused), 10 DPS each landed on it,
+    // credited "gunship", gone at their time; and, with the patrol up at once, split by anchor --
+    // the gunships on their far target, the patrol still round the carrier.
+    async Task WingsGunshipChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Carrier);
+        var cv = Me; double pdWas = PdReachOff(cv);
+        List<Wing> Guns() => Nodes<Wing>().Where(w => w.Carrier == cv && w.Kind == WingKind.Gunship && !w.Done).ToList();
+        Raider Mark(Vector2 at, double hp) { var l = H.SpawnRaider(at, Enemies.Gunship); l.Hp = hp; l.ApplyStatus(Status.Disabled, 60); return l; }
+        try
+        {
+            for (int run = 0; run < 3; run++)
+            {
+                var at = VaryNear(yonder, 300f); float head = VaryAngle();
+                void Hold() { cv.Position = at; cv.Velocity = Vector2.Zero; cv.Rotation = head; }
+                async Task Frame() { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+                Hold(); await Wait(0.2);
+                var bearing = VaryAngle();
+                var past = Mark(at + Vector2.Right.Rotated(bearing) * Vary(3080f, 3400f), 9000);
+                int refused = cv.Sortie(WingKind.Gunship, past);
+                past.TakeDamage(1e12);
+                var tgt = Mark(at + Vector2.Right.Rotated(bearing + Vary(0.8f, 2.0f)) * Vary(900f, 2900f), 1e9);
+                await Frame();
+                int sent = cv.Sortie(WingKind.Gunship, tgt);
+                var gs = Guns();
+                bool warped = false; float firstOff = 0f;
+                for (int i = 0; i < 60 * 2 && !warped; i++)
+                {
+                    await Frame();
+                    warped = gs.Count == 2 && gs.All(w => w.OrbitPhase == "Orbit");
+                    if (warped) firstOff = gs.Max(w => Mathf.Abs(w.Position.DistanceTo(tgt.Position) - 240f));
+                }
+                Check(refused == 0 && sent == 2 && warped && firstOff < 30f,
+                      $"run {run + 1}: gunships at a target {at.DistanceTo(past.Position):0} u out refused ({refused}); at one {at.DistanceTo(tgt.Position):0} u out, 2 warp onto its 240 u circle (off it by {firstOff:0.0} u)");
+                // the landed DPS, timed from the frame both were on their circle: 2 x 10 over 4 s
+                double hp0 = tgt.Hp, c0 = cv.DealtBy.GetValueOrDefault("gunship"); float lo = 9999f, hi = 0f;
+                for (int i = 0; i < 240; i++) { await Frame(); foreach (var w in gs) { float d = w.Position.DistanceTo(tgt.Position); lo = Mathf.Min(lo, d); hi = Mathf.Max(hi, d); } }
+                double lost = hp0 - tgt.Hp, credited = cv.DealtBy.GetValueOrDefault("gunship") - c0;
+                Check(Math.Abs(lost - 80) <= 12 && Math.Abs(credited - lost) < 1e-6 && lo > 240 - 40 && hi < 240 + 40,
+                      $"run {run + 1}: the two land {lost:0.0} in 4 s (2 x 10 DPS = 80), all credited \"gunship\" ({credited:0.0}), holding {lo:0}-{hi:0} u round it");
+                if (run == 0)
+                {   // SPLIT BY ANCHOR: the patrol up at once stays round the carrier while the gunships hold theirs
+                    cv.Sortie(WingKind.Patrol);
+                    float patrolFar = 0f, gunNear = 9999f;
+                    for (int i = 0; i < 60 * 5; i++)
+                    {
+                        await Frame();
+                        foreach (var w in Nodes<Wing>().Where(w => w.Carrier == cv && w.Kind == WingKind.Patrol && !w.Inside)) patrolFar = Mathf.Max(patrolFar, w.Position.DistanceTo(at));
+                        foreach (var w in Guns()) gunNear = Mathf.Min(gunNear, w.Position.DistanceTo(tgt.Position));
+                    }
+                    Check(patrolFar > 0 && patrolFar < 600 + 150 && gunNear > 240 - 40 && Guns().Count == 2,
+                          $"gunships and the patrol at once, split by anchor: the patrol never past {patrolFar:0} u of the carrier, the gunships never nearer their target than {gunNear:0} u");
+                    foreach (var w in Nodes<Wing>().Where(w => w.Carrier == cv && w.Kind == WingKind.Patrol)) w.SendOut(null, cv.Clock);
+                }
+                // THE END: at their time (cut to 2 s from here, the row's 12 being proved above) they warp out
+                foreach (var w in gs) w.SendOut(tgt, cv.Clock + 2);
+                for (int i = 0; i < 60; i++) await Frame();
+                bool stillThere = Guns().Count == 2;
+                for (int i = 0; i < 60 * 2 && Guns().Count > 0; i++) await Frame();
+                Check(stillThere && cv.WingCount(WingKind.Gunship) == 0,
+                      $"run {run + 1}: the gunships are on station until their time, then gone ({cv.WingCount(WingKind.Gunship)} left)");
+                // ...and a target that dies takes them with it
+                if (run == 2)
+                {
+                    var t2 = Mark(at + Vector2.Right.Rotated(VaryAngle()) * Vary(900f, 1500f), 9000);
+                    await Frame();
+                    cv.Sortie(WingKind.Gunship, t2);
+                    for (int i = 0; i < 60 && !Guns().All(w => w.OrbitPhase == "Orbit"); i++) await Frame();
+                    t2.TakeDamage(1e12);
+                    for (int i = 0; i < 10 && cv.WingCount(WingKind.Gunship) > 0; i++) await Frame();
+                    Check(cv.WingCount(WingKind.Gunship) == 0, "a gunship's target dies: they warp out with it");
+                }
+                tgt.TakeDamage(1e12);
+            }
+        }
+        finally
+        {
+            cv.Stats.SetBase("pd_range", pdWas);
+            foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        }
+    }
+
     async Task RecyclerChecks()
     {
         var yard = H.Yard;
@@ -7631,6 +7856,9 @@ public partial class _Test : Node
             LaneARampChecks();
             LaneASpeedAddChecks();
             await LaneAHeavyRowsChecks(yonder);
+            WingsRowsChecks();
+            await WingsPatrolChecks(yonder);
+            await WingsGunshipChecks(yonder);
 
             // ── WARRIOR: two and a half times its speed, half the damage, then the EMP ──
             await SetClass(ShipClass.HeavyWarrior);
@@ -8260,6 +8488,19 @@ public partial class _Test : Node
                             Sink(mkIn); Sink(mkOut);
                             break;
                         }
+                        case "patrol_range":
+                        {
+                            // The patrol's ring, to a hull's edge: a light inside it is one the patrol
+                            // may take, one past it never is (Wings.Pick, what every patrol craft asks)
+                            var prow = Wings.Of(WingKind.Patrol);
+                            var mkIn = await Marker(pilot.Position + way * (float)(reach * Vary(0.55f, 0.90f)));
+                            var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.15f, 1.45f)));
+                            proved = Wings.Within(pilot, prow, mkIn) && !Wings.Within(pilot, prow, mkOut)
+                                     && !ReferenceEquals(Wings.Pick(pilot, prow, null), mkOut);
+                            told = $"the patrol may take a light {Wings.Reach(pilot, prow, mkIn):0} u out and never one {Wings.Reach(pilot, prow, mkOut):0} u out";
+                            Sink(mkIn); Sink(mkOut);
+                            break;
+                        }
                         case "strike_range":
                         {
                             var mkOut = await Marker(pilot.Position + wide * (float)(reach * Vary(1.15f, 1.45f)));
@@ -8484,9 +8725,9 @@ public partial class _Test : Node
                     reachShip.RecallWing();
                 }
                 Check(skipped.Count == flownNotFired.Length && skipped.All(sk2 => flownNotFired.Any(fn2 => sk2.EndsWith(fn2)))
-                      && Classes.All.Where(cd2 => cd2.Ready).SelectMany(cd2 => cd2.Reach.Keys).Distinct().Count() == 13
-                      && Classes.All.Where(cd2 => cd2.Ready).Sum(cd2 => cd2.Reach.Count) == 31,
-                      $"thirteen reach ids over 31 class-and-id pairs, and every one of them measured above except the three that are FLOWN rather than fired "
+                      && Classes.All.Where(cd2 => cd2.Ready).SelectMany(cd2 => cd2.Reach.Keys).Distinct().Count() == 14
+                      && Classes.All.Where(cd2 => cd2.Ready).Sum(cd2 => cd2.Reach.Count) == 32,
+                      $"fourteen reach ids over 32 class-and-id pairs (the patrol's ring the fourteenth), and every one of them measured above except the three that are FLOWN rather than fired "
                       + $"-- the fighters' approach, the bombers' run out and the torpedo's own run ({string.Join(", ", skipped)})");
             }
 

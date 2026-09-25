@@ -367,7 +367,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         int wantF = (int)Stats["fighter_count"], wantB = (int)Stats["bomber_count"], hadB = WingCount(WingKind.Bomber);
         while (WingCount(WingKind.Fighter) < wantF && AddWing(WingKind.Fighter, WingCount(WingKind.Fighter))) { }
         while (WingCount(WingKind.Fighter) > wantF) RemoveWing(WingKind.Fighter);
-        while (WingCount(WingKind.Bomber) < wantB && AddWing(WingKind.Bomber, _wings.Count)) if (!fresh) _wings[^1].StartRearm();
+        // bombers after the fitted craft and before any sortie's, which ride at the end of the list
+        while (WingCount(WingKind.Bomber) < wantB && AddWing(WingKind.Bomber, Fitted)) if (!fresh) _wings[Fitted - 1].StartRearm();
         while (WingCount(WingKind.Bomber) > wantB) RemoveWing(WingKind.Bomber);
         if (WingCount(WingKind.Bomber) != hadB) { StrikeTarget = null; _strikesOut = 0; }
         if (!Net.Sim) return;
@@ -473,6 +474,24 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     public int WingCount(WingKind k) { int n = 0; foreach (var w in _wings) if (w.Kind == k) n++; return n; }
+    private int Fitted { get { int n = 0; foreach (var w in _wings) if (!w.Def.Sortie) n++; return n; } }
+
+    // A SORTIE (a Wings.All row with a LifeStat): the row's count of craft sent out for its LifeStat
+    // seconds beside the fitted wing, never counted into it -- the patrol round this carrier, or
+    // gunships at `given`. They ride at the END of the wing list, so the host's report lines the
+    // fitted craft up on every peer as before. The host's to decide; a guest's copies come from the
+    // report. Refused (0 sent): not the host, no wing, a wreck, or a given target beyond the row's
+    // EngageStat (the gunships' 3000 u, checked here and only here).
+    public int Sortie(WingKind k, IHittable given = null)
+    {
+        var row = Wings.Of(k);
+        if (!Net.Sim || !Alive || !Stats.Def.Has(Fit.Wing) || !row.Sortie) return 0;
+        if (given != null && !Wings.Within(this, row, given)) return 0;
+        int n = (int)Stats[row.CountStat], sent = 0;
+        for (int i = 0; i < n; i++)
+            if (AddWing(k, _wings.Count)) { _wings[^1].SendOut(given, _clock + Stats[row.LifeStat]); sent++; }
+        return sent;
+    }
     public int BombersReady { get { int n = 0; foreach (var w in _wings) if (w.Kind == WingKind.Bomber && w.Armed) n++; return n; } }
     public double BomberRearmLeft { get { double m = 0; foreach (var w in _wings) if (w.Kind == WingKind.Bomber) m = Math.Max(m, w.RearmLeft); return m; } }
 
@@ -1051,6 +1070,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         {
             if (!IsInstanceValid(_wings[i])) { _wings.RemoveAt(i); continue; }
             _wings[i].Tick(delta);
+            if (_wings[i].Done) { _wings[i].QueueFree(); _wings.RemoveAt(i); }    // a sortie's craft, home or warped out
         }
         if (WingTarget != null && !WingTarget.Alive) WingTarget = null;
         // Age the signal lights HERE, not in _Draw. Drawing is not guaranteed to happen -- a

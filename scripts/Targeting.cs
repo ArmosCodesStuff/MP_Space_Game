@@ -71,6 +71,10 @@ public static class Targeting
     // only while nothing that can die is in reach, and let go the moment something is -- a pilot
     // tests its turrets by dropping them beside one, and a raid that arrives takes them off it.
     public static readonly TargetFilter Sentry = new(fallback: Tag.Dummy);
+    // WHAT THE CARRIER'S PATROL TAKES (Wings.All "patrol"): the same -- anything hostile, a missile
+    // included, ranked by Turret.RankIn, a practice dummy only as a fallback. The sentry's own row,
+    // named for its second user, so the two can never drift apart.
+    public static readonly TargetFilter Patrol = Sentry;
 
     // Hidden things are CHOSEN by nothing hostile (stealth) and HIT by everything that lands on
     // them (TargetFilter.Hits). The pilot's own clicks and Tab go through Combat.Pickable, not

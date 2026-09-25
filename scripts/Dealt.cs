@@ -9,12 +9,13 @@
 // WEAPON IDS name what dealt the blow, for PlayerShip.DealtBy and AbilityDef.OnDealt. Where the
 // blow already carries a row of its own, the row's OWN id is used (Shots.Of(kind).Id): a main gun's
 // shell is "shell", a hunter or a bomber's torpedo "torpedo", the destroyer's burst "missile", the
-// siege base's cruise-missile launcher "cruise". Everything else names its own id here.
+// siege base's cruise-missile launcher "cruise", a wing craft's shot its Wings.All row's
+// ("fighter", "patrol", "gunship"). Everything else names its own id here.
 // ─────────────────────────────────────────────────────────────────────────────
 public static class Dealt
 {
     public const string Pd = "pd", Turret = "turret", Rail = "rail", Emp = "emp", Echo = "echo",
-        Fighter = "fighter", Outpost = "outpost";
+        Outpost = "outpost";
 
     public static void Deal(IHittable target, double d, ITurretHost by, string weapon)
     {

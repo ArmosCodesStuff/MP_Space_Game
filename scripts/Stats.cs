@@ -205,6 +205,24 @@ public class ShipStats
             Add("Bombers", "bomber_rearm",    "Rearm on the carrier", 6, "s", 1, inverse: true);
             Add("Bombers", "bomber_speed",    "Top speed",          190, "u/s", 0);
             Add("Bombers", "bomber_accel",    "Acceleration",       500, "u/s²", 0);
+
+            // WARP GUNSHIPS (Wings.All "gunship"): two to a target, warped onto a 240 u circle round
+            // it, 2.5 a shot every 0.25 s -- 10 DPS each -- for 12 s, sent only at a target inside
+            // 3000 u of the carrier. The key and its cooldown are the class's ability row.
+            Add("Gunships", "gunship_count",    "Craft a target",   2, "", 0);
+            Add("Gunships", "gunship_damage",   "Damage per shot",  2.5, "", 1);
+            Add("Gunships", "gunship_interval", "Reload",           0.25, "s", 2, inverse: true);
+            Add("Gunships", "gunship_range",    "Weapon range",     300, "u", 0);
+            Add("Gunships", "gunship_orbit",    "Orbit",            240, "u", 0);
+            Add("Gunships", "gunship_speed",    "Top speed",        160, "u/s", 0);
+            Add("Gunships", "gunship_turn",     "Turn rate",        2.0, "rad/s", 1);
+            Add("Gunships", "gunship_time",     "On station",       12, "s", 0);
+            Add("Gunships", "gunship_leash",    "Launch range",     3000, "u", 0);
+            // THE PATROL (Wings.All "patrol", the Supercarrier): the fighters' own numbers, round the
+            // carrier 300 u out, taking anything whose hull comes inside 600 u of it, for 20 s.
+            Add("Patrol", "patrol_range", "Patrol ring",   600, "u", 0);
+            Add("Patrol", "patrol_orbit", "Circling at",   300, "u", 0);
+            Add("Patrol", "patrol_time",  "Up for",        20, "s", 0);
         }
 
         // The class's OWN rows: whatever its abilities are made of (ClassDef.Rows).

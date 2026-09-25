@@ -48,3 +48,19 @@ run in the final test phase. A PRE with no POST is an interrupted job (CLAUDE.md
 ## Log
 
 JOB 0 (opus): spec read, job list above. HEAD f168508.
+
+### J1 PRE (opus) -- rows AND the machine in one job (an Orbit way nothing flies is an unused member: rung 2)
+Intent: J1+J2 of the list above as one commit (WingKind/WingWay members must have a game user).
+Files @ HEAD 72bcef4: ShipClasses.cs d8bc3db7, Stats.cs fdaff349, Ships.cs c272c9bf,
+Targeting.cs 226e78b5, Turrets.cs 2f876a91, Dealt.cs e3f8ce08, PlayerShip.cs 2a913835,
+SmokeTest.cs.txt 9949bb60, Shots.cs.txt 20b45d75.
+- **W10** gunship art borrows the bomber's airframe (wing_bomber.png, 32 u, steel livery) until
+  lane H casts one; gunships leave 0.25 s apart (they warp; no deck), a row literal.
+### J1 POST: typecheck 0 errors, quick ALL CHECKS PASSED. Engine-unproven: rungs owed in the final test phase.
+Built: rows gunship (2, Orbit) / patrol (3, Strafe + Picks + OrbitStat), WingDef EngageStat/ToHull/
+Picks/OrbitStat/LifeStat/Livery, `Wings.Reach/Within/Pick`, `Turret.RankIn`, `Targeting.Patrol`,
+`PlayerShip.Sortie` (+ Done craft freed, bombers fitted before sorties), Gunships + Patrol stat
+rows, `patrol_range` on the CV Reach list, wing hits credited by row id (`Dealt.Fighter` gone).
+Checks written: WingsRowsChecks, WingsPatrolChecks, WingsGunshipChecks (solo, after
+LaneAHeavyRowsChecks), reach sweep case `patrol_range` + totals 14 / 32 (rewritten).
+Next: J2 (wire + livery frame).
