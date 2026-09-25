@@ -164,6 +164,8 @@ foreach ($s in $Steps) {
   $nLane = @($vl | Where-Object { $_ -match 'FAIL LANE' }).Count
   $nExc  = @($vl | Where-Object { $_ -match 'Exception' }).Count
   $nPass = @($vl | Where-Object { $_ -match '\]\s+PASS ' }).Count
+  # A thrown lane repeats its exception every frame: identical lines collapse to one with (xN), first occurrence kept in order.
+  $vl = @($vl | Group-Object | ForEach-Object { if ($_.Count -gt 1) { '{0}  (x{1})' -f $_.Name, $_.Count } else { $_.Name } })
   $failsFile = Join-Path $Out ("{0}_{1}.fails.txt" -f $i, ($s -replace '[^\w]', '_'))
   [IO.File]::WriteAllText($failsFile, (("FAIL $nFail / FAIL LANE $nLane / Exception $nExc / PASS $nPass -- $s at $(Split-Path $Tree -Leaf)`n" + ($vl -join "`n") + "`n")), (New-Object System.Text.UTF8Encoding $false))
   $fails = @($vl | Where-Object { $_ -match '\]\s+FAIL |FAIL LANE|FAILED|LINT: [1-9]|Exception' } | Select-Object -First 12 | ForEach-Object { '   ' + $_.Substring(0, [Math]::Min(300, $_.Length)) })

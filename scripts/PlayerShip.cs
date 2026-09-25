@@ -702,18 +702,23 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // THE SENTRY THROW (F14). R with the cursor on open space throws one from the hull to the
     // cursor, clamped to deploy_reach on the same bearing; it lands deploy_flight later, and in
     // flight it is no body (nothing hits it, it fires at nothing). R with the cursor within
-    // recall_pick of one of yours recalls it: never refused, and its hull is stowed for the next
-    // throw. The host keeps the throws in flight; every peer sees the landing mark (Fx.AimZone).
+    // recall_pick of one of yours recalls it: never refused; it flies deploy_flight back (still out
+    // while it flies) and its hull is stowed for the next throw when it lands. The host keeps the
+    // throws and the recalls in flight, and their count in the deploy slot's N (the slots ride the
+    // host report, so a guest's TurretsOut reads it); every peer sees the landing mark (Fx.AimZone).
     private readonly List<(Vector2 At, double Left, double Hp, double Max)> _throws = new();
+    private readonly List<(double Left, double Hp, double Max)> _home = new();
     private readonly Stack<(double Hp, double Max)> _stowed = new();
+    private void CountFlights() => Sl("deploy").N = _throws.Count + _home.Count;
 
-    // How many of this pilot's turrets are standing or in flight.
+    // How many of this pilot's turrets are standing or in flight (thrown, or recalled and flying home).
     public int TurretsOut
     {
         get
         {
             var h = MyHub; if (h == null) return 0;
-            int n = _throws.Count; foreach (var t in h.Deployed) if (t.OwnerId == OwnerId) n++;
+            int n = Net.Sim ? _throws.Count + _home.Count : Sl("deploy").N;
+            foreach (var t in h.Deployed) if (t.OwnerId == OwnerId) n++;
             return n;
         }
     }
@@ -737,8 +742,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (!Stats.Def.Has(Fit.Deploy)) return;
         if (RecallAt(cursor) is { } mine)
         {
-            _stowed.Push((mine.Hp, mine.MaxHp));
+            _home.Add((Stats["deploy_flight"], mine.Hp, mine.MaxHp));
             MyHub?.DeployedTaken(mine);
+            CountFlights();
             return;
         }
         if (Sl("deploy").Cool > 0 || TurretsOut >= (int)Stats["deploy_max"]) return;
@@ -746,6 +752,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         double flight = Stats["deploy_flight"];
         var (hp, max) = _stowed.Count > 0 ? _stowed.Pop() : (Stats["deploy_hull"], Stats["deploy_hull"]);
         _throws.Add((at, flight, hp, max));
+        CountFlights();
         Fx.Warn(new FxRaise { Id = Fx.AimZone, At = at, To = at, Size = DeployedTurret.Radius, Time = flight });
         Sl("deploy").Cool = Cooling(Stats["deploy_cooldown"]);
     }
@@ -775,8 +782,10 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             MyHub?.DeployedTaken(t);
             Fx.Warn(new FxRaise { Id = Fx.AimZone, At = at, To = at, Size = DeployedTurret.Radius, Time = flight });
         }
+        CountFlights();
     }
-    // host, each frame: a throw whose flight is over lands as a turret
+    // host, each frame: a throw whose flight is over lands as a turret; a recall whose flight is
+    // over is stowed for the next throw
     private void TickThrows(double delta)
     {
         for (int i = _throws.Count - 1; i >= 0; i--)
@@ -787,6 +796,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             _throws.RemoveAt(i);
             MyHub?.Drop(this, th.At, th.Hp, th.Max);
         }
+        for (int i = _home.Count - 1; i >= 0; i--)
+        {
+            var hm = _home[i];
+            hm.Left -= delta;
+            if (hm.Left > 0) { _home[i] = hm; continue; }
+            _home.RemoveAt(i);
+            _stowed.Push((hm.Hp, hm.Max));
+        }
+        CountFlights();
     }
 
     // The bubble is a POOL IN THE WORLD, not a flag on one hull: it covers whoever is inside it
@@ -820,14 +838,30 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     // A TIMED ROW'S PRESS (AbilityDef.Time), on the host: it runs its Time, its Cooldown from the press, and
-    // hardens the hull at its Guard share for that time. The row's Refuse holds a press while it cools.
+    // hardens the hull at its Guard share for that time. The row's Refuse holds a press while it cools (or runs).
+    // A Swing row's first blow lands at once; a Sheds row lets go every web and takes none for its Time (the
+    // whirlwind); a Call row calls the raiders round it onto this ship for its Time (the Taunt).
     public void RunFor(string id)
     {
         var def = Abilities.Find(Class, id);
         ref var sl = ref Sl(id);
         if (!Net.Sim || def?.Time == null || sl.Cool > 0) return;
         Engage(def, Stats[def.Time]);
+        if (def.Swing != null) sl.Own = 0;
         if (def.Guard != null) _status.Apply(Status.Hardened, sl.Left, Stats[def.Guard]);
+        if (def.Sheds) { LetGoWebs(); _status.Apply(Status.Unwebbed, sl.Left); }
+        if (def.Call is { } call && MyHub is { } hub) CallIn(hub, call, sl.Left);
+    }
+    // A CALL (AbilityDef.Call), on the host: every raider squad with a member within the spec's reach, or hunting a
+    // target within it, is called onto this ship for `secs` (Raider.Call: a boss, a missile or a practice craft never --
+    // Targeting.Raiding); the reach flashes for every peer. The x taunt_mult is Outgoing's; the row Draws while it runs.
+    private void CallIn(Hub hub, CallSpec call, double secs)
+    {
+        float reach = (float)Stats[call.Reach];
+        Fx.Raise(call.Ring, Position, reach);
+        foreach (var r in hub.Raiders.ToList())
+            if (Targeting.Raiding.Hits(r) && (r.Position.DistanceTo(Position) <= reach || (r.Target is { } t && t.Position.DistanceTo(Position) <= reach)))
+                r.Call(this, secs);
     }
     // A STATUS THIS SHIP PUTS ON A HOSTILE IT HIT (a row's OnDealt, on the host): for the stat's seconds, through the
     // hostile's own ApplyStatus (its Reaches decides whether the status can hold it at all), with the row's mark raised
@@ -1111,7 +1145,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Sl("buster").Cool > 0) return;
         Sl("buster").Cool = Cooling(Stats["buster_cooldown"]);
         var from = _mains.Count > 0 ? _mains[0].GlobalPosition : Position;
-        var off = AimPoint - from;
+        var off = Sl("buster").At - from;
         var dir = off.LengthSquared() > 1f ? off.Normalized() : Vector2.Up.Rotated(Rotation);
         Combat.Fire(Shots.Buster, from + dir * Spec(false).Barrel, dir, (float)Stats["buster_speed"], (float)Stats["buster_range"],
                     Stats["buster_damage"], source: this, hitSource: "buster", size: 1.8f);
@@ -1403,7 +1437,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         sl.Cool = Cooling(Stats[h.Cooldown]);
     }
     // THE HOST'S WATCH on a line that holds, every frame: the anchor or the craft gone, or the anchor warped, ends it with
-    // no rip; a web, a disable or this ship's own warp charge ends a swing WITH one (its owner has cast off already).
+    // no rip; a web, a disable or this ship's own warp charge (its own, or a guest's reported one) ends a swing WITH one
+    // (its owner has cast off already).
     private void HookWatch()
     {
         foreach (var def in Abilities.For(Class))
@@ -1416,7 +1451,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             if (!Targeting.Immovable.Hits(t)) continue;                       // a tow runs by Towing.Step
             if (t.Position.DistanceTo(sl.At) > Drives.SnapAt) { CastOffHook(def.Id, rip: false); continue; }
             sl.At = t.Position;
-            if (Pinned || Disabled || Charging) CastOffHook(def.Id, rip: true);
+            if (Pinned || Disabled || Charging || _drive.Remote) CastOffHook(def.Id, rip: true);
         }
     }
     // THE RIP: the chunk's look raised FIRST (Fx.Tear finds the anchor among the living), then the hit through the
@@ -1966,7 +2001,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     {
         var def = Abilities.Find(Class, id);
         if (def?.Lays is not { } row || !Net.Sim || MyHub is not { } hub || !Spend(def)) return;
-        var (at, rot) = Zones.Spot(row, Position, Rotation, MyArt.Length * 0.5f, AimPoint);
+        var (at, rot) = Zones.Spot(row, Position, Rotation, MyArt.Length * 0.5f, def.TakesPoint ? Sl(id).At : AimPoint);
         Zones.Lay(hub, row, at, rot, this);
     }
 
@@ -1977,23 +2012,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         var def = Abilities.Find(Class, id);
         if (def?.Pops is not { } row || !Net.Sim || MyHub is not { } hub || !Spend(def)) return;
         hub.Flares(Position, Rotation, Array.IndexOf(Decoys.All, row), row.CountStat != null ? (int)Math.Round(Stats[row.CountStat]) : 0);
-    }
-
-    // THE TAUNT (AbilityDef Taunt: the Warden's Q), on the host: for taunt_time every raider squad with a member
-    // within taunt_reach, or hunting a target within it, is called onto this ship (Raider.Call: a boss, a missile
-    // or a practice craft never -- Targeting.Raiding); the hull takes taunt_guard of every blow (Hardened); the
-    // reach flashes for every peer. The x taunt_mult is Outgoing's; the row Draws while it runs (Draws below).
-    public void Taunt()
-    {
-        ref var sl = ref Sl("taunt");
-        if (!Net.Sim || sl.Cool > 0 || sl.Left > 0 || MyHub is not { } hub) return;
-        double secs = Stats["taunt_time"]; float reach = (float)Stats["taunt_reach"];
-        sl.Left = secs; sl.Cool = Cooling(Stats["taunt_cooldown"]);
-        _status.Apply(Status.Hardened, secs, Stats["taunt_guard"]);
-        Fx.Raise(Fx.TauntRing, Position, reach);
-        foreach (var r in hub.Raiders.ToList())
-            if (Targeting.Raiding.Hits(r) && (r.Position.DistanceTo(Position) <= reach || (r.Target is { } t && t.Position.DistanceTo(Position) <= reach)))
-                r.Call(this, secs);
     }
 
     // IT DRAWS THE HOSTILE GUNS (IRaidTarget.Draws) while any of its class's rows that Draws runs: the Taunt. Read by
@@ -2007,16 +2025,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         }
     }
 
-    // THE WHIRLWIND'S PRESS (host): its time up, its cooldown, its first blow at once; every web on
-    // the hull let go (the pin and the web's own ask), and none may take it until the spin is over.
-    public void Whirl()
-    {
-        ref var sl = ref Sl("whirlwind");
-        if (sl.Left > 0 || sl.Cool > 0) return;
-        sl.Left = Stats["whirl_time"]; sl.Cool = Cooling(Stats["whirl_cooldown"]); sl.Own = 0;
-        LetGoWebs();
-        _status.Apply(Status.Unwebbed, sl.Left);
-    }
     // EVERY WEB ON THE HULL LET GO (host): the pin and the web's own ask. A latch still on asks again next frame.
     private void LetGoWebs() { _webAsked = 0; _webPhase = 0; _status.Clear(Status.Pinned); }
 
@@ -2106,7 +2114,12 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     private void DashSweeps()
     {
         foreach (var def in Abilities.For(Class))
-            if (def.Dash is { } d && Sl(def.Id).Left > 0) DashSweep(def.Id, 1 - Sl(def.Id).Left / Stats[d.Time]);
+            if (def.Dash is { } d && Sl(def.Id).Left > 0)
+            {   // DISABLED inside the dash: the row ends where the hull stopped (the owner's carry stops on the same
+                // state, which rides the wire) -- no Expire sweep to the Reach it never went, no hardening left on
+                if (Disabled) { Sl(def.Id).Left = 0; _status.Clear(Status.Hardened); continue; }
+                DashSweep(def.Id, 1 - Sl(def.Id).Left / Stats[d.Time]);
+            }
     }
     // THE OWNER'S CARRY: from the first frame it sees a dash row's Left (the host's press, here at once
     // on the host, a packet later on a guest), the hull goes the row's Reach along its nose over the
