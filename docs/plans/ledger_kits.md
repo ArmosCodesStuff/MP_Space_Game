@@ -238,6 +238,36 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
   606201f run), this ledger (J4 + J1c rows in the rungs table).
 - Checkpoint: the commit after this entry ("Kits lane A job 1c"). Next: J5 (F4 + F18).
 
+### Job P · PRE · prove J4 (F17 OutGuards) + job 1c (the DISABLED rate fix) at rung 3
+- Intent: nothing has run in the engine since 606201f. Run the chain quick, solo@11400714819323522083,
+  solo to prove J4's OutGuards checks and job 1c's DISABLED-rate fix together. Fix any red at its
+  cause (game code if the game is wrong, harness if the check is wrong) and re-prove at rung 3 on
+  two different seeds before this job's POST. Literals J4's checks must read: the outgoing door's
+  table; 3 x "a webifier's laser goes out through the door" (Suppressed 1.50 / Jammed 0.00 /
+  Dazzled 3.00); 3 x "a Suppressed gunship ... holds its missile" (0-2 frames after the lapse);
+  "Suppressed reaches a boss; Dazzled and Jammed ..."; 3 x "a Suppressed boss: its shockwave ...
+  31.5 ... beam ... 50 ... 45"; 3 x "a Suppressed base's launcher ... its round carries". Job 1c:
+  3 x "a DISABLED warden at N deg, turning at N deg/s ...: ... turn it 0.00 deg" with N > 25.
+- Files (may touch if red): scripts/Statuses.cs, scripts/Boss.cs, scripts/Raider.cs,
+  scripts/Emplacements.cs, tools/smoketest/SmokeTest.cs.txt, docs/CHANGES.md, this ledger.
+- Model tier: sonnet (no red from a previous agent; J1c's POST was green at rung 2).
+- Start: 1d5fb855170633e954201cd771e8f8c66f4bd9ec
+- Hashes: Statuses 011a71d4 · Boss 85c742d6 · Raider 5e550c48 · Emplacements 5898f5d1 ·
+  SmokeTest 31a4f66b · CHANGES 64c4e269
+
+### Job P · POST
+- Verdict: green. Chain quick, solo@11400714819323522083, solo: first pass hit one red at rung 3
+  (seeded), "five statuses and no sixth" (a pre-F17 check asserting `Enum.GetValues(typeof(Status))
+  .Length == 6`, stale since F17 added 3 more host-only members). Fixed in the CHECK, not the game:
+  `StatusSet.Bits` already masks host-only members off the wire (D16), so the wire format was never
+  broken -- only the raw enum-length trip wire was. Rewrote it to count non-host-only members (5)
+  apart from the enum's total (9). Re-ran the full chain clean: quick green, solo@11400714819323522083
+  green, solo (fresh seed 11400714819323472548) green. J4's OutGuards checks (the table, the
+  webifier/gunship/boss/base door checks) and job 1c's DISABLED-rate fix are proved on two seeds.
+- Files: tools/smoketest/SmokeTest.cs.txt (the one check rewritten), docs/CHANGES.md (new Job P
+  entry; J4's and job 1c's Rungs/Known broken lines made true).
+- Checkpoint: the commit after this entry ("Kits lane A Job P"). Next: J5 (F4 + F18, D17, Handover 4).
+
 ## Engine rungs owed to the main session (run in the worktree, rebased, one engine at a time)
 
 | after | rung | seeds | look for (PASS lines) |

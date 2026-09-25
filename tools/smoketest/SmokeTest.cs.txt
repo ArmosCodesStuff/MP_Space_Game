@@ -6931,20 +6931,29 @@ public partial class _Test : Node
                 await Wait(0.6);
             }
 
-            {   // ── FIVE STATUSES ON THE WIRE, AND ALL FIVE COME BACK ───────────────
+            {   // ── FIVE WIRE STATUSES, AND NO SIXTH THAT PACKS ─────────────────────
                 // Shielded was a row nothing set, read or implemented, and it still rode the
                 // wire in StatusSet.Bits. The values that remain ARE the wire format: 1 2 4 8 16.
+                // F17 added three MORE members (Suppressed/Dazzled/Jammed, 64/128/256) but they are
+                // host-only (StatusSet.HostOnly) and StatusSet.Bits masks them out, so the wire
+                // format itself is unchanged: still exactly 5 members pack into it. The trip wire
+                // below counts non-host-only members, not the enum's raw length, so a future
+                // host-only addition (never on the wire) does not re-break this check -- only a
+                // sixth WIRE status would.
                 var put = new StatusSet();
                 put.Apply(Status.Pinned, 1); put.Apply(Status.Disabled, 1); put.Apply(Status.Untargetable, 1);
                 put.Apply(Status.Hardened, 1); put.Apply(Status.Evading, 1);
                 int bits = put.Bits;
                 var got = new StatusSet(); got.FromBits(bits);
-                Check(bits == 31 && System.Enum.GetValues(typeof(Status)).Length == 6
+                int total = System.Enum.GetValues(typeof(Status)).Length;
+                int wireable = System.Enum.GetValues(typeof(Status)).Cast<Status>()
+                    .Count(s => s != Status.None && (StatusSet.HostOnly & s) == 0);
+                Check(bits == 31 && total == 9 && wireable == 5
                       && (int)Status.Pinned == 1 && (int)Status.Disabled == 2 && (int)Status.Untargetable == 4
                       && (int)Status.Hardened == 8 && (int)Status.Evading == 16
                       && got.Has(Status.Pinned) && got.Has(Status.Disabled) && got.Has(Status.Untargetable)
                       && got.Has(Status.Hardened) && got.Has(Status.Evading),
-                      $"five statuses and no sixth: 1 2 4 8 16 pack into {bits} and all five come back out of it");
+                      $"five wire statuses and no sixth: 1 2 4 8 16 pack into {bits} and all five come back out of it ({total} statuses total, {total - 1 - wireable} host-only)");
             }
         }
 

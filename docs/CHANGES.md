@@ -468,6 +468,23 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### Class kits, lane A Job P: J4 and job 1c proved at rung 3; a stale wire-count literal fixed (2026-09-25, worktree wt/kits)
+
+Nothing had run in the engine since 606201f. The chain quick, solo@11400714819323522083, solo found
+one red: "five statuses and no sixth" asserted `Enum.GetValues(typeof(Status)).Length == 6`, a literal
+left over from before F17 added three more members (Suppressed/Dazzled/Jammed). They are host-only
+(`StatusSet.HostOnly`) and `StatusSet.Bits` already masks them off the wire, so the wire format itself
+is unchanged (still exactly 5 members pack into it) -- only the raw enum-length trip wire was stale.
+The check now counts non-host-only members (5) apart from the enum's total (9), so a future host-only
+addition will not re-break it -- only a sixth WIRE status would.
+
+**Checks:** rewritten "five statuses and no sixth" (now "five wire statuses and no sixth": total == 9,
+wire-eligible == 5, its wire-format assertions unchanged). **Rungs:** 1 and 2 green; rung 3 green on
+two seeds (11400714819323522083, 11400714819323472548) -- J4's OutGuards checks and job 1c's
+DISABLED-rate fix both proved by the same runs.
+
+**Known broken:** nothing known.
+
 ### Class kits, lane A job 1c: the DISABLED warden's turn is read off the hull (2026-09-25, worktree wt/kits)
 
 Rung 3 at 606201f failed "a DISABLED warden at N deg, turning at 0 deg/s" on all three headings: the
@@ -479,9 +496,9 @@ frame's start to the next's, across exactly one `_process`, with W and the rudde
 its next frame. The assertion (> 20 deg/s carried in, 0.00 deg turned) is unchanged.
 
 **Checks:** rewritten "a DISABLED warden at N deg, turning at N deg/s on A/D when it is disabled" (its
-setup only). **Rungs:** 2 in the worktree; rung 3 owed on two seeds.
+setup only). **Rungs:** 2 in the worktree; rung 3 green on two seeds (Job P, above).
 
-**Known broken:** nothing known; rung 3 has not run on this commit.
+**Known broken:** nothing known.
 
 ### Class kits, lane A J4: the outgoing door, F17 (2026-09-25, worktree wt/kits)
 
@@ -506,9 +523,10 @@ a seeded 0.6-1.4 s of Suppressed and thrown the frame it lapses), `LaneAOutDoorB
 arena, three seeded spots: a Suppressed shockwave 31.5, a Suppressed beam judgement 50, Dazzled and
 Jammed refused and the next shockwave 45), `LaneAOutDoorBaseChecks` (siege, three seeded bearings: a
 Suppressed base's round carries 126 x the level-3 scale x 0.5).
-**Rungs:** 1 and 2 in the worktree (ledger_kits.md J4); rung 3 owed on two seeds. Host-only: no rung 5.
+**Rungs:** 1 and 2 in the worktree (ledger_kits.md J4); rung 3 green on two seeds (Job P, above).
+Host-only: no rung 5.
 
-**Known broken:** nothing known; rung 3 has not run on this commit.
+**Known broken:** nothing known.
 
 ### Class kits, lane A job 1b: rung 3's four fails at ad19fd8 (2026-09-25, worktree wt/kits)
 
