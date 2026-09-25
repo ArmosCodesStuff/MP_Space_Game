@@ -601,7 +601,7 @@ public partial class Hub : Node2D
         if ((SectorKind)s != Sector) { RpcId(who, nameof(NetSector), (int)Sector, Missions.Kind, Missions.Level); return; }
         // The place a pilot is owed goes first and is never metered: a reconnecting pilot's held
         // spot is delivered by whichever report first finds it in the host's world.
-        if (_placeFor.Remove(who, out var owed)) RpcId(who, nameof(NetPlace), owed.at, owed.rot);
+        if (_placeFor.Remove(who, out var owed)) { RpcId(who, nameof(NetPlace), owed.at, owed.rot); ShipOf(who)?.Relocated(); }
         // THE CATCH-UP, and only it, is rate-limited -- one ask, dozens of reliable packets. Half a
         // second: the guest's own repeats are at 1 s and 3 s (ReportSector).
         if (!Net.Metered(who, nameof(NetMySector), 0.5)) return;
@@ -729,7 +729,8 @@ public partial class Hub : Node2D
         if (h.World == _world && _ships.TryGetValue(peer, out var s) && IsInstanceValid(s))
         {
             s.Restore(h.Hp, h.Alive, h.Stasis);
-            if (PeerSector(peer) == Sector) RpcId(peer, nameof(NetPlace), h.Pos, h.Rot); else _placeFor[peer] = (h.Pos, h.Rot);
+            if (PeerSector(peer) == Sector) { RpcId(peer, nameof(NetPlace), h.Pos, h.Rot); s.Relocated(); }   // never a jump (Drives)
+            else _placeFor[peer] = (h.Pos, h.Rot);
         }
         foreach (var k in h.Owed) PayKill(k, h.OldPeer, peer);          // what it missed (a kill it did get is not paid again)
     }
@@ -1486,7 +1487,10 @@ public partial class Hub : Node2D
         if (Hints.Wants("raid") && !InArena && Raiders.Count > 0) Hints.Meet("raid");
         if (Hints.Wants("stasis") && !me.Alive) Hints.Meet("stasis");
         if (Hints.Wants("boss") && InArena && IsInstanceValid(Boss)) Hints.Meet("boss");
-        if (Hints.Wants("warp") && WarpAim() is { has: true } aim && aim.at.DistanceTo(me.Position) > Hints.WarpMeet) Hints.Meet("warp");
+        // the hull's own drive card (warp or boost) once something far off is picked; the slide's once a hostile is near
+        if (me.Drive is { } dv && Hints.Wants(dv.Id) && WarpAim() is { has: true } aim && aim.at.DistanceTo(me.Position) > Hints.WarpMeet) Hints.Meet(dv.Id);
+        if (Hints.Wants("strafe") && me.Stats["strafe_speed"] > 0
+            && Combat.Nearest(Combat.Hostiles, me.Position, h => h.Position, Hints.TargetMeet, Combat.Pickable) != null) Hints.Meet("strafe");
     }
 
     // Tab: ALWAYS the live hostile nearest your ship, at any range. No cycling --
@@ -1758,7 +1762,7 @@ public partial class Hub : Node2D
             else if (kk.Keycode == Key.B && !InArena) ToggleBase();
             else if (kk.Keycode == Key.L) TogglePilot();
             else if (kk.Keycode == Key.I) ToggleEquipment();
-            else if (kk.Keycode == Key.V) mine.StartWarp();            // warp: a fixed key, not a slot
+            else if (kk.Keycode == Key.V) mine.PressDrive();           // the drive (Drives.cs): a fixed key; a warp's release is read by the ship
             else
             {
                 // in stasis the only order is F: re-board once the ship is ready
