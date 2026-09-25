@@ -1637,11 +1637,14 @@ public partial class _Test : Node
                     skew: Mathf.RadToDeg(Mathf.Abs(Mathf.AngleDifference(c.Rotation, dk.Heading))));
         }).ToList();
         var farthest = landed.OrderByDescending(l => l.fromPad).First();
+        // NOT SHORT OF IT, from the courier's own 30 u (the pack's, sprites.md Q6): a nose inside the
+        // 10 u band puts the centre at most the pad's reach + 10 + 15 out. A flat 50 u was that bound
+        // for the old 22 u courier and sat exactly ON the edge for the new one (50.0 u, nose 4 u off).
         Check(flyingIn == drones.Count
-              && landed.All(l => l.c.Docked && !l.c.Held && l.fromPad < 50f && l.toFace > 0f && l.toFace < 10f && l.skew < 5f)
+              && landed.All(l => l.c.Docked && !l.c.Held && l.fromPad < l.dk.Row.Reach + 10f + 30f * 0.5f && l.toFace > 0f && l.toFace < 10f && l.skew < 5f)
               && drones.All(c => Y.Arms.Any(a => a.Dock.Row == c.Home.Row)
                                  && Landmarks.Outposts[c.Def.Outpost].Docks.Contains(c.Away.Row) && c.Away.At == Hub.Outposts[c.Def.Outpost].at),
-              $"every courier docks where the fleet does -- a base service arm at one end, its outpost's clamp at the other -- and not short of it: centre within 50 u of the pad's, nose within 10 u of the open face and pointing in, flown in from {before:0.00} s out on all four bearings ({flyingIn} of {drones.Count} flying at the start, {landed.Count(l => l.c.Docked)} docked; farthest {Lanes.Name(farthest.c.Lane)} {farthest.dk.Row.Id}: {farthest.fromPad:0.0} u off the pad's centre, nose {farthest.toFace:0.0} u off the face, {farthest.skew:0.0} deg off nose-in)");
+              $"every courier docks where the fleet does -- a base service arm at one end, its outpost's clamp at the other -- and not short of it: centre within the pad's reach + 25 u (the 10 u band + half the 30 u courier), nose within 10 u of the open face and pointing in, flown in from {before:0.00} s out on all four bearings ({flyingIn} of {drones.Count} flying at the start, {landed.Count(l => l.c.Docked)} docked; farthest {Lanes.Name(farthest.c.Lane)} {farthest.dk.Row.Id}: {farthest.fromPad:0.0} u off the pad's centre, nose {farthest.toFace:0.0} u off the face, {farthest.skew:0.0} deg off nose-in)");
         // ...and the one that came in to a held arm sits BESIDE the miner holding it: its centre past
         // the miner's own half-width along the face, its own outer edge still on the face. The miner
         // keeps its arm. Both read after the wait, where they are now.
