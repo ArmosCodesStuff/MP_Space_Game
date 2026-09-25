@@ -45,7 +45,7 @@ public partial class _Shots : Node
             if (c is Button bt && bt.Text.Length > 0 && !bt.ClipText && TextW(bt, bt.Text) + 8 > r.Size.X + 2)
                 GD.Print($"LINT {frame}: clipped {id} needs {TextW(bt, bt.Text) + 8:0} px, has {r.Size.X:0}");
             // (the hint card takes no input, but it is a block on the HUD all the same)
-            if (c.GetParent() is CanvasLayer && !(c is ColorRect) && c.MouseFilter != Control.MouseFilterEnum.Ignore || c is HullHud || c is AbilityBar || c is BasePanel || c.GetParent() is Hints)
+            if (c.GetParent() is CanvasLayer && !(c is ColorRect) && c.MouseFilter != Control.MouseFilterEnum.Ignore || c is HullHud || c is AbilityBar || c is ReloadBar || c is BasePanel || c.GetParent() is Hints)
                 if (c.GetParent() is CanvasLayer) tops.Add(c);
         }
         for (int i = 0; i < tops.Count; i++)
@@ -1039,10 +1039,20 @@ public partial class _Shots : Node
         cam.Zoom = z0;
     }
 
-    // SLICE 6c: the Sniper's enhanced round (sniper_active_reload.md §3.6) -- the white glint at the muzzle
+    // SLICE 6c: the reload bar under the Sniper at its sweet spot (73c), then its enhanced round
+    // (sniper_active_reload.md §3.6) -- the white glint at the muzzle
     // while it is seated, then its shot: the rail's bar in white, 1.5x as wide. The same sniper and zoom as 73b.
     async Task LaneA6cRailFrames(PlayerShip rs, System.Action hold)
     {
+        // THE RELOAD BAR (sec 4.4): 73b's shot left the chamber reloading; the frames step until the view is half
+        // way (the fill in the white box), the owner's timing press lands PERFECT, and the frame is 3 frames later:
+        // the grey track and fill, the white box, the white flash, the pip about to seat white.
+        for (int i = 0; i < 400 && rs.ReloadView.Running && rs.ReloadView.Since < 0.5 * rs.ReloadView.Length; i++)
+        { hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        ActiveReload.Press(rs, ActiveReload.Rail);
+        for (int i = 0; i < 3; i++) { hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        await Snap("73c_sniper_reload_spot");
+        for (int i = 0; i < 400 && ActiveReload.Reloading(rs.Sl("railgun")); i++) { hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         await W(0.5);
         hold(); rs.Sl("railgun").Left = 0; rs.Sl("railgun").N = (int)Chamber.Enhanced;
         await W(0.3); await Snap("73d_sniper_enhanced_glint");

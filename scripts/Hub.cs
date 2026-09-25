@@ -346,6 +346,7 @@ public partial class Hub : Node2D
         layer.AddChild(new ReturnButton { Hub = this });            // RETURN TO BASE, after a win only
         layer.AddChild(new Radar { Hub = this });
         layer.AddChild(new AbilityBar { Hub = this });
+        layer.AddChild(new ReloadBar { Hub = this });               // an active reload's timing bar, under the own ship
         if (!InArena) layer.AddChild(new HaulerHud { Hub = this });
         Hints = new Hints { Hub = this }; AddChild(Hints);
         // THE SOFT TUTORIAL, on a first character only: a card at a time with CONTINUE, and SKIP

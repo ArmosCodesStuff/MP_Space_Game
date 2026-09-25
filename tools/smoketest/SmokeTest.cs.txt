@@ -5629,6 +5629,71 @@ public partial class _Test : Node
               $"arena guest: two claims of 0.5 at 0.3 s and 1.5 s seat it {g2} (plain: clamped to the host's clock, one press a reload); 7.0 at 0.3 s seats it {g3a}; NaN at 1.5 s, judged on the host's clock, {g3b}");
     }
 
+    // ── SLICE 6c: THE RELOAD BAR (sniper_active_reload.md §4.1-4.2), kits6c-J7 ──────────────────────────
+    // Pure: Drop is half the hull on screen and 20 px (80 at zoom 1 for a 120 u hull) at three zooms; Wanted
+    // through a reload, a charge, an enhanced round, under 0.6 s after the seat, and not past it. Then three varied
+    // runs as the Sniper (VaryNear spot, VaryAngle heading, Vary zoom 0.7-1.2): a round seated long ago shows no bar;
+    // after a real shot the bar shows, 180 x 22, centred under the hull (+- 2 px) with its top Drop below the ship's
+    // centre on screen, clear of the hull panel and the ability bar; still shown Vary(0.1, 0.45) s after the seat,
+    // gone Vary(0.75, 1.1) s after it; shown again while an enhanced round waits. A Warrior (its Space row has no
+    // Reload) holding Space never shows it.
+    async Task LaneA6cReloadBarChecks(Vector2 yonder)
+    {
+        bool dropOk = Math.Abs(ReloadBar.Drop(120f, 1f) - 80f) < 1e-4; string drops = "";
+        foreach (var (len, z) in new[] { (120f, 1f), (Vary(60f, 100f), Vary(0.5f, 0.9f)), (Vary(130f, 200f), Vary(1.0f, 1.4f)) })
+        { float d = ReloadBar.Drop(len, z); dropOk &= Math.Abs(d - (len * 0.5f * z + 20f)) < 1e-4; drops += $" {len:0} u at {z:0.00} -> {d:0.0} px;"; }
+        var running = new ActiveReload.View { Running = true, Length = 3, Since = Vary(0.1f, 2.9f) };
+        var charging = new ActiveReload.View { Charge = Vary(0.05f, 0.7f) };
+        var idle = new ActiveReload.View();
+        float soon = Vary(0.05f, 0.55f), late = Vary(0.65f, 9f);
+        bool wantOk = ReloadBar.Wanted(running, (int)Chamber.Empty, 0) && ReloadBar.Wanted(charging, (int)Chamber.Seated, 5)
+                   && ReloadBar.Wanted(idle, (int)Chamber.Enhanced, Vary(1f, 9f)) && ReloadBar.Wanted(idle, (int)Chamber.Seated, soon)
+                   && !ReloadBar.Wanted(idle, (int)Chamber.Seated, late);
+        Check(dropOk && wantOk, $"reload bar, pure: its top half the hull on screen and 20 px under the ship's centre ({drops} 80 at zoom 1 for 120 u); wanted reloading, charging, enhanced, {soon:0.00} s after the seat, not {late:0.00} s after (0.6)");
+
+        await SetClass(ShipClass.HeavySniper);
+        var sn = Me; var bar = Nodes<ReloadBar>().FirstOrDefault();
+        Check(bar != null && bar.MouseFilter == Control.MouseFilterEnum.Ignore && bar.GetParent() is CanvasLayer, "reload bar: one on the HUD layer, taking no input");
+        if (bar == null) return;
+        float z0 = H.ZoomLevel;
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle(); float zoom = Vary(0.7f, 1.2f);
+            H.SetZoom(zoom);
+            void Pose() { sn.Position = at; sn.Velocity = Vector2.Zero; sn.Rotation = rot; }
+            async Task Until(Func<bool> done, int cap = 400) { for (int i = 0; i < cap && !done(); i++) { Pose(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); } }
+            async Task Hold(double secs) { double t0 = sn.Clock; await Until(() => sn.Clock - t0 >= secs); }
+            sn.Sl("railgun").Left = 0; sn.Sl("railgun").N = (int)Chamber.Seated; sn.ReloadView = default;
+            await Hold(0.9);
+            bool quiet = !bar.Visible;
+            await RailFire(sn);
+            await Hold(0.2);                                                             // the camera settles on the held ship
+            var ct = bar.GetViewport().GetCanvasTransform(); var sp = ct * sn.GlobalPosition;
+            float drop = ReloadBar.Drop(sn.MyArt.Length, ct.Scale.Y);
+            var r = bar.GetGlobalRect();
+            var hull = Nodes<HullHud>().First().GetGlobalRect(); var ab = Nodes<AbilityBar>().First().GetGlobalRect();
+            bool shown = bar.Visible && ActiveReload.Reloading(sn.Sl("railgun"));
+            bool placed = Math.Abs(r.Size.X - 180) < 0.5f && Math.Abs(r.Size.Y - 22) < 0.5f && Math.Abs(r.GetCenter().X - sp.X) < 2f
+                       && Math.Abs(r.Position.Y - (sp.Y + drop)) < 2f && r.Position.Y > sp.Y + sn.MyArt.Length * 0.5f * ct.Scale.Y;
+            bool clearHud = !hull.Intersects(r) && !ab.Intersects(r);
+            await Until(() => !ActiveReload.Reloading(sn.Sl("railgun")));
+            float stay = Vary(0.1f, 0.45f), gone = Vary(0.75f, 1.1f);
+            await Hold(stay); bool lingers = bar.Visible;
+            await Hold(gone - stay); bool after = bar.Visible;
+            sn.Sl("railgun").N = (int)Chamber.Enhanced; await Hold(0.1); bool waits = bar.Visible;
+            sn.Sl("railgun").N = (int)Chamber.Seated;
+            Check(quiet && shown && placed && clearHud && lingers && !after && waits,
+                  $"reload bar run {run}, heading {Mathf.RadToDeg(rot):0} deg, zoom {zoom:0.00}: hidden long seated {quiet}; shown reloading {shown}, {r.Size.X:0} x {r.Size.Y:0} (180 x 22) centred {r.GetCenter().X - sp.X:0.0} px off, top {r.Position.Y - sp.Y:0.0} px under the ship (want {drop:0.0}); clear of the hull panel and ability bar {clearHud}; {stay:0.00} s after the seat {lingers}, {gone:0.00} s after {after} (gone past 0.6); enhanced waiting {waits}");
+        }
+        await SetClass(ShipClass.HeavyWarrior);
+        var wk = Abilities.KeyFor(ShipClass.HeavyWarrior, "blade"); bool ever = false;
+        KeyDown(wk);
+        for (int i = 0; i < 40; i++) { ever |= bar.Visible; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        KeyUp(wk);
+        Check(!ever && Abilities.TriggerOf(ShipClass.HeavyWarrior)?.Reload == null, "reload bar: a Warrior holding Space (its blade row has no Reload) never shows it");
+        H.SetZoom(z0);
+    }
+
     // ── THE BUILD A PLAYER READS ──────────────────────────────────────────────────────────────
     // One check, about a trap in THIS game's protocol hash that a build string can fall into.
     void BuildChecks()
@@ -11801,6 +11866,7 @@ public partial class _Test : Node
             await LaneA6cPrismStanceChecks(yonder);
             LaneA6cReloadJudgeChecks();
             await LaneA6cReloadChecks(yonder);
+            await LaneA6cReloadBarChecks(yonder);
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a

@@ -382,3 +382,24 @@ TriggerOf has a Reload; add "ReloadBar" to the lint's overlap list (Shots.cs.txt
 (after 73b: fire one real shot, step until the view's share is 0.5, press, snap 3 frames later) -- inside
 LaneA6cRailFrames. J8 Anchor must satisfy SniperAnchor (SmokeTest ~5399): UseAbility("anchor") drops it (Left > 0,
 Held 0), a second UseAbility weighs it (Left runs out within 60 frames, anchor_release 0.3), then write S7 there.
+
+## kits6c-J7 · PRE (agent 5)
+- tier opus. Intent: ReloadBar (sniper_active_reload §4.1-4.2, §4.4): a HUD Control (child of the HUD CanvasLayer, MouseFilter
+  Ignore, 180 x 22) following the owner's ship, drawn from ReloadView (grey track + fill, white spot box, pip, blue charge,
+  white / grey flash); shown only for a class whose Space row has a Reload, hidden on a wreck, off screen, under BASE,
+  or on the bottom HUD. Lint overlap list gains ReloadBar; frame 73c_sniper_reload_spot. Checks: LaneA6cReloadBarChecks
+  (solo), frame 73c. HEAD dc925baaa0f59961038e9bc09e27c38362a8070f
+- scripts/Hub.cs 6a4208dabff59f33d4eaf3668b96b2b291828d27
+- tools/screens/Shots.cs.txt fd8ff4a42ed49a4f11885299e3fe96f1dbec8904
+- tools/smoketest/SmokeTest.cs.txt 78985e7033206f6582e338387178e89a75c36b15
+- scripts/ReloadBar.cs (new)
+## kits6c-J7 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED, own diff read. engine-unproven: rungs owed in the final test phase.
+- Built: scripts/ReloadBar.cs (a HUD Control on the HUD layer, added in Hub beside AbilityBar; follows the owner's ship,
+  top Drop = hull half-length x zoom + 20 below its centre; draws §4.2 from ReloadView and the slot's chamber; shown
+  while reloading / charging / enhanced waiting / < 0.6 s after the seat; hidden for a class whose trigger row has no
+  Reload, on a wreck, off screen, under BASE, or meeting HullHud / AbilityBar). Shots lint overlap list gains ReloadBar.
+- Checks: NEW LaneA6cReloadBarChecks (pure Drop at 3 zooms + Wanted; 3 varied runs: size, place, HUD clear, linger /
+  gone around 0.6 s, enhanced waiting; a Warrior holding Space never shows it); NEW frame 73c_sniper_reload_spot
+  (inside LaneA6cRailFrames, before 73d).
+- Next: kits6c-J8 Anchor (satisfy SniperAnchor; S7 in LaneA6cAnchorChecks).
