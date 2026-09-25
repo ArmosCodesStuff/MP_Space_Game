@@ -467,6 +467,37 @@ outstanding from the batch of 2026-09-23.)*
 
 ## Unreleased
 
+### The bosses are twice as big (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
+
+The owner's ruling ("2 or 3x", built at 2): `Missions.BossSize = 2` on both boss rows -- the Rusty
+Bucket 720 u long, half-width 140; the Drake Bastion 840, 180. Their HIT SIZE grows with the art (the
+capsule is the row's), and their bells with it (`Nozzle.Scaled`). 3x is that one number.
+Everything a move places about the hull now reads the row where it is used (Boss.cs):
+- the ram's red lane is the hull's own beam (2 x HW, 280 u; the row has no Width);
+- the rock is held `Boss.FlankHold` off the keel -- half-width + body + the row's 40 u gap (400 u; the
+  row's Offset is the gap, not 310);
+- the escorts launch 13/7 half-widths out (260 u; 130 on the old hull) and the warp ring is 1.3
+  half-widths (234 u; 117);
+- every stand-off is measured from the NOSE: the hold-off (Rusty 470, Drake 440 -- each the old 650 u
+  from the centre of its old hull), the shotgun's warp 390 (600), the throw's 1090 (1300);
+- the boss spawns with its nose on `Hub.ArenaCentre`, so it starts no nearer the party.
+Frames 38/39/42 and 63-66 put the ship a gap off the nose and zoom (through `Hub.ZoomLevel`; the
+Rusty's frames set the camera's own zoom, which the hub lerped back) to fit the whole hull.
+
+**Checks:** rewritten -- "a boss's hull, art and approach are its row's" (720 / 140, 840 / 180, hold-offs
+470 / 440), "a boss wears the owner's red ... its bells at the stern of the doubled hull" (+ the bells
+scaled), the beam / ram / shotgun / throw row checks (escorts 13/7 = 260 u, ram Width 0, warp 390 / ring
+1.3 = 234 u, throw 1090 and a 400 u hold), "a boss's moves come from its ROW" (720), the two ram-lane
+finders (280 u), "two escorts launch ... 260 u out", the two lock pushes (past 470 + 360 u), "level 2 is
+the Drake Bastion ... 840 u long", the live shotgun (its nose's standoff, a 234 u ring) and throw (held
+180 + body + 40, backed off its nose's standoff) checks, and the guest's rock hold.
+
+**Known broken (J3d):** UNPROVEN at rung 3 (the checks above, two seeds) and rung 4 (frames 38, 39, 42,
+62-66 by eye). The Lancer's shockwave keeps its 340 u ring (a reach, not a place): on the 720 u hull it
+no longer clears the bow and stern and reaches 200 u past the flank (270 before). A pilot's widest zoom
+(0.588) shows about 918 u toward the boss, so at the hold-off the Drake's tail (about 360 u of it) is
+off-screen; the arena itself is open space, so there is room to dodge.
+
 ### The owner's own picks: the pod, the miner and the wing re-arted (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
 
 The owner re-chose six rows of the mapping (`docs/plans/sprites.md` §1, "the owner's picks"); four are
@@ -539,8 +570,8 @@ averages the swatch's own red (RGB 166, 7, 2), with less black.
 
 ### The bosses wear the owner's new sprites (2026-09-25, in the WarShips_Version_L fork, branch wt/art)
 
-The Rusty Bucket is the pack's `frigate_a` and the Drake Bastion its `flagship`, at their lengths (360,
-420) and half-widths (70, 90), so every hit size and the Drake's 310 u throw literal stand. The pack is
+The Rusty Bucket is the pack's `frigate_a` and the Drake Bastion its `flagship` (twice the art's size
+since the owner's ruling, above). The pack is
 grey, so each boss row carries a tint (the owner's red, above). The Rusty's white skull went with its
 old art.
 `BossType` derives from `HullArt` (its `Sprite` is `Texture`) and lists its bells (2 and 5); a boss

@@ -256,6 +256,55 @@ interceptor_a/_b (+ the old spares cargo_1, fighter_tri_b). Jobs: J3c re-map, J4
   bomber's 2 flames, torpedoes off the wingtips.
 - Next: J3d bosses 2x.
 
+### J3d bosses 2x -- PRE
+- Intent: `Missions.BossSize = 2` (the one number) on both boss rows: Length 720 / 840, HalfWidth
+  140 / 180, bells `Nozzle.Scaled`. Every hull-relative figure follows the row at use (Boss.cs): the
+  ram's lane = the hull's own beam (Width 0 -> 2 HW); the rock held HW + Radius + Offset (Offset the
+  40 u gap, was the whole 310); EscortOut and WarpRing in HALF-WIDTHS (13/7 and 1.3: 130 and 117 at
+  1x); stand-offs (HoldOff, a warp's Standoff) measured from the NOSE (+ L/2 at use; rows 470 / 440,
+  390, 1090 keep the 1x fight); the boss spawns with its nose on ArenaCentre. Shockwave 340 u NOT
+  scaled (a reach, not a place): flagged. Frames 38/39/42 and 63-66 place the ship off the nose and
+  zoom (ZoomLevel) to fit the hull. Harness: every boss-size literal rewritten to the 2x truth.
+- Start: e7f5a1c337f46a767086821bb61854515f1b2012
+- Files: scripts/Missions.cs e65a4d72251b · scripts/Sprites.cs 41b1b7ff5e0c · scripts/Boss.cs
+  fd5a56a1713d · scripts/Lancer.cs 08ac04023b42 · scripts/Drake.cs 15db8b36bfee · scripts/Hub.cs
+  b1e90e72868d · tools/make_ships.ps1 684959f04012 · tools/smoketest/SmokeTest.cs.txt aa9a7d98ad22 ·
+  tools/screens/Shots.cs.txt c1bda594db98 · docs/plans/sprites.md 948f934fb777 · docs/DESIGN.md
+  a66ea4812a9f · docs/CHANGES.md a071703d8ebc
+
+### J3d bosses 2x -- POST
+- Verdict: typecheck 0 errors; `-Quick` ALL CHECKS PASSED. Rungs 3/4 owed.
+- Files: Missions.cs (private const BossSize 2; rows x it; HoldOff from the nose: default 470, Drake
+  440), Sprites.cs (`Nozzle.Scaled`), Boss.cs (Approach/warp stand-offs + L/2; warp ring and escorts x
+  HalfWidth; ram lane 2 HW; `FlankHold`; Scaled no longer scales Offset), Lancer.cs (EscortOut 13/7,
+  ram Width gone), Drake.cs (Standoff 390 / 1090, WarpRing 1.3, Offset 40), Hub.cs (the boss's nose on
+  ArenaCentre), make_ships.ps1 (comment), SmokeTest (row checks, 2 ram-lane finders, escorts 260 u,
+  2 lock pushes, level-2 840, live shotgun/throw, guest rock hold), Shots (FitBoss zoom + ship off the
+  nose for 38/39/42 and 63-66), DESIGN.md, sprites.md, CHANGES.md.
+- Commit: the J3d commit (hash = J4's Start).
+- **D19** Stand-offs are measured from the NOSE (gap + L/2 at use), each row's gap chosen so the 1x
+  fight is unchanged (650 from the centre -> 470 / 440; 600 -> 390; 1300 -> 1090). Centre-measured,
+  the doubled Drake's shotgun would land its nose 180 u from the pilot and its 10-degree fan lines
+  ~31 u apart there (68 u at 1x): an undodgeable fan. The guns' Find (900 / 1100) still reach the
+  hold-off (830 / 860 from the centre).
+- **D20** Formation places scale with the hull (EscortOut 13/7 and WarpRing 1.3 HALF-WIDTHS: the row
+  comments said "HalfWidth + 60" and "HalfWidth x 1.3"; "+60" at 2x would put the 45-degree escorts
+  1.4 u off the flank, so the share keeps the formation's shape instead). The ram lane is the hull's
+  beam (Width 0, like the throw's body lane). The rock's hold is HW + body + a 40 u gap (FlankHold).
+- **D21** NOT scaled (reaches, not places): the beam's 70 u width, the shockwave's 340 u ring (now
+  under the 720 u hull's bow and stern: Known broken), ranges, bodies. The arena is open space (no
+  bounds), so there is room to dodge; but a pilot's widest zoom (0.588, ~918 u toward the boss) does
+  not show the Drake's whole hull at its hold-off -- the zoom-out limit is the owner's call.
+- **D22** The boss spawns with its NOSE on ArenaCentre (centre + L/2 north), so a bigger boss starts
+  no nearer the party (1179 u nose to the first ship's spawn).
+- Rung 3 owed (two seeds): the boss row checks (hull/art/approach 720/140 & 840/180, bells at the
+  stern, beam/ram/shotgun/throw rows, the mixed row 720), "two escorts ... 260 u out", the two lock
+  pushes, the ram-lane timing (280 u), "level 2 is the Drake Bastion ... 840 u", the live shotgun
+  (nose standoff 394, ring 234) and throw (hold 180 + 181.8 + 40), the guest's rock hold; and every
+  other boss-fight check (the capsule doubled: a shot that grazed past may now hit).
+- Rung 4 owed: 38, 39, 42, 62-66 -- the whole hull in frame (zoom ~0.47 / ~0.38), telegraphs.
+- Next: J4 siege.
+
 ### OWED to the main session (nothing here has run above rung 2)
 - Rung 3 (`tools\smoketest\run.ps1 -Solo`, two seeds for the new checks):
   - new "the title screen's foes wear their raider rows' tints, the Web on its own art"

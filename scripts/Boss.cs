@@ -57,10 +57,11 @@ public class BossMove
     public float Reach;                // how far the move itself carries: a beam, a dash, a lane
     public float Width;                // the warning's width, and a beam's own. A move whose
                                        // warning is as wide as the BODY it warns about leaves this
-                                       // 0 and Boss.Warn works it out instead (MoveWay.Throw).
+                                       // 0 and Boss.Warn works it out instead: a thrown body's own
+                                       // width (MoveWay.Throw), the hull's own beam (MoveWay.Dash).
     public float Speed, Range, Radius; // a dash's speed; a fired body's speed, flight and body
     public float Muzzle;               // how far ahead of the nose a fired body is born
-    public float Offset;               // how far off the flank a thrown body is held
+    public float Offset;               // the gap between the flank and a thrown body (FlankHold)
     public int Shot = Shots.Shell;     // which row of Shots.All a SHOOT move fires
     public int Count = 1;              // bodies in one firing
     public float Spread;               // degrees between them, fanned about the aim
@@ -74,15 +75,16 @@ public class BossMove
     // point defence, a friend's note. (Not MoveWay.Beam -- that is a move that burns down a line
     // for Live seconds, and it is heard by its Cue and Strike.)
     public int Beam;
-    // THE ESCORT OPENER. Escorts light craft at +-EscortAngle, EscortOut off the hull, each with
+    // THE ESCORT OPENER. Escorts light craft at +-EscortAngle, EscortOut of the hull's HALF-WIDTHS
+    // out from its centre (so a bigger hull launches them as far clear of it), each with
     // EscortHull hull and boosting for the wind-up. The wind-up then starts on the PIN; with every
     // escort shot down, WebGrace past when their web was predicted to land; at the outside
     // WebSlack past that, and never later than ArmMax.
     public int Escorts, EscortKind;
     public float EscortAngle, EscortOut;
     public double EscortHull, WebGrace, WebSlack, ArmMax;
-    // THE WARP OPENER. A ring WarpRing across where it will land, Warp seconds, Standoff off the
-    // nearest pilot.
+    // THE WARP OPENER. A ring of WarpRing of the hull's HALF-WIDTHS where it will land, Warp
+    // seconds, its NOSE Standoff off the nearest pilot (measured from the hull, as HoldOff is).
     public double Warp;
     public float Standoff, WarpRing;
     public string WarpSound;
@@ -163,10 +165,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         c.Windup /= q; c.Warp /= q; c.Flight /= q;
         c.Speed = (float)(c.Speed * q);
         c.Reach = (float)(c.Reach * q); c.Range = (float)(c.Range * q); c.Radius = (float)(c.Radius * q);
-        // ...and how far off the flank a thrown body is held goes with the body: it is a clearance
-        // (HalfWidth + Radius + a gap), so a rock that grows with the level and an offset that did
-        // not would end up drawn inside the hull holding it.
-        c.Offset = (float)(c.Offset * q);
+        // (where a thrown body is held goes with the body by construction: FlankHold is the hull's
+        // half-width, the body and a gap, so a rock that grows with the level stays clear of it)
         c.Turn = (float)(c.Turn * q);                   // a guided body comes round faster too
         c.Find = (float)(c.Find * q); c.Standoff = (float)(c.Standoff * q); c.EscortOut = (float)(c.EscortOut * q);
         return c;
@@ -315,7 +315,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         if (_lastSeen is not { } centre) return;    // it has never seen anyone: it holds
         float want = Aim.Face(Position, centre);
         Rotation = Mathf.RotateToward(Rotation, want, Turning * dt);
-        if (Position.DistanceTo(centre) > Type.HoldOff) Position += (centre - Position).Normalized() * Type.CloseSpeed * dt;
+        if (Position.DistanceTo(centre) > Type.HoldOff + Length * 0.5f) Position += (centre - Position).Normalized() * Type.CloseSpeed * dt;
     }
 
     // -- THE SCHEDULER --------------------------------------------------------
@@ -369,10 +369,10 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
             return;
         }
         if (m.Warp > 0)
-        {   // A RING WHERE IT WILL LAND, Standoff off where it aims; the hull follows (Open)
-            s.To = s.Spot + (Position - s.Spot).Normalized() * m.Standoff;
+        {   // A RING WHERE IT WILL LAND, its nose Standoff off where it aims; the hull follows (Open)
+            s.To = s.Spot + (Position - s.Spot).Normalized() * (m.Standoff + Length * 0.5f);
             s.At = Phase.Opening; s.T = m.Warp;
-            Zone(s.To, m.WarpRing, m.Warp, null, m.WarpSound);
+            Zone(s.To, m.WarpRing * HalfWidth, m.Warp, null, m.WarpSound);
             return;
         }
         Aimed(s);
@@ -441,7 +441,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
                 Lane(m, new Vector2(0, -Length * 0.5f), new Vector2(0, -Length * 0.5f - m.Reach), onHull: true, hold: m.Live);
                 break;
             case MoveWay.Dash:
-                Lane(m, Vector2.Zero, new Vector2(0, -m.Reach), onHull: true);
+                // THE LANE IS THE HULL'S OWN BEAM: what the ram hits is what the hull covers (Burn)
+                Lane(m, Vector2.Zero, new Vector2(0, -m.Reach), onHull: true, width: HalfWidth * 2f);
                 break;
             case MoveWay.Ring:
                 Zone(s.To, m.Reach, m.Windup, m.Cue, m.Strike);
@@ -540,7 +541,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         return (nose, nose + Vector2.Up.Rotated(Rotation) * (S(id)?.M.Reach ?? 0f));
     }
 
-    // A MOVE'S ESCORTS: EscortAngle to port and to starboard of the nose, EscortOut off the hull,
+    // A MOVE'S ESCORTS: EscortAngle to port and to starboard of the nose, EscortOut half-widths out,
     // straight at the pilot, boosting for the whole wind-up and fragile on purpose (point defence
     // must be able to kill them inside it). Returns roughly how long until their web should land --
     // the wind-up's floor if they are all shot down first.
@@ -565,7 +566,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         {
             float side = n > 1 ? (2f * k / (n - 1) - 1f) * m.EscortAngle : 0f;
             var dir = nose.Rotated(Mathf.DegToRad(side));
-            var at = Position + dir * m.EscortOut;
+            var at = Position + dir * (m.EscortOut * HalfWidth);
             var r = Hub.SpawnRaider(at, m.EscortKind, 0, Missions.S(Missions.Level));
             // the one launched to port flanks to port, the other to starboard
             r?.Escort(target, dir, m.Windup, m.EscortHull * Missions.S(Missions.Level), side < 0 ? -Mathf.Pi / 2f : Mathf.Pi / 2f);
@@ -575,9 +576,12 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         return eta;
     }
 
-    // A THROWN BODY: Offset off the flank toward where it aims, a lane Reach long, and the body
-    // itself -- the same one on every peer, from one event (ThrownRock). It names the blow it
+    // A THROWN BODY: held FlankHold off the keel toward where it aims, a lane Reach long, and the
+    // body itself -- the same one on every peer, from one event (ThrownRock). It names the blow it
     // deals, and strikes every live pilot in its lane, seen or not.
+    // Where it is held: the hull's half-width, the body, and the row's gap, so it clears the flank
+    // whatever the hull's size or the body's.
+    public float FlankHold(BossMove m) => HalfWidth + m.Radius + m.Offset;
     private ThrownRock _rock;
     public ThrownRock Rock => IsInstanceValid(_rock) ? _rock : null;
     private void Heave(Slot s)
@@ -585,7 +589,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         var m = s.M;
         var side = Vector2.Right.Rotated(Rotation);
         if (side.Dot(s.Spot - Position) < 0) side = -side;                     // on the flank toward where it aims
-        s.From = Position + side * m.Offset;
+        s.From = Position + side * FlankHold(m);
         s.To = s.From + (s.Spot - s.From).Normalized() * m.Reach;
         int variant = s.Fired % 2;                                            // the two bodies ThrownRock draws
         _rock = new ThrownRock { Boss = this, From = s.From, To = s.To, Hold = m.Windup, Flight = m.Flight,

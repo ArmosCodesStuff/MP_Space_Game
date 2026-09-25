@@ -47,7 +47,10 @@ public static class Missions
         public string Id, Name;
         public double Hull;
         public float HalfWidth;
-        public float HoldOff = 650f;        // unlocked, it closes to about this and no nearer
+        // UNLOCKED, IT CLOSES TO about this far off its NOSE and no nearer (Boss.Approach adds the
+        // half-length): measured from the hull, so a bigger hull holds the same gap. 470 is the old
+        // 650 u from the centre of the 360 u Rusty Bucket.
+        public float HoldOff = 470f;
         public float CloseSpeed = 30f;      // ...at this, ponderously
         public float TurnRate = 0.3f;       // its native turn (rad/s)
         public BossMove[] Moves;
@@ -56,6 +59,11 @@ public static class Missions
     // grey, so the art's highlights come out that red and its shadows black. Declared before
     // Bosses: a static field's initialiser runs in the order it is written.
     private static readonly Color BossRed = new(0.67f, 0.03f, 0.01f);
+    // THE BOSSES ARE THIS MANY TIMES THE SIZE THEIR ART WAS MEASURED AT (the owner's "2 or 3x",
+    // 2026-09-25, built at 2): the length, the half-width -- their HIT SIZE grows with the art --
+    // and the bells. Everything a move places about the hull reads the row (Boss.cs), so 3x is
+    // this one number.
+    private const float BossSize = 2f;
 
     public static readonly BossType[] Bosses =
     {
@@ -65,13 +73,14 @@ public static class Missions
         // reason: it is named for the id on disk, not for the words on the screen.
         new() { Id = "silver_lancer", Name = "RUSTY BUCKET", Hull = 760,
                 Texture = "res://boss_raider.png", Tint = BossRed,
-                Nozzles = new Nozzle[] { new(-30.30f, 178.81f, 39.21f), new(31.19f, 178.81f, 38.61f) },
-                Length = 360f, HalfWidth = 70f, Moves = Lancer.Moves },
+                Nozzles = Nozzle.Scaled(BossSize, new(-30.30f, 178.81f, 39.21f), new(31.19f, 178.81f, 38.61f)),
+                Length = 360f * BossSize, HalfWidth = 70f * BossSize, Moves = Lancer.Moves },
         new() { Id = "drake_bastion", Name = "DRAKE BASTION", Hull = 700,
                 Texture = "res://boss_drake.png", Tint = BossRed,
-                Nozzles = new Nozzle[] { new(-53.82f, 209.38f, 20.78f), new(-28.54f, 208.76f, 20.47f), new(-3.57f, 191.39f, 15.82f),
-                                         new(19.85f, 208.45f, 19.85f), new(50.25f, 208.45f, 22.33f) },
-                Length = 420f, HalfWidth = 90f, Moves = Drake.Moves },
+                Nozzles = Nozzle.Scaled(BossSize, new(-53.82f, 209.38f, 20.78f), new(-28.54f, 208.76f, 20.47f), new(-3.57f, 191.39f, 15.82f),
+                                                  new(19.85f, 208.45f, 19.85f), new(50.25f, 208.45f, 22.33f)),
+                Length = 420f * BossSize, HalfWidth = 90f * BossSize, HoldOff = 440f,   // 650 u off the centre of its 420 u
+                Moves = Drake.Moves },
     };
     // The boss of a level: every peer works it out from the replicated level alone.
     public static BossType ForLevel(int level) => Bosses[(Math.Max(1, level) - 1) % Bosses.Length];

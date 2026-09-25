@@ -88,8 +88,8 @@ bomber fighter_g. carrier_b is the pirate-carrier boss spare. ≈ widths on thos
 
 | entity | sprite | rotation | final L | drawn width (u) | why |
 |---|---|---|---|---|---|
-| Rusty Bucket | frigate_a | 90° CCW | 360 | 174 → 190 | A rounded "bucket" bow, with turrets bolted on beside cargo |
-| Drake Bastion | flagship | 90° CCW | 420 | 191 → 217 | The largest and most detailed sprite |
+| Rusty Bucket | frigate_a | 90° CCW | 360 → **720** (2x, the owner, 2026-09-25) | 174 → 380 | A rounded "bucket" bow, with turrets bolted on beside cargo |
+| Drake Bastion | flagship | 90° CCW | 420 → **840** (2x) | 191 → 434 | The largest and most detailed sprite |
 
 ### Siege (tinted `Main`)
 
@@ -156,7 +156,7 @@ values.
 | **Cross / Lancerkin** | `TurretAft` and `TurretWidth` on the clean deck (their art has no painted gun there) | 2 / 2 | no |
 | **Webifier / Talon / Pod** | none (`HitShare` unchanged) | 2 / 2 / 1 (built) | no |
 | **Title Web** | none. Its row tint now applies (the own-art-keeps-its-colours branch goes) | 2 nacelles | no |
-| **Rusty Bucket / Drake** | a **tint** (Q5). HW 70 and 90 kept, so the 310 literal stands. The nose stays at L/2 | 2 / 5 (listed; bosses draw no plume today) | no |
+| **Rusty Bucket / Drake** | a **tint** (the owner's red). **2x** (the owner's ruling, built as `Missions.BossSize`): HW 140 / 180, the hit size with it; the throw's hold follows the row (`Boss.FlankHold`, 400 u). The nose stays at L/2 | 2 / 5 (listed; bosses draw no plume today) | no |
 | **Pirate base** | `Mounts[4]` on the painted guns: horn roots ≈ (±332, −154) and canopy twins ≈ (±104, 0) (today a ring of r 210). L 483, HW 330 | 4 | no |
 | **Pylon** | `Mounts[1]` = (0,0) on the lens. L 300, HW 150 | 0 | no |
 | **Hauler** | 6 `PodCentre` plus `PodSize` on cargo_4's frames. PD (0, 8) re-seated. `Extent` share 0.12 → measured (≈ 0.2) | 2 (today 3, drawn inline) | no |

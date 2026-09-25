@@ -571,7 +571,8 @@ $Finished = @(
     @{ Src = 'crescent_a.png'; Nose = 'Down'; Out = 'enemy_light_tier_2.png'; Length = 34
        Nozzles = @(@(218.5, 320, 51), @(351.5, 320, 51)) }
     # the bosses (Missions.Bosses): no moving turrets, so their painted guns stay; their bells are
-    # listed (a boss draws no flame)
+    # listed (a boss draws no flame). Measured at these lengths; the game draws them Missions.BossSize
+    # times as large (its rows scale Length, HalfWidth and these bells by it)
     @{ Src = 'frigate_a.png'; Nose = 'Right'; Out = 'boss_raider.png'; Length = 360
        Nozzles = @(@(115, 610, 66), @(218.5, 610, 65)) }
     @{ Src = 'flagship.png'; Nose = 'Right'; Out = 'boss_drake.png'; Length = 420

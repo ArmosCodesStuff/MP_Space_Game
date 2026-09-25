@@ -61,8 +61,9 @@ public partial class Hub : Node2D
     public static readonly Vector2 SunPos    = new(0, -1794);
     public static readonly Vector2 WreckPos  = new(-1840, 60);
     public static readonly Vector2 PortalPos = new(1500, 219);
-    // WHERE A MISSION IS BUILT in the arena: a boss's spot, and a raid site's centre. It was
-    // `BasePos + new Vector2(0, -700f)` written into BuildArena, which made it the boss's alone.
+    // WHERE A MISSION IS BUILT in the arena: where a boss's NOSE stands (so a bigger boss stands
+    // no nearer the party), and a raid site's centre. It was `BasePos + new Vector2(0, -700f)`
+    // written into BuildArena, which made it the boss's alone.
     public static readonly Vector2 ArenaCentre = BasePos + new Vector2(0, -700f);
     // FOUR OUTPOSTS, 3000 u out from the base on the diagonals (1000 further than they were) (y grows south): small permanent
     // stations the escort delivers to, named for their corner, in the order the escort visits
@@ -957,8 +958,9 @@ public partial class Hub : Node2D
     // one on every peer.
     public void BuildBoss()
     {
-        Boss = new Boss { Hub = this, Type = Missions.ForLevel(Missions.Level),
-                          Position = ArenaCentre, Rotation = Mathf.Pi };
+        var type = Missions.ForLevel(Missions.Level);
+        Boss = new Boss { Hub = this, Type = type,                     // facing the party, its nose on the spot
+                          Position = ArenaCentre + Vector2.Up * (type.Length * 0.5f), Rotation = Mathf.Pi };
         AddChild(Boss);
     }
     // host: an emplacement is down. It goes the way every host-spawned thing goes; if it was the

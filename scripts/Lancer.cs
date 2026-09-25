@@ -24,7 +24,7 @@
 //              seeker is its own damage source (Shots.SourceKey), where one shared name meant a
 //              hull felt only the first inside its 0.52 s gap.
 //   SHOCKWAVE  every 17 s: a red ring for 1.8 s, held still, then 45 within 340 u
-// Slow and heavy: between its moves it closes on the party to about 650 u and turns ponderously
+// Slow and heavy: between its moves it closes on the party to about 470 u off its nose and turns ponderously
 // (its Missions.BossType row, which carries the hull's art and shape as well).
 public static class Lancer
 {
@@ -44,7 +44,8 @@ public static class Lancer
                 Cue = "boss_trident", Source = DamageSource.LancerMissiles },
 
         // THE DEATH BEAM. Its escorts are two Webifiers 45 degrees to port and starboard, launched
-        // 130 u off the hull (was HalfWidth + 60), 3 hull each -- 3 s at one point-defence turret,
+        // 13/7 of the hull's half-width out (130 u on the 70 u it was first built on; 260 on today's
+        // 140, so they stand as far clear of a bigger hull), 3 hull each -- 3 s at one point-defence turret,
         // so a pilot can clear them inside the charge -- boosting for the charge's whole 6 s. The
         // charge starts on the PIN; with every escort dead, 1 s past their predicted web; at the
         // outside 1 s past that, and never later than 5 s (under the 6 s that would push the beam
@@ -53,17 +54,18 @@ public static class Lancer
         new() { Id = "beam", Way = MoveWay.Beam, Waits = MoveWait.Itself, Busy = true, Super = true,
                 Every = 30, First = 6.0, Windup = 6.0, Live = 3.0, Tick = 0.25,
                 Damage = 50, Reach = 10000f, Width = 70f,
-                Escorts = 2, EscortKind = Enemies.Webifier, EscortAngle = 45f, EscortOut = 130f,
+                Escorts = 2, EscortKind = Enemies.Webifier, EscortAngle = 45f, EscortOut = 13f / 7f,
                 EscortHull = 3, WebGrace = 1.0, WebSlack = 1.0, ArmMax = 5.0,
                 Cue = "boss_beam_charge", Strike = "boss_beam", Source = DamageSource.LancerBeam },
 
-        // THE RAM, 15 s after each beam: 1.5 s of red line 900 u long and 140 u wide (the hull's
-        // own beam, 2 x its 70 u half-width), then the hull down it at 1200 u/s for 40 on contact.
+        // THE RAM, 15 s after each beam: 1.5 s of red line 900 u long and as wide as the hull's own
+        // beam (NO Width here: Boss.Warn draws 2 x the row's half-width, and the hull is what hits),
+        // then the hull down it at 1200 u/s for 40 on contact.
         // ITS OWN CADENCE. It read the beam's 30 s constant (`_charge = BeamEvery`): the two are
         // the same number BY ACCIDENT, not by design, and tuning the beam retuned the ram.
         new() { Id = "ram", Way = MoveWay.Dash, Waits = MoveWait.Everything, Busy = true, Super = true,
                 Every = 30, First = 21.0, Windup = 1.5,
-                Damage = 40, Reach = 900f, Width = 140f, Speed = 1200f,
+                Damage = 40, Reach = 900f, Speed = 1200f,
                 Strike = "boss_ram", Source = DamageSource.LancerCharge },
 
         // THE SHOCKWAVE, every 17 s. Both of these were bare literals in the method that fired it.

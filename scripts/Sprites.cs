@@ -23,7 +23,12 @@ public static class Sprites
 
 // A BELL: the centre of its aft rim and its width, in world units from the hull's centre (x to
 // starboard, y aft), as tools/make_ships.ps1 prints them off the art.
-public readonly record struct Nozzle(float X, float Y, float Bell);
+public readonly record struct Nozzle(float X, float Y, float Bell)
+{
+    // the bells of a hull drawn k times the length the tool measured them at
+    public static Nozzle[] Scaled(float k, params Nozzle[] bells) =>
+        Array.ConvertAll(bells, n => new Nozzle(n.X * k, n.Y * k, n.Bell * k));
+}
 
 // WHAT A HULL LOOKS LIKE: the one shape every table that draws a hull takes its art in. It replaced
 // each table's own Texture, Length and Tint fields, and the single plume every hull drew from the

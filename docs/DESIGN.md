@@ -738,8 +738,14 @@ under the base. A route or a range that moves must keep the 500.
   come out byte-identical on another machine (GDI+'s bicubic resize). After a run, `git checkout` any
   line-drawing output (carrier_player, battleship_hull, destroyer_hull, turret_main, turret_pd) whose
   block you did not change.
-- **Hit sizes never follow the art.** A raider is hit on its row's `HitShare` of its Length, a class on
-  its `HalfWidth`; the pack re-arted every raider with neither moving.
+- **Hit sizes never follow the art** -- but a boss's do. A raider is hit on its row's `HitShare` of its
+  Length, a class on its `HalfWidth`; the pack re-arted every raider with neither moving. The bosses
+  are `Missions.BossSize` (2, the owner's "2 or 3x") times their art's measure, Length, HalfWidth and
+  bells alike, and everything a move places about the hull reads the row at use: the nose (L/2), the
+  ram's lane (2 HW), the rock's hold (`Boss.FlankHold`: HW + body + gap), the escorts and the warp ring
+  (in half-widths), and every stand-off (`HoldOff`, a warp's `Standoff`) measured from the NOSE, so a
+  bigger hull stands no nearer the party. The boss spawns with its nose on `Hub.ArenaCentre`. What
+  does NOT scale: reaches, ranges and bodies (the beam's 70 u, the shockwave's 340 u ring, the rock).
 - **Carrier**: the runway down the centre, the bays on the white either side of it, three sponsons a
   flank; point defence on the two middle sponsons and the stern block (the bow is where bombers lift
   off). **Battleship**: its four painted turrets are painted over from a clean stretch of its spine
@@ -754,8 +760,7 @@ under the base. A route or a range that moves must keep the 500.
   `frigate_a`, the Drake Bastion `flagship`, both RED AND BLACK (the owner's ruling): the pack's grey
   multiplied by the owner's swatch red (0.67, 0.03, 0.01), so highlights come out that red and shadows
   black; a pure multiply, since the hull reads on space without a lift -- with their painted guns (a boss has no moving turret) and their
-  bells listed on the row (2 and 5; a boss draws no flame). HalfWidth 70 and 90 did not move, so the
-  Drake's 310 u throw literal stands. **The fleet** (the pack): the hauler `cargo_4` (`Hauler.Art`; its
+  bells listed on the row (2 and 5; a boss draws no flame), at twice the art's size (above). **The fleet** (the pack): the hauler `cargo_4` (`Hauler.Art`; its
   six painted cargo frames are the six pods, its point defence on the bow dome), the miner and the
   salvager one drone, `drone_salvager` (`gatherer.png`, the owner's pick for both: told apart by the
   row's tint, the average colour of the art each first replaced; the beam and the unloading load leave
@@ -1264,7 +1269,7 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   load-bearing needs both its update rate AND its interpolation revisited, not just its position.*
 - **A check can pass for the wrong reason when the setup makes it vacuous.** "The boss is locked in
   place" asserted zero drift, and a mutant that ignored the lock entirely still passed: inside its
-  650 u standoff the boss would not have closed anyway, so the assertion tested nothing but the
+  hold-off the boss would not have closed anyway, so the assertion tested nothing but the
   flag. Arrange the conditions under which the behaviour would actually differ, or the check is
   decoration. Sibling of the constant-comparison lesson above.
 - **A fallback that tidies up after itself makes the check blind.** `Character.Save` writes a temp
