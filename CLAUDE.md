@@ -90,9 +90,19 @@ explicit and binding.
      other engine run is going: the fix loop then happens in its small context, not the main one.
    - The main conversation holds only ledger paths and verdicts, so compacting it loses nothing and
      nothing is multiplied by the number of agents.
-4. **Cheap agents for mechanical work.** Applying a written plan, resolving a merge, copying files,
-   grepping, re-running a check: a smaller model at low effort. The default model is for design,
-   diagnosis and review.
+4. **The lowest tier you can trust (owner, 2026-09-25).** Every agent gets the cheapest model that
+   can be trusted to do its job reasonably, and the `model` is set explicitly on every call --
+   never left to inherit the main conversation's. The default is the LOW tier; a higher one needs a
+   reason you can name.
+   - **haiku, low effort:** grepping, copying, reading a log for its verdict, re-running a check,
+     applying exact edits someone else wrote, a merge whose resolution is written down.
+   - **sonnet:** building from a written plan or ledger handoff with its checks (a slice, a sprite
+     re-map, a data row, a named failing check to fix), a read-only sweep or audit of a subsystem.
+   - **opus (the default model):** design, diagnosing a failure nobody has explained yet, authority
+     and wire work, the reviewer or skeptic whose verdict gates a merge -- where a wrong answer
+     costs more than the tokens.
+   - **Escalate one tier after one failed attempt**, having read why it failed; never start high
+     "to be safe". Record each job's tier in its ledger PRE.
 5. **Sequential beats parallel when jobs share files; resume while small.** Several agents reading
    the same files each pay for them; one agent doing the jobs in turn reads them once. For a
    follow-up on the same scope, RESUME the agent that did the work while its transcript is under
