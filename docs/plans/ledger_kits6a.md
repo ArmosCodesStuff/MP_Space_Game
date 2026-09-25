@@ -409,3 +409,26 @@ fittings sweep's witness table ~13755, fitRows ~13797.
   tools/screens/Shots.cs.txt.
 - HEAD 7ae29dd8e7fd9ea3993c28576e3a9f9b483bea98 · Abilities.cs 4d6035da · Ships.cs d40e1d14 · PlayerShip.cs 14d5308d ·
   Fx.cs a25d422d · Items.cs e111996e · SmokeTest.cs.txt ec3a7496 · Shots.cs.txt 71b74484
+### kits6a-J8 · POST
+- Verdict: compiles; typecheck 0 errors, verify -Quick ALL CHECKS PASSED. engine-unproven: rungs owed in the final
+  test phase.
+- Built: Ab.Suppress (Q; timed row RunFor, suppress_window 6, suppress_cooldown 20 from the press; OnDealt on weapon id
+  Shots.Of(Shots.Shell).Id only). PlayerShip.Afflict(target, status, timeStat, mark) (generic: host, IStatused, the
+  hostile's own ApplyStatus, the mark raised when new or run down by Remark 0.5 s). Fx: FxShape.Chevron, Fx.Chevron = 16
+  appended, row "chevron" (grey, Life 3, Cap 1), Fx.Mark(id, h) on the hull's NetId, Fx.ChevronGap 12 (drawn upright over
+  the hit circle). DD Rows suppress_window 6 / suppress_time 3 / suppress_cooldown 20; Abilities Guns, Lance, Suppress (the
+  DD's walls: ability 2 now built); Items @duration + suppress_window.
+- Checks NEW: LaneA6aSuppressChecks (rows; webifier / gunship / lancerkin: Q, SUPPRESS lit, cool 20.0, nothing before a
+  shell, x0.5 guns + one chevron of the hit radius after it, one chevron after a second shell, 2.8-2.9 s still, 3.05-3.2 s
+  gone, COOLING), LaneA6aSuppressWeaponChecks (live Space on a selected webifier suppresses; Lance / PD blows do not; a
+  second shell + a second apply keep x0.5; a shell after 6.1-6.6 s and before any press: nothing),
+  LaneA6aSuppressGunChecks (a latched webifier's blows on the DD land x0.5 under a shell, web held, DD pinned; whole 3.3 s
+  on; still / turning / full ahead), frame LaneA6aSuppressFrames (85d_dd_suppressed), rung 5 LaneA6aSuppressHostWatch /
+  HostChecks / GuestChecks (the host posts a webifier off the guest DD's bow when its slot is up; the guest's shells
+  suppress it on the host; the chevron drawn on the guest), the sweep's witness "suppress".
+- Checks REWRITTEN (6.3): the DD bar list (guns, lance, suppress, warp; Q), Fx.All.Length 10 -> 17 (was already stale at
+  16 before this job: rows 10-15 were appended by earlier lanes without it).
+- Rung-5 note: the host awaits LaneA6aSuppressHostChecks right before it waits for the guest's freighter (the guest's
+  Suppress runs after its curtain); the host's watch is created with the lunge / prism / reload watches.
+- Owed: rung 3 the three checks + the sweep; rung 4 frame 85d; rung 5 the host / guest pair.
+- Next: kits6a-J9 (Grapnel).

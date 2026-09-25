@@ -761,6 +761,18 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         Engage(def, Stats[def.Time]);
         if (def.Guard != null) _status.Apply(Status.Hardened, sl.Left, Stats[def.Guard]);
     }
+    // A STATUS THIS SHIP PUTS ON A HOSTILE IT HIT (a row's OnDealt, on the host): for the stat's seconds, through the
+    // hostile's own ApplyStatus (its Reaches decides whether the status can hold it at all), with the row's mark raised
+    // on the hull -- only when the status is new or has run down by Remark, so a stream of shells raises one mark every
+    // half second, not one a shell. Suppressing fire's chevron.
+    public const double Remark = 0.5;
+    public void Afflict(IHittable target, Status st, string timeStat, int mark)
+    {
+        if (!Net.Sim || target is not IStatused held || !target.Alive) return;
+        double time = Stats[timeStat], before = held.Statuses.Left(st);
+        held.ApplyStatus(st, time);
+        if (held.Statuses.Has(st) && before < time - Remark) Fx.Mark(mark, target);
+    }
     // A row's time and its cooldown set at once: from the press, or after the time when it CoolAfter.
     private void Engage(AbilityDef def, double secs)
     {

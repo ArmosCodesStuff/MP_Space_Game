@@ -277,6 +277,22 @@ public static class Ab
         Show = (s, _) => Timed(s, "lance", "lance_cooldown", "LANCE"),
     };
 
+    // SUPPRESSING FIRE (the Destroyer's Q, kits_v2): for 6 s every hostile a director SHELL hits is Suppressed until 3 s
+    // after its last hit (StatusSet.OutGuards: guns x0.5, a boss's moves x0.7, supers whole, its throw held; it still
+    // moves and webs), a grey chevron over it on every peer; 20 s from the press. A timed row (RunFor) that hears its
+    // own ship's blows (OnDealt) and afflicts through PlayerShip.Afflict: the Lance ("lance") and the PD ("pd") carry
+    // other weapon ids and never apply it. A status, so two destroyers do not stack.
+    public static readonly AbilityDef Suppress = new()
+    {
+        Id = "suppress", Name = "Suppressing fire", Short = "SUPPRESS", Default = Key.Q,
+        Blurb = "For 6 s every hostile your main guns hit deals half damage with its guns and holds its missiles, until 3 s after its last hit.",
+        Time = "suppress_window", Cooldown = "suppress_cooldown",
+        OnDealt = (s, t, _, w) => { if (w == Shots.Of(Shots.Shell).Id) s.Afflict(t, Status.Suppressed, "suppress_time", Fx.Chevron); },
+        Press = (s, _) => s.RunFor("suppress"),
+        Refuse = (s, _) => s.Sl("suppress").Cool > 0 ? "COOLING" : null,
+        Show = (s, _) => Timed(s, "suppress", "suppress_cooldown", "SUPPRESS"),
+    };
+
     public static readonly AbilityDef Attack = new()
     {
         Weapon = true, Id = "attack", Name = "Fighters: attack", Short = "ATTACK", Default = Key.Space,

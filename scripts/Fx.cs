@@ -38,6 +38,7 @@ public enum FxShape
     Sparks,    // Count hot sparks sprayed from A toward To's side, over the first half second
     Puffs,     // Count grey puffs left along the chunk's own path (the same seed as its Debris)
     Scar,      // a dark jagged patch at A, in the anchor's own frame, so it turns with the hull
+    Chevron,   // a downward chevron over the anchor, upright on screen however the hull turns (a status on it)
 }
 
 public class FxDef
@@ -86,12 +87,14 @@ public static class Fx
     public const int Burst = 0, Lost = 1, Rebuilt = 2, Wave = 3, Emp = 4, Echo = 5, Rail = 6,
                      WarnLane = 7, WarnZone = 8, AimZone = 9, TauntRing = 10,
                      Rip = 11, RipSparks = 12, RipSmoke = 13, Scar = 14,
-                     RailEnhanced = 15;
+                     RailEnhanced = 15, Chevron = 16;
     // WHAT A WARNING RIDES: the world itself, or the NetId of the hull it is drawn on. A beam's
     // and a dash's lane are drawn in the BOSS'S OWN FRAME and parented to it, so the line it drew
     // is the line it fires down however the hull turns; everything else is pinned to the ground
     // it will hit. The world resolves the id (Hub.AddFx).
     public const int World = 0;
+    // how far above a hull's hit circle its mark (a chevron) is drawn
+    public const float ChevronGap = 12f;
     // How long a warning stays lit once its attack is over.
     public const double Flash = 0.35;
     private static readonly Color Warning = new(1f, 0.15f, 0.12f);
@@ -137,6 +140,9 @@ public static class Fx
         new() { Id = "scar",       Shape = FxShape.Scar,   Tint = new(0.10f, 0.07f, 0.06f), Life = 10.0, Cap = 3 },
         // an enhanced rail round (ActiveReload's perfect press): the rail's bar in white, 1.5x as wide
         new() { Id = "rail_enhanced", Shape = FxShape.Bar, Tint = new(0.92f, 0.96f, 1f), Life = 0.35, Width = 10.5f, Fill = false },
+        // a hostile the destroyer's guns have SUPPRESSED (PlayerShip.Afflict): a grey chevron over it, one on a hull at a
+        // time (a re-raise replaces it), lasting the status's 3 s and fading over its last half second
+        new() { Id = "chevron", Shape = FxShape.Chevron, Tint = new(0.72f, 0.74f, 0.78f), Life = 3.0, Width = 3f, Cap = 1 },
     };
 
     public static FxDef Of(int id) => All[id >= 0 && id < All.Length ? id : Burst];
@@ -174,6 +180,13 @@ public static class Fx
     {
         if (!Net.Sim || anchor is not Node2D n) return;
         On?.Invoke(new FxRaise { Id = Rip, At = n.ToLocal(hook), To = toward, Size = ChunkShare * LengthOf(anchor), Anchor = anchor.NetId });
+    }
+    // A MARK ON A HULL: a row drawn over the thing (the chevron of a status on it), riding its NetId so it follows the
+    // hull on every peer; the raise's Size is the hull's hit radius, which the row draws clear of.
+    public static void Mark(int id, IHittable on)
+    {
+        if (!Net.Sim || on is not Node2D || on.NetId == World) return;
+        On?.Invoke(new FxRaise { Id = id, At = Vector2.Zero, To = Vector2.Zero, Size = on.HitRadius, Anchor = on.NetId });
     }
     // how long a hull is, for its chunk: its art's length, else the width of its hit circle
     public static float LengthOf(IHittable h) => h is Node n && HullLength(n) is > 0 and var l ? l : 2 * h.HitRadius;
@@ -447,6 +460,18 @@ public partial class FxNode : Node2D
                 DrawColoredPolygon(o, new Color(c.R, c.G, c.B, a));
                 var loop = new Vector2[o.Length + 1]; o.CopyTo(loop, 0); loop[^1] = o[0];
                 DrawPolyline(loop, new Color(0.45f, 0.22f, 0.1f, a * 0.8f), 1.2f);
+                break;
+            }
+            case FxShape.Chevron:
+            {   // upright on screen whatever the hull's heading: the hull's turn undone, ChevronGap u clear of its hit circle
+                float a = (float)Mathf.Clamp((d.Life - _t) / 0.5, 0, 1);
+                var sc = GlobalScale;
+                DrawSetTransform(Vector2.Zero, -GlobalRotation, new Vector2(sc.X != 0 ? 1f / sc.X : 1f, sc.Y != 0 ? 1f / sc.Y : 1f));
+                float y = -(Radius + Fx.ChevronGap);
+                var v = new[] { new Vector2(-9f, y - 6f), new Vector2(0f, y + 2f), new Vector2(9f, y - 6f) };
+                DrawPolyline(v, new Color(0.08f, 0.08f, 0.1f, 0.6f * a), d.Width + 2f);
+                DrawPolyline(v, new Color(c.R, c.G, c.B, a), d.Width);
+                DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                 break;
             }
         }

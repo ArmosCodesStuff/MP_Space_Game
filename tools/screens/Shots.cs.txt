@@ -86,6 +86,7 @@ public partial class _Shots : Node
         await LaneA6cCurtainFrames(hub, yard);
         await LaneA6aBbFrames(hub, yard);
         await LaneA6aSuperFrames(hub, yard);
+        await LaneA6aSuppressFrames(hub, yard);
         // 84: a chunk torn from a practice dummy, mid-tumble, with its sparks, smoke and scar
         var d1 = hub.GetNode<TargetDummy>("TargetDummy1");
         Me().Position = d1.GlobalPosition + new Vector2(0, 320); Me().Velocity = Vector2.Zero;
@@ -130,6 +131,25 @@ public partial class _Shots : Node
         foreach (var w in N<Wing>().Where(w => w.Carrier == s && w.Kind == WingKind.Patrol)) w.SendOut(null, s.Clock);
         s.Sl("super").Left = 0; s.Sl("super").Cool = 0;
         await W(0.5);
+    }
+
+    // SLICE 6a: the destroyer's Q on a real press (85d): SUPPRESS lit on the bar, and a held gunship 300 u off that one
+    // director shell has hit, the grey chevron over it (upright, clear of its hull) 0.6 s on.
+    async Task LaneA6aSuppressFrames(Hub hub, Vector2 yard)
+    {
+        var zp = typeof(Hub).GetProperty("ZoomLevel");
+        Character.Class = ShipClass.Destroyer; P(hub, "ApplyLocalIdentity"); await W(0.3);
+        var s = hub.GetNode<PlayerShip>("Ship_1"); s.Visible = true; s.Position = yard; s.Velocity = Vector2.Zero; s.Rotation = 0.5f;
+        s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0;
+        zp.SetValue(hub, 1.1f); await W(1.0);
+        var g = hub.SpawnRaider(yard + new Vector2(260f, -160f), Enemies.Gunship); g.Hp = 1e9; g.ApplyStatus(Status.Disabled, 10); g.Rotation = 2.2f;
+        s.UseAbility("suppress", 0);
+        await W(0.3);
+        Dealt.Deal(g, 1, s, Shots.Of(Shots.Shell).Id);
+        await W(0.6); s.Position = yard; s.Velocity = Vector2.Zero; await Snap("85d_dd_suppressed");
+        g.TakeDamage(1e12);
+        s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0;
+        await W(0.3);
     }
 
     // SLICE 6c: the Warden's taunt on a real press (82c): Q with two webifiers standing 600-800 u off -- the 1000 u

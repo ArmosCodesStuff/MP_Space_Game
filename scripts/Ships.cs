@@ -261,6 +261,9 @@ public static class Classes
                 new() { Group = "Long Lance", Id = "lance_speed",    Label = "Speed",    Base = 170, Unit = "u/s", Dec = 0 },
                 new() { Group = "Long Lance", Id = "lance_range",    Label = "Run",      Base = 3000, Unit = "u", Dec = 0 },
                 new() { Group = "Long Lance", Id = "lance_cooldown", Label = "Cooldown", Base = 18, Unit = "s", Dec = 1, Inverse = true },
+                new() { Group = "Suppressing fire", Id = "suppress_window",   Label = "Lasts",                 Base = 6,  Unit = "s", Dec = 1 },
+                new() { Group = "Suppressing fire", Id = "suppress_time",     Label = "Holds after a hit",     Base = 3,  Unit = "s", Dec = 1 },
+                new() { Group = "Suppressing fire", Id = "suppress_cooldown", Label = "Cooldown",              Base = 20, Unit = "s", Dec = 1, Inverse = true },
             },
             Art = new ClassArt {
                 // destroyer_dd22 (the pack, J5): both mains on the keel gun cluster near the bow,
@@ -269,7 +272,7 @@ public static class Classes
                 Mains = new Vector2[] { new(0.20f, -14.20f), new(0.20f, 17.81f) },
                 Pds   = new Vector2[] { new(-30.81f, 5.82f), new(30.81f, 5.82f) },
                 TurretTexScale = 1.3085f / 5.5f, MainBarrel = 16.03f, PdBarrel = 7.2f },
-            Abilities = new[] { Ab.Guns, Ab.Lance } },
+            Abilities = new[] { Ab.Guns, Ab.Lance, Ab.Suppress } },
 
         // -- page 2: freight, which carries its own defences -------------------
         new() { Id = ShipClass.FreightHauler, Name = "FREIGHTER", Ready = true, Fit = Fit.Guns | Fit.Pd | Fit.Deploy,

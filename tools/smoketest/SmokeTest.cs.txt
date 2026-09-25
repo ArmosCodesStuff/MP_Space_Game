@@ -5736,6 +5736,197 @@ public partial class _Test : Node
         finally { s.Stats.SetBase("pd_range", was); dm.Position = dmHome; }
     }
 
+    // ── SLICE 6a: SUPPRESSING FIRE (the Destroyer's Q, kits_v2): for 6 s every hostile a director shell hits is Suppressed
+    // until 3 s after its last hit, a grey chevron over it; 20 s from the press. The rows once (6 / 3 / 20, Q, ability 2
+    // at level 3). Three varied runs (VaryNear spot; a held webifier, gunship, lancerkin 300-600 u off at a VaryAngle
+    // bearing; the first shell 0.5-5.4 s into the window, a second 0.15-0.35 s later): Q engages the slot (SUPPRESS on
+    // the bar, cooling 20.0 from the press) and nothing is suppressed until a shell lands; after it the target is
+    // Suppressed with its guns at x0.5, ONE chevron on its hull the size of its hit circle; 2.8-2.9 s after the LAST
+    // shell it still is, 3.05-3.2 s after it is not and its guns are whole; Q again is refused COOLING.
+    async Task LaneA6aSuppressChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        var dd = new ShipStats(ShipClass.Destroyer);
+        Check(dd["suppress_window"] == 6 && dd["suppress_time"] == 3 && dd["suppress_cooldown"] == 20 && Ab.Suppress.Default == global::Godot.Key.Q
+              && Unlocks.Nth(ShipClass.Destroyer, 2) == Ab.Suppress && Unlocks.AbilityAt(Classes.Of(ShipClass.Destroyer).Abilities, Ab.Suppress) == 3
+              && new ShipStats(ShipClass.Battleship)["suppress_window"] == 0 && Fx.All[Fx.Chevron].Id == "chevron" && Fx.All[Fx.Chevron].Cap == 1,
+              $"Suppressing fire's rows (kits_v2): {dd["suppress_window"]:0} s window (6), held {dd["suppress_time"]:0} s after the last hit (3), {dd["suppress_cooldown"]:0} s (20); Q; the destroyer's ability 2, open at level 3; no other hull has it; the chevron row, one on a hull");
+        await SetClass(ShipClass.Destroyer);
+        var s = Me; s.AutopilotTo = null;
+        var q = Abilities.KeyFor(ShipClass.Destroyer, "suppress");
+        string shell = Shots.Of(Shots.Shell).Id;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        async Task Until(double t) { while (s.Clock < t) await Frame(); }
+        var kinds = new[] { Enemies.Webifier, Enemies.Gunship, Enemies.Lancerkin };
+        H.ClearSelection();
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; }
+            s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0; Hold(); await Wait(0.2); Hold();
+            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(300f, 600f);
+            var tgt = H.SpawnRaider(spot, kinds[run]); tgt.Hp = 1e9; tgt.ApplyStatus(Status.Disabled, 60);
+            await Frame();
+            int Chevrons() => Nodes<FxNode>(tgt).Count(f => f.Id == Fx.Chevron && !f.IsQueuedForDeletion());
+            Key(q);
+            int frames = 0;
+            for (; frames < 6 && s.Sl("suppress").Left <= 0; frames++) await Frame();
+            double t0 = s.Clock, cool = s.Sl("suppress").Cool;
+            var state = Abilities.Find(ShipClass.Destroyer, "suppress").State(s, null);
+            await Until(t0 + Vary(0.5f, 5.4f));
+            bool before = tgt.Statuses.Has(Status.Suppressed);
+            Dealt.Deal(tgt, 1, s, shell);
+            await Frame(); await Frame();
+            bool on = tgt.Statuses.Has(Status.Suppressed); double gun = tgt.Statuses.Out(1.0, OutKind.Gun);
+            int marks1 = Chevrons();
+            float markR = Nodes<FxNode>(tgt).FirstOrDefault(f => f.Id == Fx.Chevron)?.Radius ?? -1f;
+            await Wait(Vary(0.15f, 0.35f));
+            Dealt.Deal(tgt, 1, s, shell);
+            double last = s.Clock;
+            await Frame(); await Frame();
+            int marks2 = Chevrons();
+            Key(q); await Frame(); await Frame();
+            string again = s.FailNote("suppress");
+            await Until(last + Vary(2.8f, 2.9f));
+            bool still = tgt.Statuses.Has(Status.Suppressed); double gunStill = tgt.Statuses.Out(1.0, OutKind.Gun);
+            await Until(last + Vary(3.05f, 3.2f));
+            bool gone = !tgt.Statuses.Has(Status.Suppressed); double gunAfter = tgt.Statuses.Out(1.0, OutKind.Gun);
+            Check(frames <= 3 && Math.Abs(cool - 20) < 0.1 && state.Lit && state.Line.StartsWith("SUPPRESS") && !before && on && Math.Abs(gun - 0.5) < 1e-9
+                  && marks1 == 1 && marks2 == 1 && Math.Abs(markR - tgt.HitRadius) < 0.01f && again == "COOLING"
+                  && still && Math.Abs(gunStill - 0.5) < 1e-9 && gone && Math.Abs(gunAfter - 1.0) < 1e-9,
+                  $"suppress run {run} ({Enemies.Of(kinds[run]).Id} {spot.DistanceTo(at):0} u off): Q -- the bar '{state.Line}' (SUPPRESS, lit), cooling {cool:0.00} (20); suppressed before a shell {before} (False); a shell -- suppressed {on}, its guns x{gun:0.00} (0.5), {marks1} chevron of radius {markR:0.0} ({tgt.HitRadius:0.0}); a second shell, {marks2} chevron (1); Q again {again} (COOLING); "
+                  + $"2.8-2.9 s after the last shell {still} x{gunStill:0.00} (0.5), 3.05-3.2 s after gone {gone} x{gunAfter:0.00} (1.0)");
+            tgt.TakeDamage(1e12);
+            s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0;
+            await Wait(0.3);
+        }
+    }
+
+    // ── SLICE 6a: WHAT SUPPRESSES (kits_v2 Proves: "a director shell, a Lance and a PD round each hit a webifier; only the
+    // shell suppresses"; "a shell at 6.1 s applies nothing"; "two DDs give x0.5"). Three varied runs (VaryNear spot, the
+    // webifier 300-600 u off at a VaryAngle bearing):
+    //   LIVE -- Q, the webifier selected, Space held with the cursor on it: within 3 s the director's own shells have
+    //   landed ("shell" credit up) and it is Suppressed, one chevron on it;
+    //   a gunship 300-600 u off the other way: a Lance blow and a PD blow (in a varied order) land through the door and
+    //   suppress nothing, no chevron; a shell does; a second shell and a second application keep its guns at x0.5, not
+    //   x0.25 (a status: two destroyers do not stack);
+    //   a lancerkin never hit in the window takes a shell 6.1-6.6 s after the press: nothing (the window is over), and a
+    //   shell with no press at all before it: nothing.
+    async Task LaneA6aSuppressWeaponChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Destroyer);
+        var s = Me; s.AutopilotTo = null;
+        string shell = Shots.Of(Shots.Shell).Id, lance = Shots.Of(Shots.Lance).Id;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int run = 0; run < 3; run++)
+        {
+            var at = VaryNear(yonder, 300f);
+            void Hold() { s.Position = at; s.Velocity = Vector2.Zero; }
+            s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0; Hold(); await Wait(0.2); Hold();
+            float bearing = VaryAngle();
+            var webAt = at + Vector2.Right.Rotated(bearing) * Vary(300f, 600f);
+            var gunAt = at - Vector2.Right.Rotated(bearing) * Vary(300f, 600f);
+            var kinAt = at + Vector2.Right.Rotated(bearing + Mathf.Pi / 2f) * Vary(300f, 600f);
+            var web = H.SpawnRaider(webAt, Enemies.Webifier); web.Hp = 1e9; web.ApplyStatus(Status.Disabled, 60);
+            var gun = H.SpawnRaider(gunAt, Enemies.Gunship); gun.Hp = 1e9; gun.ApplyStatus(Status.Disabled, 60);
+            var kin = H.SpawnRaider(kinAt, Enemies.Lancerkin); kin.Hp = 1e9; kin.ApplyStatus(Status.Disabled, 60);
+            await Frame();
+            int Chevrons(Node n) => Nodes<FxNode>(n).Count(f => f.Id == Fx.Chevron && !f.IsQueuedForDeletion());
+            // before any press: a shell suppresses nothing
+            Dealt.Deal(kin, 1, s, shell); await Frame();
+            bool unpressed = kin.Statuses.Has(Status.Suppressed);
+            // LIVE: the director's own shells
+            H.SelectTarget(web);
+            double shot0 = s.DealtBy.GetValueOrDefault(shell);
+            s.UseAbility("suppress", 0); await Frame(); await Frame();
+            double t0 = s.Clock;
+            KeyDown(global::Godot.Key.Space);
+            while (s.Clock - t0 < 3.0 && !web.Statuses.Has(Status.Suppressed)) { Hold(); web.Position = webAt; AimWorld(webAt); await Frame(); }
+            KeyUp(global::Godot.Key.Space);
+            bool live = web.Statuses.Has(Status.Suppressed); double landed = s.DealtBy.GetValueOrDefault(shell) - shot0; int liveMarks = Chevrons(web);
+            H.ClearSelection();
+            // the Lance and the PD through the same door
+            bool lanceFirst = run != 1;
+            if (lanceFirst) { Dealt.Deal(gun, 1, s, lance); Dealt.Deal(gun, 1, s, Dealt.Pd); }
+            else { Dealt.Deal(gun, 1, s, Dealt.Pd); Dealt.Deal(gun, 1, s, lance); }
+            await Frame(); await Frame();
+            bool byOthers = gun.Statuses.Has(Status.Suppressed); int otherMarks = Chevrons(gun);
+            Dealt.Deal(gun, 1, s, shell); await Frame();
+            bool byShell = gun.Statuses.Has(Status.Suppressed);
+            Dealt.Deal(gun, 1, s, shell); gun.ApplyStatus(Status.Suppressed, 3); await Frame();
+            double twice = gun.Statuses.Out(1.0, OutKind.Gun);
+            // the window over
+            while (s.Clock - t0 < Vary(6.1f, 6.6f)) { Hold(); await Frame(); }
+            double left = s.Sl("suppress").Left;
+            Dealt.Deal(kin, 1, s, shell); await Frame(); await Frame();
+            bool late = kin.Statuses.Has(Status.Suppressed); int lateMarks = Chevrons(kin);
+            Check(!unpressed && live && landed >= 11.25 - 1e-9 && liveMarks == 1 && !byOthers && otherMarks == 0 && byShell && Math.Abs(twice - 0.5) < 1e-9
+                  && left <= 0 && !late && lateMarks == 0,
+                  $"suppress weapons run {run}: a shell before any press suppresses {unpressed} (False); LIVE, Q and Space on a selected webifier {webAt.DistanceTo(at):0} u off -- {landed:0.00} of shells landed, suppressed {live}, {liveMarks} chevron (1); "
+                  + $"a gunship {gunAt.DistanceTo(at):0} u off takes a {(lanceFirst ? "Lance then a PD" : "PD then a Lance")} blow -- suppressed {byOthers} (False), {otherMarks} chevrons (0); a shell {byShell} (True); twice over, guns x{twice:0.00} (0.5); "
+                  + $"after the window ({left:0.0} s left) a shell on a lancerkin -- suppressed {late} (False), {lateMarks} chevrons (0)");
+            foreach (var r in new[] { web, gun, kin }) r.TakeDamage(1e12);
+            s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0;
+            await Wait(0.3);
+        }
+    }
+
+    // ── SLICE 6a: A SUPPRESSED FOE STILL WEBS, AT HALF ITS GUN (kits_v2: "it still moves, turns and webs"; "a suppressed
+    // pinner still pins") -- Suppress meeting the webifier's pin on the destroyer itself. Three varied runs (VaryNear spot,
+    // the webifier 250-400 u off at a VaryAngle bearing, the destroyer still / turning / full ahead; PD out of reach):
+    // latched, it lands a blow on the destroyer (its full blow read off the tally); Q and ONE director shell on it; every
+    // blow in the next 2.8 s lands half of the full one, the web still holds and the destroyer is still Pinned; 3.3 s past
+    // the shell the next blow is whole again.
+    async Task LaneA6aSuppressGunChecks(Vector2 yonder)
+    {
+        foreach (var r in H.Raiders.ToList()) r.TakeDamage(1e12);
+        await SetClass(ShipClass.Destroyer);
+        var s = Me; s.AutopilotTo = null;
+        string shell = Shots.Of(Shots.Shell).Id;
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        double was = PdReachOff(s);
+        try
+        {
+            for (int run = 0; run < 3; run++)
+            {
+                var at = VaryNear(yonder, 300f);
+                s.Position = at; s.Velocity = Vector2.Zero; s.Rotation = VaryAngle(); s.Hp = s.MaxHp;
+                s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0;
+                await Wait(0.2);
+                var w = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f), Enemies.Webifier); w.Hp = 1e9; w.Quarry = s;
+                void Hold() { if (run == 0) { s.Position = at; s.Velocity = Vector2.Zero; } s.Hp = s.MaxHp; }
+                if (run == 1) KeyDown(global::Godot.Key.D);
+                if (run == 2) KeyDown(global::Godot.Key.W);
+                for (int i = 0; i < 60 * 6 && !w.Latched; i++) { Hold(); await Frame(); }
+                double Tally() => s.DamageBySource.GetValueOrDefault($"raider:{w.NetId}");
+                // the full blow, as it lands
+                double t = Tally(), full = 0;
+                for (int i = 0; i < 60 * 3 && full <= 0; i++) { Hold(); await Frame(); double n = Tally(); if (n > t + 1e-9) full = n - t; t = n; }
+                s.UseAbility("suppress", 0); await Frame();
+                Dealt.Deal(w, 1, s, shell);
+                double c0 = s.Clock; var held = new List<double>(); bool pinned = true; int frames = 0, latchedFrames = 0;
+                t = Tally();
+                while (s.Clock - c0 < 2.8)
+                {
+                    Hold(); await Frame();
+                    double n = Tally(); if (n > t + 1e-9) held.Add(n - t); t = n;
+                    pinned &= s.Statuses.Has(Status.Pinned); frames++; if (w.Latched) latchedFrames++;
+                }
+                while (s.Clock - c0 < 3.3) { Hold(); await Frame(); t = Tally(); }
+                double whole = 0;
+                for (int i = 0; i < 60 * 3 && whole <= 0; i++) { Hold(); await Frame(); double n = Tally(); if (n > t + 1e-9) whole = n - t; t = n; }
+                KeyUp(global::Godot.Key.D); KeyUp(global::Godot.Key.W); s.Velocity = Vector2.Zero;
+                Check(full > 0 && held.Count >= 1 && held.All(h => Math.Abs(h - full * 0.5) < 1e-6) && pinned && latchedFrames >= frames * 0.9 && Math.Abs(whole - full) < 1e-6,
+                      $"suppressed web run {run} ({(run == 0 ? "still" : run == 1 ? "turning" : "full ahead")}): a webifier latched {w.Position.DistanceTo(s.Position):0} u off lands {full:0.00}; one shell under Q -- the next {held.Count} blows land [{string.Join(", ", held.Select(h => h.ToString("0.00")))}] (x0.5), web held {latchedFrames} of {frames} frames (>= 90%), the destroyer pinned every frame {pinned}; 3.3 s on the next is {whole:0.00} (whole)");
+                w.TakeDamage(1e12); s.Statuses.Clear(Status.Pinned);
+                s.Sl("suppress").Left = 0; s.Sl("suppress").Cool = 0;
+                await Wait(0.3);
+            }
+        }
+        finally { s.Stats.SetBase("pd_range", was); }
+    }
+
     async Task LaneA6cBladeChecks(Vector2 yonder)
     {
         var sh = new ShipStats(ShipClass.HeavyWarrior);
@@ -7338,6 +7529,77 @@ public partial class _Test : Node
         var said = me.FailNote("gunships");
         Check(craft == 2 && circle && left > 8 && left <= 12 + 1e-6 && cool > 20 && cool <= 25 + 1e-6 && said == "COOLING",
               $"arena guest: its own E at the dummy {d.Position.DistanceTo(me.Position):0} u off -- {craft} gunships here (2), on the 240 u circle ({circle}); up {left:0.0} s (12), cooling {cool:0.0} (25, a report late); E again {said} (COOLING)");
+    }
+
+    // ── SLICE 6a, RUNG 5: A GUEST'S SUPPRESSING FIRE (kits_v2 Proves: "a guest DD suppresses (the host decides), and the
+    // chevron shows"; kits_v31 §8's second-run list). The guest (LaneA6aSuppressGuestChecks, after its curtain) refits to
+    // the Destroyer and presses Q at a varied heading: the host's slot arrives (up 4-6 s, cooling 18.5-20) and Q again is
+    // refused COOLING. The host (LaneA6aSuppressHostWatch, beside the lunge's watch) sees the guest's slot up and posts a
+    // held webifier 380-520 u off the guest's bow (within 35 deg of it); the guest selects it and fires with the cursor on
+    // it: the host puts Suppressed on it from the guest's own shells (the host decides; the status never goes on the
+    // wire) and raises the chevron, which is drawn on the webifier HERE within 4 s. The host frees it 2 s later.
+    sealed class LaneA6aSuppressSeen { public Raider Mark; public bool Up, Suppressed, Done; public double At; }
+    LateSampler LaneA6aSuppressHostWatch(LaneA6aSuppressSeen seen)
+    {
+        float off = Vary(380f, 520f), turn = Vary(-0.6f, 0.6f);
+        var watch = new LateSampler { Probe = () =>
+        {
+            if (seen.Done || H == null || H.Ships.FirstOrDefault(s => !s.Mine) is not { Class: ShipClass.Destroyer } g) return seen.Done;
+            if (seen.Mark == null)
+            {
+                if (g.Sl("suppress").Left <= 0) return false;
+                seen.Up = true; seen.At = g.Clock;
+                var m = H.SpawnRaider(g.Position + Vector2.Up.Rotated(g.Rotation + turn) * off, Enemies.Webifier);
+                m.Hp = 1e9; m.ApplyStatus(Status.Disabled, 30);
+                seen.Mark = m;
+                return false;
+            }
+            if (!GodotObject.IsInstanceValid(seen.Mark)) { seen.Done = true; return true; }
+            if (!seen.Suppressed && seen.Mark.Statuses.Has(Status.Suppressed)) { seen.Suppressed = true; seen.At = g.Clock; }
+            if ((seen.Suppressed && g.Clock - seen.At > 2.0) || g.Clock - seen.At > 12.0) { seen.Mark.TakeDamage(1e12); seen.Done = true; return true; }
+            return false;
+        } };
+        AddChild(watch);
+        return watch;
+    }
+    async Task LaneA6aSuppressHostChecks(LateSampler watch, LaneA6aSuppressSeen seen)
+    {
+        await RealTime(() => seen.Done, Wan ? 120 : 90);
+        watch.QueueFree();
+        Check(seen.Up && seen.Suppressed,
+              $"arena host: the guest's Suppressing fire -- its slot up here ({seen.Up}), and the webifier posted off its bow Suppressed here by the guest's own shells ({seen.Suppressed}): the host decides");
+    }
+    async Task LaneA6aSuppressGuestChecks()
+    {
+        await SetClass(ShipClass.Destroyer);
+        var me = Me; me.AutopilotTo = null;
+        await RealTime(() => me.Class == ShipClass.Destroyer && me.MaxHp >= 395 - 1e-6, Wan ? 20 : 10);
+        me.Velocity = Vector2.Zero; me.Rotation = VaryAngle();
+        var at = me.Position;
+        void Hold() { me.Position = at; me.Velocity = Vector2.Zero; }
+        H.ClearSelection();
+        await Wait(Vary(0.3f, 0.6f));
+        Key(Abilities.KeyFor(ShipClass.Destroyer, "suppress"));
+        await RealTime(() => me.Sl("suppress").Left > 0, Wan ? 6 : 3);
+        double left = me.Sl("suppress").Left, cool = me.Sl("suppress").Cool;
+        Key(Abilities.KeyFor(ShipClass.Destroyer, "suppress")); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        string said = me.FailNote("suppress");
+        Raider Posted() => H.Raiders.FirstOrDefault(r => r.Alive && r.Position.DistanceTo(at) < 700f);
+        await RealTime(() => Posted() != null, Wan ? 6 : 3);
+        var mk = Posted();
+        int Chevrons() => mk == null ? 0 : Nodes<FxNode>(mk).Count(f => f.Id == Fx.Chevron && !f.IsQueuedForDeletion());
+        bool before = Chevrons() > 0;
+        if (mk != null) H.SelectTarget(mk);
+        KeyDown(global::Godot.Key.Space);
+        double c0 = me.Clock;
+        while (mk != null && GodotObject.IsInstanceValid(mk) && me.Clock - c0 < 4.0 && Chevrons() == 0)
+        { Hold(); AimWorld(mk.Position); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        KeyUp(global::Godot.Key.Space);
+        int marks = mk != null && GodotObject.IsInstanceValid(mk) ? Chevrons() : -1;
+        H.ClearSelection();
+        Check(left > 4.0 && left <= 6.0 + 1e-6 && cool > 18.5 && cool <= 20.0 + 1e-6 && said == "COOLING" && mk != null && !before && marks == 1,
+              $"arena guest: its own Q -- the host's slot here, up {left:0.0} s (6), cooling {cool:0.0} (20); Q again {said} (COOLING); the host's webifier {(mk == null ? "NEVER POSTED" : $"{mk.Position.DistanceTo(at):0} u off")}, no chevron before a shell ({!before}); "
+              + $"with Space on it the host's chevron is drawn on it here ({marks}, want 1)");
     }
 
     // ── SLICE 6c, RUNG 5: A GUEST'S TAUNT (kits_v31 §8's second-run list). The guest refits to the Warden (the
@@ -11908,10 +12170,10 @@ public partial class _Test : Node
                   && Math.Abs(Classes.Art(ShipClass.Carrier).Length - 283.5f) < 1e-4 && Math.Abs(Classes.Art(ShipClass.Battleship).Length - 378f) < 1e-4,
                   "the destroyer 25% smaller than the carrier (212.625 u), the carrier 25% smaller than the battleship (283.5 of 378); a 27.8 u half-beam; two main turrets, two PD");
             Check(help.Text.StartsWith("DESTROYER") && help.Text.Contains("mouse aims the main guns"), "controls line is destroyer-specific");
-            Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "lance", "warp" })
-                  && Abilities.KeyFor(ShipClass.Destroyer, "lance") == global::Godot.Key.F
+            Check(Abilities.For(ShipClass.Destroyer).Where(a => !a.Open).Select(a => a.Id).SequenceEqual(new[] { "guns", "lance", "suppress", "warp" })
+                  && Abilities.KeyFor(ShipClass.Destroyer, "lance") == global::Godot.Key.F && Abilities.KeyFor(ShipClass.Destroyer, "suppress") == global::Godot.Key.Q
                   && new[] { "firemode", "missile", "reload" }.All(id => Abilities.Find(ShipClass.Destroyer, id) == null),
-                  "the destroyer's bar (v1): the director battery, the Long Lance on F -- no fire mode, no missile burst, no reload; its point defence is passive, with no key");
+                  "the destroyer's bar (v1 + v2): the director battery, the Long Lance on F, Suppressing fire on Q -- no fire mode, no missile burst, no reload; its point defence is passive, with no key");
             var ddS = new ShipStats(ShipClass.Destroyer); var bsS0 = new ShipStats(ShipClass.Battleship); var cvS0 = new ShipStats(ShipClass.Carrier);
             bool N9(double a, double b) => Math.Abs(a - b) < 1e-9;
             Check(N9(ddS["hull"], 395) && N9(ship.MaxHp, 395) && N9(ddS["main_count"], 2) && N9(ddS["pd_count"], 2) && ddS["fighter_count"] == 0 && ddS["broadside_volleys"] == 0
@@ -14049,7 +14311,7 @@ public partial class _Test : Node
                 // long, how wide and what it sounds like are the MOVE's and come with the raise,
                 // because one boss move plays its cue with no warning at all.
                 var warnLane = Fx.Of(Fx.WarnLane); var warnZone = Fx.Of(Fx.WarnZone); var aimZone = Fx.Of(Fx.AimZone);
-                Check(Fx.All.Length == 10 && warnLane.Warn && warnZone.Warn && aimZone.Warn
+                Check(Fx.All.Length == 17 && warnLane.Warn && warnZone.Warn && aimZone.Warn
                       && warnLane.Shape == FxShape.Lane && warnZone.Shape == FxShape.Zone && aimZone.Shape == FxShape.Zone
                       && warnLane.Sound == null && warnZone.Sound == null && aimZone.Sound == null
                       && new[] { Fx.Burst, Fx.Lost, Fx.Rebuilt, Fx.Wave, Fx.Emp, Fx.Echo, Fx.Rail }.All(i => !Fx.Of(i).Warn)
@@ -14057,7 +14319,7 @@ public partial class _Test : Node
                       // ...and the friendly one is the SAME telegraph in another colour: where one
                       // of YOUR shots will land reads nothing like where one of THEIRS will.
                       && aimZone.Tint != warnZone.Tint && warnLane.Tint == warnZone.Tint,
-                      $"ten rows of Fx.All, seven effects and three telegraphs: a red lane and a red zone whose clock and sounds are the raise's, and the same zone in your own colours for where your own shot lands ({Fx.All.Length} rows, {Fx.All.Count(x => x.Warn)} telegraphs)");
+                      $"seventeen rows of Fx.All (the chevron, slice 6a, the last), fourteen effects and three telegraphs: a red lane and a red zone whose clock and sounds are the raise's, and the same zone in your own colours for where your own shot lands ({Fx.All.Length} rows, {Fx.All.Count(x => x.Warn)} telegraphs)");
                 // the sweep the shell and the rock share: a step longer than a hull is how a shot
                 // passes through it between frames
                 {
@@ -14199,6 +14461,9 @@ public partial class _Test : Node
             await LaneA6aDirectorChecks(yonder);
             await LaneA6aLanceChecks(yonder);
             await LaneA6aLanceHitChecks(yonder);
+            await LaneA6aSuppressChecks(yonder);
+            await LaneA6aSuppressWeaponChecks(yonder);
+            await LaneA6aSuppressGunChecks(yonder);
 
             // ── WARRIOR: the blade (slice 6c) ──
             await LaneA6cBladeChecks(yonder);
@@ -14596,6 +14861,7 @@ public partial class _Test : Node
                     ["firemode"]  = sp => sp.Staggered != sweepMode && sp.Sl("firemode").Left == 0 && sp.Sl("firemode").Cool == 0,
                     ["broadside"] = sp => sp.BroadsideTracking && sp.Sl("broadside").Left > sp.Stats["broadside_windup"] - 0.1,
                     ["lance"]     = sp => sp.Sl("lance").Cool > sp.Stats["lance_cooldown"] - 0.1 && InFlight().Any(x => x.Kind == Shots.Lance && x.Source == sp),
+                    ["suppress"]  = sp => sp.Sl("suppress").Left > sp.Stats["suppress_window"] - 0.1 && sp.Sl("suppress").Cool > sp.Stats["suppress_cooldown"] - 0.1,
                     ["attack"]    = sp => ReferenceEquals(sp.WingTarget, sweepMark),
                     ["recall"]    = sp => sp.WingTarget == null,
                     ["bombers"]   = sp => ReferenceEquals(sp.StrikeTarget, sweepMark),
@@ -17835,6 +18101,8 @@ public partial class _Test : Node
             var prismWatch = LaneA6cPrismHostWatch(prismSeen);             // slice 6c: ...and then takes a prism stance
             var reloadSeen = new LaneA6cReloadSeen();
             var reloadWatch = LaneA6cReloadHostWatch(reloadSeen);           // slice 6c: ...and then fires a railgun, timing its reloads
+            var suppressSeen = new LaneA6aSuppressSeen();
+            var suppressWatch = LaneA6aSuppressHostWatch(suppressSeen);     // slice 6a: ...and, after its curtain, suppresses a webifier posted here
             await LaneBHostDrives();                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
             await LaneA6cLungeHostChecks(lungeWatch, lungeSeen);
             await LaneA6cPrismHostChecks(prismWatch, prismSeen);
@@ -17852,6 +18120,7 @@ public partial class _Test : Node
             Check(hw.Class == ShipClass.HeavyWarrior && Math.Abs(hw.MaxHp - 300) < 1e-6
                   && Abilities.For(ShipClass.HeavyWarrior).Length == Classes.Of(ShipClass.HeavyWarrior).Abilities.Length + 7,
                   $"arena host: hosting as a WARRIOR -- its stock 300 hull, no chips, its own rows, the drive and six open slots ({hw.MaxHp:0})");
+            await LaneA6aSuppressHostChecks(suppressWatch, suppressSeen);  // the guest's Suppress comes before it parks as a freighter
             await RealTime(() => H.Ships.FirstOrDefault(s => !s.Mine) is { Class: ShipClass.FreightHauler } gg
                                  && gg.Position.DistanceTo(mpSpot) < 60, Wan ? 25 : 15);
             var fg = H.Ships.FirstOrDefault(s => !s.Mine);
@@ -18141,6 +18410,7 @@ public partial class _Test : Node
             await LaneA6cTauntGuestChecks();                                // slice 6c: a guest's taunt, the host's guard on its hull
             await LaneA6aGunshipGuestChecks();                              // slice 6a: a guest's gunships, its picks with the press
             await LaneA6cCurtainGuestChecks();                              // slice 6c: a guest's curtain, drawn where the host laid it
+            await LaneA6aSuppressGuestChecks();                             // slice 6a: a guest's Suppress (its host half: LaneA6aSuppressHostChecks)
             // ── TWO OF THE NINE, IN A SESSION (the host's side is in the ahost branch) ──
             // A FREIGHTER: the class whose abilities MAKE things in the world. Every press below
             // is a request -- nothing here is made on this peer.
