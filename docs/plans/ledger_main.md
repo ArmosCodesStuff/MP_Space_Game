@@ -10,7 +10,8 @@ Engine outputs for the old-way batches: S = C:\Users\logan\AppData\Local\Temp\cl
 
 ## Next
 1. When lane-kits-finish ends with every unit merged: launch Workflow({scriptPath: workflows/scripts/test-phase.js}) (written, not run: audit,
-   rounds of 5 chains on 4 slots + triage + fixes, frames by eye, net extras, bar, VERIFIED, push both, release). Else fix the row's unit first.
+   rounds of 5 chains on 4 slots + triage + fixes, frames by eye, net extras, bar, VERIFIED, push both, release; runner, merges, bar and
+   release on Sonnet high) AND arm the watchdog (agents.ps1 -Loop in the background). Else fix the row's unit first.
 2. (follow-ups now run inside lane-kits-finish.) Raider cruise 100 vs BB 88 / CV 99: note only, by design (capitals rely on warp).
 3. TEST PHASE, once everything is merged (owner 2026-09-25: 3+ engine checks per class ability / drive row, CLAUDE.md 6.7; first an
    audit agent maps every ClassDef.Abilities and drive row to its checks and writes the missing ones): the slots proof, then quick,solo,solo,six,screens (+ six,six) across slots, fix low, then the bar
