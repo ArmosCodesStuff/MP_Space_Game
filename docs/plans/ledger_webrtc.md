@@ -401,6 +401,21 @@ third-party infrastructure but the Google and Cloudflare STUN rows.
   fingerprint's value changed (a property now, struct rows in), which both ends of a run share.
 - checkpoint: the J9c commit
 - next: J11
+
+#### J11 PRE
+- intent: CHANGES -- the R1 entry (J7-J10, J9b, J9c; checks; Known broken as it stands after rung 3
+  on 8760795 was green on two seeds) and the Handoff (R1 landed, rungs owed, next R2); this ledger's
+  final rungs list.
+- files: docs/CHANGES.md, docs/plans/ledger_webrtc.md
+- from: e4cac192617f94fcad60a30282c6a6eb4d3a367b
+- hashes: CHANGES.md da834e7498e5aea27d5fe023816cca703f7a5cb6
+
+#### J11 POST
+- verdict: done (records only; `-Quick` run before the commit).
+- files: docs/CHANGES.md (the Handoff's R1 paragraph; "WebRTC slice R1" replaces "R1, first part",
+  its Known broken as it stands), this ledger (the rungs owed, below).
+- checkpoint: the J11 commit
+- next: the main session's rungs below; then R2 (a fresh agent reads this ledger and plan §13).
 - files: scripts/Net.cs, scripts/Character.cs, tools/smoketest/SmokeTest.cs.txt, docs/DESIGN.md,
   docs/plans/ledger_webrtc.md
 - from: 3e4df1bb54cf87085e3fcd8cf0c2d00047b48f2e
@@ -474,25 +489,24 @@ this batch designed, so R2's Net drops in as the desk:
 updated), and the Handoff (R1 landed, the rungs below owed, next R2); DESIGN if J10 finds a trap; this
 ledger's POSTs and the final rungs list.
 
-### Rungs the main session owes for R1 (none run in this batch)
+### Rungs the main session owes for R1 (none run by this lane)
 
-Already owed for J7-J9 (committed 6eef84e, dba1847, 06db494), and the same list proves J10 once it lands:
-1. `verify.ps1 -Quick` in the worktree (green here at 06db494; re-run after J10).
-2. **Rung 3 twice, two seeds**: `tools\smoketest\run.ps1 -Solo -Seed <a>` and `-Seed <b>`. Look for
-   PASS on: "Link.ReplyWindowS is the 30 s R0 measured"; "a host that takes the reply 30 s after the
-   friend made it still connects"; "invite, reply, knock and refuse each come back"; "a record's first
-   byte is its kind"; "the spike's bundles pack to the plan's sizes"; "a name is carried as at most 16
-   bytes"; "the spike's offer and answer, through the codec and back"; "the live pair's offer and
-   answer, through the codec and back"; "an SDP line the template does not know"; "a candidate
-   foundation over 255"; "an ICE credential with a character outside base64"; "a fingerprint that is
-   not sha-256"; "a code reads back whole"; "a typed address is the address row's"; "the paste row walks
-   the STUN rows"; "20 candidates fit 400 characters"; "two IPv6 addresses on one /64";
-   "Rendezvous.Clipboard is mutable"; "Link.ChannelOf names the row"; "Link.Backlog reads a 1 MB burst";
-   "the STUN rows are Google's then Cloudflare's"; "Link.Servers is mutable"; "the box is up"; "with two
-   rows that never answer"; "after no row answered, the next gather"; "with row 1 silent and row 2 the
-   box's STUN responder"; "20 gathers against a STUN server that answers"; "20 gathers with no STUN";
-   and no ERROR line (the walks close each connection right after its check). If "row 2 ... server-
-   reflexive" and the answered sealing check fail with the box's `answered` count above 0, that is D16:
-   set `LoopbackSrflx` false, re-run rung 3, and write it in DESIGN.md.
-3. Optional, when convenient: one `run.ps1 -Wan` -- the ENet relays moved from two wan.py processes
-   into the box (`--relay`); rung 3 cannot see that path. R2's own `-Wan` run would also show it.
+Done: J7-J9b at 8760795, `-Quick` and rung 3 green on seeds 11400714819323466726 and
+11400714819323463562 (the loopback server-reflexive holds: `LoopbackSrflx` stays true, D16 closed).
+Owed on the R1 records commit (it carries J10 and J9c):
+1. `verify.ps1 -Quick` (green here at e4cac19).
+2. **Rung 3 twice, two seeds** (`tools\smoketest\run.ps1 -Solo -Seed <a>`, `<b>`). PASS on everything
+   that passed at 8760795, and the new or rewritten: "nothing about the pilot is part of the build's
+   fingerprint"; "the build's fingerprint never hashes itself and is whole when it is taken"; "a struct
+   row is part of the build's fingerprint"; "Rendezvous.Clipboard is mutable and outside the build's
+   fingerprint"; "Link.Servers is mutable and outside the build's fingerprint" (both now against
+   `Net.Protocol`); "the listener takes 27015, then 27016 ... 27024"; "the guest's mark is drawn once per
+   process"; "by the address row a knock brings an invite"; "a newer knock from the same guest leaves
+   one pending entry"; "a knock is refused `full`"; "an address that knocks 21 times in a minute";
+   "a knock waiting on the host's desk when the listener closes"; "by the paste row, through the
+   courier's files"; "the clipboard pickup hands a reply over once"; "an in-process pair whose codes the
+   courier rewrote to the box's address connects through the box"; "a packet sent into a 1 s blackhole
+   arrives after it lifts"; no ERROR line. If the pair-proxy check fails twice with `to_host`/`to_guest`
+   0: plan §10.2's fallback (CHANGES Known broken; R4's watchdog uses `Net.DropBeatsFor`).
+3. Rung 5 is R2's (nothing in R1 crosses peers; the fingerprint's new value is shared by both ends).
+4. Optional: one `run.ps1 -Wan` (the ENet relays moved into the box, `--relay`).
