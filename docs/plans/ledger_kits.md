@@ -251,6 +251,32 @@ revert or keep the half-made edits, then run the job again (CLAUDE.md §2b rule 
 | J4 F17 | 3 (`-Solo`) | two different seeds | new: "the outgoing door's table" · 3 x "a webifier's laser goes out through the door" (Suppressed 1.50 / Jammed 0.00 / Dazzled 3.00) · 3 x "a Suppressed gunship ... holds its missile" (0-2 frames after the lapse) · "Suppressed reaches a boss; Dazzled and Jammed ..." · 3 x "a Suppressed boss: its shockwave ... 31.5 ... beam ... 50 ... 45" · 3 x "a Suppressed base's launcher ... its round carries". Neighbours: the Lancer arena's stealth block (right after), the siege's "ONLY THE BASE DROPS" (after the base check), the WARRIOR block (after the door checks; 3 gunship blasts land 12 s later ~4500 u from base) |
 | J1c | 3 (`-Solo`) | 11400714819323522083 and one other | 3 x "a DISABLED warden at N deg, turning at N deg/s ...: ... turn it 0.00 deg" with N > 25 |
 
+## Handover 4: the fourth agent did J4 and job 1c, and stops before J5 (context)
+
+Nothing in flight: J4 and J1c have POSTs; the tree is clean at the J1c commit. The next FRESH writer
+starts **J5 (F4 + F18, D17)** with a PRE entry. Read D17 below and J4's POST (D22, D23 and the harness
+timing note: `await Wait` resumes at a frame's END, `await ToSignal(ProcessFrame)` at the next frame's
+START, so a read spanning one of each covers no `_process`). J5's map at 0938f68:
+- **Blows a player's side deals** (each becomes `Dealt.Deal(target, d, by, weapon)`, which does
+  `TakeDamage` then the credit): Turrets.cs:171 (PD / main-gun mount tick: `tgt.TakeDamage` +
+  `Host.NoteDealt`), Shots.cs:225-226 (a shell/torpedo/missile body: `h.TakeDamage(Damage)` +
+  `Source.NoteDealt`; the weapon id must come from the shot's row/kind), PlayerShip.cs:618-619 (rail),
+  :643-644 (emp: `emp_damage`, which v2 drops later -- leave the row, route the blow), :718 (the echo's
+  blast), ShipClasses.cs:317 (the carrier wing's fighter: `t.TakeDamage(S[Def.DamageStat])` +
+  `Carrier.NoteCombat()`), Missiles.cs:94 (a friendly missile side's Land: `TakeDamage(d)`),
+  BaseDefense.cs:41 (the base's laser: `LaserDealt` -- nobody's ship; decide credit = none).
+- **`ITurretHost.NoteDealt(d, at)`** (Turrets.cs:77) and its implementers: PlayerShip.cs:226 (the echo
+  arm at :229-230 -- F18 deletes it), Deployed.cs:42 (forwards to its owner Ship), Emplacements.cs:170,
+  Hauler.cs:90, Lanes.cs:290 (no-ops). The harness calls `NoteDealt(d, pos)` directly at SmokeTest
+  6164, 6261, 6803 ("as a shell of its own would"): rewrite them to the new signature in the same edit.
+- **The echo** (PlayerShip.cs:125 `_echoAt`, :701-722 Press / blast): its row's `OnDealt` stores d
+  (`Own += d`) and where it landed; v2's small row `Slot.At` replaces `_echoAt` -- take it in J5 if the
+  OnDealt needs a place for "where" (it does), since it is the same edit.
+- **DealtBy**: does not exist yet; `PlayerShip.DealtBy` (host, by weapon id) is new in J5.
+- Checks owed (D17): `LaneADamageDoorChecks`, 3 seeded spots: DealtBy[weapon] == hull lost for the BB's
+  main guns, PD, a freighter's dropped turret (credited to its owner), the railgun, a torpedo; the echo
+  stores exactly what was dealt while it runs and nothing after.
+
 ## Handover 3: slice 2's plan (the third agent read the spec and stopped at its context cap)
 
 Nothing in flight: J3b (job 1b) has its POST, the tree is clean at its commit. No slice-2 job has
