@@ -16,3 +16,9 @@ fa1as_p2: the same three host reds, and no guest line after grapnel: run.ps1 kil
 through grapnel alone take 136 s (the list grew in the build phase, never run). Limits: aguest 480 (wan 600), ahost 240.
 fa1as_p3 (six@seed): 6/6 runs finished; curtain, suppress, grapnel, pepper/rod/ramjet/sling/slip/rewind/emp/step
 guest lanes green. Pepper host counted 1159 darts: a steered dart left the set and was counted again; fixed.
+
+## POST 1 (c469da2): stall fixed; six@11400714819323305746 still red on other lanes (fa1as_p4, quick green)
+Green there, 6/6 runs: Suppress/Grapnel host+guest, CurtainGuest, every LaneA6d*GuestChecks, Pepper/Rod/Ramjet host.
+Red, newly exposed (the 150 s kill hid them): fa1as_p4/2_six_11400714819323305746.fails.txt:2050 SlipGuest 9.93 (10 +- 0.01:
+guest regen between reports, kind check); 2056-2116 guest freighter/bubble/lance/gank/EXP/reconnect; 2146-2176 host.
+Fresh-seed six not run (4-proof budget). CHANGES: arena guests refit only once Hub.MayRefit; aguest limit 480 s.
