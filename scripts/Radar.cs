@@ -5,7 +5,9 @@ using System.Linq;
 // player (the escape pod, while the ship is in stasis), reaching Range world units.
 // Its size is a setting in the Escape menu (small, medium, large).
 //   white arrow   you                     blue arrows   other players
-//   red           hostiles (ringed yellow when selected)
+//   red           hostiles (ringed yellow when selected): a dot, a diamond for Tag.Heavy
+//   a bracket     a squad in formation round its members (SquadSight: the same on every peer)
+//   a chevron     a squad wholly off the scope, on the rim toward it, labelled "1+3"
 //   yellow        gatherers and the hauler
 //   the landmarks, and the turrets a freighter left out, are Hub.ScopeMarks: one row
 //   each, picked below and drawn below, so nothing can be pickable and invisible
@@ -93,13 +95,39 @@ public partial class Radar : Control
         // the fleet that is out there: a lost ship, or the hauler through the portal, has no dot
         if (Hub.Yard != null) foreach (var g in Hub.Yard.Gatherers) { var p = P(g.Position); if (g.InReach && Inside(p)) DrawCircle(p, 1.8f, Plume.Utility); }
         if (Hub.Yard?.Hauler is { InReach: true } hl) { var p = P(hl.Position); if (Inside(p)) DrawRect(new Rect2(p - new Vector2(3, 1.5f), new Vector2(6, 3)), Plume.Utility); }
+        // SQUADS FIRST: their members are drawn here, so the hostile loop below leaves them out
+        var squads = SquadSight.Groups(Hub.Raiders);
+        var drawn = new System.Collections.Generic.HashSet<IHittable>(squads.SelectMany(q => q));
+        foreach (var sq in squads)
+        {
+            var pts = sq.Select(m => P(m.Position)).ToList();
+            if (!pts.Any(Inside))
+            {   // wholly off the scope: ONE chevron on the rim toward it, and what it brings
+                var mid = pts.Aggregate(Vector2.Zero, (a, b) => a + b) / pts.Count;
+                var d = (mid - c).Normalized(); var sd = new Vector2(-d.Y, d.X);
+                DrawColoredPolygon(new[] { c + d * (r - 2f), c + d * (r - 10f) + sd * 5f, c + d * (r - 10f) - sd * 5f }, Hostile);
+                Txt.Centre(this, ThemeDB.FallbackFont, c + d * (r - 22f) + new Vector2(0, 4f), SquadSight.Label(sq), 10, Hostile);
+                continue;
+            }
+            for (int i = 0; i < sq.Count; i++) Blip(Inside(pts[i]) ? pts[i] : c + (pts[i] - c).Normalized() * (r - 5f), sq[i]);
+            if (!SquadSight.InFormation(sq)) continue;
+            // in formation: a bracket round the members on the scope
+            var on = pts.Where(Inside).ToList();
+            Vector2 lo = on.Aggregate((a, b) => new Vector2(Mathf.Min(a.X, b.X), Mathf.Min(a.Y, b.Y))) - new Vector2(6f, 6f);
+            Vector2 hi = on.Aggregate((a, b) => new Vector2(Mathf.Max(a.X, b.X), Mathf.Max(a.Y, b.Y))) + new Vector2(6f, 6f);
+            var bc = new Color(1f, 0.45f, 0.4f, 0.8f);
+            foreach (var (corner, sx, sy) in new[] { (lo, 1f, 1f), (new Vector2(hi.X, lo.Y), -1f, 1f), (hi, -1f, -1f), (new Vector2(lo.X, hi.Y), 1f, -1f) })
+            {
+                DrawLine(corner, corner + new Vector2(4f * sx, 0), bc, 1f);
+                DrawLine(corner, corner + new Vector2(0, 4f * sy), bc, 1f);
+            }
+        }
         foreach (var h in Combat.Hostiles)
         {
-            if (h == null || !h.Alive) continue;
+            if (h == null || !h.Alive || drawn.Contains(h)) continue;
             var p = P(h.Position);
             if (!Inside(p)) p = c + (p - c).Normalized() * (r - 5f);          // off-scope: pinned to the rim
-            DrawCircle(p, 2.6f, new Color(1f, 0.35f, 0.3f));
-            if (Hub.I != null && Hub.I.Targets.Any(t => ReferenceEquals(t, h))) DrawArc(p, 5f, 0, Mathf.Tau, 16, new Color(1f, 0.85f, 0.3f), 1.2f);
+            Blip(p, h);
         }
         foreach (var s in Hub.Ships)
         {
@@ -123,6 +151,16 @@ public partial class Radar : Control
                     if (((p0 + p1) * 0.5f).DistanceTo(c) <= r - 1f) DrawLine(p0, p1, new Color(1f, 1f, 1f, 0.5f), 1f);
                 }
         }
+    }
+
+    // ONE HOSTILE on the face: a dot, or a diamond for anything tagged Heavy; ringed when selected
+    private static readonly Color Hostile = new(1f, 0.35f, 0.3f);
+    private void Blip(Vector2 p, IHittable h)
+    {
+        if (h is ITagged t && (t.Tags & Tag.Heavy) != 0)
+            DrawColoredPolygon(new[] { p + new Vector2(0, -3.8f), p + new Vector2(3.8f, 0), p + new Vector2(0, 3.8f), p + new Vector2(-3.8f, 0) }, Hostile);
+        else DrawCircle(p, 2.6f, Hostile);
+        if (Hub.I != null && Hub.I.Targets.Any(x => ReferenceEquals(x, h))) DrawArc(p, 5f, 0, Mathf.Tau, 16, new Color(1f, 0.85f, 0.3f), 1.2f);
     }
 
     private void Arrow(Vector2 p, float rot, Color col)

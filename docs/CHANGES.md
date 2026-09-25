@@ -43,11 +43,46 @@ screens). 48 lines x 10 tiers (`Items.cs`), rarity deleted, Loot on tiers, condi
 names is on every hull it fits" (`flare_count`, `@area` / `@duration` rows the kits add). Detail and the
 kit assumptions the reconcile job checks: `docs/plans/ledger_items.md` (J7 POST; J8 the merge gate's three fixes).
 
+**2026-09-25 (worktree `WarShips_wt_raids`, branch `wt/raids`): lane G, raids v2 -- squads and a boss
+fight's adds, J1-J6 + the merge gate's fixes (GFa, GFb) built; compiles, rung 2 green. engine-unproven:
+every rung 3-5 check below is owed in the final test phase** (solo x2, six x2 for the guest checks, screens
+for frames 49a/49d/49c/49/49b). version-l merged in (curve, art, drives, fields, wings, net2, kits slice 3):
+the adds ride Par (a level, hull x the party's 1 + 0.6(P - 1), damage x 1 + 0.2(P - 1) through the host-only
+`Raider.DamageShare`). Detail and the job list: `docs/plans/ledger_raids.md`.
+
+**2026-09-25 (worktree `WarShips_wt_net2`, branch `wt/net2`): WebRTC S2 + R2-R5 built -- the session is
+on WebRTC; compiles, rung 2 green. engine-unproven: every rung owed in the final test phase.** ENet,
+UPnP, the public-IP lookup (api.ipify.org), `Router.cs` (now `Adapters.cs`) and `fakeigd.py` are gone.
+A friend joins by an invite code (INVITE A FRIEND -> JOIN -> the reply back, taken off the host's
+clipboard) or by the host's typed address (the listener, TCP 27015+). Owed, in this order: rung 3 twice
+on two seeds (S2Checks, S2TokenChecks, R2BeatChecks, R2SwitchChecks, R3WordsChecks, GateFixRefitChecks,
+GateFixJoinBoxChecks, the rewritten join failures), rung 4 (frames 51_invite_ready, 52_reply_countdown,
+60_reply_expired, 61_join_failed, 20_base_refit_in_combat; LINT: 0), rung 5 `six,six` (the roles moved:
+the `guest` joins by invite through the courier, drops, returns by its rejoin token, and returns again
+past a live old link; `guest2` knocks as another build and never hears Guesty's token; the host reads
+the join's five times),
+rung 5 `-Wan` once (the blackhole watchdog), and once at `WARSHIPS_WAN=150,40,5` (the rate check);
+then `pack.ps1 -Dirty`, the one-machine check, rung 6. **Never call multiplayer working until the owner
+and a friend have played (network_webrtc.md §11).** Detail: `docs/plans/ledger_webrtc.md` (lane net2).
+
+**2026-09-25 (worktree `WarShips_wt_wings`, branch `wt/wings`): kits lane E (wings, F13 widened)
+built; compiles, rung 2 green; engine-unproven: rungs 3, 4 and 5 owed in the final test phase.**
+`Wings.All` rows `gunship` (2) and `patrol` (3), the Orbit way, the ring pick, `PlayerShip.Sortie`;
+the Carrier's E and Q keys that call it are lane A slice 6a's. Detail: `docs/plans/ledger_wings.md`.
+
+**2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A slice 3 built** -- F5 (a
+shot strikes each body once, `Stops`), F23 (`Lines.cs`, with `AtTarget` for Time on target; the railgun on it, same literals), F6 (predicted
+missiles carry a NetId on every peer; `Hub.NetMissile` changed), F7 (charge bands, `Charge.cs`, fingerprinted). Compiles,
+rung 2 green; **engine-unproven: rungs 3 and 5 owed in the final test phase** (ledger_kits.md J11 and J12 POST).
+Not built, by ruling: Overcharge (the Sniper's piece is the active reload). Deferred to their readers:
+F5's nine rows and its Decoyable / Command flags, `shell_turn` (D24, D27).
+
 **2026-09-25 (worktree `WarShips_wt_drives`, branch `wt/drives`): kits lane B -- drives, helm,
 strafe (F21, F22, F24) -- built J1-J6; compiles, rung 2 green. engine-unproven: rungs owed in the final
 test phase** (solo x2, six x2, screens); J7 fixed the merge gate's five findings. V is the class's drive (`Drives.cs`): a held warp on the
 capitals, a boost on the nine; Shift + A/D strafe on the nine; capitals 88/99/117, freighters 120.
 Detail and what the test phase owes: `docs/plans/ledger_drives.md` (J6 POST).
+
 
 **2026-09-25 (worktree `WarShips_wt_curve`, branch `wt/curve`): lane F, the curve, built J1-J5;
 compiles, rung 2 green. engine-unproven: rungs 3-5 owed in the final test phase.** Par.cs replaces
@@ -59,6 +94,7 @@ built, J1-J3; compiles, rung 2 green. engine-unproven: rungs 3-5 and the frames 
 phase.** The field rows for the Supercarrier (`super`), the Taunt (`taunt`) and the boost (`boost`) wait
 for the lanes that build those slots; until then the harness prints `NOTE unbound field row` and the
 screens `shot skipped`. Detail: `docs/plans/ledger_fields.md` (J4 POST).
+
 
 **2026-09-25 (worktree `WarShips_wt_kits`, branch `wt/kits`): kits lane A J1-J7 + K1 built,
 version-l merged in (K2), and merge gate 1's seven problems fixed (K3); compiles, rung 2 green.
@@ -221,13 +257,14 @@ gear** -- 120 parts that each lean hard one way, fitted from the pilot's **hold*
 window (I). The **hauler** sells alone (DISPATCH, with the EVASION chance of getting through) or on
 an **ESCORT** (round four outposts, offloading at each, hunted by a raider wave every 20 s, 5x the pay);
 AUTO-SELL waits for the
-level-3 boss and 4462 cr. A guest that **drops** is retried and let back into its place; and a new
+level-3 boss and 4462 cr. A guest that **drops** keeps its place 90 s (by address it retries by itself,
+by invite the host's panel has a fresh invite ready); and a new
 pilot is shown **corner hints** the first time it meets each system. The **base** (B) runs an idle economy --
 miners in the belt, salvagers at the wreck, a hauler that sells the load -- and buys upgrades; the
-pilot levels up (L) and fits parts (I). **Multiplayer** is host-and-join over the internet: HOST
-opens the port by itself where the network allows it (UPnP, NAT-PMP, PCP, a router behind a
-router) and says in words what to forward where it cannot; a VPN or overlay address and IPv6 are
-offered too.
+pilot levels up (L) and fits parts (I). **Multiplayer** is host-and-join over WebRTC, with no server
+of ours: the host's INVITE A FRIEND makes a code, the friend pastes it into JOIN and sends back the
+reply it copies; on one network or Radmin VPN the friend types the host's address instead. Untested
+between two homes (see Unreleased, Known broken).
 
 ### Controls (hub) — fixed keys
 
@@ -582,6 +619,132 @@ kits reconcile (`flare_count`; `@area` / `@duration` rows of abilities the kits 
 capital that pays top speed in four slots and three Combat chips reaches -108%, which the x0.1 floor
 holds (a design flag for the owner: §3 prices each line alone, never the stack).
 
+### Raids v2, lane G: squads in formation and a boss fight's adds (2026-09-25, worktree wt/raids)
+
+Raiders fly in **squads** (`Squads.cs`, new): a doctrine row (`lone`, `patrol`, `gank`), a formation (the
+plain squad is a vee with its heavy close astern), one commit for all (time on target), **sticky posts**
+from one book (13 front, 5 rear: twelve on one hull all get a post), station keeping capped at the burn (a
+warp no longer throws a light 240 u in a frame), and re-forming on a jump, a flight or a lost target.
+**Heavies never wait at the map's edge**: they post astern and laser pinned or not; the missile flies only
+at a pinned target; a heavy has no CC at any level. **A boss fight has adds** (`Waves.All` "bounty_adds"):
+none to L5, then one more every 3 levels, H,L,L,L, to 3 heavies + 9 lights at L39; the Rusty Bucket's two
+beam escorts are its squad wave 1 from L1 (`BossType.AddsFloor`); slot kinds fixed (gunship + webifiers,
+cross + talons, lancerkin + pods); slots come at k x 30 s or at boss hull 1 - k/slots, form up 10 s out,
+take the boss's multipliers; a wiped slot returns in 30 s with the same kinds. **Adds pay EXP** (6 a light,
+18 a heavy, x level / pilot level, nothing past twice the level) on a first fill only, through the kill
+branch alone, to every pilot by the reliable `NetKillExp`. **The beam** launches nothing, charges on ANY
+web (an add's included) or 5 s armed, and its wind-up never leaves a stripping pilot under 0.6 s (the
+live escape floor); a stretched wind-up REPLACES its lane on every peer (`Hub.AddFx`: a hull's warning
+raised again frees the one it had), so a guest no longer hears the strike at the old time. **Squads read
+the same on every peer** (`SquadSight.cs`, new, from the packet alone): the radar draws a heavy as a
+diamond (by `Tag.Heavy`), brackets a squad in formation and folds a squad wholly off the scope into one rim
+chevron labelled "1+3" (heavies + the rest); the victim's hull bar carries "GANK: GUNSHIP + 3 WEBIFIER"
+through the burn; each row's name shows under its hull for 3 s as its squad comes into view and again at
+its commit, with a web glyph on a row with a Cc. The TIO line says what the adds pay this pilot; the pilot
+and boss hints name the adds. Deleted: the escorts (`EscortsAt`, `LaunchEscorts`,
+`Raider.Escort`/`IsEscort`/shiver, the beam row's escort fields), `Raider.Patrol`/`Station`/`Circuit`/
+`Choose`/`Circle`/`Posts`, the heavy's edge wait, `Raider.HeavyReach`, Hub's garrison clock.
+Defaults taken (ledger_raids.md): Par.cs is not in this tree, so the floor reads a beam-row `StripDps`
+(0.7 x 57.6) against row hull; no `escort` doctrine; "1+3" counts heavies + the rest; the victim is the
+ship nearest a lock line's end within its hit radius + 150 u.
+
+Checks: new RaidsFoundationChecks, RaidsSquadChecks (N1-N6, N9, N10, N17), RaidsAddsTableChecks (N11, N12,
+N14), RaidsArenaAddsChecks (N12 live, N13, N15, N16), RaidsSightChecks (labels, crews, names on view and
+commit and the GANK line, each still / crossing / run from astern; TIO and hint text), RaidsHostAddsWire +
+RaidsGuestAddsWire (N18, the stretched lane replaced on the guest, the squad label and names on the guest, the
+GANK line on the guest from a host gank squad), raiders 6b (N7, N8), the arena beam block
+(any-pin start, floor literals, live floor); frames 49a_squad_inbound, 49d_squad_lock_lines (now with the
+GANK line), 49c_squad_names_radar, 49_heavy_astern_missile, 49b_heavy_both_barrels (kits K3's, now on the posted
+heavy); rewritten: the escort checks, the mission wave clock, patrol
+and raid squad ids, blockade Station/Circuit.
+
+**Known broken:** engine-unproven (rungs 3-5 owed).
+### WebRTC S2 + R2-R5: the session on WebRTC, invite codes, the network report (2026-09-25, branch wt/net2)
+
+**What changed for a player.** MULTIPLAYER -> HOST THIS WORLD, then INVITE A FRIEND: the invite is
+copied, to send privately. The friend pastes the whole message into JOIN; its reply is copied, with a
+30 s countdown. The host copies the friend's message and the game takes it (or it goes in the reply
+box); a friend's JOIN box likewise fills itself from a copied invite. On one network or Radmin VPN the friend types the host's address instead (the panel lists them).
+The panel lists every invite not yet answered, with COPY and CANCEL; COPY NETWORK REPORT copies what a
+failed join should send the developer. A friend dropped from an invite is told to ask for a new code
+(its place held 90 s) and the host's panel has one ready; by address the game retries by itself. The
+only outside contact left is a STUN lookup (Google's, then Cloudflare's) when a code is made.
+
+**Built** (plan `docs/plans/network_webrtc.md`, ledger `docs/plans/ledger_webrtc.md`, jobs S2a-R5):
+- S2 (transport-free): the boss keeps sending while held (P4); a shockwave throws no structure or dummy
+  (P5); a class changes only at home out of a fight (P8: one rule, `Hub.RefitOpen`, read by the host and
+  by the pilot's REFIT, class picker and base menu, which reads IN A FIGHT: NO RESET), and a change keeps
+  the hull's fraction and every cooldown (`PlayerShip.FitClass`); a sector report carries its trip
+  and a stale one is ignored (P9); held turrets re-keyed to the returning pilot (P10); the rejoin token
+  (P10b), sent to the host alone, which also takes a place from a live old link.
+- R2, the switch: `Net` on `WebRtcMultiplayerPeer`, both rows in one session, the pending table, the
+  beat (`NetChannels.Beat` = 12) and its 8 s watchdog, the goodbye's WebRTC body, every hang-up through
+  `Link.Hang`, retries only by typed address, `PretendAt` = Code | Auth. Deleted: ENet, UPnP/NAT-PMP/PCP,
+  describe/reach/reveal, the public-IP lookup, `Router.cs` (-> `Adapters.cs`), `fakeigd.py`, the
+  router scenarios, S1's throttle and `server` flag.
+- R3: HOST's line says where the listener landed; `Net.Report()` and COPY NETWORK REPORT; the pending
+  list; the multiplayer hint; frames 51_invite_ready, 52_reply_countdown, 60_reply_expired,
+  61_join_failed (51_address_hidden gone: CLAUDE.md's rung-4 count of ~110 frames is 3 low).
+- R4: the watchdog through the box's blackhole under `-Wan`; the stream row's longest gap and each
+  end's peak backlog per row printed, not asserted (no literal exists for them yet).
+- R5: pack.ps1 registers the plugin before its export, refuses an export without the release DLL,
+  ships the seven licences, and writes NOTES [PLAYING WITH A FRIEND] and [THIRD-PARTY]; install.ps1
+  checks every listed file is there (step 2 and after unpacking); play.ps1 registers the plugin once
+  before a launch from source; the snapshot carries the `.gdextension`.
+
+**Checks written, none run** (the final test phase runs them): solo `S2Checks`, `S2TripChecks`,
+`S2TokenChecks`, `R2BeatChecks`, `R2SwitchChecks`, `R3WordsChecks`, the rewritten join failures
+("Nothing is hosting at" under 3 s; "No answer ... in 12 s" at 11.8-12.6 s); rung 5 the `ArenaMp` S2
+checks, `R2BeatGuest`, `R2cHostCourier`, `R2cRows`, `R2cHostReturns`, `R2cGuestReturns`, guest2's
+other-build knock, `JoinedBy` per role; rung 5 `-Wan` `R4GuestBlackhole` / `R4HostBlackhole`.
+
+**Known broken** (network_webrtc.md §10.5; true until the owner's two-machine test, §11):
+- Nothing here has run on the engine: every check above is unproven.
+- Real NATs between two homes, the owner's double NAT and the Windows Firewall Block-rule question.
+- The reply window over a real internet path, and whether real players make it inside 30 s.
+- Google's and Cloudflare's STUN from real homes (the spike reached Google's once).
+- Loss and delay on the typed rows' own datagrams (they run direct in every harness run).
+- The exported Warships.exe with the release DLL across two machines; antivirus and SmartScreen; the
+  editor's first open with the addon; a machine with no network adapter up; IPv6 between homes.
+- The "no port could be opened for typed addresses" text has no check (one process cannot take every
+  port the OS would pick).
+- Multiplayer has never worked between two machines: do not call it working until it has.
+
+### Class kits, lane E: the carrier's gunships and patrol, F13 widened (2026-09-25, worktree wt/wings)
+
+The machinery the Carrier's E (warp gunships) and Q (Supercarrier) will use; slice 6a adds only the
+class's ability rows and calls `PlayerShip.Sortie(kind, target)`. **Gunships** (`Wings.All[2]`, the
+new `WingWay.Orbit`): `gunship_count` 2 to a target, sent only at one inside `gunship_leash` 3000 u
+(checked at launch only), they WARP onto a `gunship_orbit` 240 u circle round it and fire a hitscan
+2.5 every 0.25 s (10 DPS each) for `gunship_time` 12 s, then warp out, or at once if it dies. The
+**patrol** (`Wings.All[3]`): the fighter's own count, gun, speed and turn, circling the carrier
+`patrol_orbit` 300 u out for `patrol_time` 20 s and taking whatever `Turret.RankIn` puts first among
+what `Targeting.Patrol` (the Sentry row: nothing forbidden, a dummy as a fallback) chooses inside
+`patrol_range` 600 u of the carrier, measured to the hull's edge -- **missiles first** (kits_v31
+§3.2); it does not rest, and it is amber. `patrol_range` is on the Carrier's Reach list. A wing hit is
+credited by its row id through `Dealt.Deal` ("fighter", "patrol", "gunship"; `Dealt.Fighter` is
+gone). On the wire the state code carries the craft's row (x1000) and a guest adds and drops sortie
+craft to match the host's report: no new RPC.
+
+**Checks:** new `WingsRowsChecks`, `WingsPatrolChecks`, `WingsGunshipChecks` (solo, 3 seeded spots
+each), `WingsHostSortie` + `WingsGuestWatch` (six roles), frames `10e_carrier_patrol` and
+`10f_carrier_gunships`; the reach sweep gains `patrol_range` and its totals 13/31 -> 14/32.
+**Rungs:** 1 and 2 only.
+
+**Known broken:** nothing known; nothing here has run on the engine. Gunship art borrows the
+bomber's airframe until lane H casts one; the patrol's 600 u ring and chevron are lane D / 6a.
+### Class kits, lane A slice 3: Stops, Lines, missile ids, charge bands (2026-09-25, worktree wt/kits)
+
+A shot strikes each body it touches **once** and ends after its **Stops** bodies (every row today is 1,
+so nothing that flies behaves differently; 0 will be a piercing slug). **`Lines.cs`**: a line weapon is
+a row {Id, Width, Reach, Stops, AtTarget, Fx, Beam}, aimed from a point at a point (an AtTarget row ends at
+the point, as Time on target's will); the railgun fires through `Lines.Strike` with its old
+numbers (150, 2500 x 14 u, through everything). A **predicted missile** now has an id from the
+missiles' id space, sent with its launch, the same on every peer (for the flares' decoy, slice 5).
+**Charge bands** (`Charge.cs`, an array of tables the build's fingerprint hashes, so two builds whose
+bands differ refuse each other): what a charge fires as by how far it got; the railgun's table is its
+old whole shot. **Rungs:** 1 and 2 green in the worktree; 3 and 5 owed (checks listed in the ledger).
+
 ### Class kits, lane B: drives, helm and strafe -- F21, F22, F24 (2026-09-25, worktree wt/drives)
 
 **F22 helm rows.** The capitals are cut and lean on the warp: battleship 88 u/s (thrust 47, astern
@@ -621,6 +784,7 @@ hint card, the snap flash, the bar sequences and `Abilities.For` lengths (+1 for
 is now faster than the battleship (88) and the carrier (99): its comment is stale and the number is
 lane A/G's to settle. The host prices a warp's distance, not its cooldown: a modified client could
 chain charged jumps inside 20 s and pay only for distance.
+
 
 ### The curve, lane F (2026-09-25, worktree wt/curve)
 
@@ -674,6 +838,7 @@ FieldsScarCapChecks, FieldsRipOutlivesChecks (a pylon killed 0.2 s after a tear)
 83b_taunt_ring, 84_rip_chunk_and_scar, 84b_rip_on_boss. **Rungs:** 1 and 2 only.
 
 **Known broken:** unproven on the engine.
+
 ### Class kits, lane A K3: merge gate 1's fixes (2026-09-25, worktree wt/kits)
 
 A ramp row (F1's Ramp) is **owner-stepped**: only the peer at the helm steps its running total, and

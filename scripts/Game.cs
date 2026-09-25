@@ -58,20 +58,16 @@ public static class Game
 
     // THE ONE WAY OUT. The window's close button, the menu's QUIT and the smoke test all come
     // through here, because a bare Quit() cuts off three things that need a moment to finish:
-    //   * the session -- saved (a batched save still waiting too), the socket closed, and the
-    //     router ports we opened closed again.
-    //     A mapping is made with no lease, so one left behind stays on the router for good, and
-    //     closing it is a call to the router that takes a moment. (A router job still running at
-    //     exit used to CRASH the process -- 0xC0000005 inside Godot's Upnp, host then quit within
-    //     a few seconds -- which is one of the reasons Router is plain .NET now);
+    //   * the session -- saved (a batched save still waiting too), the goodbye heard (up to 2 s:
+    //     Net's LetGoMs), the listener closed;
     //   * every sound. The mixer lets go of a stopped playback only on its next cycles, so a
     //     sound still playing at exit was reported as "resources still in use at exit" --
     //     cannon.wav and missile_whoosh.wav, the two long ones, caught mid-battle.
     // The world is paused while it waits, so nothing starts a new sound meanwhile. The wait is in
     // REAL time: at a fixed frame rate a second of game time can pass in a few milliseconds.
-    private const ulong MixerMs = 150, RouterMs = 10000;
+    private const ulong MixerMs = 150, NetMs = 10000;
     private static bool _quitting;
-    // Set as the engine is told to stop: a router thread still out past the wait must not hand
+    // Set as the engine is told to stop: a listener thread still out past the wait must not hand
     // anything back to an engine that is shutting down.
     public static bool ShuttingDown { get; private set; }
     public static async void Quit(int code = 0)
@@ -83,11 +79,11 @@ public static class Game
         Net.I?.Close();
         Music.I?.Silence();
         Sfx.Close();
-        bool routerBusy() => Net.I != null && !Net.I.NetworkIdle;
-        // a router can take seconds to answer: get the window out of the way rather than freeze it
-        if (routerBusy()) DisplayServer.WindowSetMode(DisplayServer.WindowMode.Minimized);
+        bool netBusy() => Net.I != null && !Net.I.NetworkIdle;
+        // a goodbye can take its 2 s to be heard: get the window out of the way rather than freeze it
+        if (netBusy()) DisplayServer.WindowSetMode(DisplayServer.WindowMode.Minimized);
         ulong start = Time.GetTicksMsec();
-        while (Time.GetTicksMsec() - start < MixerMs || (routerBusy() && Time.GetTicksMsec() - start < RouterMs))
+        while (Time.GetTicksMsec() - start < MixerMs || (netBusy() && Time.GetTicksMsec() - start < NetMs))
             await tree.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
         ShuttingDown = true;
         tree.Quit(code);

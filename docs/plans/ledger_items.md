@@ -258,3 +258,12 @@ Next: none; the lane's merge gate re-runs.
 Job: items gate 2 record; tier opus; intent: fix stale surge_lift/slide record (invariant C); files docs/DESIGN.md 9acda2cf0ac09a38c978364e6b23e795c36f1136, docs/CHANGES.md 50391b1ff6fe4628894b21403772c83cdfa7ff58; HEAD fed46ad08b56df7d3343c25b29750bd9ff3e266d
 ## items-J-gate2 POST
 Verdict: done; typecheck + quick green; docs only. Next: merge gate re-runs.
+
+## MERGE M2 (version-l into wt/items, lane merge) PRE
+HEAD 7afd1d4cc7a9c0f98f8e0ea81945b3acd74903b9; merging version-l 54db5c3. Conflicts: docs/CHANGES.md, scripts/TioWindow.cs, tools/smoketest/SmokeTest.cs.txt.
+## MERGE M2 POST
+- docs/CHANGES.md: Handoff and Unreleased, both sides kept (items first, then raids/net2/wings/kits).
+- scripts/TioWindow.cs: bounty line keeps raids' AddsLine and items' tier crates line ("mostly T{BaseTier}").
+- SmokeTest.cs.txt: boss drop check keeps items' tier literal (T1 or T2) and raids' adds-cleared check; the guest block keeps ItemsGuestChecks and net2's _streamGap = 0.
+- Combination red fixed: wings deleted Dealt.Fighter (wing blows credit their row id); Items.PrimaryShots now names "fighter" (same value).
+- typecheck 0 errors, verify -Quick ALL CHECKS PASSED. No engine run.

@@ -24,16 +24,16 @@ public partial class Hints : CanvasLayer
         ["tio"]         = ("THE TIO", "Left-click the building for boss missions. When every pilot is READY the portal opens and the party goes through."),
         ["equipment"]   = ("EQUIPMENT", "I. Bosses drop parts that lean hard one way; your hold keeps what you are not flying, and each class keeps its own. Level or scrap them on the EQUIPMENT BASE, right of the station, 10 s clear of combat."),
         ["loot"]        = ("LOOT", "Crates only you can see. Fly over one to take it; any you leave behind come home with you."),
-        ["multiplayer"] = ("MULTIPLAYER", "HOST THIS WORLD, then COPY ADDRESS for your friends. To join one, type their address and JOIN."),
+        ["multiplayer"] = ("MULTIPLAYER", "HOST THIS WORLD, then INVITE A FRIEND and send them the code. To join, paste an invite into JOIN and send back the reply it copies."),
         ["raid"]        = ("RAIDERS", "They come for your base after a failed mission, and for your hauler on an escort. The base's guns help; nothing else you own can fight back."),
         ["hauler"]      = ("THE HAULER", "DISPATCH sends it alone: past the portal it may be lost (EVASION lowers the risk). ESCORT flies it round the four outposts for five times the pay; keep the raiders off it."),
-        ["pilot"]       = ("A LEVEL UP", "L spends your points on rudder, hull, engines and weapons, and names what your next level opens. Bosses give EXP; a level's first clear gives more."),
+        ["pilot"]       = ("A LEVEL UP", "L spends your points on rudder, hull, engines and weapons, and names what your next level opens. Bosses give EXP, and so do their adds the first time they come; a level's first clear gives more."),
         // THE DRIVES (Drives.cs): a hull meets its own drive's card, by the drive's id.
         ["warp"]        = ("WARP", "Hold V: after 1 s the range grows to a safe 2400 u (the faint ring). Release to jump along the bow, or short of the target or waypoint it points at. Past the ring you land disabled, 2 s per 300 u over. 20 s to recharge."),
         ["boost"]       = ("BOOST", "V: +50% top speed, thrust and strafe for 3 s, every 15 s."),
         ["strafe"]      = ("STRAFE", "Hold Shift and A / D slide the hull sideways; the nose and your guns stay where they are."),
         ["stasis"]      = ("STASIS", "Your ship is held in stasis, not lost. Fly the escape pod clear; F re-boards when the ship is ready."),
-        ["boss"]        = ("THE BOSS", "Red shapes are its attacks, drawn before they land: get out of them. Beat it for EXP, a bounty and parts."),
+        ["boss"]        = ("THE BOSS", "Red shapes are its attacks, drawn before they land: get out of them. Its adds come in squads: a web holds you for its beam, so kill the webifiers. Beat it for EXP, a bounty and parts."),
     };
 
     // THE TOUR a first character is walked through, in this order (Tour.cs): the things a pilot

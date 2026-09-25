@@ -9,10 +9,12 @@ using Godot;
 //
 // Now a row says what an enemy IS, and Raider is the code that flies one. Two WAYS of fighting
 // are real behaviour and stay behaviour:
-//   PIN       -- closes, holds station 90% of its reach off the hull, and WEBS what it holds
-//                (the target is kept to a fifth of its speed, thrusting, unable to turn).
-//   STANDOFF  -- waits at the map's edge until something else has pinned the target, then boosts
-//                in astern and hammers it from just outside its own reach.
+//   PIN       -- takes a FRONT post (Squads.cs), holds station 90% of its reach off the hull, and
+//                puts its row's Cc on what it holds (Pinned: a fifth of its speed, unable to turn).
+//   STANDOFF  -- takes a REAR post astern and hammers the target from just inside its own reach,
+//                pinned or not; it never holds anything (no Cc, at any level), and its missile flies
+//                only at a target something else has pinned.
+// How either CLOSES -- in formation, then a shared burn -- is its squad's (Squads.cs), not a way.
 // Everything else about an enemy is this table, so a new one is a row.
 // ─────────────────────────────────────────────────────────────────────────────
 public enum EnemyWay { Pin, Standoff }

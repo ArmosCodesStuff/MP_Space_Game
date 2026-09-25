@@ -26,9 +26,8 @@ using System.Threading.Tasks;
 //   * the address row's LISTENER (the host's TCP port) and DIALER (the guest's knock), and the paste
 //     row's CLIPBOARD PICKUP (the host's game taking a friend's reply off the clipboard);
 //   * the PENDING table, one entry per invite not yet connected, and the two DESKS a session implements
-//     so the rows can reach it (IHostDesk, IGuestDesk: Net in R2, the harness's desk before that).
-// It replaces the public-address reveal and copy (Net's Describe, Reach and PublicIpService, deleted in
-// R2): a friend is sent an invite, not an address.
+//     so the rows can reach it (IHostDesk, IGuestDesk: Net, and the harness's own desk).
+// It replaced the public-address reveal and copy: a friend is sent an invite, not an address.
 //
 // A NEW WAY TO CARRY CODES IS A ROW of Paths (an IRendezvousPath); a new record is a Kind. The template,
 // the format version and the alphabet are readonly or const, so they are part of the build's
@@ -533,7 +532,7 @@ public static class Rendezvous
     // ── the pending table (§3.1) ─────────────────────────────────────────────
     // ONE ENTRY PER INVITE NOT YET CONNECTED, whichever row carried it. Waiting: the invite is out and no
     // reply has been taken. Linking: a reply was taken and the connection has Link.LinkMs to come up.
-    // R2's Net holds one and adds the connection, the name and when it was made.
+    // Net holds one; a connected entry leaves it, its connection now the session's.
     public enum Stage { Waiting, Linking }
     public sealed class Entry
     {
@@ -541,11 +540,17 @@ public static class Rendezvous
         public string Row = "";                     // the row that carried the invite, by its Id
         public uint Guest;                          // the knock's mark (the address row); 0 on the paste row
         public Stage Stage;
+        public Link.Gather Conn;                    // the connection being made for it (none on the harness's own desk)
+        public string Name = "";                    // who it is for: the knock's or the reply's name, a dropped pilot's; "" until known
+        public ulong Made;                          // when it was made, in ms since start (an unanswered invite runs out: Link.InviteLifeS)
+        public ulong Until;                         // Linking: when the connection has had its Link.LinkMs
+        public string Code = "";                    // the paste row's invite as text: what COPY puts on the clipboard
     }
     public sealed class Pending
     {
         private readonly List<Entry> _all = new();
         public int Count => _all.Count;
+        public IReadOnlyList<Entry> All => _all;           // in the order they were made
         public void Add(Entry e) { Remove(e.Id); _all.Add(e); }
         public bool Remove(int id) => _all.RemoveAll(e => e.Id == id) > 0;
         public Entry Find(int id) => _all.Find(e => e.Id == id);
@@ -753,5 +758,8 @@ public static class Rendezvous
     // THE CLIPBOARD, AS A SEAM: what the game reads when it looks for a copied code (§15 Q1: the host's
     // game takes a friend's reply off the clipboard). Never readonly, so it stays out of the build's
     // fingerprint, and the harness swaps it: a headless clipboard is never relied on.
-    public static Func<string> Clipboard = DisplayServer.ClipboardGet;
+    // Only where the display server has one: a headless run's clipboard read is an engine ERROR.
+    public static Func<string> Clipboard = () => DisplayServer.HasFeature(DisplayServer.Feature.Clipboard) ? DisplayServer.ClipboardGet() : "";
+    // ...and what the game writes there (an invite, a reply), swapped the same way.
+    public static Action<string> Copy = text => { if (DisplayServer.HasFeature(DisplayServer.Feature.Clipboard)) DisplayServer.ClipboardSet(text); };
 }

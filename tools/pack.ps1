@@ -77,6 +77,12 @@ if (Test-Path $dist) { Remove-Item $dist -Recurse -Force -Confirm:$false }
 foreach ($d in @($dist, $game, $rel)) { New-Item -ItemType Directory -Force $d | Out-Null }
 
 # -- 1 . the game ------------------------------------------------------------
+# THE PLUGIN IS REGISTERED FIRST (network_webrtc.md section 8): the export reads
+# .godot\extension_list.cfg, and the first import after the addon appears crashes at exit with the
+# list written (SPIKE F1), so the import is judged by what it registered, by the one tool that does.
+$plugin = 'res://addons/webrtc_native/webrtc_native.gdextension'
+& (Join-Path $PSScriptRoot 'import.ps1') -Godot $godotExe -Path $repo -Log (Join-Path $dist 'import.log') -Require $plugin
+if ($LASTEXITCODE -ne 0) { Write-Host 'pack: the import did not register the WebRTC plugin (see import.log)'; exit 1 }
 # --headless so no window opens; the preset's own export_path is overridden by the argument, which
 # is why the export lands in dist\game and not in the folder above the repo.
 Write-Host 'pack: exporting the game (a few minutes)'
@@ -96,6 +102,15 @@ if (-not $proc.WaitForExit($ExportWait * 1000)) {
     try { $proc.Kill() } catch { }
 }
 if (-not (Test-Path (Join-Path $game 'Warships.exe'))) { Write-Host 'pack: no exe was produced'; exit 1 }
+# MULTIPLAYER IS THE PLUGIN'S RELEASE LIBRARY: an export without it plays alone and says why, which is
+# not a release. It rides the runtime part (no part rule: it changes with the plugin, not the game).
+$dll = 'libwebrtc_native.windows.template_release.x86_64.dll'
+if (-not (Get-ChildItem $game -Recurse -File -Filter $dll)) { Write-Host "pack: the export carries no $dll"; exit 1 }
+# ...and its seven licences beside the game, BEFORE the listing below, so the manifest covers them
+$licences = Join-Path $game 'licences'
+New-Item -ItemType Directory -Force $licences | Out-Null
+Get-ChildItem (Join-Path $repo 'addons\webrtc_native') -Filter 'LICENSE.*' | Copy-Item -Destination $licences -Force
+if (@(Get-ChildItem $licences -File).Count -ne 7) { Write-Host 'pack: the WebRTC plugin should bring seven licences'; exit 1 }
 
 # -- 3 . every installed file, and which part carries it ---------------------
 # CODE is what an ordinary release changes: the resource pack, and the managed assembly and its
@@ -162,6 +177,22 @@ $sections = @(
         'certificate is a few hundred a year and this is a game for friends.',
         'Click "More info", then "Run anyway".',
         'You will see it again each time an update replaces the game itself.'
+    )},
+    @{ Head = 'PLAYING WITH A FRIEND'; Lines = @(
+        'Host: MULTIPLAYER, HOST THIS WORLD, INVITE A FRIEND, and send the code',
+        'privately (Discord is fine). Friend: paste it into JOIN and send back the',
+        'reply it copies. Host: copy the reply (the game takes it) or paste it into',
+        'the panel, within 30 seconds. Same house or Radmin VPN: type the host''s',
+        'address instead; no codes needed.',
+        '',
+        'When you make an invite or a reply, the game asks Google''s or Cloudflare''s',
+        'public STUN server for this PC''s internet address. Nothing else contacts any',
+        'server.'
+    )},
+    @{ Head = 'THIRD-PARTY'; Lines = @(
+        'Multiplayer runs on the webrtc-native plugin for Godot and the libraries it',
+        'is built from: libdatachannel, libjuice, libsrtp, mbedtls, plog and usrsctp.',
+        'Their licences are in the licences folder beside the game.'
     )},
     @{ Head = 'IF WINDOWS BLOCKS IT OUTRIGHT'; Lines = @(
         'A few Windows 11 machines have SMART APP CONTROL switched on. It blocks',

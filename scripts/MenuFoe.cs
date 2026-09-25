@@ -9,7 +9,7 @@ using System;
 //   Light  fast, fragile, straight attack runs past the hull
 //   Heavy  slower, tougher, bigger; it closes and stays, so there is always something to shoot
 //   Web    a webifier: it holds off at range and paints the capital with a tether beam. That is
-//          the mechanic the death beam's escorts use, shown on the title screen before you meet it
+//          the mechanic that starts the death beam, shown on the title screen before you meet it
 public enum MenuFoeKind { Light, Heavy, Web }
 
 public partial class MenuFoe : Node2D, IHittable, ITagged

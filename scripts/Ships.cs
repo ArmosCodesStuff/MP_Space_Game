@@ -196,7 +196,7 @@ public static class Classes
             },
                 // the 0: gear reaches the fighters, the pilot's points do not -- as it was
             Damage = new() { ["torpedo_damage"] = 1, ["fighter_damage"] = 0 },
-            Reach = new() { ["fighter_range"] = 1, ["control_range"] = 1, ["torpedo_range"] = 1, ["launch_range"] = 1, ["pd_range"] = 1 },
+            Reach = new() { ["fighter_range"] = 1, ["control_range"] = 1, ["torpedo_range"] = 1, ["launch_range"] = 1, ["pd_range"] = 1, ["patrol_range"] = 1 },
             Cycle = new() { ["fighter_interval"] = 1, ["bomber_rearm"] = 1, ["pd_interval"] = 1 },
             Weapons = new[] { Dps.Fighters, Dps.Bombers, Dps.Pd },
             Kit = new[] {

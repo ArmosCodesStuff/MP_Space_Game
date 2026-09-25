@@ -52,6 +52,8 @@ Kits and classes
   the chamber; after each shot a 3 s reload; Space in the 0.6 s sweet spot enhances the loaded
   round (x1.5). UI: grey bar, white box for the spot, white flash on a hit, grey flash on a miss.
   Everything on Space. OPEN: should a perfect press also finish the reload at once? Default no.
+  The active reload REPLACES Overcharge: no Overcharge rows (`rail_over_*`) are built; a list or prompt that still names
+  Overcharge for the Sniper (kits_v31 section 8's 6c line) is superseded (ledger_kits D27).
 - Freighter F = TIME ON TARGET, its shots HITSCAN rail lines like the Sniper's, all landing at once;
   sentries LAUNCH to the cursor (600 u, 0.8 s; R recalls); sentries PREFER painted targets, else
   anything hostile, bosses included.

@@ -647,3 +647,520 @@ Owed on the R1 records commit (it carries J10 and J9c):
 - Gate 3 (opus) passed the code and failed two comments: Net.cs StructRow + DESIGN.md claimed the assigned delegate moves the
   fingerprint (Show prints only its type name, Func`2); Unlocks.cs (from the walls merge) said Plain() never hashes a plain struct.
 - Fixed both as the gate wrote them; comments only. quick net_r1s ALL GREEN. Chain net_r1r2 still covers the code. Next: merge into version-l.
+
+## Lane net2 · S2 + R2-R5 code and record (worktree WarShips_wt_net2, branch wt/net2, from f168508)
+
+BUILD PHASE (CLAUDE.md top, owner ruling): no engine run of any kind. Per job: typecheck, `verify.ps1
+-Quick`, a read of the diff. Checks are WRITTEN with each job, in the lane's own named methods
+(`S2Checks`, `R2*`, `R3*`, `R4*` in SmokeTest.cs.txt; `WebRtcFrames` in Shots.cs.txt), RUN in the
+final test phase. Owner questions take their defaults (README rulings line 101): clipboard pickup YES,
+hold 90 s KEEP, UPnP DELETE.
+
+### JOB 0 · the lane's job list (foundations first)
+S2 is not built (no ledger entry, no commit; P4's `Held` return still precedes Boss's send, P10's
+`RestoreHeld` re-keys votes only), so it comes first (plan §13: before R2).
+- **S2a** P4 (Boss sends while Held), P5 (shockwave throws no Structure/Dummy: `Targeting.Throwable`
+  row forbids them), P8 (the host refuses a class change in the arena or in combat), P9 (`GoTo` of
+  the sector it is in is a no-op; `NetMySector` carries the world serial; a stale one is ignored; a
+  world's first report is never metered), P10 (`RestoreHeld` re-keys deployed turrets; the dead
+  `back` branch goes). Files: Boss.cs, Targeting.cs, Hub.cs, PlayerShip.cs (smallest hunks),
+  SmokeTest `S2Checks`.
+- **S2b** P10b, the rejoin token (plan §3.9): the host issues a per-pilot token after admission
+  (`NetToken`, Reliable, Hub), the guest keeps it per host and sends it with its identity; a token
+  that matches a held place, or a live peer still holding that character, gives the place to the
+  returning peer (the old peer hung up). Files: Hub.cs, Session.cs, SmokeTest `S2Checks`.
+- **R2a** foundations that compile beside ENet: `NetChannels.Beat` = 12 + `NetBeat`/`NetBeatBack`,
+  `StreamChannel` -> `Beat + 1`, `Pending` entries grown (conn, name, made), `PretendAt` flags,
+  GodotStub `WebRtc*` members.
+- **R2b** THE SWITCH (one edit): Net's session on `WebRtcMultiplayerPeer` (host offers, both rows,
+  the listener, `Invite()`, `TakeCode`, `Join(text)` by row), the watchdog, the goodbye's body,
+  every hang-up through `Link.Hang`, retries by row (`Auto`); delete ENet, UPnP (Router.cs ->
+  Adapters.cs), describe/reach/reveal/public-IP (api.ipify.org), fakeigd, the router scenarios,
+  S1's `Net.Link`/throttle/`server` flag; `CouldNotReach` wording; SessionMenu INVITE / reply box /
+  JOIN box (minimal); the roles moved, `Drop()` rewritten, waits re-set (P() kept on every port).
+- **R3** §6's words, COPY NETWORK REPORT, clipboard pickup wired, Hints, Game.cs's comment, frames
+  51_invite_ready / 52_reply_countdown replacing 51-52, reply_expired and join_failed.
+- **R4** the watchdog's blackhole check and the rate check at 150/40/5; per-row gap and backlog
+  printed.
+- **R5** packaging scripts (pack/install/play/snapshot/manifest, NOTES texts) and the record
+  (DESIGN, README "Playing with a friend", CHANGES Unreleased + Handoff + Known broken = §10.5).
+- Not this lane (the test phase): `pack.ps1 -Dirty`, the one-machine check, rung 6, publishing, §11.
+- Decisions taken by default (no source says otherwise): P10b's token is 16 random bytes as hex,
+  sent by the host after the welcome and kept by the guest per host address/name for the process;
+  it is never in a code (plan §3.9: "carried after connection, not in the code").
+
+#### S2a PRE
+- job S2a, tier opus. Intent: P4, P5, P8, P9, P10 (JOB 0's list). HEAD d116c47.
+- files: scripts/Boss.cs 85c742d6, scripts/Targeting.cs 226e78b5, scripts/Hub.cs d10481a4,
+  scripts/Session.cs cbf19552, tools/smoketest/SmokeTest.cs.txt 9949bb60.
+- checks planned: solo `S2Checks` (P5 throw filter + a real shockwave by a BASTION at 3 varied
+  bearings leaving a dummy and an emplacement in place and throwing a raider; P8 a class change
+  announced in the arena / in combat refused, at home out of combat applied; P9 a stale sector report
+  ignored, a same-trip NetSector a no-op, a new trip applied); rung 5 `S2HeldBossHost/Guest` (P4: the
+  host holds the boss and steps its hull 0.80/0.75/0.70/0.65 inside the hold; the guest sees at least
+  3 of the 4); rung 5 P10 in ArenaMp's drop: a guest's turret re-keyed to its new id.
+
+#### S2a POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED. engine-unproven: rungs owed
+  in the final test phase.
+- P4 Boss.cs: the send block moved above the `Held` return. P5 Targeting.Throwable forbids
+  Structure|Dummy. P8 `Hub.Refit(had, want, arena, inCombat)` (public static, the rule in one place),
+  used by NetIdentity on every peer; the audit's "keep the hull fraction via Restat" half NOT built
+  (honest refits happen at home; a refused change keeps the old class whole). Risk: a pilot whose REFIT
+  UI lets it change class at home while in combat now disagrees with the host until it leaves combat
+  and announces again -- the test phase should watch for it. P9 `Session.Trip` (host's count of sector
+  moves) / `Session.HeardTrip` (guest; -1 = none, reset by `End`); NetSector and NetMySector carry the
+  trip; a stale report is ignored; a trip already made is not reloaded; a world's first report per
+  pilot is never metered (`Hub._caughtUp`). P10 RestoreHeld re-keys DeployedTurret.OwnerId/Ship; the
+  dead `back` branch deleted.
+- checks written (not run): solo `S2Checks` (2 P5 checks, 2 P8 checks), `S2TripChecks` (P9 no-op),
+  the rewritten level-with-the-sector check (passes a new trip); rung 5 ArenaMp `S2HeldBossHost` /
+  `S2HeldBossGuest` (P4 + the host ignoring a stale report, P9), `S2TurretRekeyed` (P10).
+- next: S2b, the rejoin token.
+
+#### S2b PRE
+- job S2b, tier opus. Intent: P10b, the rejoin token (JOB 0). HEAD aef72cd. Files: scripts/Hub.cs
+  894bf72e, scripts/Session.cs 0b1d74bd, scripts/Net.cs 92949cc7, tools/smoketest/SmokeTest.cs.txt eca57f36.
+
+#### S2b POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED. engine-unproven: rungs owed
+  in the final test phase.
+- `Session.Tokens` (host: character id -> 32-hex token, cleared by `End`), `Session.Rejoin` (guest: the
+  token it holds; NOT cleared by `End`, a drop ends the guest's session), `TokenFor`, `MayClaim(id,
+  token, liveHolder)`. Hub: `NetIdentity` gains `token`; the claim is `MayClaim`; a live holder beaten
+  by the token is let go (`Net.Hang`, new: the one hang-up, R2 turns its body into `Link.Hang`) and
+  its place handed over in `OnPlayerLeft` (`_replacing`); the host sends `NetToken` (Reliable, Hub,
+  channel 0) once a pilot's id is taken. `SendIdentity` carries `Session.Rejoin`.
+- Default taken: the token lives for the game process (a restarted game has none, and an id with a
+  token issued can then no longer be claimed by name until the host's session ends). Recorded as a
+  test-phase watch item, not built further.
+- checks written (not run): solo `S2TokenChecks` (4: no token by name; 32 hex one per pilot; only the
+  token claims, gone or live; End forgets), the loose-Hub identity check's argument list; rung 5
+  ArenaMp host "claimed its place with the rejoin token", aguest "came back holding the rejoin token".
+  NOT written: the live-holder replacement at rung 5 (a guest back before the host notices its old
+  link die) -- it needs the R2 watchdog's 8 s silence; R2's paste-guest return check owes it.
+- next: R2a.
+
+### HANDOFF for the fresh agent (R2a onward) -- this agent stopped at ~150k after S2b
+Read: this lane's section (JOB 0 list, S2a/S2b POSTs), the R1 HANDOFF above (the J10 contract: the
+Pending table, IHostDesk/IGuestDesk, the listener/dialer, the paste row, the courier), plan §3 (whole),
+§6, §7, §9, §10.3-10.5, §13's R2-R5 rows. Then Net.cs, Link.cs, Rendezvous.cs, SessionMenu.cs whole;
+Router.cs, typecheck/GodotStub.cs, tools/smoketest/run.ps1 by grep. Harness landmarks (SmokeTest.cs.txt,
+line numbers as of fea4cc7): header's `P()`/`NoRouterNoInternet` ~25-35 and `RouterScenarios` 60-120
+(both go in R2b with fakeigd; KEEP `P()` on every surviving port), `Drop(int)` ~155 (ENet body ->
+`Link.Hang` deferred, §3.8), the R1 blocks 326/584/730 (`Codes`, `Walks`, `Rows`, `Proxied`,
+`WebRtcPairs` ~1041), role dispatch ~1261, `ArenaMp` (ahost/aguest, address row) ~10270, `Mp`
+(host/guest/guest2) ~10970. The S2 methods sit just above `ArenaMp`.
+Facts this lane added that R2 must keep: `Net.Hang(peer)` is the one hang-up (OnAuth's refusal and the
+rejoin token's replacement use it) -- R2b rewrites its body to `Link.Hang(mp, peer)`; `Hub.NetIdentity`
+has a trailing `token` argument; `NetSector`/`NetMySector` carry a trip; the paste guest's return
+(plan §3.9) now needs its `Session.Rejoin` token, which it keeps across its drop, and the live-holder
+replacement check (S2b POST) is owed with R2's paste-guest drop.
+Env: typecheck and `verify.ps1 -Quick` only (no engine). Write `-Quick`'s output to a NEW log name each
+run (a previous log can stay locked). Python edits: write the script to the scratchpad and run it (a
+bash heredoc holding C# `$"..."` text failed to parse once); read/write with newline='' kept LF.
+
+#### R2a PRE
+- job R2a, tier opus (fresh agent from the handoff). Intent (narrowed from JOB 0 to what has a caller
+  before the switch; the Pending entry's conn/name/made, `PretendAt` and GodotStub's WebRtc members move
+  to R2b, whose edit first uses them -- `UNUSED ANYWHERE: 0` would refuse them here): `NetChannels.Beat`
+  = 12, `NetBeat`/`NetBeatBack` on Net (Reliable, row 12), sent every `Link.BeatMs`; `Net.RoundTrip` =
+  the least of the last 8 echoes (ENet's RoundTripTime read deleted); the watchdog (frame-capped
+  silence per peer over `Link.QuietMs` 8000: the host `Hang`s, a guest takes `OnHostGone`); `Net.QuietMs`
+  moves to `Link.QuietMs` (one constant); the harness's `StreamChannel` -> `NetChannels.Beat + 1` and
+  every check asserting 12 channels / row 12 rewritten to 13.
+- files: scripts/Net.cs 819f6e03, scripts/Link.cs 67b37be6, tools/smoketest/SmokeTest.cs.txt 8097b89d,
+  ledger b9f545e9. HEAD 36d2cc3.
+- checks planned: solo `R2BeatChecks` (the silence rule at 3 frame shapes: one 5 s stall, 60 short
+  frames, a mix; the round trip as the least of the last 8 echoes, an older low one aged out; the beat's
+  two RPCs ride row 12 Reliable); rewritten R0 channel checks (13 channels, Beat Reliable, stream 13,
+  16 data channels); rung 5 guest: `Net.RoundTrip` above 0 and under 2 s once online a few beats.
+
+#### R2a POST
+- verdict: done; typecheck 0 errors (real GodotSharp.dll), `verify.ps1 -Quick` ALL CHECKS PASSED (0
+  warnings, UNUSED ANYWHERE: 0). engine-unproven: rungs owed in the final test phase.
+- Link.cs: `BeatMs` 500, `QuietMs` 8000 (Net's own deleted: one constant), `FrameCapS` 0.25, `Quiet`,
+  `Overdue`, `Echoes` 8, `Trip` (least of the last 8). Net.cs: `NetChannels.Beat` = 12; `NetBeat` /
+  `NetBeatBack` (AnyPeer, Reliable, row 12); `Beat(delta)` in `_Process` (host to each heard guest, a
+  guest to its host; silence per peer; over QuietMs the host `Hang`s and stops sending to it, a guest
+  takes `OnHostGone`); `RoundTrip` = `_trip.Least` (ENet's RoundTripTime read gone); cleared in
+  `Shutdown`, a peer's silence forgotten in `OnPeer(left)`. Inside Net the class is named
+  `global::Link` until R2b deletes Net's `Link(ENetPacketPeer,int)` (the CS0119 trap).
+- Interim (ENet still under it until R2b): the watchdog runs beside ENet's own timeouts; the host's
+  `Hang` is still ENet's PeerDisconnectLater. Both go with R2b.
+- checks written (not run): solo `R2BeatChecks` (4: capped-frame silence at 3 shapes; the 8 s drop at
+  3 silences; the least of the last 8 echoes; the beat's row), rung 5 `R2BeatGuest` (guest's round trip
+  > 0 and < 2 s once let in, called in `Mp`'s guest after "guest sees the host"); rewritten R0 checks
+  (13 channels with Beat Reliable on 12 and the stream on 13; 16 data channels each end; the highest
+  row 13; ChannelOf with the beat's two RPCs on 12 and the stream on 13; the backlog text row 13).
+- next: R2b, the switch.
+
+### HANDOFF for the fresh agent (R2b onward) -- this agent stopped at ~140k after R2a
+Read: the net2 HANDOFF above (S2 facts), this R2a POST, plan §3.1-3.9, §6, §7 (Net/Link/Rendezvous/
+SessionMenu/Adapters/GodotStub rows + "Deleted in R2's edit"), §9, §10.2-10.4, §13 R2. Rendezvous.cs
+449-757 (rows, `Pending`/`Entry`, `IHostDesk`/`IGuestDesk`, Listener, Dial, `Clipboard`) is the contract
+Net implements: Net becomes BOTH desks (host: `Pending`, `Full`, `Invite(knock)` = a `Link.Gather`
+with `stun:false`, `Hang(id)`, `Replied(reply)`, `Refused`; guest: `Knock()`, `Answer(invite)`).
+Landmarks as of 143788c:
+- Net.cs (~1040 lines): ENet in `Hang` (~185), `OnConnected`'s `Link(host,12000)`, `Link(ENetPacketPeer,int)`
+  + its comment (~333-347; delete, then `global::Link` -> `Link` everywhere in Net), `_lettingGo`'s
+  `(ENetMultiplayerPeer, until, server)` + `PumpLetGo` (~403-415, body -> WebRtcMultiplayerPeer polled
+  until `GetPeers()` empty or 2 s, then Close; `server` flag and Host()'s loop over it deleted),
+  the whole "internet hosting" block (`Reach`, `InternetAddress`, `LanAddress`, `OverlayAddresses`,
+  `Ipv6Address`, `_hops`, `_hostGen`, `RouterJob`, `Describe`, `IsPublic`, `Reachable`, `AskPublicIp`,
+  `FreeIpReq`, `StaleMappingsClosed`, `RouterResult`, `TryDecide`, `PublicIpService`, `Firewall`) ~484-660,
+  `Host()` ~662, `ConnectTo` ~771 (ENet client -> `Join(text)` by `Rendezvous.PathFor`: paste row ->
+  `Start(text, this)`; address row -> Dial), `Shutdown`'s ENet let-go ~808-823, `OnPeer`'s `Link(guest,
+  10000)` ~842, `NetworkIdle` (-> no peer, no let-go, no listener). `CouldNotReach`: "use the host's room
+  code" -> "ask the host for an invite code". `PretendProtocol` -> `PretendAt` flags `Code | Auth` (+ the
+  pretend proto) per §3.8; harness users at SmokeTest ~11225-11231 (and Shots none).
+- Rendezvous.Entry grows `Conn` (WebRtcPeerConnection or the Gather), `Name`, `Made` (ulong ms) in R2b.
+- Router.cs -> Adapters.cs: keep only `Lan()`, `Overlays()`, `GlobalIpv6()` if Fit uses it, `IsIpv4`
+  if still called; delete Fake, Hop, Report, Open, Close, FrontCandidates, IsCarrierGrade, IsShared.
+- SessionMenu.cs (153 lines): COPY ADDRESS + reveal (lines 69-84, 110-122) go; add INVITE A FRIEND
+  (hosting only), the reply box (a LineEdit -> `Net.I.TakeCode`), the pending list minimal, address labels
+  "Same network: {lan}:{Rendezvous.ListenPort}" / "On {name}: {ip}:{port}"; the JOIN box takes invite or
+  address; the guest's reply text + countdown + MAKE A FRESH REPLY.
+- Game.cs:86 `routerBusy` -> `netBusy` (§7 row); Hub.cs:1340 comment names ENet (reword); Hub.cs:1620 ok.
+- GodotStub.cs:148 `ENetMultiplayerPeer` -> minimal `WebRtcMultiplayerPeer`/`WebRtcPeerConnection` stub.
+- Harness SmokeTest.cs.txt, lines naming ENet/Router/reach (delete or rewrite each): 22-119 (header
+  comment, `NoRouterNoInternet`, `RouterScenarios`: DELETE, keep `P()`), 125 `HostAt` (drop the Wan +1000
+  offset), 149-169 (`Drop` -> `Link.Hang` deferred; the throttle helper), 1221, 1317 (`GetMaxChannels`
+  -> `Link.Channels().Length`, rule `r <= opened`), 1359-1380, 5704-5743 and 5840-5848 (reveal/describe
+  checks: delete), 6056, 10602, 10885, 11063-11113 (throttle checks: delete), 11425, 11435, 11611, 11686.
+  Roles per §10.3: `guest` joins by INVITE via the courier files (R1's courier: grep `Courier`/`invite-`),
+  `guest2` by address (other-build knock refused over TCP, then `PretendAt.Auth` refused in-band, then
+  joins); `aguest` address retries unchanged. Owed checks: `Net.I.JoinedBy` row per guest; paste guest's
+  drop with no retry in 20 s + host's fresh invite + return into its held place WITH the rejoin token;
+  the live-holder replacement (S2b owed); solo typed failures (127.0.0.1:9 "Nothing is hosting at" < 3 s;
+  127.0.0.1:19481 "No answer from ... in 12 s" 11.8-12.6 s).
+- run.ps1:226-227 starts fakeigd (delete + fakeigd.py); tools/rungs.ps1:25 comment names fakeigd's port;
+  wan.py:2 mentions; Shots.cs.txt 321-325 (51-52's describe block: R3 replaces with 51_invite_ready /
+  52_reply_countdown; R2b must at least delete the Router/Describe lines so it compiles).
+Env: `.\verify.ps1 -Quick` is at the REPO ROOT (not tools\). Commit messages: write the file with
+`[IO.File]::WriteAllText(path, text, (New-Object Text.UTF8Encoding $false))` -- Out-File's BOM lands in the
+subject. Harness `Vary` takes floats (`Vary(3f, 20f)`).
+
+#### R2b PRE
+- job R2b, tier opus (fresh agent from the R2b handoff). HEAD 8d8c20c. Intent: THE SWITCH, game side in
+  one edit: Net's session on `WebRtcMultiplayerPeer` (Host = `CreateServer(Link.Channels())` + both rows
+  opened; Net is both desks; `Invite()` (paste row, walks STUN), `TakeCode(text)`, `Join(text)` by
+  `Rendezvous.PathFor`; the Pending entry grows Conn/Name/Made; `LinkMs` deadline; `InviteLifeS`; the
+  goodbye's WebRTC body; `Hang` -> `Link.Hang`; retries only for an `Auto` row; `PretendAt` flags
+  Code|Auth); DELETE ENet, Router's UPnP family (Router.cs -> Adapters.cs: Lan, Overlays), describe/reach/
+  reveal/public-IP, fakeigd.py + run.ps1's start, the router scenarios and reveal/describe/throttle
+  checks, S1's `Net.Link`/throttle/`server` flag; `CouldNotReach` "ask the host for an invite code";
+  SessionMenu INVITE A FRIEND / reply box / JOIN box (minimal; R3 adds the words and frames); Game.cs
+  `netBusy`; GodotStub WebRtc stubs; harness `Drop` -> `Link.Hang` deferred, the channel check on
+  `Link.Channels().Length`, `HostAt` without the +1000.
+- SPLIT (default taken): the harness's ROLES MOVE in R2c (guest by invite through the courier, guest2's
+  knocks, the paste guest's drop/return, the live-holder check, the solo typed failures, wan.py's ENet
+  relay). R2b keeps every address-joining role compiling and meaningful: `Join(address)` now knocks the
+  host's listener, which `Host(port)` opens from `port`.
+- files: scripts/Net.cs 4afaa0da, scripts/Link.cs 12360a50, scripts/Rendezvous.cs 513eddbc,
+  scripts/Router.cs 8649d1eb (-> Adapters.cs), scripts/SessionMenu.cs f5bcdcf5, scripts/Game.cs 0041e7a9,
+  scripts/Hub.cs 4b2a8b23 (comment), typecheck/GodotStub.cs 0179d8a2, tools/smoketest/SmokeTest.cs.txt
+  f5278188, tools/screens/Shots.cs.txt 20b45d75, tools/smoketest/run.ps1 b965bc88,
+  tools/smoketest/fakeigd.py a8838032 (deleted), tools/rungs.ps1 d65c7956 (comment).
+- checks planned: solo `R2SwitchChecks` (NetworkIdle offline and after GoOffline; a host's INVITE makes a
+  paste-row entry Waiting with the invite's id, the invite text decodes to that id and the host's proto;
+  the full text at MaxPlayers; a reply for an unknown id refused with §6.1's sentence; an invite pasted into
+  the reply box refused; a reply pasted into JOIN refused; Join of another build's invite refused before
+  any WebRTC object with the build text; Join of a damaged code; `Link.Hang` on a pending entry frees it);
+  the rewritten channel check (`r <= Link.Channels().Length`); deleted with what they tested: router
+  scenarios, reveal/describe/public-IP/stale-mapping checks, the two throttle checks (plan §9).
+
+#### R2b POST
+- verdict: done; typecheck 0 errors (real GodotSharp.dll), `verify.ps1 -Quick` ALL CHECKS PASSED (0
+  findings, UNUSED ANYWHERE: 0). engine-unproven: rungs owed in the final test phase.
+- Net: both desks. Host = `CreateServer(Link.Channels())` + every row opened (`Rendezvous.ListenFrom`
+  swapped to `port` for the open, restored), `Addresses` for the panel; `Invite()` (paste row, walks),
+  `Invite(knock)` (address row, no STUN), `MakeInvite` -> an Entry with a `Link.Gather`, sealed in
+  `PumpSession` (Strip, Fit with `Adapters`, `Encode` + `Rendezvous.Copy` on the paste row); `TakeCode`,
+  `Replied` (Waiting + gather Done only), Linking deadline `Link.LinkMs` -> hung up + a fresh paste invite;
+  `InviteLifeS` sweep; `Full` = players + pending >= 8. Guest: `Join(text)` by `Rendezvous.PathFor`
+  (reply / other build / damaged named before any peer), `Answer` = `CreateClient(invite.Id)` + a Gather
+  on peer 1 (the invite's candidates added once sealed), `ReplyCode`/`ReplyAt`, `FreshFrom`/`FreshReply`;
+  a paste guest's deadline = reply + ReplyWindowS + LinkMs; a timeout on the address row is left to the
+  12 s/5 s deadline (so the silent port reads "No answer ... in 12 s"). `JoinedBy`, `_rowOf` (host).
+  Every hang-up `Hang` -> `Link.Hang` (a live peer's deferred to the frame's end); goodbye = the hearer
+  hangs up, `_lettingGo` polled until `GetPeers()` is empty or 2 s. `PretendAt` = Code|Auth
+  (`Claimed(where)`). Paste guest: no retries, §3.9's text; host: a fresh invite on a paste guest's drop.
+- Deleted: ENet everywhere, Router.cs (-> Adapters.cs: `Lan()`, `Overlays()`), describe/reach/reveal/
+  public IP (api.ipify.org), `Net.Link`/throttle/`server` flag, fakeigd.py + run.ps1's start, wan.py's
+  ENet relays + run.ps1's `--relay`, the router scenarios, the describe/IsPublic/stale-mapping/carrier-
+  grade checks, the two throttle checks, the reveal check and Shots' describe block (51 kept as the host
+  panel; 52 gone until R3). `Rendezvous.Clipboard` default reads only where the display server has a
+  clipboard (headless ClipboardGet is an engine ERROR); `Rendezvous.Copy` is the write seam.
+  `Rendezvous.Entry` grew Conn/Name/Made/Until/Code; `Pending.All`.
+- Defaults taken: the paste guest's give-up is ReplyWindowS + LinkMs after its reply (the plan says "the
+  countdown runs out first"; the host still needs its 12 s to link a reply taken at the last second).
+  SessionMenu is minimal (INVITE A FRIEND, COPY INVITE, the reply box, the address labels, the guest's
+  reply + seconds left, MAKE A FRESH REPLY); R3 sets §6's words and the frames.
+- checks written (not run): solo `R2SwitchChecks` (JOIN: reply / another build's invite / PretendAt Code /
+  damaged; HOST: 3 invites -> 3 entries, ids, codes; reply box: invite / stranger's reply / words / a real
+  reply -> Linking / the same reply again / a hung-up entry's reply; full at 8; offline: all hung up,
+  listener closed); rewritten: "127.0.0.1:9" -> "Nothing is hosting at" < 3 s, the silent TCP port
+  P(19481) -> "No answer ... in 12 s" 11.8-12.6 s with "ask the host for an invite code", the mid-
+  handshake check on P(19481), the channel check `r <= Link.Channels().Count`, the host's listener-port
+  check (was the LAN address), `NetworkIdle` wording; `PretendProtocol` -> `PretendAt = Auth` in guest2.
+- next: R2c, the roles moved (§10.3) and R2's owed rung-5 checks.
+
+### HANDOFF for the fresh agent (R2c onward) -- this agent stopped at ~150k after R2b
+Read: the R2b POST above, plan §3.3, §3.8, §3.9, §6, §10.2-10.4 (R2-R4 rows), §13 R2-R5. Net.cs's session
+section (grep `── hosting`, `── the host's desk`, `── the guest's desk`, `PumpSession`, `── joining`) is
+the API: `Net.I.Invite()`, `LastInvite`, `Pending` (`.All`, `.Find`), `TakeCode(text)`, `Join(text)`,
+`ReplyCode`/`ReplyAt`, `FreshFrom`/`FreshReply()`, `JoinedBy` ("paste"/"address"), `Addresses`,
+`Net.PretendAt = Net.Pretend.Code|Auth`, `Hang(id)`. The harness clipboard is `_Test.Clip` (static;
+`HermeticNetwork()` swaps `Rendezvous.Clipboard`/`Copy` to it and `Link.Servers` to `BoxStun`).
+Landmarks (SmokeTest.cs.txt as of dc6ac67): courier `CourierFile` 695, `Rewrite` 700 (the box pair),
+R1's paste-row courier check ~850-900, role dispatch 1176, `ArenaMp` 10304, `Mp` 11014 (host 11017,
+guest2 11222, guest after), `R2SwitchChecks` just above `S2HeldBossHost`.
+**R2c · the roles moved (§10.3)** (files: SmokeTest.cs.txt, maybe Net.cs for a fix): `guest` joins BY
+INVITE: the host role, once hosting, calls `Net.I.Invite()` and writes `Clip` (its invite) to
+`CourierFile("invite", P(27115), n)`; the guest reads it, waits `Vary(0.5f, 3f)`, and puts it through the
+JOIN box's handler (`SessionMenu`'s LineEdit TextSubmitted, or `Net.I.Join`); it writes `Net.I.ReplyCode`
+to `CourierFile("reply", ...)`; the host puts that through the reply box's handler (`ReplyBox`
+TextSubmitted -> `TakeCode`), and ONCE per run through the clipboard seam instead (set `Clip` to a
+Discord-style `Message(reply)`: the pickup takes it). Under `-Wan` the courier `Rewrite`s both codes to
+the box pair. `guest2` by ADDRESS: first `PretendAt = Code` -> refused over TCP before any peer (its text
+"That host is on a different build of the game (theirs {build} {proto:x8}, yours ...)" and the host's
+"Refused {name} on a different build ..." counted once; `refusals` at the host now counts both lines
+starting "Refused": raise the host's expected count to 2 or split), then `PretendAt = Auth` refused
+in-band (existing check), then joins. New checks: `Net.I.JoinedBy` == "paste" for guest, "address" for
+guest2/aguest; the paste guest's drop (host `Drop(id)`): no reconnect attempt for 20 s (`!Net.I.Connecting
+&& !Net.I.Reconnecting` throughout), guest status "Lost the connection to {hostName}. Ask them for a new
+invite code: your place is held 90 s. Your own world keeps running."; the host's status "{name} dropped.
+Send them this invite to come back (their place is held 90 s): COPY." and a new paste entry; the courier
+carries the fresh invite; the guest lands back in its held place WITH its rejoin token (Hub's existing
+"claimed its place with the rejoin token" line); the live-holder replacement (S2b owed: the guest rejoins
+before the host's watchdog lets its old peer go -- e.g. guest `Net.SkipGoodbye` + GoOffline, then joins the
+fresh invite at once; the host hands the place over, `_replacing`). Role limits in run.ps1 (120/150 s)
+may need raising for the courier waits. `aguest` unchanged (address retries at 2/8/14 s, RECONNECT 19 s).
+**R3** words (§6.1/6.2 table: most literals are already in Net.cs; add the listener-moved text if
+`ListenPort != port`), COPY NETWORK REPORT (§6.3: `Net.Report()` + a SessionMenu button, per invite/reply
+the STUN row + ms (`Gather.Row`, `DoneAt - Began`), candidates dropped by `Fit`, code length; per join
+the times; per-row gap/backlog via `Link.Backlog`; ReplyWindowS; pickup on), Hints "multiplayer" row
+(§6.3 literal), Shots: replace `51_address_hidden` with `51_invite_ready` + `52_reply_countdown`, add
+`reply_expired` and `join_failed` at the next free numbers (grep `Snap("5` / `Snap("6`), checks for each.
+**R4** the watchdog blackhole check (`Box("POST", "/box/blackhole?s=12")` after the guest's return under
+-Wan: both ends drop at 8 +/- 1 s, the fresh invite brings it back) and the rate check at 150/40/5 with
+per-row gap/backlog printed. **R5** pack/install/play/snapshot/manifest NOTES texts (§8), DESIGN, README
+"Playing with a friend", CHANGES (Unreleased + Handoff + Known broken = §10.5) in the LAST job.
+Env: `typecheck\typecheck.ps1` from typecheck/, `.\verify.ps1 -Quick` at the repo root (log to a new
+name outside the tree). Python edits: write the script to the scratchpad with the Write tool (a bash
+heredoc turns "\n" inside C# strings into real newlines: it broke SessionMenu once this job).
+
+#### R2c PRE
+- job R2c, tier opus (fresh agent from the R2c handoff). HEAD 4d90422. Intent: the roles moved (§10.3):
+  `guest` joins BY INVITE through the courier (host posts `Message(LastInvite)` to invite-{P(27115)}-{n},
+  the guest waits Vary(0.5,3) s and submits it to the JOIN box, posts its reply; the host takes reply 0
+  through the clipboard seam, the rest through the ReplyBox); under -Wan the GUEST rewrites both codes to
+  a box pair (it knows Wan; the host gets `wan` too for its waits); `guest2` knocks as another build
+  (`PretendAt.Code`, refused over TCP, no WebRTC peer on any frame), then `Auth`, then joins; the host
+  counts the two refusals apart; `JoinedBy` per role; the paste guest's drop (no attempt for 20 s, §3.9's
+  text both ends, a fresh invite) and return into its held place with its token; the live-holder
+  replacement (the guest orphans its live peer and joins a fresh invite at once: the host lets the old
+  link go and hands the place over, no "dropped", no fresh invite). Net fix found reading: a peer let go
+  because its pilot is back under another id is not a paste drop (no fresh invite). run.ps1: `$gx` to the
+  host, role limit 120 -> 180 s for the three-player set, expected engine lines as named rows.
+- files: scripts/Net.cs a18ed578, scripts/SessionMenu.cs 02b0223a (JOIN box named "JoinBox"),
+  tools/smoketest/SmokeTest.cs.txt 4818ac3e, tools/smoketest/run.ps1 37cb0c81, ledger a0e9ab6a.
+- checks planned: rung 5 host `R2cHostCourier` / `R2cHostReturns`, guest `R2cJoinByInvite` /
+  `R2cGuestReturns`, guest2's other-build knock; rewritten: the host's refusal count (split in two), the
+  guest's end (the drop now precedes "Host closed").
+
+#### R2c POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED (0 findings, UNUSED ANYWHERE: 0).
+  engine-unproven: rungs owed in the final test phase.
+- Harness (SmokeTest.cs.txt, methods above `S2HeldBossHost`): `Post` (write whole, then move), `R2cPostInvite`,
+  `R2cTakeReply` (clipboard seam or ReplyBox's TextSubmitted), `R2cJoinByInvite` (JoinBox's TextSubmitted;
+  under -Wan the guest rewrites both codes and registers the box pair), `R2cHostCourier`, `R2cRows`,
+  `R2cHostReturns`, `R2cGuestReturns`. `guest` joins by invite; its end reordered: the host DROPS it after the
+  third player leaves (§3.9 text), its own-world checks run there, then 20 s of no attempt, the return by
+  fresh invite, the live holder (its `_peer` orphaned by reflection: up, never polled, so the host sees
+  silence, not a close), then "Host closed". `guest2` knocks with `PretendAt.Code` first (no WebRTC peer on
+  any frame), then Auth, then joins; `JoinedBy` asserted for guest/guest2/aguest.
+- Net fix: a paste peer let go while its pilot is back under another id (the rejoin token beat it) gets no
+  fresh invite (`OnPeer`). SessionMenu: the JOIN box is named `JoinBox`.
+- run.ps1: the host gets `wan` under -Wan (its waits), the three-player roles' limit 120 -> 180 s (20 s of
+  no-retry, two returns), `$expected` named rows for engine chatter (the UPnP sentence gone).
+- checks written (not run): rung 5 host "INVITE A FRIEND's invite went out by the courier ... taken off the
+  clipboard", "one session serves both rows", "a paste guest that drops is held 90 s and gets a fresh
+  invite", "came back by the fresh invite ... rejoin token", "the pilot back with its token while its old
+  link still lived"; guest "joined by the host's invite ... within 30 s", "dropped from an invite ...",
+  "tries nothing by itself for 20 s", "back in by the host's fresh invite", "back again while its old link
+  still lived"; guest2 "its knock as another build is refused by the listener before any connection",
+  "joined by the typed address"; aguest "joined, by the typed address". Rewritten: the host's refusal count
+  (one at the knock, one in-band, counted apart), the guest's "Lost the connection ... held 90 s" (was
+  "Host closed" at that point), guest2's joinWatch text (four joins).
+- Test-phase watch: the live holder leans on the orphaned peer's native threads keeping the link up
+  (libdatachannel); if the host sees a close instead, the check reads "again > 0" -- then orphan by
+  blackhole under -Wan only.
+- next: R3.
+
+#### R3 PRE
+- job R3, tier opus. HEAD 353203a. Intent: §6's words still missing (the listener moved / could not bind,
+  appended to HOST's line; a SocketException from the OS-picked port no longer escapes Host), COPY NETWORK
+  REPORT (§6.3: `Net.Report()`, a line per code made -- row, STUN row and ms, candidates the fit dropped,
+  length -- and per join -- row, invite made, reply made/taken, connected, admitted; peak backlog per
+  NetChannels row sampled 4 a second; the beat's longest silence; ReplyWindowS; pickup on/off), the pending
+  list with COPY and CANCEL (§7 SessionMenu row; §6.1's full text sends the host to it), Hints'
+  "multiplayer" row (§6.3 literal), Shots 51_invite_ready + 52_reply_countdown replacing 51_address_hidden,
+  60_reply_expired, 61_join_failed (next free numbers). Game.cs already reads `netBusy` (nothing to do).
+- Defaults: v1 §6.1's two listener texts are not in the repo, so they are written here (" Port {p} is taken
+  on this PC, so friends typing an address use port {at}." / " No port could be opened for typed addresses,
+  so friends join by invite only."); the report's "longest gap per row" is the beat's row only (the game
+  cannot see which row a packet came in on; the harness times its own stream, R4).
+- files: scripts/Net.cs f9150394, scripts/SessionMenu.cs 47ea0157, scripts/Hints.cs 87bce0b3,
+  tools/smoketest/SmokeTest.cs.txt 38784fa1, tools/screens/Shots.cs.txt f2d2d599, ledger 959a60ad.
+- checks planned: solo `R3WordsChecks` (listener moved at 3 varied ports/depths; the Linking deadline's
+  text + fresh invite; the 15-min expiry text; CANCEL from full frees a place; the report's lines; COPY
+  NETWORK REPORT on the clipboard; the hint literal; the guest's countdown-ran-out text + MAKE A FRESH
+  REPLY at 3 varied invites; the connection-closed text); Shots frames 51, 52, 60, 61.
+
+#### R3 POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED (0 findings, UNUSED ANYWHERE: 0).
+  engine-unproven: rungs owed in the final test phase (3, 4 with LINT: 0, 5).
+- Net: HOST's line carries the listener's outcome (moved: " Port {p} is taken on this PC, so friends typing an
+  address use port {at}."; none: " No port could be opened for typed addresses, so friends join by invite
+  only."), a SocketException from the OS-picked port no longer escapes Host; `Report()` (build, session,
+  addresses, STUN rows + the walk's start, "reply window 30 s; clipboard pickup on", round trip + the beat's
+  longest silence, peak backlog per NetChannels row sampled 4/s, a line per code made with its STUN row, ms,
+  fit drops and length, a line per join with invite/reply/connected/admitted times, the last status);
+  `CopyInvite` deleted (the pending list's COPY replaces it).
+- SessionMenu: the pending list (`PendingList`, a row `Invite{id}` per entry: who, stage, COPY, CANCEL);
+  COPY NETWORK REPORT (`CopyReport`); INVITE stays pressable when full (it says how to free a place).
+- Hints "multiplayer": §6.3's literal. Game.cs already read `netBusy` (no change).
+- Shots: 51_invite_ready, 52_reply_countdown, 60_reply_expired, 61_join_failed (51_address_hidden gone; a
+  hermetic session: no STUN rows, the run's own clipboard).
+- checks written (not run): solo `R3WordsChecks` (listener moved at 3 varied bases, 1-3 ports taken; a free
+  port adds nothing; the Linking deadline's text + fresh invite; the 15-min expiry; the report's lines; COPY
+  NETWORK REPORT; CANCEL from full; the hint; the guest's reply + countdown label, the countdown-ran-out text,
+  MAKE A FRESH REPLY answering the same invite, at 2 varied invites; the closed-connection text).
+- Not checkable in one process: the "no port could be opened" text (every port and the OS's own taken).
+- next: R4.
+
+#### R4 PRE
+- job R4, tier opus. HEAD a58bcfb. Intent (§10.4 R4, -Wan only): the watchdog -- after the paste guest's
+  return the guest blackholes the box for 12 s and posts the moment (UTC ms, the courier's file
+  blackhole-{port}-0); both ends drop each other 8 +/- 1 s after it (the guest's §3.9 text, the host's
+  "Player {id} dropped."); the host's fresh invite, posted once the blackhole lifts, brings it back (invite
+  2; the live holder moves to 3 under -Wan). The rate check is S1's streamRate >= 8 (run at
+  WARSHIPS_WAN=150,40,5 in the test phase); printed, not asserted: the stream row's longest gap over its
+  12 s and each end's peak backlog per NetChannels row (Net.Report's line).
+- files: tools/smoketest/SmokeTest.cs.txt 3d1f31df, ledger 4670d059.
+- checks planned: rung 5 -Wan guest "the watchdog drops the host 8 +/- 1 s into a blackhole", host "the
+  watchdog drops the guest 8 +/- 1 s into a blackhole", both "back by the fresh invite after it lifts".
+
+#### R4 POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED. engine-unproven: rung 5 -Wan owed
+  in the final test phase (default path, then WARSHIPS_WAN=150,40,5 for the rate check).
+- Harness: `R4GuestBlackhole` / `R4HostBlackhole` (after the paste guest's first return, -Wan only: the guest
+  posts `/box/blackhole?s=12` and its wall-clock start through the courier; each end's watchdog drop timed
+  from it, 7-9 s; back by invite 2 after it lifts; the live holder moves to invite 3 under -Wan), `R4Backlog`
+  (Net.Report's backlog + round-trip lines), `NetStream` keeps the longest wait between two. Printed under
+  -Wan, not asserted: the stream row's longest gap over the rate check's 12 s and the guest's and the host's
+  peak backlog per NetChannels row. The rate check is S1's (>= 8 a second), unchanged.
+- checks written (not run): rung 5 -Wan guest "into a 12 s blackhole, its watchdog lets the host go 8 +/- 1
+  s in", "back by the host's fresh invite once the blackhole lifted"; host "... lets the guest go 8 +/- 1 s
+  in", "the fresh invite, carried after the blackhole lifted, brings the guest back into its place".
+- next: R5 (packaging NOTES and the record; CHANGES in it, the lane's last job).
+
+#### R5 PRE
+- job R5, tier opus. HEAD 547fa86. Intent: packaging (§8, v1 R6) and the record (§13 R5), the lane's LAST
+  job. pack.ps1: tools\import.ps1 before the export (SPIKE F1), the release DLL's presence after it, the
+  seven licences copied into the export before its file listing (runtime part, no part rule), NOTES
+  [PLAYING WITH A FRIEND] (+ the privacy line) and [THIRD-PARTY]; install.ps1: a presence check of every
+  `in=` file, used by step 2 (an install missing a file is not "already installed") and after step 4;
+  play.ps1: tools\import.ps1 before a launch from source; snapshot.ps1: the trimmed .gdextension is in the
+  master copy. Record: DESIGN (the WebRTC section: plugin row, one STUN row per connection and the walk, no
+  ICE restart, the reply window 30 s and its measurement, every channel reliable and per row, seal one
+  poll after Complete, Link.Hang, the codec's template rule, the watchdog, the traps), README ("Playing
+  with a friend"; the -Two text), CHANGES (Unreleased + Handoff + Known broken = §10.5; CLAUDE.md's rung-4
+  frame count goes stale by the new frames).
+- files: tools/pack.ps1 8ed20edb, tools/install.ps1 22492678, play.ps1 27ba61e4, tools/snapshot.ps1 bd84c158,
+  docs/DESIGN.md 8545bdea, docs/README.md c6c0a1c1, docs/CHANGES.md 599d498b, ledger 03c6ea59.
+- checks: packaging has no engine rung in this lane: `pack.ps1 -Dirty` (the export check) and the
+  one-machine check are the test phase's (not this lane); rung 6 reads the manifest/snapshot.
+
+#### R5 POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED (0 control characters). The five
+  edited scripts parse (PowerShell's own parser). engine-unproven: `pack.ps1 -Dirty`, the one-machine check
+  and rung 6 are the test phase's.
+- pack.ps1: tools\import.ps1 -Require the plugin before the export; refuses an export without
+  libwebrtc_native.windows.template_release.x86_64.dll; the seven LICENSE.* into `licences\` before the
+  listing (runtime part); NOTES [PLAYING WITH A FRIEND] (+ the privacy line, W = 30) and [THIRD-PARTY].
+  install.ps1: `Missing` (every `in=` file present), asked by step 2 and after unpacking. play.ps1: the
+  import once (when extension_list.cfg lacks the plugin), by the console build; -Two's text names invites.
+  snapshot.ps1: `.gdextension` in the master copy.
+- Record: DESIGN (internet play rewritten for WebRTC; getting back in by row; goodbye; deadlines; traps:
+  the UPnP/loopback ones deleted, round trip, GetPeer, Link.Hang, pre-handshake drop, the 8 s stall, rows,
+  WebRTC close, no ICE restart, the seal, one STUN row per connection; the harness's network; the file
+  table), README ("Playing with a friend", the install's presence check, Testing multiplayer), CHANGES
+  (Handoff paragraph, the player summary, Unreleased entry with Known broken = §10.5 + the no-port text).
+- Defaults recorded: [THIRD-PARTY] wording written here (v1 §8.4 is not in the repo); the release's file
+  count and size are left to the next pack (README says so).
+- LANE DONE: S2, R2 (a-c), R3, R4, R5 built; nothing run on the engine.
+
+#### GATE FIX PRE
+- job gate-fix, tier opus. HEAD 1035596. Intent: the opus merge gate's six findings, each code fix with its
+  check (written, not run). (1) the rejoin token to the host alone (SendIdentity sends every other peer "");
+  rung-5 third-player check that its copy of Guesty's identity never carried one. (2) P8's REFIT: one rule
+  (Hub.RefitOpen, read by Hub.Refit, ResetShip, the class picker and the base menu's RESET); a class change
+  keeps the hull fraction and does not refresh slots (PlayerShip.FitClass carries each slot's cooldown and
+  count by id, run down by the game seconds it was away); solo checks at three situations. (3) the JOIN box
+  fills itself from a copied invite (SessionMenu, PickupMs); solo check. (4) run.ps1: 205 s for the three
+  roles under -Wan. (5) the report's per-join line gains "ICE connected" (the peer connection reaching
+  Connected), the old "connected" reads "channels open"; R3WordsChecks wants both. (6) two stale router
+  comments in SmokeTest.cs.txt (invariant C).
+- files: scripts/Hub.cs 4feec202, scripts/PlayerShip.cs 2a913835, scripts/Net.cs 80af0a72,
+  scripts/SessionMenu.cs 38dc6940, scripts/CharacterCreator.cs f108033a, scripts/BasePanel.cs 3d8362a6,
+  tools/smoketest/SmokeTest.cs.txt 6101e98e, tools/smoketest/run.ps1 18b57ec1, tools/screens/Shots.cs.txt
+  148de467, docs/CHANGES.md 8107904f, ledger 108a7a6f.
+
+#### GATE FIX POST
+- verdict: done; typecheck 0 errors, `verify.ps1 -Quick` ALL CHECKS PASSED. engine-unproven: rungs owed in
+  the final test phase (3 twice, 4, 5 `six,six`, 5 `-Wan`).
+- (1) Hub.SendIdentity: one RpcId per peer (Multiplayer.GetPeers(), or the one asked for); the token rides
+  only to peer 1 from a guest, "" to everyone else. NetIdentity keeps what it heard in PlayerInfo.Token.
+- (2) Hub.RefitOpen (the one rule) -> Hub.Refit (host), Hub.MayRefit (ResetShip, BasePanel's RESET reads
+  "IN A FIGHT: NO RESET" and is shut), CharacterCreator's class card (Hub.Refit). PlayerShip.FitClass: the
+  hull keeps its fraction (a dead ship still fits full, as before); every slot's Cool and N are kept by id
+  in _slotsAway through class changes, Cool run down by the game seconds away; Left/Own end.
+- (3) SessionMenu.FillJoinBox: open panel, not hosting, not Connecting, empty box: Rendezvous.Clipboard
+  every PickupMs, an invite not the text read last time fills JoinBox.
+- (4) run.ps1: host/guest/guest2 limit 205 s under -Wan, 180 otherwise. (5) JoinTimes Ice/Channels; the
+  line reads "ICE connected", "channels open"; Ice stamped from PumpSession (host Linking entries, guest
+  _answer), or at channels open when one poll brought both. (6) the two router comments rewritten.
+- Checks written (not run): rung 3 `GateFixRefitChecks` ("at home in a fight, from 3 varied moments ...
+  REFIT charges nothing and opens nothing, and a class picked in the creator is refused", "a class changed
+  at home out of a fight keeps the hull's fraction", "a class change does not reset a cooldown"),
+  `GateFixJoinBoxChecks` ("the JOIN box fills itself from a copied invite, 3 of 3 ... a reply or words
+  leave it alone"), R3WordsChecks' wanted list + " ms, ICE connected never, channels open never, admitted
+  never"; rung 5 guest2 `GateFixTokenWatch/Check` ("Guesty's identity reached it with no rejoin token"),
+  host `GateFixJoinTimes` ("invite made, reply taken, ICE connected, channels open, admitted, in that
+  order"); rung 4 frame 20_base_refit_in_combat (Shots `RefitInCombatFrame`).
+- Watch in the test phase: FitClass no longer refills the hull or clears cooldowns on ANY class change, so
+  an older solo check that relied on a class switch as a heal or a cooldown reset goes red there; fix it
+  at rung 3 by setting what it needs (Hp, Sl(id).Cool) explicitly, never by restoring the old refill.
+- Slip, undone: one PowerShell [IO.File] write with a relative path landed in WarShips_Version_L's
+  tools/smoketest/run.ps1 (the same R4 edit); reverted there at once with git checkout (tree clean again).
+- LANE DONE (gate fix): nothing run on the engine.
+
+## JOB gate 2 comments (PRE)
+- tier opus; intent: fix two stale Router comments (invariant C); files tools/smoketest/SmokeTest.cs.txt (07cbc10ddc980f0d94c04a41a9397bec5ef83dfd); HEAD feacfc45b50c0bf43572b7b2ffcea1d807befd9e
+- POST: done; two comments/message reworded (line 5699 is a home router, kept); typecheck 0 errors, quick green; no engine run.
+
+## JOB M3 merge version-l (PRE)
+- tier opus; intent: merge version-l 9b05fd3 (kits A slices 1-3, art, drives, fields, curve, wings) into wt/net2; HEAD c389b45
+- conflicted: tools/smoketest/SmokeTest.cs.txt, tools/smoketest/run.ps1, docs/CHANGES.md
+- POST: resolved.
+  - SmokeTest header: version-l's `Trimmed` helper kept; its old router-era HERMETIC NETWORK comment dropped (net2 rewrote it above HermeticNetwork).
+  - arena guest join: net2's JoinedBy == "address" check kept, plus version-l's `await LaneBGuestDrives()`.
+  - host mid-session level: version-l's curve literal 1.2725 (base 1.2875 was changed only there) + its hostRampHold cleanup, then net2's R2cHostReturns and the -Wan backlog print.
+  - guest before the drop: version-l's guest-flown ramp block (D18), then net2's "host DROPS this guest" comment.
+  - run.ps1: net2's $lim (205 under -Wan, else 180); version-l's side was the old literal 180.
+  - CHANGES.md: Handoff = net2's entry + every version-l entry (net2's stale kits K2 entry dropped: version-l's K3 entry supersedes it); Unreleased keeps both sides.
+  - Wire: no channel/enum collision (version-l changed no NetChannels; Beat = 12 stays net2's).
+  - typecheck 0 errors, quick ALL CHECKS PASSED; no engine run.

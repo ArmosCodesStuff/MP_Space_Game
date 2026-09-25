@@ -83,7 +83,7 @@ Reused as-is or lightly adapted — these were built and validated:
    raider waves hunt it, for **5x** the pay if it reaches the portal. DISPATCH: send it alone, and it
    gets through with the EVASION upgrade's chance -- or its cargo is lost past the portal. (The
    owner's 2026-09-21 answer; it replaced "alone for a reduced payout".)
-3. **Real multiplayer, now**, peer-to-peer over ENet — one peer hosts, the rest join. Not architected-for-later.
+3. **Real multiplayer, now**, peer-to-peer over WebRTC with invite codes and no server of ours — one peer hosts, the rest join. Not architected-for-later.
 
 ## The authority model
 
@@ -243,23 +243,26 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   which the hub sets each frame from the selection and `PlayerShip.InCombat` (host-tracked: dealing
   or taking damage within 12 s). `Music.CombatZone` forces combat in the arena.
 - **Leaving** (`Game.Quit`): the ONE way out -- the window's close button, the menu's QUIT and the
-  harnesses. It pauses the world, closes the session (saved; router ports closed again), stops every
-  sound, and waits in REAL time for the mixer to let go (150 ms) and for router jobs (up to 10 s,
-  window minimised). A bare `Quit()` left sounds playing ("resources still in use at exit") and could
-  crash inside a router thread.
-- **Internet play** (`Net.cs`, `Router.cs`): ENet over UDP 27015, a direct connection, so the host
-  must be reachable. HOST starts LAN hosting at once; a background job (`Router.Open`) then tries to
-  open the port: UPnP asked directly (our own .NET client), then NAT-PMP / PCP at the gateway, then
-  Godot's UPnP as a last resort. If the router that opened it is behind ANOTHER router (its internet
-  side is private -- your router behind the provider's modem, the developer's own network), the one
-  in front is asked too, directly (a multicast search does not cross a router). What the player is
-  told (`Net.Describe`), from the routers' report and a public "what is my IP" lookup:
-  INTERNET (every hop opened), MANUAL (one step by hand: the exact forward left -- to the inner
-  router's internet side when the outer one is silent -- or "turn the VPN off" when this PC's traffic
-  leaves by a VPN), LAN ONLY (carrier-grade NAT, or nothing learned). Whatever the routers did,
-  virtual networks friends can share (Tailscale, ZeroTier, Radmin VPN, Hamachi, found by adapter
-  NAME) and this PC's IPv6 address are offered too -- IPv6 has no NAT, the one way in left behind
-  carrier-grade NAT. There is no relay server or NAT punch-through: that needs infrastructure.
+  harnesses. It pauses the world, closes the session (saved; every goodbye given its 2 s, the
+  listener closed), stops every sound, and waits in REAL time for the mixer to let go (150 ms) and for
+  the network to go idle (`Net.NetworkIdle`: no peer, no goodbye still going, no listener; up to 10 s,
+  window minimised). A bare `Quit()` left sounds playing ("resources still in use at exit"), and a
+  listener thread must not hand a knock to an engine that is stopping (`Game.ShuttingDown`).
+- **Internet play** (`Net.cs`, `Link.cs`, `Rendezvous.cs`, `Adapters.cs`; docs/plans/network_webrtc.md):
+  WebRTC data channels through the webrtc-native plugin (`Link.Plugin`), peer to peer, no server of
+  ours. A friend joins by one of two rows (`Rendezvous.Paths`). **By invite**: INVITE A FRIEND makes a
+  code holding the host's offer and candidates, the friend pastes the whole message into JOIN and
+  sends back the reply it copies, and the host's game takes that reply off the clipboard while an
+  invite waits (or from the reply box) within `Link.ReplyWindowS`. **By typed address** (a LAN, Radmin
+  VPN, Tailscale): the guest knocks on the host's TCP listener (27015, the nine after it, then one the
+  OS picks), which answers with an invite on the same connection, gathered with no STUN. One session
+  serves both; every join not yet connected is a `Net.Pending` entry, hung up through `Link.Hang` when
+  it runs out (an invite unanswered for 15 min; a taken reply not connected in 12 s, which makes that
+  friend a fresh invite at once, since a connection takes one answer). A code's candidates come from
+  ONE STUN row at a time (Google's, then Cloudflare's, `Link.Servers`; the walk moves on after 2 s of
+  silence and remembers which answered, `Link.StunFirst`); that lookup is the game's only outside
+  contact. There is no TURN relay (the ruling: no servers): two strict NATs cannot meet, and Radmin
+  VPN is the answer then. COPY NETWORK REPORT (`Net.Report`) is what a failed join sends the developer.
 - **The handshake** is Godot's authentication step (`SceneMultiplayer.AuthCallback`), BEFORE a peer
   counts as connected: each side sends `Net.Protocol`, a fingerprint of the build (every RPC's
   signature, every constant and fixed value, the save version) and refuses a mismatch on its own
@@ -268,11 +271,18 @@ levels once a second and ship and hauler state ten times a second; a guest's own
 - **Joining** keeps your own world running until a host answers (`Net.Connecting`), looks names up
   off the main thread, and reads IPv6 / `[v6]:port` / pasted URLs. A late joiner is caught up when it
   reports its world (`Hub.NetMySector`: mission, raiders, a win; a guest in the wrong world is brought
-  into the host's). A dropped friend is let go in ~10 s; the session saves on every leaving route.
+  into the host's). A silent friend is let go after 8 s (the beat's watchdog, `Link.QuietMs`); the
+  session saves on every leaving route.
+- **Getting back in, by row** (`IRendezvousPath.Auto`). A typed address retries by itself (2, 8 and
+  14 s, then RECONNECT); an invite cannot knock again, so a dropped invite friend is told to ask for a
+  new invite code, and the host's panel makes that friend a fresh one at once. The place is held 90 s
+  (`Session.HoldFor`) and reclaimed with the rejoin token (`Session.Rejoin`), which also takes it from
+  an old link the host has not yet noticed die (the old one is let go, its place handed over).
 - **Latency.** Host-owned things are followed with `NetPose` (eased, and carried forward along their
   measured velocity for at most 0.25 s). A guest's telegraphs are shortened by its round trip
   (`Net.Arriving`) so they end when the guest's own position is judged. Cosmetic reliable traffic
-  (shells, torpedoes) rides its own ENet channel so a lost one does not hold up the rest; raider
+  (shells, torpedoes) rides a row of its own (`NetChannels`: each row is its own negotiated data
+  channel and SCTP stream, every one reliable and ordered), so a loss holds back only its row; raider
   updates go in packets of 24, under the internet's ~1.2 KB.
 - **The WebRTC reply window** (R0, measured once on 2026-09-24 by a seven-pair run since deleted, an
   in-process pair over the LAN host candidate): a host applying the reply 5, 10, 15, 25, 35, 45 or
@@ -289,17 +299,17 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   *(As shipped THEN. The 50 DPS pass has since moved every weapon figure in that line -- a
   fighter's shot and a bomber's torpedo are `fighter_damage` and `torpedo_damage` in `Stats.cs`,
   and the rows are the truth. The utility hull is still 120: `Economy.UtilityHull`.)*
-- **B (DONE; escorts 3 hull)**: the beam charges **6 s**; meanwhile the boss launches **2 light fighters, 45° to port and to
-  starboard**, straight at the player, their boost lasting until they reach it (a pin to hold the pilot
-  in the beam unless point defence — or, for a fighter pilot, their guns — kills them); live **3 s**,
+- **B (DONE; the escorts since REPLACED by raids v2's squad wave 1)**: the beam charges **6 s** (never under the
+  escape floor); its pin now comes from the fight's adds; live **3 s**,
   **0.25 s ticks, 50** (half the old tick, twice as long); the boss the pack's `frigate_a` in the owner's
   **red and black** (its skull went with its old art).
 - **C (DONE — carrier measured 19.07 DPS; guns 5.9 a shell; control 1080 u)**: **battleship total DPS = 1.25 × carrier's**; **carrier range = 1.5 × battleship's**; the
   battleship's main guns fire **shells at 520 u/s** (their own stat since gear came: a missile rack
   must not change the guns), **not tracking**.
 - **D (DONE)**: capital ships **turn in place at ≤ 5% of top speed**, about 10°/s; no strafing.
-- **E (DONE)**: heavies **snub-nosed (option b)**; they **wait at the map's edge** nearest their target and,
-  once it is pinned, **boost at 700% until 300 u away**; missile within 500 u.
+- **E (DONE; the edge wait since REPLACED by raids v2)**: heavies **snub-nosed (option b)**. They no longer
+  wait at the map's edge: a heavy flies in its squad, posts astern and lasers pinned or not; its missile
+  (within its row's reach) flies only at a pinned target.
 - **F (DONE)**: **Miner hull / Salvager hull** upgrades, +10% a level, **125 cr to start** (25% above the other
   +10% rows), ×1.25 a level.
 - **G (DONE)**: the **equipment menu** (I, and a button): Weapon, Engines, Shield (health), Hull (mods), Utility,
@@ -353,7 +363,9 @@ Recorded here so every chunk builds from the written word, not from memory.
   1. **(DONE) Internet address**: the host's panel shows the address a friend in another city needs — the
      public IP (asked of a public "what is my IP" service, compared with the router's own report to
      catch shared/carrier NAT) and the port — behind a **click-to-reveal** button. (Today it is the
-     router's report via UPnP when that works, else only the LAN address.)
+     router's report via UPnP when that works, else only the LAN address.) *(Replaced 2026-09-25 by
+     invite codes, network_webrtc.md: the reveal, the public-IP lookup and UPnP are gone; the owner
+     allows the two STUN rows and nothing else.)*
   2. **(DONE) Single player stays silent** (already: no socket or lookups offline — to be proven by a test);
      the multiplayer buttons get a **1 s rate limit**.
   3. **(DONE) Party size scales the boss and the rewards.** (Formula: to be agreed.)
@@ -412,15 +424,15 @@ Recorded here so every chunk builds from the written word, not from memory.
   the game does not do, and a title screen that lies about the ship is worse than a title screen
   that breaks loudly when the ship changes. The smoke test covers it, so it breaks loudly.
 
-- **The death beam is a trap you can spring or break.** It opens with two escorts, not a red line:
-  they shiver at the launch point while coming round onto the pilot, boost in on a triple-length
-  plume, flank **port and starboard**, and web. From the moment they launch **the boss holds its
-  position**, and turns only to face the pilot -- the one turn the beam allows. **The charge begins
-  when the web has actually pinned the pilot** (the owner's call, 2026-09-22: it used to begin on a
-  prediction made at launch, and a pilot running or slipping behind the boss saw it charge before
-  anything had pinned them). Kill the escorts first and it still comes, once their web would have
-  landed -- a beam you can fly out of; and escorts that neither pin nor die cannot stall it past 5 s
-  after launch (`BeamArmMax`: under 6 s, so the beam's whole run ends inside the 15 s before the ram).
+- **The death beam is a trap you can spring or break.** It opens armed, not with a red line: from
+  that moment **the boss holds its position** and turns only to face the pilot -- the one turn the
+  beam allows. **The charge begins when ANY web has pinned the pilot** (raids v2, owner: an add's web
+  starts it; the beam launches no craft of its own -- its old two escorts are the fight's squad wave 1,
+  from level 1), and nothing pinning cannot stall it past 5 s (`ArmMax`: under 6 s, so the beam's
+  whole run ends inside the 15 s before the ram). **The escape floor**: the wind-up is never shorter
+  than 2 s + 55/46 x (the pinners' row hull on the pilot) / (0.7 x 57.6) + 0.6 s, taken as the
+  charge starts AND again whenever a new pinner latches during it -- so a pilot who strips the web
+  always has 0.6 s to leave the line (numbers_curve_raids_items.md §2.1: priced on the slowest class).
   **Beat the lights and the beam becomes dodgeable; ignore them and it cannot miss.**
 - **From the charge to the beam's end the boss is HARD LOCKED**: no turn, no move. The red line it
   shows is the line it fires, so the telegraph is a promise, and the pilot's last decision is
@@ -620,6 +632,18 @@ before, and are NOT copied here:
 Numbers for the curve, bosses, raids, chips and items are `numbers_curve_raids_items.md`'s, not the
 kits'. Progress, decisions taken where the spec is silent, and the engine rungs owed: `docs/plans/ledger_kits.md`.
 
+**Stops: one rule for "how many bodies before it ends"** (slice 3). A flyer (`ShotDef.Stops`, and a
+shot's own `Shot.Stops`) and a line (`LineDef.Stops`, `Lines.cs`) both mean the same by it: 1 = the
+first body, n = the first n, 0 = everything on its path; each body is struck once. A piercing slug,
+the railgun, Time on target's lines and the prism's children are rows, never a new loop. Trap: a
+blow may end a body and remove it from the list being walked, so `Shot.Strike` asks for the next
+body afresh after each blow, and `Lines.Strike` picks every body before it deals the first.
+A line is aimed from a point at a point: an `AtTarget` row ends there (never past its Reach), any other runs its
+whole Reach through it. **A charged weapon reads its bands** (`Charge.cs`, `Charges.Of(ability id)`): the share of the full
+charge picks a multiplier and a line row; a ramp is a band flag, not code. The Sniper's active reload
+(6c) is the railgun's table rewritten, not a new path. Trap: a constant table is an ARRAY of rows, never a
+dictionary -- `Net.Plain` does not hash a dictionary field, so a build whose table differed would still be admitted.
+
 ### Fields and one-raise effects (kits lane D, F9)
 
 - **A field is a row keyed by a slot id** (`Fields.All`), never a block in `_Draw`. The row names the
@@ -634,6 +658,7 @@ kits'. Progress, decisions taken where the spec is silent, and the engine rungs 
   before, so a hull freed first leaves nothing behind. **Trap:** raise a tear BEFORE the hit it goes
   with; the world finds the anchor among the living (`Combat.ById`), so a tear after a killing hit has
   no hull to cut from.
+
 
 ### The helm: capital ships handle like naval ships
 
@@ -951,8 +976,9 @@ piece of player state that is **not** host-owned — it is identity, not a resou
 - **Loot never goes to waste.** Drops are on the pilot's file at the kill and claimed on the next
   world entry: a quit, a crash or a lost host costs nothing. Crates are local nodes with no network:
   only their pilot's machine has them. The host rolls; a guest cannot choose what it gets.
-- **A goodbye is what tells a closed session from a dropped one.** ENet reports both the same way.
-  The goodbye must actually leave, so the peer is disconnected gently and pumped for up to a second.
+- **A goodbye is what tells a closed session from a dropped one.** From the other end they look the
+  same. The goodbye must actually leave: THE HEARER HANGS UP, and the sender keeps polling its old peer
+  until it has, or 2 s have passed (`Net.LetGoMs`, each goodbye on its own clock).
 - **A place is held by character id**, not peer id (it changes on a reconnect). The id is the
   guest's own claim, as its name and gear are: there is nothing else to know a returning player by.
 - **A failed attempt changes nothing.** Going offline raises `SessionChanged` only if a session was
@@ -974,7 +1000,8 @@ piece of player state that is **not** host-owned — it is identity, not a resou
   that kill again -- a loot dupe anyone could do on purpose. So a kill is one message (EXP, share and
   parts): two could be paid apart.
 - **Every connection attempt has a deadline of its own**: 12 s for a JOIN, 5 s for a try to get back
-  in (automatic or RECONNECT). ENet's own timeout is not one -- see Traps.
+  in (automatic or RECONNECT); a pasted invite, the reply window and then the host's 12 s. A WebRTC
+  connection notices a hard-killed peer only after 25-26 s (SPIKE F3), so the game keeps its own.
 - **A session's end takes its party with it.** Who is held, who is READY and -- for a pilot that was a
   guest -- the mission: the host's portal stayed open in a guest's own world, and a held pilot kept a
   solo world's portal shut for good.
@@ -987,7 +1014,7 @@ each (`python tools/map.py`). The files to start from:
 | File | What it is |
 |---|---|
 | `Hub.cs` | the world: layout, sectors (home / arena), ships, raids, missions, loot drops, held places, the HUD |
-| `Net.cs` / `Router.cs` | sessions, the build handshake, the goodbye and reconnection; opening the port on any router |
+| `Net.cs` / `Link.cs` / `Rendezvous.cs` / `Adapters.cs` | sessions, the build handshake, the beat, the goodbye and reconnection, COPY NETWORK REPORT / the WebRTC transport (the one place that names it) / the codes, the rows (invite, typed address), the listener / this PC's LAN and overlay addresses |
 | `PlayerShip.cs` / `ShipClasses.cs` | the ship (helm, abilities, refit, wing) / turrets and wings |
 | `Stats.cs` / `Equipment.cs` | every number a ship flies with / the 96 drop parts and the kit |
 | `Loot.cs` / `Hints.cs` | drops and crates / the tutorial's corner card |
@@ -1070,7 +1097,40 @@ future Godot version changes one, this table is the record of what was intended.
 removed lines equal the engine defaults first — ask the engine — and keep the reasoning in this file,
 where the editor cannot delete it.*
 
+## Raids v2: squads and a boss fight's adds (lane G, 2026-09-25)
+
+The spec is `docs/plans/raids_squads_adds.md` with the owner's rulings (`docs/plans/README.md`, "Raids and
+bosses"); the numbers are `numbers_curve_raids_items.md` §2.
+- **Every raider flies in a squad** (`Squads.cs`), a squad of one included (doctrine `lone`). The squad is
+  host bookkeeping: it picks the target (its doctrine row: `lone`, `patrol` holding a ring, `gank` hunting the
+  loneliest pilot), holds a formation at its slowest member's pace, commits as one when its anchor is inside
+  its commit range, and hands out **sticky posts** from one post book per target (13 front, 5 rear).
+  Everyone lands together (time on target), on the boost unless the squad burned inside 10 s. A warp
+  (`Lead.Jumped`) or a fleeing target re-forms it. A heavy never pins at any level: its CC is the webifiers
+  in its squad.
+- **A boss fight's adds are a row** (`Waves.All` "bounty_adds"): N(L) = none to L5, then one more every 3
+  levels to 12, dealt H,L,L,L; the boss row's `AddsFloor` (the Rusty's 2) sets its first squad's pinners
+  from L1. Slots come on the arena clock (`Raids.TickGarrison`, which replaced Hub's) at k x 30 s or at boss
+  hull 1 - k/slots; a wiped slot returns 30 s later with the same kinds. A first fill pays
+  `EnemyDef.Exp x level / pilot level` (`Missions.ExpFor`, one formula with the boss kill) through the kill
+  branch alone, to every pilot at its own level (`NetKillExp`, reliable).
+- **What a squad looks like is read the same on every peer** (`SquadSight.cs`): a guest has no Squad, only
+  the raider packet (squad id in bits 8-23, the lead and lock bits, the line's end) and the kind's row, so
+  the radar's diamond / bracket / rim chevron, the victim's "GANK:" line and the names under the hulls are
+  all worked out from those, on the host as on a guest. A new enemy row needs nothing there.
+
 ## Traps that have already cost time
+
+- **A burst does not mean a kill.** A boss's death sweeps its adds out through `Hub.RaiderDown` with their
+  hull left, and a withdrawn hunter goes quietly (`Raids.CallOff`): only `Raider.TakeDamage`'s own kill
+  branch pays (`Hub.PayKill`). Paying from `RaiderDown` or the burst would pay a boss kill for every live add.
+- **A Garrison row must name its Mission.** `Waves.For` matches `WaveDef.Mission` against the brief's; a
+  Garrison row with none would answer every mission, and a bounty's clock would draw the siege's rows.
+- **A warning replaced on one peer is replaced on none.** A stretched beam wind-up once freed its old lane
+  with a host-only `QueueFree` and raised a new one to everybody: each guest kept both, and the old one
+  struck early. Replacement lives in the one raise path (`Hub.AddFx`, run by the host and by `NetFx`).
+- **`Raids.Tick` must stay ahead of the raiders' `_Process`** (`Hub._Process` calls it first): a squad
+  ticked after its members hands them last frame's target, posts and time on target.
 
 - **A harness port literal that bypasses `P()` collides between engine slots.** `rungs.ps1` runs up to
   `-Slots` chains at once; slot n gives its own TEMP/APPDATA and passes the user arg `port-shift=100n`, and every port
@@ -1193,17 +1253,12 @@ where the editor cannot delete it.*
 - **A sound still playing at exit is a "resource still in use".** The mixer releases a stopped
   playback only on its next cycles; stop everything, then wait in REAL time (`Game.Quit`). It was
   first blamed on `GD.Load`'s cache -- which does not hold resources alive -- and chased for days.
-- **Godot's `Upnp` refuses a router whose internet side is private** (double NAT) and returns an
-  empty device list for a router that answered on a search target it did not ask for. `Router.cs`
-  talks UPnP itself; Godot's is the last resort.
-- **Windows will not send from a LAN address to a loopback one** (WSAEADDRNOTAVAIL). Only the
-  network-wide search is bound to the LAN adapter; a search to one address binds to any.
 - **A player still joining is not a guest yet, and a guest is not online until the host says so.**
   `IsHost` stays true until the handshake lets the player in; `Connecting` stays true until the
   host's welcome (`Net.NetWelcome`). Code that must know which end of a join it is on asks
   `Net.Connecting`, never `IsHost`.
 - **Godot throws away, with an engine error, anything but the handshake from a peer it has not let
-  in** ("SYS_COMMAND_AUTH" in the log). ENet calls a link connected before the handshake has let
+  in** ("SYS_COMMAND_AUTH" in the log). The transport calls a link connected before the handshake has let
   either end in, and each end lets the other in the moment it hears the other's "done" -- so a guest's
   first unreliable report, sent right beside its own "done", overtook it on a link that reorders.
   `Net.IsOnline` is true only in a session and, on a guest, only after the host's welcome, which the
@@ -1213,9 +1268,9 @@ where the editor cannot delete it.*
   "done"; the host sends unreliably only to guests that have answered (`Net.ToHeard`) or reported a
   world (`Hub.RpcToSector`), and guests' ship reports reach the others through the host, never
   Godot's relay, which sends to every admitted peer at once.
-- **ENet's round-trip estimate starts at 500 ms** and settles over the first reliable packets:
-  `Net.Arriving` never shortens a warning below 40% of it.
-- **`ENetMultiplayerPeer.GetPeer(id)` only knows the peers this process is connected to.** A guest
+- **The round trip is the beat's** (`Net.RoundTrip`: the least of the last 8 echoes, 0 before the
+  first): `Net.Arriving` never shortens a warning below 40% of it.
+- **`WebRtcMultiplayerPeer.GetPeer(id)` only knows the peers this process is connected to.** A guest
   hears of the other guests through the host; asking for them is an engine error.
 
 Each of these compiled clean and was wrong at runtime. The smoke test covers all of them.
@@ -1444,34 +1499,40 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   unreliable one, so over a lossy link the first ones arrived at a guest with no ship for them yet:
   "Node not found ... Invalid packet received". A node that exists on every peer (the hub) takes
   them and drops what it cannot place. The same goes for anything new that talks unreliably at once.
-- **`DisconnectPeer` is a polite hang-up, and ENet empties the peer at once.** Godot keeps listing
-  the peer until the other side answers, and everything sent meanwhile fails ("max channels: 0") --
-  unseen on one machine, a round trip of errors on a real link. The game never hangs up on one
-  peer in session; the tests simulate a drop with `PeerDisconnectNow`, which is what a drop is.
+- **Every hang-up goes through `Link.Hang`.** The plugin's `remove_peer` prints an engine ERROR for
+  an id it does not have, and a run with an ERROR line is red; there a gone id is a no-op. A live
+  peer's hang-up waits for the end of the frame (the call can come from inside that peer's own
+  poll); the tests' `Drop` is the same call, which is what a drop is.
 - **A .NET export needs `Warships.sln`, the run button does not.** Godot's export plugin checks for
   `<assembly_name>.sln` in the project folder and fails every `.cs` file without it; the editor's own
   build falls back to the `.csproj`, so nothing else ever notices it is missing.
-- **ENet's timeout is late, and a pre-handshake drop is not a "failure".** ENet looks at a peer's
-  timeout only when a resend falls due, and its resends double (0.5, 1.5, 3.5, 7.5, 15.5 s): a JOIN
-  set to give up in 12 s gave up after 15, a retry set to 5 after 7.5 -- which made three retries
-  take 24.5 s. `Net._Process` holds the real deadline. And Godot raises `connection_failed` only for a
-  link that never came up: one that came up and dropped before the host let the pilot in is
+- **A pre-handshake drop is not a "failure".** Godot raises `connection_failed` only for a link that
+  never came up: one that came up and dropped before the host let the pilot in is
   `server_disconnected`, the same as a session lost -- so `OnHostGone` checks `Connecting` first.
-- **ENet's timeout MINIMUM is the stall a session survives.** A silent peer is given up once its
-  resends run out AND the minimum has passed, and on a fast link the resends run out in about a
-  second: at 4 s a scene load or a GC pause ended sessions. It is 8 s (`Net.QuietMs`). And a live
-  link's packet throttle is set never to fall (`Net.Link`): at its defaults ENet drops unreliable
-  packets AT THE SENDER whenever a round trip comes back slower than the last few.
-- **An ordered unreliable packet is thrown away when anything sent after it on its channel got
-  there first.** On one shared channel, a ship report overtaking a base report cost the base report,
-  on any link that reorders. Every such stream has a transfer channel of its own (`NetChannels`, a
-  row each); what still shares one is the streams inside a single RPC (one pilot's ship against
-  another's). And every such stream is addressed to the Hub, the one node at the same path in every
-  world: a late unreliable report can land after its world has gone, and the Hub drops it where the
-  base or the boss would have been "Node not found".
-- **Closing an ENet peer still says goodbye to ENet.** `ENetMultiplayerPeer.Close` disconnects every
-  connected peer at once, so a host that closes without the game's goodbye (`Net.SkipGoodbye`) is
-  still noticed at once on a clean link; only a lost disconnect datagram leaves it to the timeout.
+  `Net._Process` holds every attempt's real deadline.
+- **The stall a session survives is `Link.QuietMs`, 8 s**, counted by the beat's watchdog in frames
+  capped at 0.25 s (`Link.Quiet`), so one long frame -- a scene load, a GC pause -- is not a drop; at
+  4 s those ended sessions.
+- **Every stream has a row of its own** (`NetChannels`), and each row is its own negotiated data
+  channel and SCTP stream. Every channel is reliable and ordered, so nothing is thrown away; what a
+  loss costs is a resend's delay to the rest of ITS row -- what still shares one is the streams inside
+  a single RPC (one pilot's ship against another's). `Link.Backlog` reads a row that backs up
+  (§3.8's guard, built only on evidence). And every such stream is addressed to the Hub, the one node
+  at the same path in every world: a late report can land after its world has gone, and the Hub
+  drops it where the base or the boss would have been "Node not found".
+- **Closing a WebRTC connection is heard at once on a live link** (DTLS says so), so a host that
+  closes without the game's goodbye (`Net.SkipGoodbye`) is still noticed at once; a frozen or cut-off
+  one only by the watchdog, 8 s on. So the harness's live-holder check orphans its old peer (up, never
+  polled) rather than closing it: a closed one would read as an ordinary drop.
+- **A connection takes one answer: there is no ICE restart** ("ICE restart is not supported"). A reply
+  that ran out is spent; the host makes that friend a fresh invite, and the guest MAKE A FRESH REPLY
+  answers the same invite again with a new connection.
+- **A bundle is sealed one poll after gathering says Complete** (`Link.Sealed`): the last candidates
+  arrive through signals inside the poll that reports Complete, so a bundle read in that frame can
+  miss one.
+- **One STUN row per connection.** A connection is configured with one row; the walk remakes it on the
+  next row when the first has not answered in 2 s (`Link.Gather`), and the next code starts at the row
+  that answered (`Link.StunFirst`).
 - **The plain `Godot_...win64.exe` writes nothing to stdout.** It is a GUI-subsystem binary, so
   every `GD.Print` from a headless run vanishes and the harness sees an empty log. Use the
   `_console.exe` beside it; both Windows runners swap to it automatically and refuse to run if it
@@ -1549,15 +1610,14 @@ the session.
 
 `tools/smoketest/run.ps1` is the same harness for Windows, driving the win64 mono build.
 
-**The harness builds its own network.** Every role starts with `Router.Fake = (1, 1)` and a public-IP
-service that refuses: no router, no internet, on every machine alike -- the old "two environmental
-failures" off the sandbox are gone, and a test run can never open a port on the real router (the
-game maps ports itself now). The plug-and-play scenarios point `Router.Fake` at
-`tools/smoketest/fakeigd.py`: two fake routers on 127.0.0.1 and 127.0.4.1 answering UPnP, NAT-PMP and
-PCP, in eleven networks (one router, two routers, the front one silent, a refusal, carrier-grade NAT,
-a VPN, NAT-PMP with a reassigned port, PCP, none...). `run.ps1 -Wan` runs the multiplayer half
-through `tools/smoketest/wan.py`, a relay of 90 ms each way, ±25 ms, 2% loss (`WARSHIPS_WAN="ms,jitter,loss"`
-for another day). The runner fails a run whose process crashed (a negative exit code) -- a crash at
+**The harness builds its own network.** Every role points the STUN rows at the box's responder and
+keeps a clipboard of its own (`HermeticNetwork`): no run reaches a real server or the player's
+clipboard. The box (`tools/smoketest/wan.py`, which run.ps1 starts for every run) is a STUN responder,
+two silent UDP ports, a silent TCP port and a pair proxy; the courier carries codes between roles as
+files (`CourierFile`), the way Discord does, into the JOIN box and the reply box. The `guest` role
+joins by invite, `guest2` and `aguest` by typed address. `run.ps1 -Wan` sends the invite path's
+datagrams through the pair proxy at 90 ms each way, ±25 ms, 2% loss (`WARSHIPS_WAN="ms,jitter,loss"`
+for another day); the typed rows run direct. The runner fails a run whose process crashed (a negative exit code) -- a crash at
 exit used to cut off the engine's leak report, so the one crashed run was the one that "passed".
 
 **Use Ubuntu 24.04 for the WSL distro, not the default.** `wsl --install -d Ubuntu` now gives 26.04,

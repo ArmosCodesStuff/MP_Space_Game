@@ -17,8 +17,8 @@
 # -Solo runs ONLY the single-player scenario: one engine instead of six, for the loop while a
 # change is being built. It is a PARTIAL run and says so in every line it prints, because the one
 # thing it cannot cover is the thing this harness exists for -- host and guests disagreeing.
-# -Wan runs ONLY the multiplayer scenarios, with every guest joining through tools\smoketest\wan.py:
-# an internet path of 90 ms each way, +/- 25 ms of jitter and 2% of datagrams lost -- a friend in
+# -Wan runs ONLY the multiplayer scenarios, with the invite guest's datagrams crossing tools\smoketest\wan.py
+# (the courier rewrites its codes to the box's pair; typed addresses run direct, as a LAN does): an internet path of 90 ms each way, +/- 25 ms of jitter and 2% of datagrams lost -- a friend in
 # another part of the country on an ordinary connection, rather than a second process on the same
 # machine. The checks are the same ones; what changes is everything they depend on arriving late,
 # out of order, or twice.
@@ -36,7 +36,7 @@
 # the harness binds, joins or asserts is shifted by 100*Slot (see SmokeTest.cs.txt's P() helper),
 # passed down as the user arg --port-shift=N so 2-4 chains from different trees never collide on a
 # port. -Wan refuses off slot 0: the internet-path simulation is one scripted scenario, not worth
-# doubling, and wan.py's relay ports are the unshifted literals below.
+# doubling.
 param([string]$Godot, [switch]$Solo, [switch]$Wan, [switch]$Fly, [string]$Seed, [switch]$OneDll, [int]$Slot = 0)
 
 $ErrorActionPreference = 'Stop'
@@ -197,9 +197,8 @@ try {
   if ($LASTEXITCODE -ne 0) { Write-Host "SMOKE TEST FAILED (the import)"; exit 2 }
 
   # THE BOX (tools\smoketest\wan.py, network_webrtc.md section 10.1): the network between players,
-  # up for every run -- a STUN responder, silent ports, the pair proxy, and under -Wan the relays the
-  # guests join through, each 1000 above the session port it fronts. Stopped through its control port
-  # at the end, so it prints what it carried.
+  # up for every run -- a STUN responder, silent ports, the pair proxy (under -Wan with the path's delay,
+  # jitter and loss). Stopped through its control port at the end, so it prints what it carried.
   # the box runs for EVERY run (not just -Wan): its control port and its own fixed local ports
   # (STUN responder, silent UDP/TCP) shift with this run's slot so concurrent chains never collide.
   $boxArgs = @((Join-Path $PSScriptRoot 'wan.py'), '--http', (19480 + $shift), '--shift', $shift, '--life', 1300)
@@ -209,7 +208,6 @@ try {
     $path = if ($env:WARSHIPS_WAN) { $env:WARSHIPS_WAN -split ',' } else { @(90, 25, 2) }
     Write-Host ("internet: {0} ms each way, +/- {1} ms, {2}% lost" -f $path[0], $path[1], $path[2])
     $boxArgs += @('--path', ($path -join ','))
-    foreach ($port in 27115, 27125) { $boxArgs += @('--relay', "$($port + 1000):$port") }
     $gx = @('wan')
   }
   $script:box = Start-Process -FilePath python -ArgumentList $boxArgs -NoNewWindow -PassThru `
@@ -219,27 +217,23 @@ try {
   $all = @()
   $want = 0
   if ($Fly) {
-    # the pilot: one engine, no fake routers, no peers
+    # the pilot: one engine, no peers
     $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','fly') + $seedArg + $shiftArg) 'fly' 1800) '[fly] '
     $want = 1
   }
   elseif (-not $Wan) {
-    # Two fake routers for the plug-and-play scenarios: the run never searches the real network,
-    # and never opens a port on the real router (see NoRouterNoInternet in the test).
-    $fake = Start-Process -FilePath python -ArgumentList @((Join-Path $PSScriptRoot 'fakeigd.py'), (19000 + $shift), (19080 + $shift), (19351 + $shift), 1300) `
-            -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W 'fakeigd.out') -RedirectStandardError (Join-Path $W 'fakeigd.err')
-    Start-Sleep -Milliseconds 500
     # fixed 60 fps: identical frame timing every run, so the DPS checks are exact
     $all += Complete-Run (Start-Run (@('--headless','--fixed-fps','60','--path',$W,'--','solo') + $seedArg + $shiftArg) 'solo' 1200) '[solo] '
-    if (-not $fake.HasExited) { try { $fake.Kill() } catch {} }
     $want = 1
   }
 
   if (-not $Solo -and -not $Fly) {
-    $host1 = Start-Run (@('--headless','--path',$W,'--','host') + $gx + $seedArg + $shiftArg)   'host'   180
+    # R4: -Wan adds the watchdog's 12 s blackhole, the drop, invite 2 and the live holder's invite 3 (about 25 s)
+    $lim = if ($Wan) { 205 } else { 180 }
+    $host1 = Start-Run (@('--headless','--path',$W,'--','host') + $gx + $seedArg + $shiftArg)   'host'   $lim
     Start-Sleep -Milliseconds 500
-    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx + $seedArg + $shiftArg) 'guest2' 180
-    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx + $seedArg + $shiftArg)  'guest'  180
+    $g2 = Start-Run (@('--headless','--path',$W,'--','guest2') + $gx + $seedArg + $shiftArg) 'guest2' $lim
+    $g1 = Start-Run (@('--headless','--path',$W,'--','guest') + $gx + $seedArg + $shiftArg)  'guest'  $lim
     $all += Complete-Run $g1    '[guest] '
     $all += Complete-Run $host1 '[host]  '
     $all += Complete-Run $g2    '[third] '
@@ -253,9 +247,9 @@ try {
     $want += 5
   }
   Stop-Box
-  # what the box carried: the relays' lines under -Wan, and anything it could not bind, always
+  # what the box carried: anything it could not bind
   $boxOut = @(Get-Content (Join-Path $W 'box.out') -ErrorAction SilentlyContinue)
-  $boxOut | Where-Object { ($Wan -and $_ -match '^wan ') -or $_ -match 'could not bind' } | ForEach-Object { Write-Host "  $_" }
+  $boxOut | Where-Object { $_ -match 'could not bind' } | ForEach-Object { Write-Host "  $_" }
 
   $all | ForEach-Object { Write-Host $_ }
   $bad = @($all | Where-Object { $_ -cmatch 'FAIL|Exception|ERROR' }).Count

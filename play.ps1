@@ -64,6 +64,16 @@ if ($Editor) {
 Write-Host "building..."
 $out = & dotnet build -v q -nologo 2>&1
 if ($LASTEXITCODE -ne 0) { $out | ForEach-Object { Write-Host $_ }; Write-Host "BUILD FAILED"; exit 1 }
+# The WebRTC plugin registered before the first launch, once (its first import crashes at exit, SPIKE
+# F1, so tools\import.ps1 judges it by what it wrote): without it the game plays alone, and its
+# MULTIPLAYER panel says why. By the console build, which the shell waits for.
+$extList = Join-Path $PSScriptRoot '.godot\extension_list.cfg'
+if (-not ((Test-Path $extList) -and (Select-String -Path $extList -SimpleMatch 'webrtc_native' -Quiet))) {
+    $console = $Godot -replace '\.exe$', '_console.exe'
+    if (-not (Test-Path $console)) { $console = $Godot }
+    & (Join-Path $PSScriptRoot 'tools\import.ps1') -Godot $console -Path $PSScriptRoot -Require 'res://addons/webrtc_native/webrtc_native.gdextension'
+    if ($LASTEXITCODE -ne 0) { Write-Host "the WebRTC plugin did not register (import.log): multiplayer will be off" }
+}
 
 $n = if ($Two) { 2 } else { 1 }
 for ($i = 1; $i -le $n; $i++) {
@@ -75,7 +85,8 @@ for ($i = 1; $i -le $n; $i++) {
 if ($Two) {
     Write-Host ""
     Write-Host "Two windows up. In one: MULTIPLAYER (top left) -> HOST THIS WORLD."
-    Write-Host "In the other: MULTIPLAYER -> type 127.0.0.1 -> JOIN."
+    Write-Host "In the other: MULTIPLAYER -> type 127.0.0.1 -> JOIN (or INVITE A FRIEND in the first,"
+    Write-Host "paste the invite into the other's JOIN, and its reply into the first's reply box)."
     Write-Host "Give each window its own character first -- they share one save folder."
 }
 

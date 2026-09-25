@@ -319,7 +319,7 @@ public static class Items
     public static bool IsCraft(IHittable t) => t != null && TagExt.Is(t, Tag.Light | Tag.Fighter) && !TagExt.Is(t, Tag.Boss);
     // THE PRIMARY'S BLOWS by weapon id (Dealt): what Spin-up Feed ramps. The kits' new primaries add
     // their ids here (ITEM ASSUMPTIONS A10).
-    public static readonly string[] PrimaryShots = { "shell", Dealt.Fighter };
+    public static readonly string[] PrimaryShots = { "shell", "fighter" };   // a wing craft's blow is its Wings row id
     // THE BLOWS THAT REPEAT BLOWS ALREADY WEIGHED (Dealt.Deal): the echo puts down what its ship dealt,
     // and every blow it stored was weighed at the door as it landed, so PlayerShip.Outgoing passes a
     // repeat as it is. A second repeating weapon is a row here.

@@ -248,6 +248,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public struct Slot { public double Left, Cool, Own; public int N; public Vector2 At; }
     private Slot[] _slots = new Slot[1];                 // the spare alone, until the class is fitted
     private readonly Dictionary<string, int> _slotAt = new();
+    private readonly Dictionary<string, (Slot slot, double clock)> _slotsAway = new();   // every slot a class change put away, and when (FitClass)
     public ref Slot Sl(string id) => ref _slots[_slotAt.TryGetValue(id, out int i) ? i : 0];
 
     // Missiles (destroyer): a magazine of bursts, reloaded by hand.
@@ -355,10 +356,17 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _turrets.Clear(); _mains.Clear(); PdTurrets.Clear(); _wings.Clear();
         WingTarget = StrikeTarget = null; _strikesOut = 0; _attacking = false;
 
+        // A CLASS CHANGE IS A REFIT (audit P8): the hull keeps its FRACTION, as Restat does (a new ship's
+        // first fit, MaxHp 0, is a full one), and no slot is refreshed: each one's cooldown and count are
+        // kept by id through every class change, run down by the game seconds it was away, so flying B
+        // and then A again hands back A's bar as it would be now. What was running (Left, Own) ends.
+        double frac = MaxHp > 0 ? Hp / MaxHp : 1;
+        foreach (var (id, at) in _slotAt) _slotsAway[id] = (_slots[at], _clock);
         Stats = BuildSheet();
-        MaxHp = Hp = Stats["hull"];
-        _hullWatch = default;                      // a new hull, not damage
-        // The class's slots, fresh: every timer at zero, the magazine full. Index 0 is the spare.
+        MaxHp = Stats["hull"];
+        Hp = Alive ? Math.Max(1, frac * MaxHp) : MaxHp;
+        _hullWatch = default;                      // a refit, not damage
+        // The class's slots, index 0 the spare: a new one with every timer at zero and the magazine full.
         var list = Abilities.For(Class);
         _slots = new Slot[list.Length + 1];
         _slotAt.Clear();
@@ -366,6 +374,13 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _netSlotLeft = new float[_slots.Length]; _netSlotCool = new float[_slots.Length];
         _netSlotOwn = new float[_slots.Length]; _netSlotN = new int[_slots.Length];
         Sl("missile").N = (int)Stats["missile_mag"];
+        foreach (var (id, at) in _slotAt)
+            if (_slotsAway.Remove(id, out var kept))
+            {
+                ref var s = ref _slots[at];
+                s.Cool = Math.Max(0, kept.slot.Cool - (_clock - kept.clock));
+                s.N = kept.slot.N;                 // a magazine over the new sheet's is cut to it (FitWings)
+            }
 
         var art = MyArt;
         var tex = Assets.Load<Texture2D>(art.Texture);
@@ -405,7 +420,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         int wantF = (int)Stats["fighter_count"], wantB = (int)Stats["bomber_count"], hadB = WingCount(WingKind.Bomber);
         while (WingCount(WingKind.Fighter) < wantF && AddWing(WingKind.Fighter, WingCount(WingKind.Fighter))) { }
         while (WingCount(WingKind.Fighter) > wantF) RemoveWing(WingKind.Fighter);
-        while (WingCount(WingKind.Bomber) < wantB && AddWing(WingKind.Bomber, _wings.Count)) if (!fresh) _wings[^1].StartRearm();
+        // bombers after the fitted craft and before any sortie's, which ride at the end of the list
+        while (WingCount(WingKind.Bomber) < wantB && AddWing(WingKind.Bomber, Fitted)) if (!fresh) _wings[Fitted - 1].StartRearm();
         while (WingCount(WingKind.Bomber) > wantB) RemoveWing(WingKind.Bomber);
         if (WingCount(WingKind.Bomber) != hadB) { StrikeTarget = null; _strikesOut = 0; }
         if (!Net.Sim) return;
@@ -427,12 +443,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         _wings.Insert(at, w);
         return true;
     }
-    private void RemoveWing(WingKind k)
-    {
-        int i = _wings.FindLastIndex(x => x.Kind == k);
-        var w = _wings[i]; _wings.RemoveAt(i);
-        if (IsInstanceValid(w)) w.QueueFree();
-    }
+    private void RemoveWing(WingKind k) => DropWing(_wings.FindLastIndex(x => x.Kind == k));
 
     public void SetClass(ShipClass c) { Class = c; FitClass(); }
 
@@ -511,6 +522,24 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     }
 
     public int WingCount(WingKind k) { int n = 0; foreach (var w in _wings) if (w.Kind == k) n++; return n; }
+    private int Fitted { get { int n = 0; foreach (var w in _wings) if (!w.Def.Sortie) n++; return n; } }
+
+    // A SORTIE (a Wings.All row with a LifeStat): the row's count of craft sent out for its LifeStat
+    // seconds beside the fitted wing, never counted into it -- the patrol round this carrier, or
+    // gunships at `given`. They ride at the END of the wing list, so the host's report lines the
+    // fitted craft up on every peer as before. The host's to decide; a guest's copies come from the
+    // report. Refused (0 sent): not the host, no wing, a wreck, or a given target beyond the row's
+    // EngageStat (the gunships' 3000 u, checked here and only here).
+    public int Sortie(WingKind k, IHittable given = null)
+    {
+        var row = Wings.Of(k);
+        if (!Net.Sim || !Alive || !Stats.Def.Has(Fit.Wing) || !row.Sortie) return 0;
+        if (given != null && !Wings.Within(this, row, given)) return 0;
+        int n = (int)Stats[row.CountStat], sent = 0;
+        for (int i = 0; i < n; i++)
+            if (AddWing(k, _wings.Count)) { _wings[^1].SendOut(given, _clock + Stats[row.LifeStat]); sent++; }
+        return sent;
+    }
     public int BombersReady { get { int n = 0; foreach (var w in _wings) if (w.Kind == WingKind.Bomber && w.Armed) n++; return n; } }
     public double BomberRearmLeft { get { double m = 0; foreach (var w in _wings) if (w.Kind == WingKind.Bomber) m = Math.Max(m, w.RearmLeft); return m; } }
 
@@ -684,22 +713,15 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Sl("railgun").Left > 0 || Sl("railgun").Cool > 0) return;
         Sl("railgun").Left = Stats["rail_charge"];
     }
-    // The charge is spent (the Railgun row's Expire, on the host).
+    // The charge is spent (the Railgun row's Expire, on the host): the band its charge reached
+    // (Charges.Of("railgun")) says how much of rail_damage goes down which line, from the nose
+    // along the heading, as far as rail_range.
     public void FireRail()
     {
-        var a = Aim.Nose(this, MyArt.Length * 0.5f);
-        var b = a + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"];
-        float halfWidth = (float)Stats["rail_width"] * 0.5f;
-        foreach (var h in new List<IHittable>(Targeting.Hittable(Combat.Hostiles, Targeting.Attackable)))
-        {
-            if (Combat.DistToSegment(h.Position, a, b) <= halfWidth + h.HitRadius)
-            {
-                Dealt.Deal(h, Stats["rail_damage"], this, Dealt.Rail);
-                if (h is Node2D n) Popups.NoteImpact(n, h.Position);
-            }
-        }
-        Fx.Line(Fx.Rail, a, b);                             // the line it threw, on every peer
-        Combat.Flash(a, b, Beam.Rail);                      // ...and its report, on every peer: this runs on the host alone
+        double charged = 1 - Sl("railgun").Left / Stats["rail_charge"];
+        var (mult, line) = Charges.At(Charges.Of("railgun"), charged);
+        var nose = Aim.Nose(this, MyArt.Length * 0.5f);
+        Lines.Strike(line, this, nose, nose + Vector2.Up.Rotated(Rotation) * (float)Stats["rail_range"], Stats["rail_damage"] * mult);
         Sl("railgun").Cool = Cooling(Stats["rail_cooldown"]);
     }
 
@@ -1078,6 +1100,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         {
             if (!IsInstanceValid(_wings[i])) { _wings.RemoveAt(i); continue; }
             _wings[i].Tick(delta);
+            if (_wings[i].Done) { _wings[i].QueueFree(); _wings.RemoveAt(i); }    // a sortie's craft, home or warped out
         }
         if (WingTarget != null && !WingTarget.Alive) WingTarget = null;
         // Age the signal lights HERE, not in _Draw. Drawing is not guaranteed to happen -- a
@@ -1426,12 +1449,31 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // What the bombers were sent at. It was host-only, so a guest's own BOMB slot read
         // "RETURNING" for the whole of every strike it ordered -- the one word its bar had for it.
         StrikeTarget = strikeTarget != 0 ? Combat.ById(strikeTarget) : null;
+        MatchSorties(wingPos, wingState);
         for (int i = 0; i < Math.Min(_wings.Count, wingPos.Length); i++)
         {
             _wings[i].SetNet(wingPos[i], wingRot[i]);
             _wings[i].SetNetState(wingState[i], wingRearm[i]);
         }
     }
+
+    // SORTIE CRAFT come and go on the host alone (Sortie), so a guest's list is brought to the
+    // host's report here: each state code carries its craft's row (Wing.RowCode), and a sortie craft
+    // the host reports is added at its place, one it no longer reports is dropped. The fitted craft
+    // are FitWings' on every peer, from the same sheet, and are left alone.
+    private void MatchSorties(Vector2[] pos, int[] state)
+    {
+        for (int i = 0; i < state.Length; i++)
+        {
+            int kind = state[i] / Wing.RowCode;
+            if (kind < 0 || kind >= Wings.All.Length || !Wings.All[kind].Sortie) continue;
+            while (i < _wings.Count && _wings[i].Def.Sortie && (int)_wings[i].Kind != kind) DropWing(i);
+            if ((i >= _wings.Count || (int)_wings[i].Kind != kind) && AddWing((WingKind)kind, Math.Min(i, _wings.Count)))
+                _wings[Math.Min(i, _wings.Count - 1)].Position = pos[i];
+        }
+        for (int i = _wings.Count - 1; i >= state.Length; i--) if (_wings[i].Def.Sortie) DropWing(i);
+    }
+    private void DropWing(int i) { var w = _wings[i]; _wings.RemoveAt(i); if (IsInstanceValid(w)) w.QueueFree(); }
 
     // Wings are parented to the world, not the ship, so they fly free of its
     // rotation. That means they do not leave with it: free them here, or a

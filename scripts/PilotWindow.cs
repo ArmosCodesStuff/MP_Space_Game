@@ -46,7 +46,7 @@ public partial class PilotWindow : PanelContainer
         // here as well, and the TIO window reads the same three from the table, so the same numbers
         // sat in two places with nothing to keep them together.
         var note = Ui.Lbl($"EXP from boss kills: {Missions.KillExp} x the boss's level / yours, +{Missions.FirstClearExp} the first time you beat a level, "
-                        + $"+{Missions.CompletionExp} for completing. Every pilot earns their own.",
+                        + $"+{Missions.CompletionExp} for completing; a boss's adds pay a little each, the first time they come. Every pilot earns their own.",
                           Ui.Small, Ui.Dim);
         note.AutowrapMode = TextServer.AutowrapMode.WordSmart; note.CustomMinimumSize = new Vector2(440, 0);
         col.AddChild(note);

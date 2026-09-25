@@ -15,7 +15,7 @@ using System.Linq;
 //   Beating a level -- whichever boss held it -- unlocks the next; the TIO selects the newest when
 //   the host opens it. The first-clear bonus is paid once a level, not once a boss.
 //   REWARDS, per pilot, each computed on the pilot's own machine:
-//     the kill   round(200 x boss level / pilot level)  (a level-5 boss for a level-10 pilot: 100)
+//     the kill   round(300 x boss level / pilot level)  (a level-5 boss for a level-10 pilot: 150)
 //     +250       the first time that pilot beats that level
 //     +100       for completing the mission
 //     credits    2000 x HullScale(L) x (1 + 0.5(P-1)), split evenly among the P pilots (solo earns the most)
@@ -62,6 +62,9 @@ public static class Missions
         // the scale, never a second copy of the move table.
         public float Size = 1f;
         public BossMove[] Moves;
+        // ITS FIRST ADD SQUAD BRINGS AT LEAST THIS MANY PINNERS, from level 1 (Waves.Roster): the
+        // Rusty Bucket's two beam escorts became its squad wave 1 (owner, raids v2).
+        public int AddsFloor;
     }
     // THE BOSSES ARE RED AND BLACK: the owner's swatch (mean RGB 172, 7, 2) multiplying the pack's
     // grey, so the art's highlights come out that red and its shadows black. Declared before
@@ -84,7 +87,7 @@ public static class Missions
         new() { Id = "silver_lancer", Name = "RUSTY BUCKET", Hull = 3222,
                 Texture = "res://boss_raider.png", Tint = BossRed,
                 Nozzles = Nozzle.Scaled(BossSize, new(-30.30f, 178.81f, 39.21f), new(31.19f, 178.81f, 38.61f)),
-                Length = 360f * BossSize, HalfWidth = 70f * BossSize, Size = BossSize, Moves = Lancer.Moves },
+                Length = 360f * BossSize, HalfWidth = 70f * BossSize, Size = BossSize, Moves = Lancer.Moves, AddsFloor = 2 },
         new() { Id = "drake_bastion", Name = "DRAKE BASTION", Hull = 2968,
                 Texture = "res://boss_drake.png", Tint = BossRed,
                 Nozzles = Nozzle.Scaled(BossSize, new(-53.82f, 209.38f, 20.78f), new(-28.54f, 208.76f, 20.47f), new(-3.57f, 191.39f, 15.82f),
@@ -161,7 +164,9 @@ public static class Missions
                 Build = h => h.BuildBoss(),
                 Quarry = h => GodotObject.IsInstanceValid(h.Boss) ? h.Boss : null,
                 Won = h => { if (GodotObject.IsInstanceValid(h.Boss)) h.Boss.Downed(); },
-                CatchUp = (h, who) => { if (GodotObject.IsInstanceValid(h.Boss) && h.Boss.Alive) h.Boss.CatchUp(who); } },
+                CatchUp = (h, who) => { if (GodotObject.IsInstanceValid(h.Boss) && h.Boss.Alive) h.Boss.CatchUp(who); },
+                // its adds (Waves.All "bounty_adds"): slot 1 at once, a wiped slot back 30 s later
+                FirstWave = 0, WaveEvery = 30 },
 
         // A SIEGE -- the first entry of RAIDS: a pirate base behind four shield pylons, its
         // garrison arriving wave by wave (Waves.All: "siege") on the clock below. What a pirate
@@ -261,6 +266,9 @@ public static class Missions
     // ladder and the levels you have beaten do not care what level you were when you beat them.
     public const double ExpFloorShare = 0.5;
     public static bool WorthExp(int bossLevel, int pilotLevel) => bossLevel >= pilotLevel * ExpFloorShare;
-    public static int KillExpFor(int bossLevel, int pilotLevel) =>
-        !WorthExp(bossLevel, pilotLevel) ? 0 : (int)Math.Round(KillExp * (double)bossLevel / Math.Max(1, pilotLevel));
+    // WHAT A KILL IS WORTH TO ONE PILOT: `worth` x its level over the pilot's, nothing under half.
+    // The boss's kill and a boss-fight add's (EnemyDef.Exp x WaveDef.Exp, Hub.PayKill) are one formula.
+    public static int ExpFor(double worth, int level, int pilotLevel) =>
+        !WorthExp(level, pilotLevel) ? 0 : (int)Math.Round(worth * level / Math.Max(1, pilotLevel));
+    public static int KillExpFor(int bossLevel, int pilotLevel) => ExpFor(KillExp, bossLevel, pilotLevel);
 }

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NET — the authority model, and the one thing in this project that must be
@@ -22,18 +23,17 @@ using System.Reflection;
 // Offline is not a separate mode: single player is simply a host with no peers,
 // so there is exactly ONE code path and offline can never drift from online.
 // ─────────────────────────────────────────────────────────────────────────────
-public partial class Net : Node
+public partial class Net : Node, Rendezvous.IHostDesk, Rendezvous.IGuestDesk
 {
     public const int DefaultPort = 27015;
-    private const int MaxPlayers = 8;
 
     public static Net I { get; private set; }
 
     // Single player runs as a host with nobody connected, so IsHost is true offline -- and while
     // a join is still in its handshake: until a host has accepted this build, this is still your world.
     public static bool IsHost => I == null || I._isHost;
-    // IN A SESSION AND LET IN, not merely "the link is up". ENet reports a link connected the moment
-    // it comes up, before Godot's handshake has let either end in; a guest that sent then was
+    // IN A SESSION AND LET IN, not merely "the link is up". The transport reports a link connected the
+    // moment it comes up, before Godot's handshake has let either end in; a guest that sent then was
     // throwing packets at a host that had not admitted it -- an engine error there
     // ("SYS_COMMAND_AUTH") -- and read itself as HOSTING in its own HUD and panel meanwhile. A
     // guest is online once the host's welcome arrives (NetWelcome); until then it is Connecting.
@@ -43,7 +43,7 @@ public partial class Net : Node
 
     private bool _isHost = true;
     private int _localId = 1;
-    private MultiplayerPeer _peer;
+    private WebRtcMultiplayerPeer _peer;
     // From a session starting (hosting, or a host letting us in) until it ends. What "there was a
     // session to leave" means -- IsOnline cannot say it: by the time the multiplayer layer reports
     // a host gone or a connection failed, the peer already reads Disconnected, so the leaving
@@ -67,6 +67,7 @@ public partial class Net : Node
         public string[] Equip = Array.Empty<string>();
         public Dictionary<string, int> GearLevel = new();  // what the pilot levelled each core slot to, by slot (Equipment.SanitizeLevels on arrival)
         public string CharacterId = "";                   // the pilot's stable identity: a peer id changes on a reconnect
+        public string Token = "";                         // the rejoin token its last identity carried: only the host is sent one (Hub.SendIdentity)
         public int Level = 1;                              // the pilot's level, as claimed (an escort's threat)
         public int Peak = 1;                               // the highest level it has reached, as claimed (Progression.Claim): what its walls read
         public bool HasIdentity;
@@ -107,14 +108,22 @@ public partial class Net : Node
         Multiplayer.ServerDisconnected += OnHostGone;
         GoOffline();
         // The close button goes through Game.Quit like every other way out. This is the one node
-        // that always exists, and what it owns -- the socket and the router ports -- is what a
+        // that always exists, and what it owns -- the connections and the listener -- is what a
         // closed window must not strand.
         GetTree().AutoAcceptQuit = false;
     }
-    private void OnAuthenticating(long id) => ((SceneMultiplayer)Multiplayer).SendAuth((int)id, BitConverter.GetBytes(PretendProtocol ?? Protocol));
+    // A CONNECTION IS UP: the handshake starts, and a host's invite has done its work -- its entry leaves
+    // the pending table, the connection is the session's now, and the row it came by is kept (§3.9).
+    private void OnAuthenticating(long id)
+    {
+        if (_isHost && Pending.Find((int)id) is { } e) { _rowOf[(int)id] = e.Row; Pending.Remove((int)id); }
+        // ICE was up by now at the latest: a poll that brought both in one frame reads them together
+        if (_times.TryGetValue(_isHost ? (int)id : _joinId, out var t)) { t.Channels = Time.GetTicksMsec(); if (t.Ice == 0) t.Ice = t.Channels; }
+        ((SceneMultiplayer)Multiplayer).SendAuth((int)id, BitConverter.GetBytes(Claimed(Pretend.Auth)));
+    }
     private void OnPeerJoined(long id) => OnPeer((int)id, true);
     private void OnPeerLeft(long id) => OnPeer((int)id, false);
-    private void OnConnectionFailed() => Failed(CouldNotReach);
+    private void OnConnectionFailed() => Failed(_joinRow == Rendezvous.Paste ? ReplyRanOut : CouldNotReach);
 
     // EVERYTHING _Ready HOOKED INTO THE TREE'S MULTIPLAYER COMES OFF, AND EVERY SOCKET IS CLOSED
     // (invariant A). The tree's multiplayer outlives this node by a few steps of the engine's own
@@ -130,7 +139,8 @@ public partial class Net : Node
         sm.ConnectionFailed -= OnConnectionFailed;
         sm.ServerDisconnected -= OnHostGone;
         sm.AuthCallback = new Callable();
-        foreach (var (p, _, _) in _lettingGo) p.Close();
+        foreach (var row in Rendezvous.Paths) row.Close();
+        foreach (var (p, _) in _lettingGo) p.Close();
         _lettingGo.Clear();
         _peer?.Close(); _peer = null;
         sm.MultiplayerPeer = null;
@@ -143,10 +153,12 @@ public partial class Net : Node
     {
         Character.TickSave(delta);
         PumpLetGo();
-        // Every attempt has a hard deadline. ENet looks at its own timeout only when a resend falls
-        // due, and its resends double: a JOIN set to give up in 12 s gave up after 15, a retry
-        // set to 5 after 7.5.
-        if (Connecting && Time.GetTicksMsec() - _attemptAt > (ulong)(BackIn ? RetryTimeoutMs : JoinTimeoutMs)) { Failed(CouldNotReach); return; }
+        PumpSession();
+        Beat(delta);
+        SampleBacklog(delta);
+        // Every attempt has a hard deadline of its own: a typed address 12 s from JOIN (5 for a retry), a
+        // pasted invite the reply window and the host's time to link from the moment its reply was made.
+        if (Connecting && _deadline > 0 && Time.GetTicksMsec() >= _deadline) { Failed(_joinRow == Rendezvous.Paste ? ReplyRanOut : CouldNotReach); return; }
         if (_dropClock < 0 || GetTree().Paused) return;
         _dropClock += delta;
         if (!Connecting && Attempt < RetryAt.Length && _dropClock >= RetryAt[Attempt]) { Attempt++; Connect(LastHost, retry: true); }
@@ -178,23 +190,48 @@ public partial class Net : Node
     public static int Protocol { get; private set; }
     static Net() => Protocol = Fingerprint();
     public static bool Accepts(int protocol) => protocol == Protocol;
-    // The smoke test's way to be a different build, to prove the refusal on a real connection.
-    public static int? PretendProtocol;
+    // THE SMOKE TEST'S WAY TO BE A DIFFERENT BUILD, to prove each refusal on a real connection: where the
+    // pretended build shows (§3.8). Code: this player's knock, and its own check of a pasted invite (the
+    // listener refuses the one, the other is refused before any network step). Auth: the in-band handshake
+    // (OnAuth), the last guard.
+    [Flags] public enum Pretend { None = 0, Code = 1, Auth = 2 }
+    public static Pretend PretendAt;
+    // The build this player claims at `where`: its own, or the one next to it.
+    public static int Claimed(Pretend where) => PretendAt.HasFlag(where) ? Protocol ^ 1 : Protocol;
+
+    // ONE PEER LET GO: an invite not yet connected (hung up, gone from the pending table), or a live peer --
+    // a refusal, a replacement, the watchdog. Every hang-up goes through Link.Hang (a gone id is a no-op);
+    // a live peer's at the end of the frame, since the call may come from inside the peer's own poll.
+    public void Hang(int peer)
+    {
+        if (Pending.Find(peer) is { } e)
+        {
+            Pending.Remove(peer);
+            if (e.Conn != null) e.Conn.Close(); else Link.Hang(_peer, peer);
+            return;
+        }
+        var mp = _peer;
+        Callable.From(() => Link.Hang(mp, peer)).CallDeferred();
+    }
 
     private void OnAuth(long id, byte[] data)
     {
         int theirs = data.Length == 4 ? BitConverter.ToInt32(data) : -1;
         var sm = (SceneMultiplayer)Multiplayer;
-        if (Accepts(theirs) && PretendProtocol == null) { sm.CompleteAuth((int)id); return; }
+        if (Accepts(theirs) && !PretendAt.HasFlag(Pretend.Auth)) { sm.CompleteAuth((int)id); return; }
         // NOT IsHost: a player still connecting keeps the host role over its own world until a
         // host has let it in -- which is exactly the moment this runs.
         if (!Connecting)
         {
             Say($"Refused a player on a different build of the game (theirs {theirs:x8}, this one {Protocol:x8}).");
-            (_peer as ENetMultiplayerPeer)?.GetPeer((int)id)?.PeerDisconnectLater();
+            Hang((int)id);
         }
-        else GoOffline($"That host is on a different build of the game (theirs {theirs:x8}, yours {PretendProtocol ?? Protocol:x8}): "
-                     + "you both need the same release (Esc menu, bottom). Playing offline.");
+        else
+        {
+            string why = $"That host is on a different build of the game (theirs {theirs:x8}, yours {Claimed(Pretend.Auth):x8}): "
+                         + "you both need the same release (Esc menu, bottom). Playing offline.";
+            Callable.From(() => GoOffline(why)).CallDeferred();   // not inside the peer's own poll
+        }
     }
 
     private static int Fingerprint()
@@ -279,8 +316,8 @@ public partial class Net : Node
         _localId = Multiplayer.GetUniqueId();
         _isHost = false; _inSession = true;
         // the host that let us in is the one to come back to; an unreachable one is given up on in 12 s
-        LastHost = _joinAddress; _dropClock = -1; Attempt = 0; CanReconnect = false; _rejoin = false; _hostSaidBye = false;
-        if ((_peer as ENetMultiplayerPeer)?.GetPeer(1) is { } host) Link(host, 12000);
+        LastHost = _joinText; _dropClock = -1; Attempt = 0; CanReconnect = false; _rejoin = false; _hostSaidBye = false;
+        JoinedBy = _joinRow?.Id ?? ""; _answer = null; _answering = null; _deadline = 0;
         Players.TryAdd(_localId, new PlayerInfo());
         SessionChanged?.Invoke();
     }
@@ -297,6 +334,7 @@ public partial class Net : Node
     {
         if (_isHost || !_inSession || !Connecting) return;
         Connecting = false;
+        if (_times.TryGetValue(_joinId, out var t)) t.Admitted = Time.GetTicksMsec();
         RpcId(1, nameof(NetWelcomed));
         Say($"Connected as player {_localId}.");
         Admitted?.Invoke();
@@ -314,7 +352,9 @@ public partial class Net : Node
     private void NetWelcomed()
     {
         int from = Multiplayer.GetRemoteSenderId();
-        if (_isHost && Players.ContainsKey(from)) _heard.Add(from);
+        if (!_isHost || !Players.ContainsKey(from)) return;
+        _heard.Add(from);
+        if (_times.TryGetValue(from, out var t)) t.Admitted = Time.GetTicksMsec();
     }
     public static bool Hears(int peer) => I != null && I._heard.Contains(peer);
     // The host's one way to send to every guest outside a world's own traffic (which waits for the
@@ -327,21 +367,52 @@ public partial class Net : Node
             if (peer != except) node.RpcId(peer, method, args);
     }
 
-    // A LIVE LINK, set up the same at both ends (a guest's to its host, the host's to each guest).
-    //   How long a silent peer is kept: ENet gives one up once its resends have run out (the
-    //   limit, 32) AND QuietMs has passed -- or at `maxMs`, whichever comes first. On a fast link
-    //   the resends run out in about a second, so QuietMs is what a stall on either machine has to
-    //   outlast: a first scene load, a garbage-collection pause, a Wi-Fi roam. At 4 s any of them
-    //   ended the session.
-    //   The throttle never falls. At its defaults ENet throws unreliable packets away BEFORE they
-    //   are sent whenever a round trip comes back slower than the last few -- every jitter spike on
-    //   the internet, and worst right after a burst of reliable sends -- and those are every ship,
-    //   raider, boss and base report a player draws from. Deceleration 0 keeps every one.
-    private const int QuietMs = 8000;
-    private static void Link(ENetPacketPeer p, int maxMs)
+    // ── the beat and the watchdog (plan §3.6; Link's constants) ──────────────
+    // Every Link.BeatMs each end of a live link sends NetBeat (the host to each guest that answered its
+    // welcome, a guest to its host), and the other end echoes it. Anything heard from a peer -- a beat or
+    // an echo -- ends its silence; a silence over Link.QuietMs, counted in capped frames (Link.Quiet),
+    // drops it: the host hangs the guest up, a guest takes its host as gone (OnHostGone: the retries).
+    // Its own row, NetChannels.Beat, so a beat never waits behind the game's reliable words.
+    private readonly Dictionary<int, double> _silence = new();
+    private Link.Trip _trip = new();
+    private double _beatClock;
+    private void Beat(double delta)
     {
-        p.SetTimeout(32, Math.Min(QuietMs, maxMs), maxMs);
-        p.ThrottleConfigure(5000, 2, 0);
+        if (!IsOnline || _peerGone) return;
+        var peers = _isHost ? _heard.ToList() : new List<int> { 1 };
+        foreach (int p in peers) _longestQuiet = System.Math.Max(_longestQuiet, _silence[p] = Link.Quiet(_silence.GetValueOrDefault(p), delta));
+        _beatClock += delta;
+        if (_beatClock * 1000 >= Link.BeatMs)
+        {
+            _beatClock = 0;
+            foreach (int p in peers) RpcId(p, nameof(NetBeat), (long)Time.GetTicksMsec());
+        }
+        foreach (int p in peers)
+        {
+            if (!Link.Overdue(_silence[p])) continue;
+            _silence.Remove(p);
+            if (!_isHost) { OnHostGone(); return; }
+            _heard.Remove(p);                              // nothing more is sent to it while it is let go
+            Hang(p);
+        }
+    }
+    // Heard from this peer on a live link: the host's guests that answered the welcome, a guest's host.
+    private bool Beating(int from) => IsOnline && (_isHost ? _heard.Contains(from) : from == 1);
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = NetChannels.Beat)]
+    private void NetBeat(long sentMs)
+    {
+        int from = Multiplayer.GetRemoteSenderId();
+        if (!Beating(from)) return;
+        _silence[from] = 0;
+        RpcId(from, nameof(NetBeatBack), sentMs);
+    }
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = NetChannels.Beat)]
+    private void NetBeatBack(long sentMs)
+    {
+        int from = Multiplayer.GetRemoteSenderId();
+        if (!Beating(from)) return;
+        _silence[from] = 0;
+        if (!_isHost) _trip.Echo(((long)Time.GetTicksMsec() - sentMs) / 1000.0);
     }
 
     // ── session lifecycle ────────────────────────────────────────────────────
@@ -364,19 +435,18 @@ public partial class Net : Node
         if (changed) SessionChanged?.Invoke();
     }
 
-    // ── the goodbye ─────────────────────────────────────────────────────────
-    // ENet reports a host that closed and a host that vanished the same way, and a guest that
-    // quit the same way as one whose Wi-Fi dropped. So whoever leaves on purpose says so first:
-    // a guest told goodbye does not try to get back in, and a host told goodbye does not hold the
-    // pilot's place. The goodbye must actually leave: the peer is let go gently -- ENet sends what
-    // is queued, waits for it to be acknowledged, then sends its own disconnect -- and is pumped
-    // until that is done or LetGoMs has passed (see Shutdown: every link that is up goes this way).
+    // ── the goodbye (§3.7) ──────────────────────────────────────────────────
+    // A host that closed and a host that vanished look the same from the other end, and so do a guest
+    // that quit and one whose Wi-Fi dropped. So whoever leaves on purpose says so first: a guest told
+    // goodbye does not try to get back in, and a host told goodbye does not hold the pilot's place. THE
+    // HEARER HANGS UP: the goodbye's sender keeps polling its old peer until the other end has let it go
+    // or LetGoMs has passed (see Shutdown: every link that is up goes this way).
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetBye()
     {
         int from = Multiplayer.GetRemoteSenderId();
-        if (!_isHost && from == 1) _hostSaidBye = true;
-        else if (_isHost && Players.ContainsKey(from)) _leaving.Add(from);
+        if (!_isHost && from == 1) { _hostSaidBye = true; Hang(1); }
+        else if (_isHost && Players.ContainsKey(from)) { _leaving.Add(from); Hang(from); }
     }
     public static bool SkipGoodbye;                        // the smoke test's host that vanishes (a crash, a pulled cable)
     private bool _hostSaidBye;
@@ -387,58 +457,61 @@ public partial class Net : Node
         if (!_inSession || Connecting || !IsOnline || SkipGoodbye || _peerGone) return;
         if (_isHost) Rpc(nameof(NetBye)); else RpcId(1, nameof(NetBye));
     }
-    // HOW LONG A GOODBYE IS GIVEN. It is two reliable packets in turn: the game's NetBye, then --
-    // once that is acknowledged -- ENet's own disconnect, the one the other end acts on. Over the
-    // internet a round trip is up to 230 ms (90 +/- 25 ms each way in the smoke test's), and a
-    // packet lost on the way (2-5% of them) is resent after the round trip plus four times its
-    // variance -- up to half a second on a link a few seconds old, doubled for a second loss of the
-    // same packet. Two losses fit in 2 s; the 1 s it was given let one run-of-the-mill loss past it,
-    // and the other end then waited out its whole timeout instead.
+    // HOW LONG A GOODBYE IS GIVEN: NetBye, then the other end's hang-up, which this end sees as its
+    // connection closing. One lost packet costs a resend of at least a round trip (SCTP's least resend
+    // time is 200 ms), and a second loss of the same packet doubles it; two fit in 2 s.
     // EVERY GOODBYE KEEPS ITS OWN TIME. Ending a session let any earlier goodbye go at once, so a
     // pilot that pressed HOST and then quit a second later cut its own goodbye off; a quitting game
-    // waits for these (NetworkIdle).
-    private readonly List<(ENetMultiplayerPeer peer, ulong until, bool server)> _lettingGo = new();
+    // waits for these (NetworkIdle). WebRTC's sockets are its own, not a port a new session binds, so
+    // HOST leaves them to finish too.
+    private readonly List<(WebRtcMultiplayerPeer peer, ulong until)> _lettingGo = new();
     private const ulong LetGoMs = 2000;
     private void PumpLetGo()
     {
         for (int i = _lettingGo.Count - 1; i >= 0; i--)
         {
-            var (p, until, _) = _lettingGo[i];
-            if (p.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Disconnected) { _lettingGo.RemoveAt(i); continue; }   // already let go
-            bool busy = p.Host != null && p.Host.GetPeers().Any(x => x.GetState() != ENetPacketPeer.PeerState.Disconnected);
-            if (!busy || Time.GetTicksMsec() >= until) { p.Close(); _lettingGo.RemoveAt(i); }
-            else p.Poll();
+            var (p, until) = _lettingGo[i];
+            p.Poll();
+            if (p.GetPeers().Count == 0 || Time.GetTicksMsec() >= until) { p.Close(); _lettingGo.RemoveAt(i); }
         }
     }
 
     // ── reconnecting ────────────────────────────────────────────────────────
-    // A guest whose host drops without a goodbye goes offline -- its own world keeps running --
-    // and tries the same host again 3 times over about 20 s. Then RECONNECT, one more try on the
-    // button. The host holds the pilot's place meanwhile (Hub: 90 s).
+    // A guest whose host drops without a goodbye goes offline -- its own world keeps running. BY A ROW
+    // THAT CAN SIGNAL AGAIN BY ITSELF (Rendezvous.IRendezvousPath.Auto: the typed address) it tries the
+    // same host again 3 times over about 20 s, each try a new knock; then RECONNECT, one more try on the
+    // button. By invite it cannot: the host's panel makes a fresh invite for that pilot, and the pilot
+    // waits for it. The host holds the pilot's place meanwhile (Session.HoldFor).
     public static readonly double[] RetryAt = { 2.0, 8.0, 14.0 };   // seconds after the drop
     private const int RetryTimeoutMs = 5000, JoinTimeoutMs = 12000;
     private bool BackIn => _retrying || _rejoin;           // a try to get back in to the host just lost, not a JOIN
     // What a typed address that never answered means, and the one next step: an address is for the
     // same network or a virtual one, and the host's firewall has to let it in.
     private string CouldNotReach => $"No answer from {_joinTarget} in {JoinTimeoutMs / 1000} s. An address works on the same network or over Radmin VPN, "
-                                  + "and the host must allow Warships through Windows Firewall; for friends elsewhere, use the host's room code. Playing offline.";
+                                  + "and the host must allow Warships through Windows Firewall; for friends elsewhere, ask the host for an invite code. Playing offline.";
+    // What a pasted invite whose reply never led anywhere means (§6.2).
+    private string ReplyRanOut => $"{_joinTarget} did not connect within {Link.ReplyWindowS} s of your reply. MAKE A FRESH REPLY and send that one, "
+                                + "or ask them for a new invite. Playing offline.";
     public string LastHost { get; private set; } = "";
-    private string _joinAddress = "";
     public int Attempt { get; private set; }
     private double _dropClock = -1;
     public bool Reconnecting => _dropClock >= 0;
     public bool CanReconnect { get; private set; }
     private bool _retrying, _rejoin;
-    private ulong _attemptAt;
+    private ulong _attemptAt, _deadline;                   // the attempt's start, and when it is given up (0: not yet running)
 
     private void OnHostGone()
     {
         _peerGone = true;
-        // Still in the handshake (Godot reports a link that came up and then went as "disconnected",
-        // not "failed"): an attempt that did not happen, not a session lost.
+        // Still in the handshake: an attempt that did not happen, not a session lost.
         if (Connecting) { Failed($"Could not get in to {_joinTarget}: it let the connection go before the handshake finished. Playing offline."); return; }
         if (_hostSaidBye) { GoOffline("Host closed the session. Playing offline."); return; }
         StopReconnecting();
+        if (_joinRow is { Auto: false })
+        {
+            Offline($"Lost the connection to {_joinTarget}. Ask them for a new invite code: your place is held {Session.HoldFor:0} s. Your own world keeps running.");
+            return;
+        }
         Offline($"Lost the connection to {_joinTarget}. Trying to get back in, {RetryAt.Length} times in the next 20 s. Your own world keeps running.");
         if (LastHost.Length > 0) _dropClock = 0;
     }
@@ -447,7 +520,14 @@ public partial class Net : Node
     private void Failed(string reason)
     {
         if (_rejoin) { _rejoin = false; Offline($"Could not get back in to {LastHost}. RECONNECT to try again."); CanReconnect = true; return; }
-        if (!Reconnecting) { GoOffline(reason); return; }
+        if (!Reconnecting)
+        {
+            // an invite can be answered again, as long as its host has not taken a reply for it (§3.3 A guest 7)
+            string invite = _joinRow == Rendezvous.Paste ? _joinText : "";
+            GoOffline(reason);
+            FreshFrom = invite;
+            return;
+        }
         Offline($"Lost the connection to {LastHost}: attempt {Attempt} of {RetryAt.Length} failed.");
         if (Attempt < RetryAt.Length) return;
         _dropClock = -1; CanReconnect = true;
@@ -474,226 +554,321 @@ public partial class Net : Node
         Character.SaveIfPending();
         SayGoodbye();
         _inSession = false;
-        _joinGen++;                                        // a lookup still in flight connects to nothing
+        _joinGen++;                                        // an attempt still in flight connects to nothing
         Shutdown();
     }
 
-    // ── internet hosting ────────────────────────────────────────────────────
-    // Hosting starts at once for your own network. Meanwhile a background thread asks your
-    // routers to forward the port to this PC (Router: UPnP, NAT-PMP, PCP, and the router in front
-    // of yours if there is one), and a web request asks a public "what is my IP" service what the
-    // internet sees; the answers together decide what friends elsewhere need (see Describe). The
-    // background thread writes NOTHING: it hands its report back to the main thread, which keeps
-    // it only for the current session -- ports opened for a session that has ended are closed.
-    public enum Reach { None, Checking, Internet, Manual, LanOnly }
-    public Reach Reachability { get; private set; } = Reach.None;
-    public string InternetAddress { get; private set; } = "";
-    public string LanAddress { get; private set; } = "";
-    // For friends on a virtual network with you (Tailscale, ZeroTier, Radmin VPN, Hamachi), and
-    // for friends with IPv6 -- the one way in left when carrier-grade NAT closes every IPv4 door.
-    public List<(string name, string address)> OverlayAddresses { get; private set; } = new();
-    public string Ipv6Address { get; private set; } = "";
-    private List<Router.Hop> _hops = new();
-    private int _hostGen;
-
-    // Every call to a router runs on a background thread (a router can take seconds), and every
-    // one is counted: NetworkIdle, and Game.Quit's wait, mean "none still running". The count is
-    // kept on the main thread only -- the job hands its decrement back through the same queue as
-    // its result, so the result (which may start the job that closes its ports) always lands
-    // first, and "none running" can never be seen between the two.
-    private int _routerJobs;
-    private void RouterJob(Action job)
-    {
-        _routerJobs++;
-        System.Threading.Tasks.Task.Run(() =>
-        {
-            try { job(); }
-            finally { if (!Game.ShuttingDown) Callable.From(() => _routerJobs--).CallDeferred(); }
-        });
-    }
-
-    // ── what friends elsewhere need: decided from the routers' report AND the public address ──
-    //   INTERNET   every router on the way opened the port: friends join <public>:<port>
-    //   MANUAL     a router would not open it -- ours (UPnP off), or the one in front of ours (two
-    //              routers, the second silent) -- or this PC's traffic leaves by a VPN: one step
-    //              by hand, then <public>:<port>
-    //   LAN ONLY   carrier-grade NAT, or nothing could be learned at all
-    // The status line never prints the public address: the panel shows it behind a reveal.
-    //
-    // Where the public address comes from. The smoke test points it somewhere that cannot answer,
-    // so that "no internet" is a scenario it sets up rather than a fact about the machine.
-    public static string PublicIpService = "https://api.ipify.org";
-    private HttpRequest _ipReq;
-    private string _publicIp = "";
-    private Router.Report _report;
-    private bool _publicDone;
-    private int _hostPort;
-    // single player (and between sessions): no socket, no lookup, no router job
-    public bool NetworkIdle => _peer == null && _ipReq == null && _routerJobs == 0 && _lettingGo.Count == 0;
-
-    private const string Firewall = " If friends still cannot get in, allow Warships (Godot) through the Windows firewall, for private AND public networks.";
-
-    // `routerExt`: what the router that opened the port says its internet side is ("" if it would
-    // not say, or nothing opened). `why`: why nothing opened. `front`: ours opened, but sits behind
-    // a router that did not -- this is our router's internet side, where that one has to forward.
-    public static (Reach reach, string address, string message) Describe(string routerExt, bool mapped, string publicIp, int port, string lan,
-                                                                         string why = "", string front = "")
-    {
-        bool pub = IsPublic(publicIp);
-        string pc = lan.Split(':')[0];
-        if (mapped)
-        {
-            // TWO ROUTERS, the second silent. One forward there finishes the path, and the game
-            // opens its own router every session after that -- so this names the exact address,
-            // which nobody would guess (it is not this PC's).
-            if (front.Length > 0 && pub)
-                return (Reach.Manual, $"{publicIp}:{port}",
-                        $"Hosting. Your router opened port {port}, but it sits behind a second router (usually your internet provider's modem) "
-                      + $"that did not answer. Once, in THAT router's settings: forward UDP {port} to {front} -- or put {front} in its DMZ, or "
-                      + "switch it to bridge mode. After that, friends anywhere join the address below, every time." + Firewall);
-            // The port IS open; the router just would not say what its outside address is.
-            if (routerExt.Length == 0 && pub)
-                return (Reach.Internet, $"{publicIp}:{port}",
-                        "Hosting for the internet: your router opened the port. Friends anywhere join the address below (click to reveal, or copy it)." + Firewall);
-            if (IsPublic(routerExt) && (!pub || publicIp == routerExt))
-                return (Reach.Internet, $"{routerExt}:{port}",
-                        "Hosting for the internet: friends anywhere join the address below (click to reveal, or copy it)." + Firewall);
-            // The router opened a public address, but the internet sees this PC somewhere else:
-            // its traffic leaves by another route -- almost always a VPN.
-            if (IsPublic(routerExt) && pub)
-                return (Reach.Manual, $"{routerExt}:{port}",
-                        "Hosting. Your router opened the port, but this PC's internet traffic goes out another way -- usually a VPN. Friends can try "
-                      + "the address below; if they cannot get in, turn the VPN off (or exclude Warships from it) while you host.");
-            return (Reach.LanOnly, lan,
-                    $"Hosting for your network ({lan}). Your router opened the port, but your provider puts you behind a shared address "
-                  + "(carrier-grade NAT), so friends elsewhere cannot reach you directly. Use a virtual network (Tailscale, ZeroTier, Radmin VPN), "
-                  + "or let a friend host.");
-        }
-        // Nothing opened. What the router said about its internet side still tells us which fix works.
-        if (Router.IsCarrierGrade(routerExt))
-            return (Reach.LanOnly, lan,
-                    $"Hosting for your network ({lan}). Your provider puts you behind a shared address (carrier-grade NAT), so no amount of port "
-                  + "forwarding lets friends reach you directly. Use a virtual network (Tailscale, ZeroTier, Radmin VPN), or let a friend host.");
-        if (pub && Router.IsShared(routerExt))
-            return (Reach.Manual, $"{publicIp}:{port}",
-                    $"Hosting. Your router did not open port {port}" + (why.Length > 0 ? $" -- {why}" : "") + ", and it sits behind a second router. "
-                  + $"Forward UDP {port} to this PC ({pc}) in your router, and in the router in front of it forward UDP {port} to {routerExt}; "
-                  + "then friends elsewhere join the address below." + Firewall);
-        if (pub)
-            return (Reach.Manual, $"{publicIp}:{port}",
-                    $"Hosting. Your router did not open port {port}" + (why.Length > 0 ? $" -- {why}" : "") + ". "
-                  + $"Forward UDP {port} to this PC ({pc}) in your router's settings (turn UPnP on there and it will "
-                  + "do this by itself next time), then friends elsewhere join the address below." + Firewall);
-        return (Reach.LanOnly, lan,
-                $"Hosting for your network ({lan}). Neither your router nor the internet could be asked for your public address. "
-              + $"For friends elsewhere, forward UDP {port} to this PC, or use a virtual network (Tailscale, ZeroTier, Radmin VPN).");
-    }
-
-    // A real internet address: IPv4, and none of the ranges that cannot be reached from outside
-    // (private, carrier-grade, loopback, link-local, "this network", multicast and reserved).
-    public static bool IsPublic(string ip)
-    {
-        if (!Router.IsIpv4(ip) || Router.IsShared(ip)) return false;
-        var o = ip.Split('.').Select(int.Parse).ToArray();
-        return o[0] != 0 && !(o[0] == 169 && o[1] == 254) && !(o[0] == 192 && o[1] == 0 && o[2] == 0) && o[0] < 224;
-    }
-
-    // What the panel shows. (Public so a test can show the reveal without a real router.)
-    public void Reachable(Reach r, string address, string message)
-    {
-        Reachability = r; InternetAddress = r is Reach.Internet or Reach.Manual ? address : "";
-        Say(message);
-    }
-
-    private void AskPublicIp(int gen)
-    {
-        FreeIpReq();
-        _ipReq = new HttpRequest { Timeout = 6 };
-        AddChild(_ipReq);
-        _ipReq.RequestCompleted += (result, code, headers, body) =>
-        {
-            string ip = result == (long)HttpRequest.Result.Success && code == 200 ? System.Text.Encoding.UTF8.GetString(body).Trim() : "";
-            _publicIp = Router.IsIpv4(ip) ? ip : "";
-            _publicDone = true;
-            Callable.From(FreeIpReq).CallDeferred();
-            TryDecide(gen);
-        };
-        if (_ipReq.Request(PublicIpService) != Error.Ok) { _publicDone = true; FreeIpReq(); TryDecide(gen); }
-    }
-    private void FreeIpReq()
-    {
-        if (_ipReq == null) return;
-        if (IsInstanceValid(_ipReq)) { _ipReq.CancelRequest(); _ipReq.QueueFree(); }
-        _ipReq = null;
-    }
-
-    public int StaleMappingsClosed { get; private set; }            // for the record (and the smoke test)
-    private void RouterResult(int gen, Router.Report report)
-    {
-        if (gen != _hostGen)
-        {   // that session is over: never keep its ports -- close them
-            if (report.Opened.Count > 0) { StaleMappingsClosed++; RouterJob(() => Router.Close(report.Opened)); }
-            return;
-        }
-        _report = report;
-        _hops = report.Opened;
-        TryDecide(gen);
-    }
-
-    private void TryDecide(int gen)
-    {
-        if (gen != _hostGen || !IsHost || !IsOnline || _report == null || !_publicDone) return;   // the session changed, or one answer is still out
-        var r = _report;
-        bool mapped = r.Opened.Count > 0;
-        var d = Describe(r.Ext, mapped, _publicIp, mapped ? r.ExtPort : _hostPort, LanAddress, r.Why, r.Front);
-        // Whatever the routers did: friends on a virtual network with you can always join on it,
-        // and friends with IPv6 may get in where IPv4 cannot.
-        if (d.reach != Reach.Internet)
-        {
-            foreach (var (name, address) in OverlayAddresses) d.message += $" Friends on your {name} network join {address}.";
-            if (Ipv6Address.Length > 0) d.message += " Friends with IPv6 internet can also try your IPv6 address (in the panel).";
-        }
-        Reachable(d.reach, d.address, d.message);
-    }
-
+    // ── hosting (§3.1, §3.3) ────────────────────────────────────────────────
+    // A HOST IS A SERVER PEER AND ITS ROWS: CreateServer is Connected in the same call, and every row of
+    // Rendezvous.Paths opens on this desk -- the paste row's clipboard pickup, the address row's listener
+    // (from `port`, the nine after it, then one the OS picks). One session serves both: an invite friend in
+    // another country and a Radmin friend at once. Single player never makes one: no socket, no lookup.
+    public const int MaxPlayers = 8;                       // the host included, and invites not yet answered
     public bool Host(int port = DefaultPort)
     {
-        StopReconnecting();
+        StopReconnecting(); FreshFrom = "";
         Close();                                           // a session in progress ends properly: saved, the others told
-        // A HOST's old socket is let go now: it holds the port about to be bound again. A GUEST's is
-        // left to finish -- its goodbye is still on the way out, and cut off, the host it left held
-        // its place as a drop.
-        foreach (var (old, _, _) in _lettingGo.Where(g => g.server).ToList()) old.Close();
-        _lettingGo.RemoveAll(g => g.server);
-        var p = new ENetMultiplayerPeer();
-        if (p.CreateServer(port, MaxPlayers) != Error.Ok)
+        Link.StunFirst = 0;
+        var p = new WebRtcMultiplayerPeer();
+        if (p.CreateServer(Link.Channels()) != Error.Ok)
         {
-            GoOffline($"Could not open port {port}: another program, or another copy of Warships, is using it. Playing offline.");
+            p.Dispose();
+            GoOffline("Could not start a session: the network library refused it. Playing offline.");
             return false;
         }
         _peer = p; Multiplayer.MultiplayerPeer = p;
         _isHost = true; _localId = 1; Connecting = false; _inSession = true;
         Players.Clear(); Players[1] = new PlayerInfo();
-        var lan = Router.Lan();
-        LanAddress = $"{lan.Ip}:{port}"; Reachability = Reach.Checking; InternetAddress = "";
-        OverlayAddresses = Router.Overlays().Select(o => (o.name, $"{o.ip}:{port}")).ToList();
-        Ipv6Address = Router.GlobalIpv6() is { Length: > 0 } v6 ? $"[{v6}]:{port}" : "";
-        Say($"Hosting on your network ({LanAddress}). Asking your router to open port {port}, and the internet for your public address...");
-        SessionChanged?.Invoke();
-        int gen = ++_hostGen; _hostPort = port;
-        _publicIp = ""; _publicDone = false; _report = null;
-        RouterJob(() =>
+        int from = Rendezvous.ListenFrom;
+        Rendezvous.ListenFrom = port;
+        foreach (var row in Rendezvous.Paths)
         {
-            Router.Report rep;
-            try { rep = Router.Open(port, lan); }
-            catch (Exception e) { rep = new Router.Report { Why = e.Message, ExtPort = port }; }
-            // The session may have ended while the routers were asked: close what this opened in
-            // this same job, so no moment exists where nothing runs and a port is still open.
-            if (gen != System.Threading.Volatile.Read(ref _hostGen) || Game.ShuttingDown) { Router.Close(rep.Opened); return; }
-            Callable.From(() => RouterResult(gen, rep)).CallDeferred();
-        });
-        AskPublicIp(gen);
+            try { row.Open(this); }
+            catch (System.Net.Sockets.SocketException) { }   // not even a port the OS picks: invites carry on without the listener
+        }
+        Rendezvous.ListenFrom = from;
+        int at = Rendezvous.ListenPort;
+        Addresses = at == 0 ? new List<string>() : new List<string> { $"Same network: {Adapters.Lan()}:{at}" }
+            .Concat(Adapters.Overlays().Select(o => $"On {o.name}: {o.ip}:{at}")).ToList();
+        // the listener's port as it came out: hosting and invites carry on either way (§6.1)
+        Say("Hosting. INVITE A FRIEND makes a code for one friend. Friends on this network or on Radmin VPN can type an address below instead."
+            + (at == 0 ? " No port could be opened for typed addresses, so friends join by invite only."
+               : port != 0 && at != port ? $" Port {port} is taken on this PC, so friends typing an address use port {at}." : ""));
+        SessionChanged?.Invoke();
         return true;
+    }
+    // What the host panel lists under INVITE A FRIEND: one line per address the listener serves.
+    public List<string> Addresses { get; private set; } = new();
+    // single player (and between sessions): no connection, no goodbye still on its way, no listener
+    public bool NetworkIdle => _peer == null && _lettingGo.Count == 0 && Rendezvous.ListenPort == 0;
+
+    // ── the host's desk (Rendezvous.IHostDesk) ───────────────────────────────
+    // ONE ENTRY PER INVITE NOT YET CONNECTED (§3.1): made by INVITE A FRIEND (the paste row) or by a knock
+    // on the listener (the address row); it leaves the table the moment its connection is up (OnAuthenticating).
+    public Rendezvous.Pending Pending { get; } = new();
+    public bool Full => Players.Count + Pending.Count >= MaxPlayers;
+    private string FullText => $"The session is full ({MaxPlayers} players, counting invites not yet answered). Cancel an invite to free a place.";
+    // the invites being gathered, each with who waits for it and what to do once it is made
+    private readonly List<(Rendezvous.Entry e, Rendezvous.IRendezvousPath row, TaskCompletionSource<Rendezvous.Record> done, Action<Rendezvous.Entry> then)> _making = new();
+    // the row each connected guest came by: a paste guest who drops gets a fresh invite (§3.9)
+    private readonly Dictionary<int, string> _rowOf = new();
+
+    // INVITE A FRIEND: an invite for one friend, gathered on the STUN rows, copied when it is made.
+    public void Invite()
+    {
+        if (!_isHost || !IsOnline) return;
+        if (Full) { Say(FullText); return; }
+        Say("Making an invite…");
+        MakeInvite(Rendezvous.Paste, 0, "", e => Say("Invite copied. Send it to one friend, privately (it holds your IP addresses). When their reply comes, "
+                                                    + "just copy it: the game takes it. Or paste it here." + (e.Conn.NoStun ? NoStunHost : "")));
+    }
+    private const string NoStunHost = " No STUN server answered, so this invite works only on your network and over Radmin VPN.";
+    // The newest invite not yet answered, as text: what COPY puts on the clipboard ("" for none).
+    public string LastInvite => Pending.All.LastOrDefault(e => e.Code.Length > 0 && e.Stage == Rendezvous.Stage.Waiting)?.Code ?? "";
+
+    public Task<Rendezvous.Record> Invite(Rendezvous.Record knock) =>
+        MakeInvite(Rendezvous.Address, knock.Guest, knock.Name, null) ?? Task.FromResult<Rendezvous.Record>(null);
+
+    // An entry with a drawn id, a connection added under it and its description asked for; the invite comes
+    // out of PumpSession once the walk has sealed it (§3.3 A host 2-4). null when there is no room.
+    private Task<Rendezvous.Record> MakeInvite(Rendezvous.IRendezvousPath row, uint guest, string name, Action<Rendezvous.Entry> then)
+    {
+        if (!_isHost || !IsOnline || Full) return null;
+        var e = new Rendezvous.Entry { Id = DrawId(), Row = row.Id, Guest = guest, Name = name ?? "", Made = Time.GetTicksMsec(), Stage = Rendezvous.Stage.Waiting };
+        Pending.Add(e);
+        e.Conn = new Link.Gather(_peer, e.Id, row.Stun, c => c.CreateOffer());
+        var done = new TaskCompletionSource<Rendezvous.Record>();
+        _making.Add((e, row, done, then));
+        return done.Task;
+    }
+    // THE HOST DRAWS EVERY ID (§3.1): 2 ... 2^31-1, not a player, not pending, not a held place's old id.
+    // The invite carries it, so the guest's CreateClient(id) and this AddPeer(conn, id) agree.
+    private int DrawId()
+    {
+        int id;
+        do id = (int)Random.Shared.NextInt64(2, int.MaxValue);
+        while (Players.ContainsKey(id) || Pending.Find(id) != null || Session.Places.Values.Any(h => h.OldPeer == id));
+        return id;
+    }
+
+    // A code the host was handed: the reply box, or the clipboard pickup. A reply is taken; anything else
+    // is named. On a guest or offline, an invite is a JOIN.
+    public void TakeCode(string text)
+    {
+        if (!_isHost || !IsOnline) { Join(text); return; }
+        if (Rendezvous.Find(text, Rendezvous.Kind.Reply) is { } reply) { Replied(reply); return; }
+        Say(Rendezvous.Find(text, Rendezvous.Kind.Invite) != null ? "That is an invite: send it to a friend. Their reply goes here."
+            : "That code is damaged or cut off: copy the whole message again.");
+    }
+    // A REPLY FOR A PENDING INVITE (§3.3 A host 6): the friend's description and candidates set on the
+    // invite's connection, which then has Link.LinkMs to come up.
+    public void Replied(Rendezvous.Record reply)
+    {
+        if (Pending.Find(reply.Id) is not { Stage: Rendezvous.Stage.Waiting, Conn: { Done: true } } e)
+        {
+            Say("That reply is for an invite this session no longer has (used, cancelled or expired). Send them a new invite.");
+            return;
+        }
+        try
+        {
+            e.Conn.Conn.SetRemoteDescription("answer", Rendezvous.Sdp.Build(reply));
+            foreach (var c in reply.Candidates) e.Conn.Conn.AddIceCandidate("0", 0, Rendezvous.Sdp.Line(c));
+        }
+        catch (FormatException) { Say("That code is damaged or cut off: copy the whole message again."); return; }
+        e.Stage = Rendezvous.Stage.Linking; e.Until = Time.GetTicksMsec() + Link.LinkMs;
+        Times(e.Id).Reply = Time.GetTicksMsec();
+        if (reply.Name.Length > 0) e.Name = reply.Name;
+        Say($"{Who(e)} is joining…");
+    }
+    private static string Who(Rendezvous.Entry e) => e.Name.Length > 0 ? e.Name : "Your friend";
+    public void Refused(Rendezvous.Record knock, Rendezvous.Why why)
+    {
+        string who = knock.Name.Length > 0 ? knock.Name : "a player";
+        Say(why switch
+        {
+            Rendezvous.Why.Build => $"Refused {who} on a different build of the game (theirs {knock.Build} {knock.Proto:x8}, this one {Game.Build} {Protocol:x8}).",
+            Rendezvous.Why.Full => $"{who} knocked, but the session is full ({MaxPlayers} players, counting invites not yet answered).",
+            _ => $"Turned {who} away: {Rendezvous.KnocksPerMinute} knocks a minute from one address is the most.",
+        });
+    }
+
+    // ── the guest's desk (Rendezvous.IGuestDesk) ─────────────────────────────
+    public Rendezvous.Record Knock() => new()
+    {
+        Kind = Rendezvous.Kind.Knock, Proto = Claimed(Pretend.Code), Guest = Rendezvous.Guest, Build = Game.Build, Name = Character.Name,
+    };
+    // THE ANSWER TO AN INVITE (§3.3 A guest 3-5): a client peer with the invite's id, one connection as its
+    // host, the offer set; the reply comes out of PumpSession once this side's walk has sealed it.
+    public Task<Rendezvous.Record> Answer(Rendezvous.Record invite)
+    {
+        if (!Connecting || _asking != _joinGen) throw new OperationCanceledException("that join is over");
+        var mp = new WebRtcMultiplayerPeer();
+        if (mp.CreateClient(invite.Id, Link.Channels()) != Error.Ok) { mp.Dispose(); throw new InvalidOperationException("the network library refused a client session"); }
+        _peer = mp; Multiplayer.MultiplayerPeer = mp;
+        string offer = Rendezvous.Sdp.Build(invite);
+        _answer = new Link.Gather(mp, 1, _joinRow.Stun, c => c.SetRemoteDescription("offer", offer));
+        var done = new TaskCompletionSource<Rendezvous.Record>();
+        _answering = (invite, done);
+        return done.Task;
+    }
+    private Link.Gather _answer;                           // this guest's connection to its host, until the host lets it in
+    private (Rendezvous.Record invite, TaskCompletionSource<Rendezvous.Record> done)? _answering;
+    // The reply this guest made for a pasted invite, and when (the panel's countdown: Link.ReplyWindowS).
+    public string ReplyCode { get; private set; } = "";
+    public ulong ReplyAt { get; private set; }
+    // A pasted invite whose reply ran out, or whose connection failed: MAKE A FRESH REPLY answers it again.
+    public string FreshFrom { get; private set; } = "";
+    public bool FreshReply() { string invite = FreshFrom; return invite.Length > 0 && Join(invite); }
+
+    // ── each frame: the invites being made, the pending table, the rows, this guest's answer ──
+    private void PumpSession()
+    {
+        if (_peer == null) return;
+        ulong now = Time.GetTicksMsec();
+        for (int i = _making.Count - 1; i >= 0; i--)
+        {
+            var (e, row, done, then) = _making[i];
+            if (Pending.Find(e.Id) != e || e.Conn?.Conn == null) { _making.RemoveAt(i); done.TrySetResult(null); continue; }   // hung up meanwhile
+            if (!e.Conn.Step()) continue;
+            _making.RemoveAt(i);
+            Rendezvous.Record invite;
+            try { invite = Rendezvous.Sdp.Strip(Rendezvous.Kind.Invite, e.Conn.Sdp, e.Conn.Lines); }
+            catch (FormatException x) { Hang(e.Id); Say($"Could not make an invite: {x.Message}."); done.TrySetResult(null); continue; }
+            invite.Id = e.Id; invite.Proto = Protocol; invite.Build = Game.Build; invite.Name = Character.Name; invite.NoStun = e.Conn.NoStun;
+            int dropped = Fit(invite, row);
+            if (row == Rendezvous.Paste) { e.Code = Rendezvous.Encode(invite); Rendezvous.Copy(e.Code); }
+            Made("invite", e.Id, row, e.Conn, dropped, invite);
+            var t = Times(e.Id); t.Row = row.Id; t.Invite = now;
+            done.TrySetResult(invite);
+            then?.Invoke(e);
+        }
+        if (_isHost && IsOnline)
+        {
+            foreach (var row in Rendezvous.Paths) row.Poll();
+            foreach (var e in Pending.All.ToList())
+            {
+                if (e.Stage == Rendezvous.Stage.Linking) StampIce(e.Id, e.Conn?.Conn, now);
+                if (e.Stage == Rendezvous.Stage.Linking && now >= e.Until)
+                {
+                    // host step 8: this invite is spent (a connection takes one answer), so a paste friend gets a fresh one at once
+                    string who = Who(e), reason = Reason(e.Conn?.Conn);
+                    bool paste = e.Row == Rendezvous.Paste.Id;
+                    Hang(e.Id);
+                    if (!paste) Say($"{who} could not get through ({reason}).");
+                    else if (MakeInvite(Rendezvous.Paste, 0, e.Name, _ => Say($"{who} could not get through ({reason}). Their reply may have run out: "
+                                                                      + $"a reply works for {Link.ReplyWindowS} s. A new invite for them: COPY.")) == null) Say(FullText);
+                }
+                else if (e.Stage == Rendezvous.Stage.Waiting && e.Row == Rendezvous.Paste.Id && now - e.Made >= Link.InviteLifeS * 1000UL)
+                {
+                    Hang(e.Id);
+                    Say($"An invite from {Link.InviteLifeS / 60} min ago ran out unused.");
+                }
+            }
+        }
+        if (_answering is var (inv, answered) && _answer != null && _answer.Step())
+        {
+            _answering = null;
+            foreach (var c in inv.Candidates) _answer.Conn.AddIceCandidate("0", 0, Rendezvous.Sdp.Line(c));
+            Rendezvous.Record reply;
+            try { reply = Rendezvous.Sdp.Strip(Rendezvous.Kind.Reply, _answer.Sdp, _answer.Lines); }
+            catch (FormatException x) { answered.TrySetException(x); return; }
+            reply.Id = inv.Id; reply.Name = Character.Name; reply.NoStun = _answer.NoStun;
+            int dropped = Fit(reply, _joinRow);
+            Made("reply", inv.Id, _joinRow, _answer, dropped, reply);
+            var t = Times(inv.Id); t.Row = _joinRow.Id; t.Invite = _attemptAt; t.Reply = now; _joinId = inv.Id;
+            if (_joinRow == Rendezvous.Paste)
+            {
+                ReplyCode = Rendezvous.Encode(reply); ReplyAt = now;
+                Rendezvous.Copy(ReplyCode);
+                _deadline = now + Link.ReplyWindowS * 1000UL + Link.LinkMs;   // the host's window to take it, then its time to link
+                Say($"Reply copied. Send it to {_joinTarget} now: they have {Link.ReplyWindowS} s to take it."
+                    + (inv.NoStun ? $" This invite works only on {_joinTarget}'s network or over Radmin VPN." : ""));
+            }
+            answered.TrySetResult(reply);
+        }
+        if (Connecting && _answering == null && _answer is { Done: true }) StampIce(_joinId, _answer.Conn, now);
+        // a pasted invite's connection that failed is over at once, not at the end of its countdown
+        if (Connecting && _joinRow == Rendezvous.Paste && _answer is { Done: true, Conn: { } conn }
+            && conn.GetConnectionState() is WebRtcPeerConnection.ConnectionState.Failed or WebRtcPeerConnection.ConnectionState.Closed)
+            Failed($"Could not get through to {_joinTarget}: {Reason(conn)}. Try again with you hosting, or use Radmin VPN (radmin-vpn.com). Playing offline.");
+    }
+    // A join's "ICE connected" (the report): the first frame its connection reads Connected.
+    private void StampIce(int id, WebRtcPeerConnection c, ulong now)
+    {
+        if (_times.TryGetValue(id, out var t) && t.Ice == 0 && c?.GetConnectionState() == WebRtcPeerConnection.ConnectionState.Connected) t.Ice = now;
+    }
+    private static string Reason(WebRtcPeerConnection c) => c?.GetConnectionState() switch
+    {
+        WebRtcPeerConnection.ConnectionState.Failed => "no path between the two networks worked",
+        WebRtcPeerConnection.ConnectionState.Closed => "the connection was closed",
+        null => "the connection is gone",
+        _ => $"no answer in {Link.LinkMs / 1000} s",
+    };
+    // THE FIT RULE with this PC's own addresses: an overlay's and the LAN's are ranked above the rest.
+    private static int Fit(Rendezvous.Record r, Rendezvous.IRendezvousPath row)
+    {
+        var overlays = Adapters.Overlays().Select(o => System.Net.IPAddress.Parse(o.ip)).ToList();
+        return Rendezvous.Fit(r, row, overlays, System.Net.IPAddress.Parse(Adapters.Lan()));
+    }
+
+    // ── COPY NETWORK REPORT (§6.3) ───────────────────────────────────────────
+    // What a player pastes to the developer when a join did not work: this build, where the session
+    // stands, every code this game made (its STUN row and how long, what the fit rule dropped, how long
+    // the code is), every join's times, the most that waited per NetChannels row, the longest silence.
+    // Kept for the whole game, not the session: the report is copied after a failure, offline.
+    private readonly List<string> _made = new();
+    // Ice: the connection reached Connected (ICE and DTLS up, PumpSession); Channels: SCTP's channels
+    // open, the handshake starting (OnAuthenticating). The gap between them is the channels' own.
+    private sealed class JoinTimes { public string Row = ""; public ulong Invite, Reply, Ice, Channels, Admitted; }
+    private readonly Dictionary<int, JoinTimes> _times = new();
+    private int _joinId;                                  // a guest's own id: the invite's, the key of its join's times
+    private readonly Dictionary<int, int> _peakBacklog = new();
+    private double _longestQuiet, _backlogClock;
+    private const int ReportKeeps = 16;                   // codes and joins, the newest
+    private JoinTimes Times(int id)
+    {
+        if (_times.TryGetValue(id, out var t)) return t;
+        if (_times.Count >= ReportKeeps) _times.Remove(_times.MinBy(kv => kv.Value.Invite).Key);
+        return _times[id] = new JoinTimes();
+    }
+    private void Made(string kind, int id, Rendezvous.IRendezvousPath row, Link.Gather g, int dropped, Rendezvous.Record r)
+    {
+        string stun = g.Row >= 0 && !g.NoStun ? $"STUN {Link.Servers[g.Row].Url} answered" : row.Stun ? "no STUN row answered" : "no STUN row asked";
+        _made.Add($"{kind} {id} by {row.Id}: {stun}, sealed in {g.DoneAt - g.Began} ms; the fit dropped {dropped} candidates; {row.Measure(r)} long");
+        if (_made.Count > ReportKeeps) _made.RemoveAt(0);
+    }
+    // Four times a second: the most waiting on each row of each live link (Link.Backlog).
+    private void SampleBacklog(double delta)
+    {
+        if (!IsOnline || _peer is not WebRtcMultiplayerPeer mp) return;
+        _backlogClock += delta;
+        if (_backlogClock < 0.25) return;
+        _backlogClock = 0;
+        _rows ??= Link.Channels().Count;
+        foreach (int p in _isHost ? _heard : new HashSet<int> { 1 })
+            for (int ch = 1; ch <= _rows; ch++)
+                _peakBacklog[ch] = System.Math.Max(_peakBacklog.GetValueOrDefault(ch), Link.Backlog(mp, p, ch));
+    }
+    private int? _rows;
+    public string Report()
+    {
+        string At(JoinTimes t, ulong at) => at == 0 ? "never" : $"+{at - t.Invite} ms";
+        var rowName = typeof(NetChannels).GetFields().Where(f => f.IsLiteral).ToDictionary(f => (int)f.GetRawConstantValue(), f => f.Name);
+        var r = new System.Text.StringBuilder();
+        r.AppendLine($"WARSHIPS NETWORK REPORT · build {Game.Build} ({Protocol:x8}) · {Time.GetDatetimeStringFromSystem()}");
+        r.AppendLine(Connecting ? $"joining {_joinTarget}" : !IsOnline ? "offline" : _isHost ? $"hosting: {Players.Count} players, {Pending.Count} invites pending"
+                     : $"a guest of {_joinTarget}, joined by {JoinedBy}");
+        r.AppendLine(Rendezvous.ListenPort == 0 ? "typed addresses: no listener" : $"typed addresses: {string.Join("; ", Addresses)}");
+        r.AppendLine($"STUN rows: {string.Join(", ", Link.Servers.Select(s => s.Url))}; the next walk starts at row {Link.StunFirst + 1}");
+        r.AppendLine($"reply window {Link.ReplyWindowS} s; clipboard pickup on");
+        r.AppendLine($"round trip {RoundTrip * 1000:0} ms; longest silence from a peer {_longestQuiet:0.00} s (row {NetChannels.Beat}, the beat)");
+        r.AppendLine("peak backlog by row: " + (_peakBacklog.Count == 0 ? "none measured"
+                     : string.Join(", ", _peakBacklog.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key} {rowName.GetValueOrDefault(kv.Key, "stream")} {kv.Value} B"))));
+        foreach (var m in _made) r.AppendLine(m);
+        foreach (var (id, t) in _times.OrderBy(kv => kv.Value.Invite))
+            r.AppendLine($"join {id} by {t.Row}: invite made +0 ms, reply {(_isHost ? "taken" : "made")} {At(t, t.Reply)}, ICE connected {At(t, t.Ice)}, channels open {At(t, t.Channels)}, admitted {At(t, t.Admitted)}");
+        r.Append($"last: {LastStatus}");
+        return r.ToString();
     }
 
     // ── joining ──────────────────────────────────────────────────────────────
@@ -724,39 +899,91 @@ public partial class Net : Node
         return host.Length == 0 ? null : (host, port);
     }
 
-    private int _joinGen;
-    private string _joinTarget = "";
-    public bool Join(string address) { StopReconnecting(); return Connect(address, retry: false); }
+    private int _joinGen, _asking;
+    private string _joinTarget = "", _joinText = "";
+    private Rendezvous.IRendezvousPath _joinRow;
+    // The row this guest came in by ("paste" or "address"; "" offline or on the host).
+    public string JoinedBy { get; private set; } = "";
+    // JOIN: the text is an invite (the paste row) or an address (the address row), by Rendezvous.Paths.
+    public bool Join(string text) { StopReconnecting(); FreshFrom = ""; return Connect(text, retry: false); }
 
-    private bool Connect(string address, bool retry)
+    private bool Connect(string text, bool retry)
     {
-        if (ParseAddress(address) is not var (host, port))
+        text ??= "";
+        var row = Rendezvous.PathFor(text);
+        Rendezvous.Record invite = null;
+        if (row == null)
         {
-            Say(string.IsNullOrWhiteSpace(address) ? "Enter a host address first." : $"\"{address.Trim()}\" is not an address. Type the host's IP, or IP:port.");
+            Say(Rendezvous.HoldsCode(text) ? "That code is damaged or cut off: copy the whole message again."
+                : string.IsNullOrWhiteSpace(text) ? "Paste an invite, or type the host's address, first."
+                : $"\"{text.Trim()}\" is not an invite or an address. Paste the friend's whole message, or type the host's IP, or IP:port.");
             return false;
+        }
+        if (row == Rendezvous.Paste)
+        {
+            invite = Rendezvous.Find(text, Rendezvous.Kind.Invite);
+            if (invite == null) { Say("That is a reply code: it goes to the host, not into JOIN."); return false; }
+            // the build check comes before any network step: no WebRTC object is made for another build's invite
+            if (invite.Proto != Claimed(Pretend.Code))
+            {
+                Say($"This invite is from build {invite.Build} ({invite.Proto:x8}); you are on {Game.Build} ({Claimed(Pretend.Code):x8}). "
+                    + "You both need the same release (Esc menu, bottom).");
+                return false;
+            }
         }
         bool had = _inSession;
         Close();                                           // hosting or in a session: that ends first, properly
         Players[1] = new PlayerInfo();
         Connecting = true;
-        _joinAddress = address; _retrying = retry; _attemptAt = Time.GetTicksMsec();
-        _joinTarget = port == DefaultPort ? host : $"{host}:{port}";
-        int gen = ++_joinGen;
-        Say(retry ? $"Getting back in to {_joinTarget} ... (attempt {Attempt} of {RetryAt.Length})" : $"Connecting to {_joinTarget} ...");
-        if (had) SessionChanged?.Invoke();                 // the guests that were here are gone: rebuild without them
-        // A NAME is looked up off the main thread: a slow or failing lookup used to freeze the game.
-        if (System.Net.IPAddress.TryParse(host, out _)) { ConnectTo(gen, host, port); return true; }
-        System.Threading.Tasks.Task.Run(() =>
+        ulong now = Time.GetTicksMsec();
+        _joinText = text; _joinRow = row; _retrying = retry; _attemptAt = now; ReplyCode = ""; ReplyAt = 0;
+        if (!retry) Link.StunFirst = 0;
+        if (invite != null) { _joinTarget = invite.Name.Length > 0 ? invite.Name : "the host"; _deadline = 0; }
+        else
         {
-            string ip = "";
-            try { ip = DialAddress(System.Net.Dns.GetHostAddresses(host)); }
-            catch (Exception) { /* no such name: reported below */ }
-            if (!Game.ShuttingDown) Callable.From(() => ConnectTo(gen, ip, port)).CallDeferred();
-        });
+            var (host, port) = ParseAddress(text).Value;
+            _joinTarget = port == DefaultPort ? host : $"{host}:{port}";
+            _deadline = now + (ulong)(BackIn ? RetryTimeoutMs : JoinTimeoutMs);
+        }
+        int gen = ++_joinGen; _asking = gen;
+        Say(invite != null ? $"Answering {_joinTarget}'s invite ..."
+            : retry ? $"Getting back in to {_joinTarget} ... (attempt {Attempt} of {RetryAt.Length})" : $"Connecting to {_joinTarget} ...");
+        if (had) SessionChanged?.Invoke();                 // the guests that were here are gone: rebuild without them
+        _ = Joining(gen, row.Start(text, this));
         return true;
     }
+    // THE ROW'S ANSWER: an invite answered (nothing more to do: the connection comes up by itself) or a
+    // refusal, or the way it failed. A timeout is left to the attempt's deadline, so a silent host reads
+    // "No answer ... in 12 s" at 12 s, not at the 3 s a connection's read is given.
+    private async Task Joining(int gen, Task<Rendezvous.Record> start)
+    {
+        Rendezvous.Record got = null; string why = null; bool refusedBuild = false;
+        try { got = await start; }
+        catch (System.Net.Sockets.SocketException x) when (x.SocketErrorCode == System.Net.Sockets.SocketError.ConnectionRefused)
+        { why = $"Nothing is hosting at {_joinTarget}: that PC turned the connection away. Check the address, and that the host pressed HOST THIS WORLD. Playing offline."; }
+        catch (System.Net.Sockets.SocketException x) when (x.SocketErrorCode is System.Net.Sockets.SocketError.HostNotFound or System.Net.Sockets.SocketError.NoData)
+        { why = $"Could not find {_joinTarget}. Check the address. Playing offline."; }
+        catch (Exception x) when (x is OperationCanceledException or System.IO.IOException or System.Net.Sockets.SocketException) { }
+        catch (FormatException) { why = $"{_joinTarget} answered with something that is not Warships. Playing offline."; }
+        catch (InvalidOperationException x) { why = $"Could not start a session: {x.Message}. Playing offline."; }
+        if (gen != _joinGen || !Connecting) return;        // superseded, or already over
+        if (got is { Kind: Rendezvous.Kind.Refuse } r)
+        {
+            refusedBuild = r.Why == Rendezvous.Why.Build;
+            why = r.Why switch
+            {
+                Rendezvous.Why.Build => $"That host is on a different build of the game (theirs {r.Build} {r.Proto:x8}, yours {Game.Build} {Claimed(Pretend.Code):x8}): "
+                                        + "you both need the same release (Esc menu, bottom). Playing offline.",
+                Rendezvous.Why.Full => $"{_joinTarget} is full ({MaxPlayers} players, counting invites not yet answered). Playing offline.",
+                Rendezvous.Why.Rate => $"{_joinTarget} turned the knock away: too many from this address in a minute. Wait a minute and JOIN again. Playing offline.",
+                _ => $"{_joinTarget} stopped hosting while this knocked. Playing offline.",
+            };
+        }
+        if (why == null) return;
+        if (refusedBuild) GoOffline(why); else Failed(why);
+    }
 
-    // What a name's lookup hands ENet: its IPv4 address when it has one, else its IPv6 one -- a name
+    // What a name's lookup gives the dialer: its IPv4 address when it has one, else its IPv6 one -- a name
     // with only an AAAA record read as "no such host". Link-local IPv6 is left out: it means
     // something only on the adapter it came from, which a name cannot say.
     public static string DialAddress(IEnumerable<System.Net.IPAddress> found) =>
@@ -764,21 +991,6 @@ public partial class Net : Node
                          || (a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && !a.IsIPv6LinkLocal))
              .OrderBy(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 0 : 1)
              .FirstOrDefault()?.ToString() ?? "";
-
-    private void ConnectTo(int gen, string ip, int port)
-    {
-        if (gen != _joinGen) return;                       // cancelled, or superseded by another JOIN
-        var p = new ENetMultiplayerPeer();
-        if (ip.Length == 0 || p.CreateClient(ip, port) != Error.Ok)
-        {
-            Failed($"Could not find {_joinTarget}. Check the address. Playing offline.");
-            return;
-        }
-        // ENet's own timeout as well, so it never keeps its default 30 s (the deadline is _Process's)
-        int deadline = BackIn ? RetryTimeoutMs : JoinTimeoutMs;
-        foreach (var server in p.Host.GetPeers()) server.SetTimeout(32, Math.Min(QuietMs, deadline), deadline);
-        _peer = p; Multiplayer.MultiplayerPeer = p;
-    }
 
     // The live Yard writes the base into Character first: a base is part of a character, and this
     // is the moment the character stops being in a session. Nothing here touches another peer's
@@ -793,54 +1005,39 @@ public partial class Net : Node
 
     private void Shutdown()
     {
+        // the rows first: no knock and no pickup reaches a session that is ending; then every invite not yet
+        // connected is hung up, because GetPeers lists them and nobody else will (§3.7)
+        foreach (var row in Rendezvous.Paths) row.Close();
+        foreach (var e in Pending.All.ToList()) Hang(e.Id);
+        foreach (var m in _making) m.done.TrySetResult(null);
+        _making.Clear();
+        if (_answering is var (_, answered)) answered.TrySetCanceled();
+        _answering = null; _answer = null;
         if (_peer != null)
         {
-            // EVERY LINK THAT IS UP IS LET GO GENTLY, goodbye or not: what it has queued goes first --
-            // the goodbye (NetBye), or a refused player's own build, which the host must hear to say
-            // it refused one. A knock hung up the moment it read the host's build, and when its own
-            // had been lost on the way it was never resent: the host never knew. Not when the other
-            // end is already gone, nor for the smoke test's crash.
-            // (the status first: a link the engine has already closed -- a drop, a failed connect -- has
-            // no host to ask, and asking is an engine error)
-            if (!SkipGoodbye && !_peerGone && _peer is ENetMultiplayerPeer e
-                && e.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Disconnected && e.Host != null
-                && e.Host.GetPeers().Any(p => p.GetState() == ENetPacketPeer.PeerState.Connected))
-            {
-                foreach (var p in e.Host.GetPeers()) if (p.GetState() == ENetPacketPeer.PeerState.Connected) p.PeerDisconnectLater();
-                _lettingGo.Add((e, Time.GetTicksMsec() + LetGoMs, e.GetUniqueId() == 1));
-            }
+            // EVERY LINK THAT IS UP IS LET GO GENTLY, goodbye or not: what it has queued goes first -- the
+            // goodbye (NetBye), or a refused player's own build, which the host must hear to say it refused
+            // one. Not when the other end is already gone, nor for the smoke test's crash.
+            if (!SkipGoodbye && !_peerGone && _peer.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected && _peer.GetPeers().Count > 0)
+                _lettingGo.Add((_peer, Time.GetTicksMsec() + LetGoMs));
             else _peer.Close();
             _peer = null;
         }
-        if (_hops.Count > 0)
-        {   // close the router ports we opened (in the background: routers can be slow)
-            var hops = _hops;
-            RouterJob(() => Router.Close(hops));
-        }
-        _hops = new(); _hostGen++;
-        FreeIpReq();                                        // no lookup outlives its session
-        Reachability = Reach.None; InternetAddress = ""; LanAddress = ""; Ipv6Address = ""; OverlayAddresses = new();
+        Addresses = new(); JoinedBy = ""; _rowOf.Clear(); _deadline = 0;
         // An explicit offline peer rather than null: IsServer() and GetUniqueId() then
         // answer 1 / true offline instead of depending on engine fallback behaviour.
         Multiplayer.MultiplayerPeer = new OfflineMultiplayerPeer();
         Players.Clear(); _asked.Clear(); _heard.Clear();
         _hostSaidBye = false; _leaving.Clear(); _peerGone = false;
+        _silence.Clear(); _trip = new(); _beatClock = 0;
     }
 
     private void OnPeer(int id, bool joined)
     {
         if (joined)
         {
-            // A friend whose connection dies without a goodbye (their PC sleeps, their Wi-Fi
-            // drops) is let go in about 10 s instead of ENet's 30, which left a ghost ship
-            // drifting through everyone's world. The host's to set: only it holds a real
-            // connection to each guest (a guest hears of the others through the host). Then the
-            // welcome, first of everything this host sends it: the guest is let in (NetWelcome).
-            if (_isHost && (_peer as ENetMultiplayerPeer)?.GetPeer(id) is { } guest)
-            {
-                Link(guest, 10000);
-                RpcId(id, nameof(NetWelcome));
-            }
+            // The welcome, first of everything this host sends it: the guest is let in (NetWelcome).
+            if (_isHost) RpcId(id, nameof(NetWelcome));
             // TryAdd: their identity may have arrived a moment before the join event.
             Players.TryAdd(id, new PlayerInfo());
             Say($"Player {id} joined.");
@@ -848,10 +1045,20 @@ public partial class Net : Node
         }
         else
         {
-            Players.Remove(id, out var info); ForgetAsks(id); _heard.Remove(id);
+            Players.Remove(id, out var info); ForgetAsks(id); _heard.Remove(id); _silence.Remove(id);
             bool onPurpose = _leaving.Remove(id);
+            bool paste = _rowOf.Remove(id, out var row) && row == Rendezvous.Paste.Id;
             Say(onPurpose || !_isHost ? $"Player {id} left." : $"Player {id} dropped.");   // only the host hears goodbyes
             PlayerLeft?.Invoke(id, info ?? new PlayerInfo(), onPurpose);
+            // A PASTE GUEST CANNOT KNOCK AGAIN (§3.9): its way back is a fresh invite, made at once -- unless
+            // its pilot is already back under another id (its rejoin token beat this old link: Hub let it go).
+            bool back = info?.CharacterId is { Length: > 0 } cid && Players.Values.Any(p => p.CharacterId == cid);
+            if (_isHost && IsOnline && paste && !onPurpose && !back)
+            {
+                string who = info?.Name is { Length: > 0 } n ? n : "Your friend";
+                if (MakeInvite(Rendezvous.Paste, 0, info?.Name ?? "", _ => Say($"{who} dropped. Send them this invite to come back "
+                                                                              + $"(their place is held {Session.HoldFor:0} s): COPY.")) == null) Say(FullText);
+            }
         }
     }
 
@@ -872,10 +1079,9 @@ public partial class Net : Node
     // full round trip before the end the host sent: this is that end. Never below 40% of the
     // warning, whatever the connection. The host (and single player) sees it as sent.
     public static double Arriving(double warning) => System.Math.Max(warning * 0.4, warning - RoundTrip);
-    // a guest's round trip to the host, in seconds (0 on the host and offline)
-    public static double RoundTrip =>
-        IsHost || I?._peer is not ENetMultiplayerPeer e || e.GetPeer(1) is not { } host
-            ? 0 : host.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) / 1000.0;
+    // a guest's round trip to the host, in seconds (0 on the host, offline, and before the first echo):
+    // the least of the beat's last echoes (Link.Trip)
+    public static double RoundTrip => IsHost || I == null ? 0 : I._trip.Least;
 
     // A guest's request to the host: the one way a guest asks for anything. Offline, or still
     // connecting, there is no host to ask -- and an RPC then is an engine error.
@@ -918,20 +1124,19 @@ public partial class Net : Node
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TRANSFER CHANNELS: ONE PER STREAM. An ordered unreliable packet is delivered only if nothing
-// sent after it ON THE SAME CHANNEL has arrived first (ENet discards it otherwise), and every one
-// of these streams used to share channel 0 (a WebRTC peer maps channels to data channels alike): on
-// a link that reorders, a base report was thrown away because a ship report sent a millisecond
-// later got there first -- a guest saw the hauler's hold start seconds late, by lottery. Each
-// stream is ordered only against itself now. The reliable channel 0 carries everything else.
+// TRANSFER CHANNELS: ONE PER STREAM. Every row is a data channel of its own, and so its own SCTP
+// stream: a packet lost on one row holds back only that row until it is resent. Every one of these
+// streams used to share channel 0, where a base report waited on (or, on the old transport, was
+// thrown away behind) a ship report sent a millisecond later -- a guest saw the hauler's hold start
+// seconds late, by lottery. The reliable channel 0 carries everything else.
 //
 // A NEW STREAM IS A ROW: a constant here with a number no other row has, read by its own
 // [Rpc(..., TransferChannel = NetChannels.X)] ON THE HUB -- the one node at the same path in every
 // world, since an unreliable report can land after its world has gone (Hub.NetBase). A rung-3 check
 // reads every Rpc attribute and fails an UnreliableOrdered one off the Hub, on channel 0, off this
 // table, or sharing a channel with anything else.
-// ENet opens 255 channels at both ends (channel count 0 at CreateServer and CreateClient), and a
-// transfer channel N is ENet channel N + 1, so a row may go up to 254.
+// Each row is negotiated when a link is made (Link.Channels reads every [Rpc] for them), and transfer
+// channel N is the peer's data channel 2 + N (channel 0's three come first).
 // ─────────────────────────────────────────────────────────────────────────────
 public static class NetChannels
 {
@@ -950,6 +1155,10 @@ public static class NetChannels
     public const int Base = 9;          // Hub.NetBase: the gatherers and the hauler, 10 Hz, for the Yard
     public const int Boss = 10;         // Hub.NetBoss: the boss, 10-30 Hz
     public const int BossSounds = 11;   // Hub.NetBossSound: a special's sound
+    // RELIABLE, on Net (the autoload that outlives every world): the beat and its echo (Net.NetBeat,
+    // NetBeatBack). Its own row, so a beat never queues behind channel 0's reliable words; reliable, so
+    // the Hub-only and one-RPC-a-row rules for ordered streams leave its two RPCs alone.
+    public const int Beat = 12;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
