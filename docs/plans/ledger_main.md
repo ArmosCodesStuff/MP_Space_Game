@@ -1,39 +1,31 @@
-# Coordinator state (CLAUDE.md section 4.6) -- updated 2026-09-25 (the owner compacts at will; the SessionStart hook re-injects this)
+# Coordinator state -- last event 14:10: critique-2 landed; its edits installed; the test phase launches next
+Under 25 lines. Edit tool only; commit as the FIRST call after every event. The hook re-injects this after a compact and
+cross-checks every `task <id>` below against its output file. Facts go to README / CHANGES, not here.
 
-## Running (TEST PHASE since 2026-09-25 12:51; process = lean CLAUDE.md bccdadd + docs/process/*.md; Fable coordinates)
-- DONE test-prep: harness Lane() helper 5e688ac (178 calls wrapped; a thrown lane prints "FAIL LANE <name> threw" and the role goes on);
-  12 spec cards docs/plans/cards 306a531. Cards' OPEN lines for the review/triage: BB fire-mode key (spec R, built G, checks assert G);
-  Tender numbers have no source file (kits_v1 missing: the code is the source); DD `longlance` id (renamed off the Tender's lance);
-  grapnel_rip sound never built.
-- watchdog: a 30-min Monitor polls tools/agents.ps1 every 10 min while Sonnet/Haiku agents run; re-arm it at each expiry.
-- fable-critique-2 / task w8qdfovp6 (wf_f703a3a3-c3e): testing, hand-offs + compaction, verbiage -> scratchpad/fable2/REPORT2.md,
-  CLAUDE.md v2 + CLAUDE.diff.md, process/, tools/. When it lands: REPORT2 to the owner; apply at the next batch boundary; report in 3 lines.
+## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
+- (none: the test phase launches with Next 1)
 
-- DONE fable-review: 46 findings in docs/plans/review_tasks.json, 37 kept (severity >= 2; kept=true), 9 dropped (owner: speed). Top:
-  Warden PD 10 DPS/mount vs the ruling's 1 (hv-R6c-1); a guest DD's warp mid-grapple rips 5 s late on the host (cap-R1); a rejoin
-  without the token is not refused (net-RV1); Dealt.Deal credits blows on a dead target (net-RV3). test-phase.js applies them per scope
-  (args.review: one Opus fix agent per scope, one proving chain each) before round 1. The blanket 3+ audit is OFF (args.audit unset).
+## Landed (verdict first; delete the row once its action is done)
+- (none)
 
-## Next
-1. When test-prep, critique-2 and fable-review have all landed: apply critique-2's test-phase.js / tester.md changes (owner: overhaul
-   permitted), then Workflow({scriptPath: workflows/scripts/test-phase.js, args: {tasks: <review tasks>}}): review fixes -> rounds a ->
-   audit merge after the first green -> rounds c -> extras -> bar -> release. A stop: read the row, fix, relaunch with resumeFromRunId
-   and args {attempt: 2, tasks: []}.
-2. After the release: frames to the owner (framesForOwner), the owed one-machine / two-machine network checks (netOwed), then the
-   critique's "after this release" list (REPORT.md in scratchpad/fable; copy it to docs/plans/process_after_release.md first).
-3. Delete each lane's worktree once merged (t0..t4 belong to the test phase).
-Slots proof tpslots_0/1 at ae8ae99: two chains at once on slots 0 and 1, quick green on both, solo ran to the end on both: 42 / 45 problems,
-  the same first 12 at two seeds = deterministic reds (every warp +27 u and its overshoot pricing, broadside 343.75 of 375, the fingerprint
-  coverage check, the BB keys tab, a squad tracker on jumps, "never walled"). Tooling proven; the reds are round 1's triage.
-Build phase complete: every lane merged at 1ff39a3 (defaults in each lane ledger); backup origin/backup/unverified.
+## Next (1 is the exact next call, copy-pasteable)
+1. Workflow({scriptPath: "C:\Users\logan\.claude\projects\C--Users-logan-Downloads-WarShips-Version-L\31bcb796-5d47-41e0-ad68-ba3af2cf375b\workflows\scripts\test-phase.js",
+   args: {review: [{scope:"cap",ids:["cap-R1","cap-R2","cap-R3","cap-R4","cap-R5","cap-R6"],six:true},
+   {scope:"fr",ids:["fr-R6b-1","fr-R6b-2","fr-R6b-3","fr-R6b-4","fr-R6b-5","fr-R6b-6","fr-R6b-7","fr-R6b-8"],six:true},
+   {scope:"hv",ids:["hv-R6c-1","hv-R6c-2","hv-R6c-3","hv-R6c-4","hv-R6c-5","hv-R6c-6","hv-R6c-7"],six:true},
+   {scope:"lt",ids:["lt-R6d-1","lt-R6d-2","lt-R6d-3","lt-R6d-4","lt-R6d-5","lt-R6d-6"],six:true},
+   {scope:"net",ids:["net-RV1","net-RV2","net-RV3","net-RV4","net-RV5","net-RV6","net-RV7","net-RV8","net-RV9","net-RV10"],six:true}]}})
+   then a Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout, re-armed at expiry) and this file's Running row.
+2. When it lands (return under 20 lines): 3 lines to the owner + the frames (framesForOwner); a stop -> docs/plans/ledger_test.md and the
+   journal, fix, relaunch with resumeFromRunId and args {attempt: 2, review: []}.
+3. After the release: the two-machine test (NOTES.txt script) as a ledger row; docs/process/fable_report_1.md + _2.md "after the release"
+   lists (harness split, enums, CHANGES fold, scenarios lane, PlayerShip/Hub split), each as a lane with a retrospective after.
 
-## Owner questions
-- none open. Rulings today (README, Agents): Fable orchestrates and picks models; Fable's CLAUDE.md approved (applied bccdadd); Fable keeps
-  iterating the process after every phase toward an EXTREMELY EFFICIENT WORKFLOW; cut reply/prompt text; a method to compact at any moment.
+## Owner questions (one line each, with its default)
+- none open (today's rulings: README, Agents).
 
-## Notes
-- Unverified work is backed up to origin/backup/unverified (owner: "push soon"); version-l/main move only on a green bar.
-- A wait agent cannot wait long (the harness forces an early answer): waits are promises inside ONE workflow.
-- Lane defaults to report with the release: items D-J8a web hold round 2 s; raids adds scaling HullShare/DamageShare; 6a rip on a dummy = 10,
-  no rip sound; 6d Wraith numbers derived from the power rows; items: 4 unpriced pairs.
-- Net fingerprint: a delegate field is hashed only as its type name, so a changed WaveCrew.Count rule is not compared (accepted, documented).
+## Notes (merge risks, promised follow-ups; nothing done, nothing historical)
+- Slots proof tpslots_0/1 at ae8ae99: tooling works; solo 42/44 reds, 32 shared, 7+9 seed-only (the old summary capped at 12 lines).
+- review_tasks.json: 37 kept findings (severity >= 2) applied per scope before round 1; 9 dropped (severity 1). Cards' OPEN lines for
+  triage: BB fire-mode key (spec R, built G); Tender numbers have no spec file; DD `longlance`; no grapnel_rip sound.
+- Unverified work: origin/backup/unverified; version-l/main move only on a green bar. Lane defaults for the release notes: each lane ledger.

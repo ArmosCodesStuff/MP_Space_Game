@@ -1,0 +1,15 @@
+# CLAUDE.md v2 against bccdadd: each change in one line, with its reason
+
+1. Header: "the process docs on disk win over any older CLAUDE.md text an agent inherited" -- every agent spawned since 12:56 still carries the coordinator's cached 17.8 KB copy (a spawned agent inherits it until the owner compacts); this line settles the contradiction.
+2. Phases: "after every phase one Fable retrospective proposes process edits with numbers" -- the owner's standing ask (README, 2026-09-25); the rule itself lives in coordinator.md.
+3. Read slices: a workflow script and a task .output added to the never-read-whole list; "never paste a log: the .fails.txt holds every verdict line" -- a compact re-attaches every file Read whole (~130 KB observed); step logs are UTF-16 and the summary keeps 12 of 42 reds.
+4. NEW budget table (7 rows: reply 4 lines, return 200/400 chars, prompt 1,500 chars, ledger head 40 / POST 6, ledger_main 25, Handoff 20 / Unreleased 150, workflow return 20 lines) -- every number is one a tool refuses (schema cap, script slice, verify text step, Stop hook); replaces the prose "2-4 lines" that 236 of 525 replies broke.
+5. Replies rule moved into the table row and coordinator.md -- one place for the shape.
+6. NEW compaction paragraph (3 lines): nothing on disk is at risk; a landed result is recorded FIRST; after a compact the hook's STATE is the truth -- the owner's fear named and answered where every agent reads it.
+7. Check kind 3: "a test-phase rewrite asserts the literal its task names (`expect`) and returns it (`asserted`)" -- nothing checked that a `kind: check` rewrite still asserts the spec; the merge now refuses a mismatch.
+8. Check kind 7: "as many distinct checks as its risk needs, Fable's judgment; the blanket 3+ audit is off" -- the owner's later ruling (README: speed; the count is Fable's judgment) superseded the 3+ rule this file still carried.
+9. Seeds: "a rewritten check proves on three seeds; a red seen at one seed only is seed-dependent until three seeds say otherwise" -- 16 of ~48 round-1 failure signatures appear at one seed only; two seeds and the bar as the third cost 15 min per flake.
+10. Ladder: rungs.ps1 "writes a UTF-8 <n>_<step>.fails.txt with every verdict line (read that, never the log)" -- the runner and triage read one small file instead of decoding a UTF-16 log.
+11. Commands: `lanes.ps1 -Check / -Autosave` (the Stop and PreCompact hooks) and `agents.ps1 -Tokens` -- the compaction tooling and the per-agent token measure the retrospective needs.
+12. Trims to stay under 7 KB (no rule lost): "Never call multiplayer working" shortened; "Name a thing for its mechanism", "Godot is found by tools\find-godot.ps1" and "Integrity is asked only by verify.ps1 -Update" dropped (the first is in gate.md's generalised rule, the other two are in tools' own headers); Models shortened to two lines (the table is in coordinator.md).
+Unchanged: the two phases, the harness-is-source rule, check kinds 1-2 and 4-6, the three traps, Systems, Invariants, the ladder table. Size 7,165 bytes.

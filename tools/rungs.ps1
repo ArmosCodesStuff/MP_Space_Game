@@ -155,10 +155,21 @@ foreach ($s in $Steps) {
     default   { Log "unknown step '$s'"; exit 2 }
   }
   $code = $LASTEXITCODE
-  $fails = @(Select-String -Path $log -Pattern '\]\s+FAIL |FAILED|LINT: [1-9]|Exception' | Select-Object -First 12 | ForEach-Object { $t = $_.Line.Trim(); '   ' + $t.Substring(0, [Math]::Min(300, $t.Length)) })
+  # <i>_<step>.fails.txt (UTF-8, no BOM): EVERY verdict line of the step in log order (PASS, FAIL, FAIL LANE,
+  # Exception, LINT, SEED, the verdict), with a count header, so no reader decodes the UTF-16 log that *> writes
+  # and no cap hides a red. The summary keeps its first 12 FAIL lines and gains the counts.
+  $text = [IO.File]::ReadAllText($log)   # detects the UTF-16 BOM
+  $vl = @([regex]::Matches($text, '(?m)^[^\r\n]*(\]\s+(PASS|FAIL) |FAIL LANE|LINT: \d+|Exception|SEED \d+|SMOKE TEST.*(PASSED|FAILED)|ALL CHECKS PASSED|FAILED: )[^\r\n]*') | ForEach-Object { $_.Value.Trim() })
+  $nFail = @($vl | Where-Object { $_ -match '\]\s+FAIL ' }).Count
+  $nLane = @($vl | Where-Object { $_ -match 'FAIL LANE' }).Count
+  $nExc  = @($vl | Where-Object { $_ -match 'Exception' }).Count
+  $nPass = @($vl | Where-Object { $_ -match '\]\s+PASS ' }).Count
+  $failsFile = Join-Path $Out ("{0}_{1}.fails.txt" -f $i, ($s -replace '[^\w]', '_'))
+  [IO.File]::WriteAllText($failsFile, (("FAIL $nFail / FAIL LANE $nLane / Exception $nExc / PASS $nPass -- $s at $(Split-Path $Tree -Leaf)`n" + ($vl -join "`n") + "`n")), (New-Object System.Text.UTF8Encoding $false))
+  $fails = @($vl | Where-Object { $_ -match '\]\s+FAIL |FAIL LANE|FAILED|LINT: [1-9]|Exception' } | Select-Object -First 12 | ForEach-Object { '   ' + $_.Substring(0, [Math]::Min(300, $_.Length)) })
   $seed = (Select-String -Path $log -Pattern 'SEED \d+' | Select-Object -First 1 | ForEach-Object { $_.Matches[0].Value })
   $verdict = (Select-String -Path $log -Pattern 'SMOKE TEST.*(PASSED|FAILED)|ALL CHECKS PASSED|FAILED: |LINT: \d+' | Select-Object -Last 1 | ForEach-Object { $_.Line.Trim() })
-  Log "$i $s exit=$code $([int]((Get-Date) - $t0).TotalSeconds)s $seed | $verdict"
+  Log "$i $s exit=$code $([int]((Get-Date) - $t0).TotalSeconds)s $seed fails=$nFail lanes=$nLane exc=$nExc | $verdict"
   $fails | ForEach-Object { Log $_ }
   if ($code -ne 0) { Log "STOPPED at $i $s"; exit $code }
 }

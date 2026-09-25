@@ -4,8 +4,11 @@ The test phase starts only when every planned lane is merged into `version-l`. E
 through `tools\rungs.ps1` (`-Tree` required, so a lane is never tested as version-l by mistake): it runs
 the chain in order, stops at the first red, takes the first free of at most 4 engine slots (slot 0 for
 `bar`, `wan` and trees without slots; one chain per tree at a time) and writes
-`%TEMP%\warships_rungs\<tag>\summary.txt` (UTF-8, ends `ALL GREEN` when green) plus one log per step. A
-tag is used once (the runner clears its folder). Never start a harness directly; never paste a log.
+`%TEMP%\warships_rungs\<tag>\summary.txt` (UTF-8, ends `ALL GREEN` when green), one log per step (UTF-16:
+never grep it from bash) and `<n>_<step>.fails.txt` (UTF-8): a count header `FAIL n / FAIL LANE n /
+Exception n / PASS n`, then every verdict line in lane order. Every reader reads the fails file; a log is
+opened only for the stack frames around a throw. A tag is used once (the runner clears its folder). Never
+start a harness directly; never paste a log.
 
 ## Chains
 
@@ -17,48 +20,78 @@ tag is used once (the runner clears its folder). Never start a harness directly;
 | anything drawn | add `screens` |
 | anything a guest sees, an RPC, authority | add `six,six` |
 | everything, before the bar | `quick,solo,solo,six,screens` (`six,six` with new guest checks) |
-| every chain green | `bar`, once |
+| a fix of kind code | `quick,<rung@seed>,<base>` (the failing seed and a fresh one) |
+| a fix of kind check, or a red seen at one seed only | `quick,<rung@seed>,<base>,<base>` (three seeds) |
+| every chain green | the seed sweep, then `bar`, once |
 
-`solo@<n>` and `six@<n>` replay a seed; `wan` is the WAN test (slot 0). A new or rewritten check passes
-on two seeds; a flaky one is fixed at rung 3 until three seeds pass. Never re-run a higher rung hoping
-for a different draw.
+`solo@<n>` and `six@<n>` replay a seed; `wan` is the WAN test (slot 0). Never re-run a higher rung hoping
+for a different draw. A third of the first round's reds appeared at one seed only (32 of ~48 signatures
+shared by two seeds, 16 not): two seeds do not prove a rewritten check.
+
+## Hand-offs (pointers, never pasted evidence)
+
+- **Runner -> triage**: `green`, `head`, `tag`, `fails` (the FAIL count) and `failLines` (the header line
+  of each red step's `.fails.txt` with its path, at most 600 chars). The runner greps nothing else.
+- **Triage -> fix**: one TASK per root cause: `kind` (code / check / env / review), `rung` (the lowest step
+  with its seed), `checks` (the method names, 200), `evidence` (`<tag>/<n>_<step>.fails.txt:<line>` plus
+  the seed and the one asserted literal, 300), `expect` (for kind check: the literal the rewritten check
+  must assert and its source, e.g. `375; cards/battleship.md broadside`), `after` (the FAIL LANE it
+  follows, or empty), `owner` (the lane and job it traces to), `files`, `unblocks`.
+- **Fix -> merge**: `verdict` (200), `ledger` (the POST heading), `asserted` (kind check: the literal the
+  rewritten check now asserts and the method). The merge refuses a kind-check fix whose `asserted` differs
+  from `expect` or whose commit has no `Checks:` line naming the method; the merge commit appends one row
+  to `docs/plans/ledger_test.md` (`| round | task | kind | rung@seeds proved | traces to | commit |`) and
+  deletes the fix lane's ledger file.
 
 ## Order of the test phase
 
 1. **Harness proof and slots proof** first: `quick,solo` on two test trees on slots 1 and 2 at once
    (one Haiku runner each). Red = a `rungs.ps1` or harness task before anything else; loop until solo is
    green at least once. Nothing else has run in the engine since the build phase began.
-2. **The ability audit** (owner: 3+ engine checks per class ability and drive row): a Haiku agent maps
-   every `ClassDef.Abilities` and drive row to its checks (grep the `Checks:` lines and the harness
-   methods into a table, no judgment); Opus writes the missing checks per hull tier; one gate; merged
-   only after step 1 is green.
-3. **Rounds**: five chains at once (`quick,solo` x2, `quick,six` x2, `quick,screens`) on the 4 slots,
-   one Haiku waiter per chain (start ONE chain, wait under 10 minutes per call, return its summary lines
-   and the FAIL / Exception / LINT lines of its red step grouped by check method, at most 40 lines).
-   Triage (Opus high, ONE agent) reads the union and returns tasks, each traced to a lane through the
-   ledgers' job lists (`git bisect` over the job commits if unclear), tagged: code wrong (Opus fix, high)
-   or check wrong (knife edge, stale pick, clock from the input: Sonnet fix with the exact rewrite). At
-   most 4 fixes in flight; each proved at the lowest rung that covers it, in its own worktree, then
-   merged (Haiku). A triage with zero tasks and no green STOPS the workflow (never re-run the same five
-   chains). The round is re-run once after the fixes merge.
-4. **Extras**: frames by eye (Opus medium; trust `LINT: 0` for layout, read a frame only for new art,
+2. **Review fixes** (`args.tasks`, kind review: nothing to reproduce; make the check fail on the old code
+   first, then fix) before round 1. The blanket 3+ coverage audit is OFF (owner, 2026-09-25: the check
+   count is Fable's judgment); with `args.audit` it runs only after round a is green: ONE Haiku mapping
+   agent (grep `Checks:` lines and method names to a table, no judgment), Opus writers only for the
+   groups with a gap, each audit tree proved by `quick,solo@<seed>,solo` on a free slot before its merge.
+3. **Rounds** (at most 6): five chains at once (`quick,solo` x2, `quick,six` x2, `quick,screens`) on the
+   4 slots, one Haiku runner per chain (start ONE chain, wait under 10 minutes per call). Triage (Opus
+   high, ONE agent) reads the five `.fails.txt` files (and `ledger_test.md`: a check listed there that
+   fails again is a regression task, kind code) and returns at most 8 tasks. A FAIL LANE task is fixed
+   first; tasks with a non-empty `after` are deferred to the next round (a thrown lane leaves the world
+   broken for the lanes after it). Fixes: at most 4 in flight in the pooled worktrees `wt_fix0..3`
+   (`git checkout -B wt/<key> version-l` + `clean -fdq`, never `-x`: a cold tree costs 100 s of import
+   per `quick`), Opus for code, Sonnet for a wrong check (the rewrite asserts `expect`; never loosened),
+   each reproduced at the lowest rung, proved per the chain table, then merged (Haiku). A `stopped_context`
+   gets one continuation agent from its ledger; a red gets the one Opus-high escalation. A triage with
+   zero tasks and no green STOPS the workflow; so does a round whose fails count did not shrink after
+   merges (not converging: the coordinator decides).
+4. **Seed sweep** after the first green round: `solo` x3 at fresh seeds and `six` x1 on the 4 slots
+   (~6 min). A red is one triage flagged seed-dependent; its fixes are kind check unless the card says
+   otherwise; then one more round.
+5. **Extras**: frames by eye (Opus medium; trust `LINT: 0` for layout, read a frame only for new art,
    frames to the owner: Drake, Rusty, siege, player ships); the network lane's owed guest checks.
-5. **The bar** once (`verify.ps1 -Update`: rungs 1-5 x3, map, snapshot, manifest, integrity; ~13 min,
+6. **The bar** once (`verify.ps1 -Update`: rungs 1-5 x3, map, snapshot, manifest, integrity; ~13 min,
    slot 0). Red: `git checkout -- .` drops its regenerated files, then one triage; the fix is proved at
    the lowest rung, never by another bar; then the bar once more. Two bars for one fix means the ladder
    was skipped.
-6. Green: a `VERIFIED:` commit; push BOTH `version-l` and `main`; pack; GitHub release (standing OK).
-   The release agent folds every merged ledger's `CHANGES entry` into Unreleased and one honest Known
-   broken, deletes the previous release section (the CHANGES protocol), and moves durable reasoning to
-   `DESIGN.md` / traps to `docs/TRAPS.md`.
+7. Green: the release agent first folds CHANGES (every merged ledger's `CHANGES entry` into Unreleased, at
+   most 150 lines of what it IS; the Handoff rewritten to 20 lines: merged, owed, where the detail is;
+   `ledger_test.md`'s rows folded into Known broken / fixed and the file deleted; the previous release
+   section deleted per the CHANGES protocol; durable reasoning to `DESIGN.md`, traps to `docs/TRAPS.md`),
+   adds the `verify.ps1` text-step caps (Handoff 20, Unreleased 150, ledger head 40 / POST 6, ledger_main
+   25) in the same commit, then the `VERIFIED:` commit; push BOTH `version-l` and `main`; pack; GitHub
+   release (standing OK). `NOTES.txt` carries the 6-line two-machine script (host, invite, join, what to
+   look at, where the SEED line is, paste both log tails into `docs/plans/ledger_net_owed.md`).
 
 ## Rules that bite here
 
 - Escalate one rung only when the lower one is blind to it or has failed twice; always come back down.
 - A test-phase red is fixed in a fix lane from `version-l`, never in the test trees.
 - Never call multiplayer "working": rung 5 is loopback; the two-machine test with the owner and a friend
-  is owed after every release.
-- After the features: python scenario tools and smoke tests covering every mechanic for every class,
-  every ability, and the interactions between heavies, bosses and lights for every weapon and platform
-  (owner, standing).
+  is owed after every release and is recorded as a ledger row, not prose.
+- After the release: the scenarios lane (owner, standing): a scenario table in the harness (class,
+  ability, foe, geometry, expected literal) reached by `scenario=<id>` through `run.ps1`, and
+  `tools/scenarios.py` generating rows from the cards and reading a `.fails.txt` into a table; the
+  interactions matrix (heavies x bosses x lights per weapon and platform) is rows of that table.
 - Engine slots: at most 4; the PC is not the limit, shared folders and ports were.
+- Prompts point at this file and carry at most 1,500 characters; the rules above are not re-pasted.
