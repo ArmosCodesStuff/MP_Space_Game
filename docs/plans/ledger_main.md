@@ -10,9 +10,9 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   Watchdog Monitor (agents.ps1 -Minutes 30 every 10 min, 30-min timeout) re-armed at each expiry while it runs.
 
 ## Landed (verdict first; delete the row once its action is done)
-- Round 1 at 68ad42c (task ww2f2xd5l, STOPPED 16:08): solo x2 and screens red as expected; both quick,six chains (slots 2/3) died at 15:34
-  with no verdict, no fails file, rungs.ps1 gone (the harness has no name-based kills; my kill ran 15:30). Action: reproduce six on slots 2+3
-  in the foreground (dbg6_s2/s3, console in the scratchpad), fix (kind env), then relaunch with args {attempt: 3, review: []} (round 1 reruns).
+- Round 1 at 68ad42c (task ww2f2xd5l, STOPPED 16:08): both quick,six chains died at 15:39:45 with no verdict: their runners' launch
+  call was moved to the background and killed its children when it ended (tester.md rule added). Action: runner prompt fixed (launch
+  call returns at once); relaunch with args {attempt: 3, review: []}; dbg6_s2/s3 (six on slots 2+3 at once, foreground) proves the slots.
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task ww2f2xd5l (relaunched 15:30 with grouped fixes, fixed fix-merge branch and asserted gate); take its return as above.

@@ -96,4 +96,7 @@ shared by two seeds, 16 not): two seeds do not prove a rewritten check.
   `tools/scenarios.py` generating rows from the cards and reading a `.fails.txt` into a table; the
   interactions matrix (heavies x bosses x lights per weapon and platform) is rows of that table.
 - Engine slots: at most 4; the PC is not the limit, shared folders and ports were.
+- A tool call that is moved to the background (past its timeout) kills its child processes when it ends: the call that
+  starts `rungs.ps1` with Start-Process returns at once (PID only); every wait is a separate call under 10 minutes.
+  Two round-1 `six` chains died this way on 2026-09-25 with no verdict and no fails file.
 - Prompts point at this file and carry at most 1,500 characters; the rules above are not re-pasted.
