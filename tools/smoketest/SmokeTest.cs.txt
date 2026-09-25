@@ -7022,7 +7022,8 @@ public partial class _Test : Node
         await SetClass(ShipClass.Carrier);
         var s = Me;
         async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        List<Wing> Ps() => Nodes<Wing>().Where(w => w.Carrier == s && w.Kind == WingKind.Patrol && !w.Done).ToList();
+        var old = new HashSet<Wing>();                                      // craft an earlier run sent out: never this run's
+        List<Wing> Ps() => Nodes<Wing>().Where(w => w.Carrier == s && w.Kind == WingKind.Patrol && !w.Done && !old.Contains(w)).ToList();
         for (int run = 0; run < 3; run++)
         {
             var at = VaryNear(yonder, 300f); float head = VaryAngle();
@@ -7030,6 +7031,7 @@ public partial class _Test : Node
             s.Sl("super").Left = 0; s.Sl("super").Cool = 0; s.Sl("warp").Cool = 0; s.Statuses.Clear(Status.Disabled);
             H.ClearSelection();
             Hold(); await Wait(0.2); Hold();
+            old.Clear(); old.UnionWith(Ps());
             s.UseAbility("super", 0);
             double c0 = s.Clock;
             while (s.Clock < c0 + 12 && Ps().Count(w => w.FighterPhase == "Circle") < 3) { Hold(); await Frame(); }
