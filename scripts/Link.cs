@@ -9,16 +9,13 @@ using System.Reflection;
 // WebRtc* classes that core GodotSharp declares; this file owns what the game needs to know about it:
 // the plugin row and the presence test, the channel table (and which channel an RPC rides, and how
 // much waits on it), the sealing rule, the one way to hang up, the STUN rows and the walk over them,
-// and the transport's timings, the beat's included (QuietMs, BeatMs: they replace ENet's SetTimeout
-// and RoundTripTime). R2 moves the session onto it and deletes ENet's ThrottleConfigure and PeerDisconnectLater.
+// and the transport's timings, the beat's included (QuietMs, BeatMs). It replaced the old transport's
+// timeouts, throttle, round-trip statistic and disconnect: Net's session runs on WebRtcMultiplayerPeer.
 //
 // A PLUGIN UPGRADE IS A ROW: `Plugin` names the library, its version, the native class it registers
 // and its files; nothing else in the game names them. It is a readonly record, so it is part of the
 // build's fingerprint: two builds on different plugins do not meet. A NEW STUN SERVER IS A ROW of
 // `Servers`, which is NOT readonly: which servers a PC asks is not part of what two builds agree on.
-//
-// TRAP WHILE S1 IS IN THE TREE: Net's private `Link(ENetPacketPeer, int)` hides this class inside Net
-// (CS0119), so until R2 deletes that method only code outside Net names `Link`.
 public static class Link
 {
     public sealed record PluginRow(string Name, string Version, string NativeClass, string Extension, string ReleaseDll);
@@ -106,7 +103,7 @@ public static class Link
     public static StunRow[] Servers = { new("stun:stun.l.google.com:19302"), new("stun:stun.cloudflare.com:3478") };
     // The row the next walk starts at: the one that last answered in this process, or past the end when
     // none did, so that later gathers skip STUN rather than wait for it again. HOST and JOIN set it back
-    // to 0 (R2).
+    // to 0.
     public static int StunFirst;
     public const int GatherMs = 2000;               // a STUN row that has not answered by then is passed over (§5.2)
     public const int LinkMs = 12000;                // a reply taken has this long to connect (§3.3 A6)

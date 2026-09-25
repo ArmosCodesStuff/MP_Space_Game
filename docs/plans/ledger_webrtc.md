@@ -869,3 +869,39 @@ subject. Harness `Vary` takes floats (`Vary(3f, 20f)`).
   any WebRTC object with the build text; Join of a damaged code; `Link.Hang` on a pending entry frees it);
   the rewritten channel check (`r <= Link.Channels().Length`); deleted with what they tested: router
   scenarios, reveal/describe/public-IP/stale-mapping checks, the two throttle checks (plan §9).
+
+#### R2b POST
+- verdict: done; typecheck 0 errors (real GodotSharp.dll), `verify.ps1 -Quick` ALL CHECKS PASSED (0
+  findings, UNUSED ANYWHERE: 0). engine-unproven: rungs owed in the final test phase.
+- Net: both desks. Host = `CreateServer(Link.Channels())` + every row opened (`Rendezvous.ListenFrom`
+  swapped to `port` for the open, restored), `Addresses` for the panel; `Invite()` (paste row, walks),
+  `Invite(knock)` (address row, no STUN), `MakeInvite` -> an Entry with a `Link.Gather`, sealed in
+  `PumpSession` (Strip, Fit with `Adapters`, `Encode` + `Rendezvous.Copy` on the paste row); `TakeCode`,
+  `Replied` (Waiting + gather Done only), Linking deadline `Link.LinkMs` -> hung up + a fresh paste invite;
+  `InviteLifeS` sweep; `Full` = players + pending >= 8. Guest: `Join(text)` by `Rendezvous.PathFor`
+  (reply / other build / damaged named before any peer), `Answer` = `CreateClient(invite.Id)` + a Gather
+  on peer 1 (the invite's candidates added once sealed), `ReplyCode`/`ReplyAt`, `FreshFrom`/`FreshReply`;
+  a paste guest's deadline = reply + ReplyWindowS + LinkMs; a timeout on the address row is left to the
+  12 s/5 s deadline (so the silent port reads "No answer ... in 12 s"). `JoinedBy`, `_rowOf` (host).
+  Every hang-up `Hang` -> `Link.Hang` (a live peer's deferred to the frame's end); goodbye = the hearer
+  hangs up, `_lettingGo` polled until `GetPeers()` is empty or 2 s. `PretendAt` = Code|Auth
+  (`Claimed(where)`). Paste guest: no retries, §3.9's text; host: a fresh invite on a paste guest's drop.
+- Deleted: ENet everywhere, Router.cs (-> Adapters.cs: `Lan()`, `Overlays()`), describe/reach/reveal/
+  public IP (api.ipify.org), `Net.Link`/throttle/`server` flag, fakeigd.py + run.ps1's start, wan.py's
+  ENet relays + run.ps1's `--relay`, the router scenarios, the describe/IsPublic/stale-mapping/carrier-
+  grade checks, the two throttle checks, the reveal check and Shots' describe block (51 kept as the host
+  panel; 52 gone until R3). `Rendezvous.Clipboard` default reads only where the display server has a
+  clipboard (headless ClipboardGet is an engine ERROR); `Rendezvous.Copy` is the write seam.
+  `Rendezvous.Entry` grew Conn/Name/Made/Until/Code; `Pending.All`.
+- Defaults taken: the paste guest's give-up is ReplyWindowS + LinkMs after its reply (the plan says "the
+  countdown runs out first"; the host still needs its 12 s to link a reply taken at the last second).
+  SessionMenu is minimal (INVITE A FRIEND, COPY INVITE, the reply box, the address labels, the guest's
+  reply + seconds left, MAKE A FRESH REPLY); R3 sets §6's words and the frames.
+- checks written (not run): solo `R2SwitchChecks` (JOIN: reply / another build's invite / PretendAt Code /
+  damaged; HOST: 3 invites -> 3 entries, ids, codes; reply box: invite / stranger's reply / words / a real
+  reply -> Linking / the same reply again / a hung-up entry's reply; full at 8; offline: all hung up,
+  listener closed); rewritten: "127.0.0.1:9" -> "Nothing is hosting at" < 3 s, the silent TCP port
+  P(19481) -> "No answer ... in 12 s" 11.8-12.6 s with "ask the host for an invite code", the mid-
+  handshake check on P(19481), the channel check `r <= Link.Channels().Count`, the host's listener-port
+  check (was the LAN address), `NetworkIdle` wording; `PretendProtocol` -> `PretendAt = Auth` in guest2.
+- next: R2c, the roles moved (§10.3) and R2's owed rung-5 checks.

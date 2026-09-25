@@ -1337,8 +1337,8 @@ public partial class Hub : Node2D
     }
 
     // In packets of at most 24 raiders. A full failed-mission raid is 40, and in one packet that
-    // was 1.5 KB -- past the internet's usual 1.2 KB, so ENet split it, and an unreliable packet
-    // with one piece lost is lost whole: every raider froze for that update. Each packet names its
+    // was 1.5 KB -- past the internet's usual 1.2 KB, so the transport split it, and a packet with
+    // one piece lost waits for that piece: every raider froze for that update. Each packet names its
     // raiders, so each stands alone.
     private const int RaidersPerPacket = 24;
     // EVERY HOST-OWNED THING THE WORLD CAN DAMAGE, on one clock. A raider's packet carries where

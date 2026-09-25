@@ -12,11 +12,9 @@
 #     datagram waits the path's delay +/- jitter and is lost at its rate, drawn from the pair's seed;
 #   * POST /box/blackhole?s=<seconds>: every proxied datagram is dropped for that long;
 #   * GET /box/stats: what the box has carried, as JSON; POST /box/quit ends it, printing that;
-#   * --relay <listen>:<host>: the plain UDP relay the ENet -Wan run still joins through (a guest joins
-#     127.0.0.1:<listen>); it goes when R2 moves -Wan onto the pair proxy.
 # Exits by itself after --life seconds, printing what it carried.
 #
-#     python wan.py --http 19480 --path 90,25,2 --life 1300 [--relay 28115:27115 ...]
+#     python wan.py --http 19480 --path 90,25,2 --life 1300 [--shift 100]
 import argparse, heapq, json, random, select, socket, struct, threading, time, zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -25,7 +23,6 @@ ap = argparse.ArgumentParser()
 ap.add_argument('--http', type=int, default=19480)
 ap.add_argument('--path', default='0,0,0')              # one-way ms, jitter ms, loss %
 ap.add_argument('--life', type=float, default=1300)
-ap.add_argument('--relay', action='append', default=[])
 # engine slots (tools\rungs.ps1): the box runs for EVERY run, not just -Wan, so its own fixed local
 # ports (the STUN responder, the two silent UDP ports, the silent TCP port) must shift with the
 # caller's slot too, or two concurrent chains collide binding the same socket. --http already arrives
@@ -145,29 +142,6 @@ def proxied(n, side, data):
         st['lost'] += 1
 
 
-# ---- the ENet relays (-Wan, until R2) ----
-relays = []
-for spec in args.relay:
-    listen, host = (int(x) for x in spec.split(':'))
-    front = udp('127.0.0.1', listen)
-    r = {'front': front, 'host': host, 'upstream': {}, 'guest_of': {}, 'rng': random.Random(listen), 'sent': 0, 'lost': 0}
-    relays.append(r)
-    readers[front] = ('front', r)
-
-
-def relayed(r, sock, data, frm):
-    if sock is r['front']:
-        if frm not in r['upstream']:
-            u = udp('127.0.0.1', 0)
-            r['upstream'][frm], r['guest_of'][u] = u, frm
-            with lock:
-                readers[u] = ('back', r)
-        ok = later(r['upstream'][frm], data, ('127.0.0.1', r['host']), r['rng'])
-    else:
-        ok = later(r['front'], data, r['guest_of'][sock], r['rng'])
-    r['sent' if ok else 'lost'] += 1
-
-
 # ---- the control port ----
 class Control(BaseHTTPRequestHandler):
     def log_message(self, *a):
@@ -250,8 +224,6 @@ while time.monotonic() < end:
                 stats['silent_udp'][str(arg)] += 1
             elif what == 'pair':
                 proxied(arg[0], arg[1], data)
-            else:
-                relayed(arg, s, data, frm)
     now = time.monotonic()
     with lock:
         while queue and queue[0][0] <= now:
@@ -262,6 +234,4 @@ while time.monotonic() < end:
                 pass
 
 control.shutdown()
-for r in relays:
-    print(f"wan {r['front'].getsockname()[1]}->{r['host']}: {r['sent']} delivered, {r['lost']} lost, {len(r['upstream'])} guests", flush=True)
 print('BOX: ' + json.dumps(stats), flush=True)
