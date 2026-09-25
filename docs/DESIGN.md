@@ -1138,6 +1138,27 @@ The mechanisms only; the class rows and keys that press them are slice 6 (ledger
   none and drops its own. Named so a row's default is "no effect". Raiders fire only while latched, so a
   blocked latch is also a silent laser.
 
+## Class kits, lane A slice 6b: the freighters' keys (2026-09-25)
+
+Decisions are ledger_kits6b.md's D33-D42 (numbered on from slice 3's; slice 5 also used D33-D37).
+- **The paint rides a slot** (6b-D33): `PaintOn`/`Painted` keep the paint in the pilot's `guns` slot (seconds left,
+  the target's NetId). Slots are in the host report, so a guest's sentry copies and its F refusal read the host's
+  paint with no new field or RPC.
+- **A primary is a field** (6b-D35): `ClassDef.Primary` {Guns, Lob, Beam}, read in ONE place (`FireOnce`). A new kind
+  of primary is a member and its one fire method; a class names its kind.
+- **Time on target is Lines rows, not a new weapon** (6b-D36): one `Lines.Tot` strike per gun in reach, same tick;
+  "landed" is `Hub.Deployed` (a throw in flight is no gun).
+- **What a round does to what holds a spot is its Shots row** (6b-D42): `ShotDef.Versus`/`VersusMult`/`Through`.
+  A shield's one door past it is `IShielded.TakeThrough`, reached through `Dealt.Deal(.., through)`; nothing else
+  ever passes a shield.
+- **A shockwave reaches `Targeting.Shaken`** (nothing in flight): the `Immovable` is HELD (Disabled), the rest thrown.
+  A practice dummy is `IStatused` so a hold means the same on it (its launcher quiet).
+- **A gravity well is a host list** (6b-D39, `Wells.cs`): craft move in the world state already sent; every peer
+  draws the well from ONE raise that carries its life (`Fx.Raise(.., time)`: a non-warning effect may say how long
+  it lasts). What moves is `Targeting.Pullable`; a latched or towed craft is owned by its latch or its tow.
+- **The Tender waits for one heal door** (6b-D37): its lance and Repair field heal through slice 4's `Mend.Give`,
+  never a second path.
+
 ## Traps that have already cost time
 
 - **A burst does not mean a kill.** A boss's death sweeps its adds out through `Hub.RaiderDown` with their

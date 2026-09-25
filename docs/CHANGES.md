@@ -36,6 +36,18 @@ history pick the work up from it alone. Update it in the same change as the code
 
 ## Handoff — read this first
 
+**2026-09-25 (worktree `WarShips_wt_kits6b`, branch `wt/kits6b`): kits lane A slice 6b, the freighters -- FREIGHTER
+done (spotter paint on the wire, Time on target on F, the Bubble over every friendly hull on Q, Redeploy on E) and
+BASTION done (the siege mortar, a Lob primary; Bunker buster on F; Shockwave on Q, holding what it cannot throw;
+Gravity well on E, `Wells.cs`). The TENDER is NOT built: its lance and Repair field heal through slice 4's
+`Mend.Give` (D37), and kits4 is not merged into version-l, so it keeps its old kit until a later batch.
+Compiles, rung 2 green; engine-unproven: every check is owed in the final test phase** -- rung 3 twice (the
+LaneA6b* solo checks, LaneA6bBusterBossChecks in the boss fight, LaneA6bSiegeChecks in the siege, and every rewritten
+row, sweep and table check), rung 4 (frames 79c-79g), rung 5 `six,six` (LaneA6bPaintWireHost/Guest,
+LaneA6bTotHost/Guest). Wire: Shots.Spotter = 8, Shots.Buster = 9, Fx.Tot = 15, Fx.Well = 16, Beam.Tot = 9,
+Lines.Tot = 3, Missiles.Mortar = 2, FxShape.Vortex (all appended; parallel slice-6 lanes will collide on these
+numbers). Detail and decisions (6b's D33-D42; kits5 also used D33-D37): `docs/plans/ledger_kits6b.md`.
+
 **2026-09-25 (worktree `WarShips_wt_kits5`, branch `wt/kits5`): kits lane A slice 5 built -- F12 (`Melee.cs`),
 F11 (`Prism.cs`: bands, the split onto `Lines` rows, reflected rounds, rays), F14 (the paint and `ITurretHost.Prefer`;
 the sentry throw to the cursor and the recall, replacing Collect; `Raider.Call`; `Decoys.cs`: the flares spawn row,
@@ -310,9 +322,9 @@ whenever the ship is alive, on every hull that mounts it.
 | Battleship | main guns | fire mode | broadside (3 volleys, 14 s cooldown) | point defence (passive) |
 | Destroyer | main guns | fire mode | missile burst (magazine of 3) | R reload (9 s), point defence (passive) |
 | Carrier | fighters: attack | — | bomber strike | R recall, point defence (passive) |
-| Freighter | main gun | fire mode | bubble (400 soaked, 8 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
+| Freighter | spotter (a hit paints 5 s) | -- | time on target (every gun in 1500 u of the paint, 40 a line, 16 s) | Q bubble (400 soaked, 8 s, every friendly hull in it), E redeploy (a 150 u ring, 1.0 s), R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
 | Tender | main gun | fire mode | overdrive (x2 rate of fire, 8 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
-| Bastion | main gun | fire mode | shockwave (1000 u, or a boss held 3 s) | R sentry: throw to the cursor (600 u, 0.8 s) or recall one within 60 u, point defence (passive) |
+| Bastion | siege mortar (150-1100 u, 1.4 s) | -- | bunker buster (180; 360 on a boss or structure; 12 s) | Q shockwave (1000 u; a boss, structure or dummy held 3 s), E gravity well (900 u, 280 u, 6 s), point defence (passive) |
 | Sniper | main gun | fire mode | railgun (3 s charge, locked, 150 at 2500 u) | |
 | Warrior | main guns | fire mode | rush (2.5 s, then an EMP) | |
 | Warden | main gun | fire mode | six hunter-seekers | point defence (passive), 10 DPS |
@@ -594,6 +606,25 @@ outstanding from the batch of 2026-09-23.)*
 ---
 
 ## Unreleased
+
+### Class kits, lane A slice 6b: the Freighter and the Bastion (2026-09-25, worktree wt/kits6b)
+
+**Freighter** (hull 450): its gun is a **spotter** (800 u, 31.25 every 1.25 s) whose hit PAINTS the target for 5 s,
+and the paint rides the pilot's slots to every peer. **F Time on target**: the spotter and every landed sentry
+within 1500 u of the paint fire one 14 u rail line each, in the same tick, 40 to every hostile on it, every 16 s
+(refused NO PAINT / COOLING). **Q Bubble** now covers every friendly hull inside it -- pilots, sentries, fleet craft.
+**E Redeploy**: every sentry folds and lands 1.0 s later on a 150 u ring round the hull, 120 deg apart, each with its
+hull, every 20 s. Sentries: 650 u, 5 every 0.5 s. Fire mode and the cargo gun are gone.
+**Bastion** (hull 420): its gun is a **siege mortar** lobbed onto the cursor (150-1100 u, 1.4 s in the air, 58.75 in
+110 u every 2.35 s). **F Bunker buster**: one slow round (380 u/s, 1400 u) that stops on the first body, 180 -- 360
+on a boss or structure, 90 through a pylon's shield -- every 12 s. **Q Shockwave**: throws what is within 1000 u
+clear and HOLDS a boss, a structure or a practice dummy 3 s. **E Gravity well**: at the cursor up to 900 u, 280 u,
+6 s, drags loose light craft in at 200 u/s and heavies at 100; bosses, structures, anything in flight and anything
+latched stay put; every 22 s. Fire mode and the sentries are gone.
+**Known broken:** engine-unproven (rungs 3-5 owed). The Tender still has its old kit (fire mode, sentries,
+Overdrive x2 on F): its Mending lance, Overdrive field, Repair field and Resupply wait for slice 4's heal door.
+Time on target and the Buster are not lifted by Weapons or REACH points (a default). The freight_main_gun item keeps
+its id on all three (a saved id).
 
 ### Class kits, lane A slice 5: melee, the prism, owned bodies, tow and hurl (2026-09-25, worktree wt/kits5)
 

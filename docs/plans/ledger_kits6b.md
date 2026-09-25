@@ -289,3 +289,19 @@ Done: J2, J3, J4 (a3265f7, 43b0953, 19cfffa). Next is kits6b-J5; no PRE written.
 - Checks written: LaneA6bWellChecks (solo, after LaneA6bBusterChecks), the well run (4) in LaneA6bSiegeChecks, frame
   79g_gravity_well (Shots.cs.txt LaneA6bWellFrame). Test phase owes: solo x2, screens.
 - Next: kits6b-J7 (Tender Mending lance; D37 needs slice 4's Mend.Give).
+
+### kits6b-J7 / kits6b-J8 · WAIT (D37)
+- version-l is still a8a5e81: kits4 (Mend.Give, scripts/Mend.cs on wt/kits4) is not merged. Per D37 the Tender jobs
+  (J7 lance + Beam primary, J8 Overdrive field / Repair field / Resupply) wait; no second heal door is built. The
+  Tender keeps its old kit (fire mode, sentries, Overdrive x2 on F). A later batch: merge version-l once kits4 is in,
+  then J7, J8, and a J9 update of the record.
+
+### kits6b-J9 · PRE · the record (CHANGES Unreleased + Handoff, DESIGN section) -- tier opus
+- Files: docs/CHANGES.md, docs/DESIGN.md. HEAD d3aaf977031d7b70eb62320f32001934f6ea185e · b8ea288 e6fb246
+### kits6b-J9 · POST
+- Verdict: typecheck 0 errors, verify -Quick ALL CHECKS PASSED. CHANGES: Handoff + Unreleased (Freighter, Bastion;
+  the Tender's wait in Known broken) and the default-keys table's Freighter / Bastion rows; DESIGN: "Class kits, lane A
+  slice 6b" (6b-D33..D42, the D-number overlap with kits5 named). engine-unproven: rungs owed in the final test phase.
+- Lane state: J1-J6 built; J7/J8 (Tender) WAIT on kits4 in version-l (D37). Test phase owes for J1-J6: rung 3 x2
+  (LaneA6bSpotter/Tot/BubbleCover/Redeploy/Mortar/Buster/Well, LaneA6bBusterBossChecks, LaneA6bSiegeChecks, every
+  rewritten check), rung 4 (79c-79g), rung 5 six x2 (LaneA6bPaintWire*, LaneA6bTot*).
