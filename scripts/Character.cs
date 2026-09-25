@@ -279,7 +279,7 @@ public static class Character
             int at = Array.FindIndex(Progression.All, u => u.Id == spentId); // an id this build no longer has counts for nothing
             if (at >= 0) Spent.Add(at);
         }
-        // Every part id read from the file goes through Equipment.Migrated first (see there). A
+        // A part id this build does not know reads as nothing (the slot takes the class's own kit). A
         // dropped part the file has fitted where it may not fly is never lost: it goes into the hold.
         // That is a part that no longer fits its slot (the slot takes the class's own kit), a chip in
         // a slot this pilot's peak has not opened, and a chip over its kind's cap (Equipment.Sanitize,
@@ -289,7 +289,7 @@ public static class Character
         foreach (ShipClass sc in Enum.GetValues(typeof(ShipClass)))
             if (c.HasSectionKey("equipment", sc.ToString()))
             {
-                var ids = ((string)c.GetValue("equipment", sc.ToString(), "")).Split(',').Select(Equipment.Migrated).ToArray();
+                var ids = ((string)c.GetValue("equipment", sc.ToString(), "")).Split(',');
                 var clean = Equipment.Sanitize(sc, ids, Peak);
                 for (int k = 0; k < ids.Length && k < Equipment.Slots; k++)
                     if (Equipment.ById(ids[k]) is { Kit: false } part && clean[k] != part.Id) displaced.Add(part.Id);
@@ -300,12 +300,12 @@ public static class Character
         GearHold.Clear();
         if (c.HasSection("gear_hold"))
             foreach (var gid in c.GetSectionKeys("gear_hold"))
-                if (Equipment.Migrated(gid) is var mid && Equipment.ById(mid) != null && (int)c.GetValue("gear_hold", gid, 0) is var n && n > 0)
-                    GearHold[mid] = GearHold.GetValueOrDefault(mid) + n;
+                if (Equipment.ById(gid) != null && (int)c.GetValue("gear_hold", gid, 0) is var n && n > 0)
+                    GearHold[gid] = GearHold.GetValueOrDefault(gid) + n;
         foreach (var gid in displaced) Stow(gid);
         Unclaimed.Clear();
         Unclaimed.AddRange(((string)c.GetValue("loot", "unclaimed", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                           .Select(Equipment.Migrated).Where(gid => Equipment.ById(gid) is { Kit: false }));
+                           .Where(gid => Equipment.ById(gid) is { Kit: false }));
         PaidKills.Clear();
         foreach (var t in ((string)c.GetValue("loot", "paid", "")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             if (long.TryParse(t, out var serial)) PayOnce(serial);

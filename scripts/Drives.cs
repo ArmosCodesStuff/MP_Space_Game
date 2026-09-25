@@ -15,8 +15,8 @@ using System.Linq;
 //
 // A NEW DRIVE ROW fills in: its Id (the slot's id and its Hints card's), its Kind (Jump: held,
 // charged, released into a relocation the host prices; Surge: a timed lift on the ability path),
-// its AbilityDef Row (Default = V, Kind, Name, Short, Blurb, Refuse, Show, and Press / SpeedStat for
-// a Surge), its StatRows (the numbers, on the sheet, so gear can move them) and its word on the
+// its AbilityDef Row (Default = V, Kind, Name, Short, Blurb, Refuse, Show, and Press / SpeedStat /
+// StrafeStat for a Surge), its StatRows (the numbers, on the sheet, so gear can move them) and its word on the
 // controls line. Abilities.For appends the class's drive row after its own, so it has a slot on the
 // wire and a box on the bar; it is not in ClassDef.Abilities, so no level wall and no Resupply
 // reaches it. The code reaches the slot by the hull's own row (s.Drive.Id), never by Warp or Boost;
@@ -96,13 +96,15 @@ public static class Drives
         {
             new() { Group = "Boost", Id = "surge_time",     Label = "Lasts",          Base = 3,   Unit = "s", Dec = 1 },
             new() { Group = "Boost", Id = "surge_cooldown", Label = "Cooldown",       Base = 15,  Unit = "s", Dec = 1, Inverse = true },
-            new() { Group = "Boost", Id = "surge_lift",     Label = "Speed and strafe", Base = 1.5, Unit = "x", Dec = 2 },
+            new() { Group = "Boost", Id = "surge_lift",     Label = "Speed",          Base = 1.5, Unit = "x", Dec = 2 },
+            new() { Group = "Boost", Id = "surge_strafe",   Label = "Strafe",         Base = 1.5, Unit = "x", Dec = 2 },
         },
         Row = new AbilityDef
         {
             Id = "boost", Name = "Boost", Short = "BOOST", Default = Key.V,
             Blurb = "Tap V: more top speed, thrust and strafe for a few seconds, then it recharges. It does not break a web. Hold Shift and A/D to slide the hull sideways, the nose where it is.",
-            SpeedStat = "surge_lift",                       // one F1 lift: top, thrust, strafe speed and strafe thrust
+            SpeedStat = "surge_lift",                       // F1 lifts: top speed and thrust...
+            StrafeStat = "surge_strafe",                    // ...and, a row of its own, strafe speed and strafe thrust
             Press = (s, _) => Surge(s),
             Refuse = (s, _) => Refusal(s),
             Show = (s, _) => SurgeShow(s),
