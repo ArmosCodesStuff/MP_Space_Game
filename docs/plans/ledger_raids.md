@@ -84,3 +84,19 @@ webbed by an add while the beam's lane is up; NetKillExp pays this pilot ExpFor(
 Not covered on the wire (open): a guest above 2L paid 0 (the guest's level is not varied in the MP run),
 L18 P2 add hull/shot on a guest (proved by table in RaidsAddsTableChecks instead).
 engine-unproven: rungs owed in the final test phase (six x2).
+## J6 PRE -- tier opus -- record: CHANGES Unreleased + Handoff (+ Known broken), DESIGN (beam paragraph true now, raids v2 section, three traps), Enemies header, stale Missions/Waves text. HEAD 17a7af1. Files: CHANGES 599d498b, DESIGN 8545bdea, Enemies caddc1c5, Missions 724e20ae, Waves 2870a344.
+## J6 POST -- done. typecheck 0 errors; quick ALL PASSED at this commit. CHANGES: Handoff line + Unreleased
+entry (Known broken: engine-unproven; a guest's stretched-beam lane). DESIGN: the beam paragraph true now,
+history lines B/E marked replaced, a "Raids v2" section, three traps. Enemies header, Missions "300 x" and
+LevelStep text, Waves LevelStep text.
+### WHAT THE FINAL TEST PHASE OWES (lane G)
+- rung 3 `solo` x2 (two seeds): RaidsFoundationChecks, RaidsAddsTableChecks, raiders 6a (unchanged, now on
+  `lone` squads), 6b (N7, N8, 2250 u / 700 burn), 6c patrol, RaidsSquadChecks (N1-N6, N9, N10, N17), the
+  arena beam block (arming, any-pin start, floor literals, floor at start, live floor, overdue, PD, pair,
+  kill sweep 0 squads/posts), RaidsArenaAddsChecks (N12 live, N16, N13 refill ~31 s, N15), the siege clock,
+  the failed-mission raid (squad ids, 4200 u), blockade (Squad.Station/Circuit), hunts (gank doctrine).
+- rung 5 `six` x2: RaidsHostAddsWire (ahost) + RaidsGuestAddsWire (aguest), mission 1; watch the mission-1
+  timing (host adds ~5 s before its kill; the guest waits 15 s for MissionWon).
+- rung 4 `screens`: 49a_squad_inbound, 49b_squad_lock_lines, 49_heavy_astern_missile (read by eye once), LINT: 0.
+- Risks to watch at rung 3: the Solo arena now holds its adds (Raids.Held) until RaidsArenaAddsChecks and
+  frees them before the kill; the lane-A burn/out-door clears use RaiderDown.

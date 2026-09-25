@@ -13,7 +13,7 @@ using System.Linq;
 //   Beating a level -- whichever boss held it -- unlocks the next; the TIO selects the newest when
 //   the host opens it. The first-clear bonus is paid once a level, not once a boss.
 //   REWARDS, per pilot, each computed on the pilot's own machine:
-//     the kill   round(200 x boss level / pilot level)  (a level-5 boss for a level-10 pilot: 100)
+//     the kill   round(300 x boss level / pilot level)  (a level-5 boss for a level-10 pilot: 150)
 //     +250       the first time that pilot beats that level
 //     +100       for completing the mission
 //     credits    2000 x S(L) x (1 + 0.5(P-1)), split evenly among the P pilots (solo earns the most)
@@ -165,7 +165,7 @@ public static class Missions
     public static int Kind { get => _kind; set => _kind = value >= 0 && value < Kinds.Length ? value : Bounty; }
 
     // A BOSS GETS QUICKER AND LONGER-ARMED WITH THE LEVEL, gently: one percent a level, compounding,
-    // beside the 10% a level its hull and damage already take. A pilot's reach and rate of fire
+    // beside the 2.5% a level its hull and damage already take (LevelStep). A pilot's reach and rate of fire
     // climb with gear and points, and a boss whose wind-ups and ranges never moved would be fought
     // from further out and dodged more easily every level -- the fight would get EASIER as the
     // numbers got bigger. What it touches: how long it takes to wind up and how fast a fired body

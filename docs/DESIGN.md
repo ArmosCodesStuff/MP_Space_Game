@@ -277,16 +277,16 @@ levels once a second and ship and hauler state ten times a second; a guest's own
   *(As shipped THEN. The 50 DPS pass has since moved every weapon figure in that line -- a
   fighter's shot and a bomber's torpedo are `fighter_damage` and `torpedo_damage` in `Stats.cs`,
   and the rows are the truth. The utility hull is still 120: `Economy.UtilityHull`.)*
-- **B (DONE; escorts 3 hull)**: the beam charges **6 s**; meanwhile the boss launches **2 light fighters, 45° to port and to
-  starboard**, straight at the player, their boost lasting until they reach it (a pin to hold the pilot
-  in the beam unless point defence — or, for a fighter pilot, their guns — kills them); live **3 s**,
+- **B (DONE; the escorts since REPLACED by raids v2's squad wave 1)**: the beam charges **6 s** (never under the
+  escape floor); its pin now comes from the fight's adds; live **3 s**,
   **0.25 s ticks, 50** (half the old tick, twice as long); the boss **raider red with a white skull**.
 - **C (DONE — carrier measured 19.07 DPS; guns 5.9 a shell; control 1080 u)**: **battleship total DPS = 1.25 × carrier's**; **carrier range = 1.5 × battleship's**; the
   battleship's main guns fire **shells at 520 u/s** (their own stat since gear came: a missile rack
   must not change the guns), **not tracking**.
 - **D (DONE)**: capital ships **turn in place at ≤ 5% of top speed**, about 10°/s; no strafing.
-- **E (DONE)**: heavies **snub-nosed (option b)**; they **wait at the map's edge** nearest their target and,
-  once it is pinned, **boost at 700% until 300 u away**; missile within 500 u.
+- **E (DONE; the edge wait since REPLACED by raids v2)**: heavies **snub-nosed (option b)**. They no longer
+  wait at the map's edge: a heavy flies in its squad, posts astern and lasers pinned or not; its missile
+  (within its row's reach) flies only at a pinned target.
 - **F (DONE)**: **Miner hull / Salvager hull** upgrades, +10% a level, **125 cr to start** (25% above the other
   +10% rows), ×1.25 a level.
 - **G (DONE)**: the **equipment menu** (I, and a button): Weapon, Engines, Shield (health), Hull (mods), Utility,
@@ -399,15 +399,15 @@ Recorded here so every chunk builds from the written word, not from memory.
   the game does not do, and a title screen that lies about the ship is worse than a title screen
   that breaks loudly when the ship changes. The smoke test covers it, so it breaks loudly.
 
-- **The death beam is a trap you can spring or break.** It opens with two escorts, not a red line:
-  they shiver at the launch point while coming round onto the pilot, boost in on a triple-length
-  plume, flank **port and starboard**, and web. From the moment they launch **the boss holds its
-  position**, and turns only to face the pilot -- the one turn the beam allows. **The charge begins
-  when the web has actually pinned the pilot** (the owner's call, 2026-09-22: it used to begin on a
-  prediction made at launch, and a pilot running or slipping behind the boss saw it charge before
-  anything had pinned them). Kill the escorts first and it still comes, once their web would have
-  landed -- a beam you can fly out of; and escorts that neither pin nor die cannot stall it past 5 s
-  after launch (`BeamArmMax`: under 6 s, so the beam's whole run ends inside the 15 s before the ram).
+- **The death beam is a trap you can spring or break.** It opens armed, not with a red line: from
+  that moment **the boss holds its position** and turns only to face the pilot -- the one turn the
+  beam allows. **The charge begins when ANY web has pinned the pilot** (raids v2, owner: an add's web
+  starts it; the beam launches no craft of its own -- its old two escorts are the fight's squad wave 1,
+  from level 1), and nothing pinning cannot stall it past 5 s (`ArmMax`: under 6 s, so the beam's
+  whole run ends inside the 15 s before the ram). **The escape floor**: the wind-up is never shorter
+  than 2 s + 55/46 x (the pinners' row hull on the pilot) / (0.7 x 57.6) + 0.6 s, taken as the
+  charge starts AND again whenever a new pinner latches during it -- so a pilot who strips the web
+  always has 0.6 s to leave the line (numbers_curve_raids_items.md §2.1: priced on the slowest class).
   **Beat the lights and the beam becomes dodgeable; ignore them and it cannot miss.**
 - **From the charge to the beam's end the boss is HARD LOCKED**: no turn, no move. The red line it
   shows is the line it fires, so the telegraph is a promise, and the pilot's last decision is
@@ -955,7 +955,35 @@ future Godot version changes one, this table is the record of what was intended.
 removed lines equal the engine defaults first — ask the engine — and keep the reasoning in this file,
 where the editor cannot delete it.*
 
+## Raids v2: squads and a boss fight's adds (lane G, 2026-09-25)
+
+The spec is `docs/plans/raids_squads_adds.md` with the owner's rulings (`docs/plans/README.md`, "Raids and
+bosses"); the numbers are `numbers_curve_raids_items.md` §2.
+- **Every raider flies in a squad** (`Squads.cs`), a squad of one included (doctrine `lone`). The squad is
+  host bookkeeping: it picks the target (its doctrine row: `lone`, `patrol` holding a ring, `gank` hunting the
+  loneliest pilot), holds a formation at its slowest member's pace, commits as one when its anchor is inside
+  its commit range, and hands out **sticky posts** from one post book per target (13 front, 5 rear).
+  Everyone lands together (time on target), on the boost unless the squad burned inside 10 s. A warp
+  (`Lead.Jumped`) or a fleeing target re-forms it. A heavy never pins at any level: its CC is the webifiers
+  in its squad.
+- **A boss fight's adds are a row** (`Waves.All` "bounty_adds"): N(L) = none to L5, then one more every 3
+  levels to 12, dealt H,L,L,L; the boss row's `AddsFloor` (the Rusty's 2) sets its first squad's pinners
+  from L1. Slots come on the arena clock (`Raids.TickGarrison`, which replaced Hub's) at k x 30 s or at boss
+  hull 1 - k/slots; a wiped slot returns 30 s later with the same kinds. A first fill pays
+  `EnemyDef.Exp x level / pilot level` (`Missions.ExpFor`, one formula with the boss kill) through the kill
+  branch alone, to every pilot at its own level (`NetKillExp`, reliable).
+- **Not built here**: the radar diamond / bracket / rim chevron, the victim's "GANK:" HUD line and the name
+  labels (`raids_squads_adds.md` §1e) -- Radar.cs and the HUD are other lanes' files.
+
 ## Traps that have already cost time
+
+- **A burst does not mean a kill.** A boss's death sweeps its adds out through `Hub.RaiderDown` with their
+  hull left, and a withdrawn hunter goes quietly (`Raids.CallOff`): only `Raider.TakeDamage`'s own kill
+  branch pays (`Hub.PayKill`). Paying from `RaiderDown` or the burst would pay a boss kill for every live add.
+- **A Garrison row must name its Mission.** `Waves.For` matches `WaveDef.Mission` against the brief's; a
+  Garrison row with none would answer every mission, and a bounty's clock would draw the siege's rows.
+- **`Raids.Tick` must stay ahead of the raiders' `_Process`** (`Hub._Process` calls it first): a squad
+  ticked after its members hands them last frame's target, posts and time on target.
 
 - **A harness port literal that bypasses `P()` collides between engine slots.** `rungs.ps1` runs up to
   `-Slots` chains at once; slot n gives its own TEMP/APPDATA and passes the user arg `port-shift=100n`, and every port

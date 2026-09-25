@@ -152,7 +152,7 @@ public static class Waves
     //   the boss    the highest the base owner has beaten (1 before any)
     //   the route   how far along the escort the wave comes: 1 at the first, +0.5 a wave
     // A fresh base's first wave with a light load is about 1.4. The threat makes the hunters' hull and
-    // damage (the missions' 10% a level), their numbers (a light more a patrol every 3 levels, 3 more
+    // damage (the missions' 2.5% a level, Missions.LevelStep), their numbers (a light more a patrol every 3 levels, 3 more
     // at most) and, very slightly, their speed and turning (1% a level, 10% at most).
     public const double CreditsPerThreat = 1000, ThreatPerWave = 0.5;
     public static double EscortThreat(double loadCredits, double partyLevel, double partyToughness, int highestBoss, int wave) =>
