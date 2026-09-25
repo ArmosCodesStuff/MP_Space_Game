@@ -840,3 +840,32 @@ Landmarks as of 143788c:
 Env: `.\verify.ps1 -Quick` is at the REPO ROOT (not tools\). Commit messages: write the file with
 `[IO.File]::WriteAllText(path, text, (New-Object Text.UTF8Encoding $false))` -- Out-File's BOM lands in the
 subject. Harness `Vary` takes floats (`Vary(3f, 20f)`).
+
+#### R2b PRE
+- job R2b, tier opus (fresh agent from the R2b handoff). HEAD 8d8c20c. Intent: THE SWITCH, game side in
+  one edit: Net's session on `WebRtcMultiplayerPeer` (Host = `CreateServer(Link.Channels())` + both rows
+  opened; Net is both desks; `Invite()` (paste row, walks STUN), `TakeCode(text)`, `Join(text)` by
+  `Rendezvous.PathFor`; the Pending entry grows Conn/Name/Made; `LinkMs` deadline; `InviteLifeS`; the
+  goodbye's WebRTC body; `Hang` -> `Link.Hang`; retries only for an `Auto` row; `PretendAt` flags
+  Code|Auth); DELETE ENet, Router's UPnP family (Router.cs -> Adapters.cs: Lan, Overlays), describe/reach/
+  reveal/public-IP, fakeigd.py + run.ps1's start, the router scenarios and reveal/describe/throttle
+  checks, S1's `Net.Link`/throttle/`server` flag; `CouldNotReach` "ask the host for an invite code";
+  SessionMenu INVITE A FRIEND / reply box / JOIN box (minimal; R3 adds the words and frames); Game.cs
+  `netBusy`; GodotStub WebRtc stubs; harness `Drop` -> `Link.Hang` deferred, the channel check on
+  `Link.Channels().Length`, `HostAt` without the +1000.
+- SPLIT (default taken): the harness's ROLES MOVE in R2c (guest by invite through the courier, guest2's
+  knocks, the paste guest's drop/return, the live-holder check, the solo typed failures, wan.py's ENet
+  relay). R2b keeps every address-joining role compiling and meaningful: `Join(address)` now knocks the
+  host's listener, which `Host(port)` opens from `port`.
+- files: scripts/Net.cs 4afaa0da, scripts/Link.cs 12360a50, scripts/Rendezvous.cs 513eddbc,
+  scripts/Router.cs 8649d1eb (-> Adapters.cs), scripts/SessionMenu.cs f5bcdcf5, scripts/Game.cs 0041e7a9,
+  scripts/Hub.cs 4b2a8b23 (comment), typecheck/GodotStub.cs 0179d8a2, tools/smoketest/SmokeTest.cs.txt
+  f5278188, tools/screens/Shots.cs.txt 20b45d75, tools/smoketest/run.ps1 b965bc88,
+  tools/smoketest/fakeigd.py a8838032 (deleted), tools/rungs.ps1 d65c7956 (comment).
+- checks planned: solo `R2SwitchChecks` (NetworkIdle offline and after GoOffline; a host's INVITE makes a
+  paste-row entry Waiting with the invite's id, the invite text decodes to that id and the host's proto;
+  the full text at MaxPlayers; a reply for an unknown id refused with §6.1's sentence; an invite pasted into
+  the reply box refused; a reply pasted into JOIN refused; Join of another build's invite refused before
+  any WebRTC object with the build text; Join of a damaged code; `Link.Hang` on a pending entry frees it);
+  the rewritten channel check (`r <= Link.Channels().Length`); deleted with what they tested: router
+  scenarios, reveal/describe/public-IP/stale-mapping checks, the two throttle checks (plan §9).
