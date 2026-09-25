@@ -19,3 +19,6 @@ local.config.ps1
 *.uid
 dist/
 play/
+
+# Python bytecode from running a model or a tool
+__pycache__/

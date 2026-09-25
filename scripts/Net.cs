@@ -30,11 +30,14 @@ public partial class Net : Node
     public static Net I { get; private set; }
 
     // Single player runs as a host with nobody connected, so IsHost is true offline -- and while
-    // a join is still connecting: until a host has actually answered, this is still your world.
+    // a join is still in its handshake: until a host has accepted this build, this is still your world.
     public static bool IsHost => I == null || I._isHost;
-    // Connected, not merely "a peer object exists": while a join is still handshaking
-    // there is nobody to send to, and an RPC then is an engine error.
-    public static bool IsOnline => I != null && I._peer != null
+    // IN A SESSION AND LET IN, not merely "the link is up". ENet reports a link connected the moment
+    // it comes up, before Godot's handshake has let either end in; a guest that sent then was
+    // throwing packets at a host that had not admitted it -- an engine error there
+    // ("SYS_COMMAND_AUTH") -- and read itself as HOSTING in its own HUD and panel meanwhile. A
+    // guest is online once the host's welcome arrives (NetWelcome); until then it is Connecting.
+    public static bool IsOnline => I != null && I._inSession && !I.Connecting && I._peer != null
         && I._peer.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected;
     public static int LocalId => I == null ? 1 : I._localId;
 
@@ -46,7 +49,8 @@ public partial class Net : Node
     // a host gone or a connection failed, the peer already reads Disconnected, so the leaving
     // routes that mattered most were the ones that never saved.
     private bool _inSession;
-    // JOIN pressed, no host has answered yet (the address is looked up, then connected to).
+    // JOIN pressed, and the host has not let this pilot in yet: the address looked up, connected
+    // to, the handshake, then the host's welcome.
     public bool Connecting { get; private set; }
 
     // Everyone in the session, host included. Keyed by peer id.
@@ -70,6 +74,9 @@ public partial class Net : Node
     public event Action<int> PlayerJoined;
     public event Action<int, PlayerInfo, bool> PlayerLeft;          // peer, who it was, whether it said goodbye
     public event Action<string> Status;
+    // A guest's session is open both ways: the host has let it in, and from here what it sends
+    // reaches the host (see NetWelcome). The moment a guest introduces itself.
+    public event Action Admitted;
 
     // Fired whenever LocalId or the host/guest role changes: offline, hosting,
     // connected, dropped. A world rebuilds its ships on this, because every ship is
@@ -89,19 +96,44 @@ public partial class Net : Node
         // THE HANDSHAKE, before a peer counts as connected at all (see Protocol).
         sm.AuthCallback = Callable.From<long, byte[]>(OnAuth);
         sm.AuthTimeout = 10;                               // an internet round trip, with room to spare
-        sm.PeerAuthenticating += id => sm.SendAuth((int)id, BitConverter.GetBytes(PretendProtocol ?? Protocol));
-        Multiplayer.PeerConnected    += id => OnPeer((int)id, true);
-        Multiplayer.PeerDisconnected += id => OnPeer((int)id, false);
+        sm.PeerAuthenticating += OnAuthenticating;
+        Multiplayer.PeerConnected    += OnPeerJoined;
+        Multiplayer.PeerDisconnected += OnPeerLeft;
         Multiplayer.ConnectedToServer += OnConnected;
         // A failed or dropped connection falls back to offline -- and a DROP is retried (OnHostGone).
         // Without this a guest sat forever with IsHost false: the hub stopped and nothing said why.
-        Multiplayer.ConnectionFailed   += () => Failed(CouldNotReach);
+        Multiplayer.ConnectionFailed   += OnConnectionFailed;
         Multiplayer.ServerDisconnected += OnHostGone;
         GoOffline();
         // The close button goes through Game.Quit like every other way out. This is the one node
         // that always exists, and what it owns -- the socket and the router ports -- is what a
         // closed window must not strand.
         GetTree().AutoAcceptQuit = false;
+    }
+    private void OnAuthenticating(long id) => ((SceneMultiplayer)Multiplayer).SendAuth((int)id, BitConverter.GetBytes(PretendProtocol ?? Protocol));
+    private void OnPeerJoined(long id) => OnPeer((int)id, true);
+    private void OnPeerLeft(long id) => OnPeer((int)id, false);
+    private void OnConnectionFailed() => Failed(CouldNotReach);
+
+    // EVERYTHING _Ready HOOKED INTO THE TREE'S MULTIPLAYER COMES OFF, AND EVERY SOCKET IS CLOSED
+    // (invariant A). The tree's multiplayer outlives this node by a few steps of the engine's own
+    // teardown; left to it, this node's handlers, its handshake callback and a peer made here -- all
+    // of them objects the scripting side answers for -- were let go only as that side shut down.
+    public override void _ExitTree()
+    {
+        var sm = (SceneMultiplayer)Multiplayer;
+        sm.PeerAuthenticating -= OnAuthenticating;
+        sm.PeerConnected -= OnPeerJoined;
+        sm.PeerDisconnected -= OnPeerLeft;
+        sm.ConnectedToServer -= OnConnected;
+        sm.ConnectionFailed -= OnConnectionFailed;
+        sm.ServerDisconnected -= OnHostGone;
+        sm.AuthCallback = new Callable();
+        foreach (var (p, _, _) in _lettingGo) p.Close();
+        _lettingGo.Clear();
+        _peer?.Close(); _peer = null;
+        sm.MultiplayerPeer = null;
+        if (I == this) I = null;
     }
 
     // This node outlives every scene: the batched save's clock, the goodbye's last second, and the
@@ -156,7 +188,7 @@ public partial class Net : Node
             (_peer as ENetMultiplayerPeer)?.GetPeer((int)id)?.PeerDisconnectLater();
         }
         else GoOffline($"That host is on a different build of the game (theirs {theirs:x8}, yours {PretendProtocol ?? Protocol:x8}): "
-                     + "you both need the same zip. Playing offline.");
+                     + "you both need the same release (Esc menu, bottom). Playing offline.");
     }
 
     private static int Fingerprint()
@@ -215,16 +247,76 @@ public partial class Net : Node
         _ => v.ToString(),
     };
 
+    // The handshake is done: this is a guest now, with its own id, and the world is rebuilt as one.
+    // It stays Connecting -- sending nothing -- until the host's welcome (NetWelcome).
     private void OnConnected()
     {
         _localId = Multiplayer.GetUniqueId();
-        _isHost = false; Connecting = false; _inSession = true;
+        _isHost = false; _inSession = true;
         // the host that let us in is the one to come back to; an unreachable one is given up on in 12 s
         LastHost = _joinAddress; _dropClock = -1; Attempt = 0; CanReconnect = false; _rejoin = false; _hostSaidBye = false;
-        (_peer as ENetMultiplayerPeer)?.GetPeer(1)?.SetTimeout(32, 4000, 12000);
+        if ((_peer as ENetMultiplayerPeer)?.GetPeer(1) is { } host) Link(host, 12000);
         Players.TryAdd(_localId, new PlayerInfo());
-        Say($"Connected as player {_localId}.");
         SessionChanged?.Invoke();
+    }
+
+    // THE HOST'S FIRST WORD TO A GUEST IT HAS LET IN, and the moment that guest is online. Godot
+    // admits a peer once each end has said "done", and each end starts sending the moment it has
+    // heard the other's: a guest's first ship reports left right beside its own "done" and, on a
+    // link that reorders, overtook it -- to a host still waiting for that "done", which threw them
+    // away with an engine error. The host sends this only once it has let the guest in, so a guest
+    // that waits for it sends nothing early. (Its reliable words were never at risk: they queue
+    // behind the "done" on the same channel. Its ship reports go unreliably, on another.)
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetWelcome()
+    {
+        if (_isHost || !_inSession || !Connecting) return;
+        Connecting = false;
+        RpcId(1, nameof(NetWelcomed));
+        Say($"Connected as player {_localId}.");
+        Admitted?.Invoke();
+    }
+
+    // THE ANSWER TO THE WELCOME, and the moment the host may send a guest anything unreliable.
+    // Godot lets a guest in on the guest's "done", which the guest may send before the HOST's "done"
+    // has reached it -- and if the host's was lost, what the host then broadcast (and every other
+    // guest's report it passed on) reached a guest still waiting for it, which threw it all away
+    // with an engine error. The welcome travels behind the host's "done" on the reliable channel,
+    // so this answer proves the "done" arrived. Until it comes the guest is sent only reliable
+    // words (they queue behind the "done" too) and nothing of a world it has not reported.
+    private readonly HashSet<int> _heard = new();
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void NetWelcomed()
+    {
+        int from = Multiplayer.GetRemoteSenderId();
+        if (_isHost && Players.ContainsKey(from)) _heard.Add(from);
+    }
+    public static bool Hears(int peer) => I != null && I._heard.Contains(peer);
+    // The host's one way to send to every guest outside a world's own traffic (which waits for the
+    // guest's report of its world: Hub.RpcToSector): only to guests that have answered the welcome,
+    // leaving out `except` (0 leaves out nobody). Nothing on a guest, and nothing offline.
+    public static void ToHeard(int except, Node node, StringName method, params Variant[] args)
+    {
+        if (I == null || !IsHost || !IsOnline) return;
+        foreach (int peer in I._heard.ToList())
+            if (peer != except) node.RpcId(peer, method, args);
+    }
+
+    // A LIVE LINK, set up the same at both ends (a guest's to its host, the host's to each guest).
+    //   How long a silent peer is kept: ENet gives one up once its resends have run out (the
+    //   limit, 32) AND QuietMs has passed -- or at `maxMs`, whichever comes first. On a fast link
+    //   the resends run out in about a second, so QuietMs is what a stall on either machine has to
+    //   outlast: a first scene load, a garbage-collection pause, a Wi-Fi roam. At 4 s any of them
+    //   ended the session.
+    //   The throttle never falls. At its defaults ENet throws unreliable packets away BEFORE they
+    //   are sent whenever a round trip comes back slower than the last few -- every jitter spike on
+    //   the internet, and worst right after a burst of reliable sends -- and those are every ship,
+    //   raider, boss and base report a player draws from. Deceleration 0 keeps every one.
+    private const int QuietMs = 8000;
+    private static void Link(ENetPacketPeer p, int maxMs)
+    {
+        p.SetTimeout(32, Math.Min(QuietMs, maxMs), maxMs);
+        p.ThrottleConfigure(5000, 2, 0);
     }
 
     // ── session lifecycle ────────────────────────────────────────────────────
@@ -252,7 +344,8 @@ public partial class Net : Node
     // quit the same way as one whose Wi-Fi dropped. So whoever leaves on purpose says so first:
     // a guest told goodbye does not try to get back in, and a host told goodbye does not hold the
     // pilot's place. The goodbye must actually leave: the peer is let go gently -- ENet sends what
-    // is queued, then disconnects -- and pumped for up to a second.
+    // is queued, waits for it to be acknowledged, then sends its own disconnect -- and is pumped
+    // until that is done or LetGoMs has passed (see Shutdown: every link that is up goes this way).
     [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void NetBye()
     {
@@ -264,23 +357,34 @@ public partial class Net : Node
     private bool _hostSaidBye;
     private readonly HashSet<int> _leaving = new();
     private bool _peerGone;                                  // the other end is already gone: nobody to say goodbye to
-    private bool SayGoodbye()
+    private void SayGoodbye()
     {
-        if (!_inSession || Connecting || !IsOnline || SkipGoodbye || _peerGone) return false;
+        if (!_inSession || Connecting || !IsOnline || SkipGoodbye || _peerGone) return;
         if (_isHost) Rpc(nameof(NetBye)); else RpcId(1, nameof(NetBye));
-        return true;
     }
-    private ENetMultiplayerPeer _letGo;
-    private ulong _letGoUntil;
-    private const ulong LetGoMs = 1000;
+    // HOW LONG A GOODBYE IS GIVEN. It is two reliable packets in turn: the game's NetBye, then --
+    // once that is acknowledged -- ENet's own disconnect, the one the other end acts on. Over the
+    // internet a round trip is up to 230 ms (90 +/- 25 ms each way in the smoke test's), and a
+    // packet lost on the way (2-5% of them) is resent after the round trip plus four times its
+    // variance -- up to half a second on a link a few seconds old, doubled for a second loss of the
+    // same packet. Two losses fit in 2 s; the 1 s it was given let one run-of-the-mill loss past it,
+    // and the other end then waited out its whole timeout instead.
+    // EVERY GOODBYE KEEPS ITS OWN TIME. Ending a session let any earlier goodbye go at once, so a
+    // pilot that pressed HOST and then quit a second later cut its own goodbye off; a quitting game
+    // waits for these (NetworkIdle).
+    private readonly List<(ENetMultiplayerPeer peer, ulong until, bool server)> _lettingGo = new();
+    private const ulong LetGoMs = 2000;
     private void PumpLetGo()
     {
-        if (_letGo == null) return;
-        if (_letGo.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Disconnected) { _letGo = null; return; }   // already let go
-        bool busy = _letGo.Host != null && _letGo.Host.GetPeers().Any(p => p.GetState() != ENetPacketPeer.PeerState.Disconnected);
-        if (!busy || Time.GetTicksMsec() >= _letGoUntil) EndLetGo(); else _letGo.Poll();
+        for (int i = _lettingGo.Count - 1; i >= 0; i--)
+        {
+            var (p, until, _) = _lettingGo[i];
+            if (p.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Disconnected) { _lettingGo.RemoveAt(i); continue; }   // already let go
+            bool busy = p.Host != null && p.Host.GetPeers().Any(x => x.GetState() != ENetPacketPeer.PeerState.Disconnected);
+            if (!busy || Time.GetTicksMsec() >= until) { p.Close(); _lettingGo.RemoveAt(i); }
+            else p.Poll();
+        }
     }
-    private void EndLetGo() { if (_letGo == null) return; _letGo.Close(); _letGo = null; }
 
     // ── reconnecting ────────────────────────────────────────────────────────
     // A guest whose host drops without a goodbye goes offline -- its own world keeps running --
@@ -289,8 +393,10 @@ public partial class Net : Node
     public static readonly double[] RetryAt = { 2.0, 8.0, 14.0 };   // seconds after the drop
     private const int RetryTimeoutMs = 5000, JoinTimeoutMs = 12000;
     private bool BackIn => _retrying || _rejoin;           // a try to get back in to the host just lost, not a JOIN
-    private string CouldNotReach => $"Could not reach {_joinTarget}. Check the address; if the host plays from home, "
-                                  + "their MULTIPLAYER panel says what their router still needs. Playing offline.";
+    // What a typed address that never answered means, and the one next step: an address is for the
+    // same network or a virtual one, and the host's firewall has to let it in.
+    private string CouldNotReach => $"No answer from {_joinTarget} in {JoinTimeoutMs / 1000} s. An address works on the same network or over Radmin VPN, "
+                                  + "and the host must allow Warships through Windows Firewall; for friends elsewhere, use the host's room code. Playing offline.";
     public string LastHost { get; private set; } = "";
     private string _joinAddress = "";
     public int Attempt { get; private set; }
@@ -341,10 +447,10 @@ public partial class Net : Node
     {
         if (_inSession) SaveLocalCharacter();
         Character.SaveIfPending();
-        bool bye = SayGoodbye();
+        SayGoodbye();
         _inSession = false;
         _joinGen++;                                        // a lookup still in flight connects to nothing
-        Shutdown(bye);
+        Shutdown();
     }
 
     // ── internet hosting ────────────────────────────────────────────────────
@@ -398,7 +504,7 @@ public partial class Net : Node
     private bool _publicDone;
     private int _hostPort;
     // single player (and between sessions): no socket, no lookup, no router job
-    public bool NetworkIdle => _peer == null && _ipReq == null && _routerJobs == 0 && _letGo == null;
+    public bool NetworkIdle => _peer == null && _ipReq == null && _routerJobs == 0 && _lettingGo.Count == 0;
 
     private const string Firewall = " If friends still cannot get in, allow Warships (Godot) through the Windows firewall, for private AND public networks.";
 
@@ -528,8 +634,12 @@ public partial class Net : Node
     public bool Host(int port = DefaultPort)
     {
         StopReconnecting();
-        Close();                                           // a session in progress ends properly: saved, guests told
-        EndLetGo();                                        // ...and its socket let go now: this port is about to be bound again
+        Close();                                           // a session in progress ends properly: saved, the others told
+        // A HOST's old socket is let go now: it holds the port about to be bound again. A GUEST's is
+        // left to finish -- its goodbye is still on the way out, and cut off, the host it left held
+        // its place as a drop.
+        foreach (var (old, _, _) in _lettingGo.Where(g => g.server).ToList()) old.Close();
+        _lettingGo.RemoveAll(g => g.server);
         var p = new ENetMultiplayerPeer();
         if (p.CreateServer(port, MaxPlayers) != Error.Ok)
         {
@@ -614,12 +724,21 @@ public partial class Net : Node
         System.Threading.Tasks.Task.Run(() =>
         {
             string ip = "";
-            try { ip = System.Net.Dns.GetHostAddresses(host).FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)?.ToString() ?? ""; }
+            try { ip = DialAddress(System.Net.Dns.GetHostAddresses(host)); }
             catch (Exception) { /* no such name: reported below */ }
             if (!Game.ShuttingDown) Callable.From(() => ConnectTo(gen, ip, port)).CallDeferred();
         });
         return true;
     }
+
+    // What a name's lookup hands ENet: its IPv4 address when it has one, else its IPv6 one -- a name
+    // with only an AAAA record read as "no such host". Link-local IPv6 is left out: it means
+    // something only on the adapter it came from, which a name cannot say.
+    public static string DialAddress(IEnumerable<System.Net.IPAddress> found) =>
+        found.Where(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                         || (a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && !a.IsIPv6LinkLocal))
+             .OrderBy(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 0 : 1)
+             .FirstOrDefault()?.ToString() ?? "";
 
     private void ConnectTo(int gen, string ip, int port)
     {
@@ -631,7 +750,8 @@ public partial class Net : Node
             return;
         }
         // ENet's own timeout as well, so it never keeps its default 30 s (the deadline is _Process's)
-        foreach (var server in p.Host.GetPeers()) server.SetTimeout(32, BackIn ? 2000 : 4000, BackIn ? RetryTimeoutMs : JoinTimeoutMs);
+        int deadline = BackIn ? RetryTimeoutMs : JoinTimeoutMs;
+        foreach (var server in p.Host.GetPeers()) server.SetTimeout(32, Math.Min(QuietMs, deadline), deadline);
         _peer = p; Multiplayer.MultiplayerPeer = p;
     }
 
@@ -646,15 +766,23 @@ public partial class Net : Node
         else Character.Save();
     }
 
-    private void Shutdown(bool bye)
+    private void Shutdown()
     {
-        EndLetGo();
         if (_peer != null)
         {
-            if (bye && _peer is ENetMultiplayerPeer e && e.Host != null)
-            {   // let the goodbye out (see NetBye)
+            // EVERY LINK THAT IS UP IS LET GO GENTLY, goodbye or not: what it has queued goes first --
+            // the goodbye (NetBye), or a refused player's own build, which the host must hear to say
+            // it refused one. A knock hung up the moment it read the host's build, and when its own
+            // had been lost on the way it was never resent: the host never knew. Not when the other
+            // end is already gone, nor for the smoke test's crash.
+            // (the status first: a link the engine has already closed -- a drop, a failed connect -- has
+            // no host to ask, and asking is an engine error)
+            if (!SkipGoodbye && !_peerGone && _peer is ENetMultiplayerPeer e
+                && e.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Disconnected && e.Host != null
+                && e.Host.GetPeers().Any(p => p.GetState() == ENetPacketPeer.PeerState.Connected))
+            {
                 foreach (var p in e.Host.GetPeers()) if (p.GetState() == ENetPacketPeer.PeerState.Connected) p.PeerDisconnectLater();
-                _letGo = e; _letGoUntil = Time.GetTicksMsec() + LetGoMs;
+                _lettingGo.Add((e, Time.GetTicksMsec() + LetGoMs, e.GetUniqueId() == 1));
             }
             else _peer.Close();
             _peer = null;
@@ -670,7 +798,7 @@ public partial class Net : Node
         // An explicit offline peer rather than null: IsServer() and GetUniqueId() then
         // answer 1 / true offline instead of depending on engine fallback behaviour.
         Multiplayer.MultiplayerPeer = new OfflineMultiplayerPeer();
-        Players.Clear(); _asked.Clear();
+        Players.Clear(); _asked.Clear(); _heard.Clear();
         _hostSaidBye = false; _leaving.Clear(); _peerGone = false;
     }
 
@@ -681,8 +809,13 @@ public partial class Net : Node
             // A friend whose connection dies without a goodbye (their PC sleeps, their Wi-Fi
             // drops) is let go in about 10 s instead of ENet's 30, which left a ghost ship
             // drifting through everyone's world. The host's to set: only it holds a real
-            // connection to each guest (a guest hears of the others through the host).
-            if (_isHost) (_peer as ENetMultiplayerPeer)?.GetPeer(id)?.SetTimeout(32, 4000, 10000);
+            // connection to each guest (a guest hears of the others through the host). Then the
+            // welcome, first of everything this host sends it: the guest is let in (NetWelcome).
+            if (_isHost && (_peer as ENetMultiplayerPeer)?.GetPeer(id) is { } guest)
+            {
+                Link(guest, 10000);
+                RpcId(id, nameof(NetWelcome));
+            }
             // TryAdd: their identity may have arrived a moment before the join event.
             Players.TryAdd(id, new PlayerInfo());
             Say($"Player {id} joined.");
@@ -690,7 +823,7 @@ public partial class Net : Node
         }
         else
         {
-            Players.Remove(id, out var info); ForgetAsks(id);
+            Players.Remove(id, out var info); ForgetAsks(id); _heard.Remove(id);
             bool onPurpose = _leaving.Remove(id);
             Say(onPurpose || !_isHost ? $"Player {id} left." : $"Player {id} dropped.");   // only the host hears goodbyes
             PlayerLeft?.Invoke(id, info ?? new PlayerInfo(), onPurpose);
@@ -757,6 +890,41 @@ public partial class Net : Node
     // out of the tree its Multiplayer is null: a peer's 20 Hz ship report landing in that moment
     // threw on the arena host after every check had passed.
     public static int SenderOf(Node node) => node.IsInsideTree() ? node.Multiplayer.GetRemoteSenderId() : 0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRANSFER CHANNELS: ONE PER STREAM. An ordered unreliable packet is delivered only if nothing
+// sent after it ON THE SAME CHANNEL has arrived first (ENet discards it otherwise), and every one
+// of these streams used to share channel 0 (a WebRTC peer maps channels to data channels alike): on
+// a link that reorders, a base report was thrown away because a ship report sent a millisecond
+// later got there first -- a guest saw the hauler's hold start seconds late, by lottery. Each
+// stream is ordered only against itself now. The reliable channel 0 carries everything else.
+//
+// A NEW STREAM IS A ROW: a constant here with a number no other row has, read by its own
+// [Rpc(..., TransferChannel = NetChannels.X)] ON THE HUB -- the one node at the same path in every
+// world, since an unreliable report can land after its world has gone (Hub.NetBase). A rung-3 check
+// reads every Rpc attribute and fails an UnreliableOrdered one off the Hub, on channel 0, off this
+// table, or sharing a channel with anything else.
+// ENet opens 255 channels at both ends (channel count 0 at CreateServer and CreateClient), and a
+// transfer channel N is ENet channel N + 1, so a row may go up to 254.
+// ─────────────────────────────────────────────────────────────────────────────
+public static class NetChannels
+{
+    // RELIABLE, and still its own: reliable RPCs share one ordered channel by default, so one lost
+    // packet holds up everything behind it until it is resent -- and a firing battleship sends a
+    // shell every quarter second. Shells, torpedoes and the missiles shot down (in order with their
+    // torpedoes) go here, so a lost one never delays a telegraph, a raider's arrival or the economy.
+    public const int Cosmetic = 1;
+    public const int Ships = 2;         // Hub.NetShipState: each pilot's own ship, from its owner, 20 Hz
+    public const int HostShips = 3;     // Hub.NetHostState: what the host decides of each ship, 10 Hz
+    public const int Shields = 4;       // Hub.NetShield: a deflector's facing
+    public const int Raiders = 5;       // Hub.NetRaiders: every raider, 10 Hz
+    public const int Hulls = 6;         // Hub.NetHulls: what is left of every thing that holds a spot, 10 Hz
+    public const int Flashes = 7;       // Hub.NetFlash: a hit's flash
+    public const int Dummies = 8;       // Hub.NetDummy: a practice target's readout
+    public const int Base = 9;          // Hub.NetBase: the gatherers and the hauler, 10 Hz, for the Yard
+    public const int Boss = 10;         // Hub.NetBoss: the boss, 10-30 Hz
+    public const int BossSounds = 11;   // Hub.NetBossSound: a special's sound
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1035,11 +1035,21 @@ where the editor cannot delete it.*
   talks UPnP itself; Godot's is the last resort.
 - **Windows will not send from a LAN address to a loopback one** (WSAEADDRNOTAVAIL). Only the
   network-wide search is bound to the LAN adapter; a search to one address binds to any.
-- **A player still connecting is not a guest yet** (`IsHost` stays true until a host answers). Code
-  that must know which end of a handshake it is on asks `Net.Connecting`, never `IsHost`.
-- **Godot drops packets that overtake the last handshake packet** ("SYS_COMMAND_AUTH" in the log) --
-  on a lossy path a resent handshake packet arrives after the guest's first words. The guest says its
-  introduction twice more (`Hub.OnSessionChanged`); everything in it is safe to repeat.
+- **A player still joining is not a guest yet, and a guest is not online until the host says so.**
+  `IsHost` stays true until the handshake lets the player in; `Connecting` stays true until the
+  host's welcome (`Net.NetWelcome`). Code that must know which end of a join it is on asks
+  `Net.Connecting`, never `IsHost`.
+- **Godot throws away, with an engine error, anything but the handshake from a peer it has not let
+  in** ("SYS_COMMAND_AUTH" in the log). ENet calls a link connected before the handshake has let
+  either end in, and each end lets the other in the moment it hears the other's "done" -- so a guest's
+  first unreliable report, sent right beside its own "done", overtook it on a link that reorders.
+  `Net.IsOnline` is true only in a session and, on a guest, only after the host's welcome, which the
+  host sends once it has let the guest in; every guest send goes through `IsOnline`. The other way:
+  the host's own "done" can be lost, and anything unreliable the host sent a guest before the resend
+  was thrown away there. The guest answers the welcome (`NetWelcomed`), which travels behind that
+  "done"; the host sends unreliably only to guests that have answered (`Net.ToHeard`) or reported a
+  world (`Hub.RpcToSector`), and guests' ship reports reach the others through the host, never
+  Godot's relay, which sends to every admitted peer at once.
 - **ENet's round-trip estimate starts at 500 ms** and settles over the first reliable packets:
   `Net.Arriving` never shortens a warning below 40% of it.
 - **`ENetMultiplayerPeer.GetPeer(id)` only knows the peers this process is connected to.** A guest
@@ -1284,6 +1294,21 @@ Each of these compiled clean and was wrong at runtime. The smoke test covers all
   take 24.5 s. `Net._Process` holds the real deadline. And Godot raises `connection_failed` only for a
   link that never came up: one that came up and dropped before the host let the pilot in is
   `server_disconnected`, the same as a session lost -- so `OnHostGone` checks `Connecting` first.
+- **ENet's timeout MINIMUM is the stall a session survives.** A silent peer is given up once its
+  resends run out AND the minimum has passed, and on a fast link the resends run out in about a
+  second: at 4 s a scene load or a GC pause ended sessions. It is 8 s (`Net.QuietMs`). And a live
+  link's packet throttle is set never to fall (`Net.Link`): at its defaults ENet drops unreliable
+  packets AT THE SENDER whenever a round trip comes back slower than the last few.
+- **An ordered unreliable packet is thrown away when anything sent after it on its channel got
+  there first.** On one shared channel, a ship report overtaking a base report cost the base report,
+  on any link that reorders. Every such stream has a transfer channel of its own (`NetChannels`, a
+  row each); what still shares one is the streams inside a single RPC (one pilot's ship against
+  another's). And every such stream is addressed to the Hub, the one node at the same path in every
+  world: a late unreliable report can land after its world has gone, and the Hub drops it where the
+  base or the boss would have been "Node not found".
+- **Closing an ENet peer still says goodbye to ENet.** `ENetMultiplayerPeer.Close` disconnects every
+  connected peer at once, so a host that closes without the game's goodbye (`Net.SkipGoodbye`) is
+  still noticed at once on a clean link; only a lost disconnect datagram leaves it to the timeout.
 - **The plain `Godot_...win64.exe` writes nothing to stdout.** It is a GUI-subsystem binary, so
   every `GD.Print` from a headless run vanishes and the harness sees an empty log. Use the
   `_console.exe` beside it; both Windows runners swap to it automatically and refuse to run if it

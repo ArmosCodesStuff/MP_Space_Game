@@ -147,6 +147,35 @@ public partial class _Test : Node
     // its timeout instead, several seconds later -- hence the host's longer waits there.)
     void Drop(int peer) => Callable.From(() => (Multiplayer.MultiplayerPeer as ENetMultiplayerPeer)?.GetPeer(peer)?.PeerDisconnectNow()).CallDeferred();
     object Priv(object o, string m, params object[] a) => o.GetType().GetMethod(m, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(o, a);
+    // How long since another peer's ship last reported: the silence this peer has heard from its owner.
+    static float Quiet(PlayerShip s) => (float)typeof(PlayerShip).GetField("_netAge", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(s);
+    // ENet's throttle on one end of a link, as (interval ms, acceleration, deceleration).
+    static (double interval, double up, double down) Throttle(ENetPacketPeer p) =>
+        (p.GetStatistic(ENetPacketPeer.PeerStatistic.PacketThrottleInterval),
+         p.GetStatistic(ENetPacketPeer.PeerStatistic.PacketThrottleAcceleration),
+         p.GetStatistic(ENetPacketPeer.PeerStatistic.PacketThrottleDeceleration));
+
+    // A STEADY STREAM FROM THE HOST, to count what arrives. The host role sends one unreliable,
+    // ordered packet ten times a second -- the kind every ship, raider and boss report is -- to every
+    // peer it has let in, and a guest counts them. ENet's throttle, left to fall, threw such packets
+    // away before they were sent.
+    // ON A CHANNEL OF ITS OWN. ENet delivers an ordered unreliable packet only if nothing sent after
+    // it on the same channel got there first (peer.c discards it otherwise), and every ship, raider
+    // and base report the host sends shares channel 0. The simulated internet reorders datagrams
+    // sent milliseconds apart (each is delayed 90 +/- 25 ms on its own), so on channel 0 the ~80
+    // other reports a second threw four in ten of this stream away AT THE RECEIVER: 5.8 a second
+    // arrived with nothing dropped before sending. The throttle is the PEER's, on every channel, so
+    // a channel of its own still measures it, and only it. (The game's own streams have one each
+    // now, NetChannels; this one sits well clear of that table, and a check says so.)
+    const int StreamChannel = 200;
+    bool _streaming; double _streamClock; int _streamGot;
+    public override void _Process(double delta)
+    {
+        if (!_streaming || !Net.IsHost || !Net.IsOnline) return;
+        for (_streamClock += delta; _streamClock >= 0.1; _streamClock -= 0.1) Net.ToHeard(0, this, nameof(NetStream));
+    }
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = StreamChannel)]
+    void NetStream() => _streamGot++;
 
     // ── VARIED GEOMETRY, REPRODUCIBLE ──────────────────────────────────────
     // A check tied to one spot is a check that can only find the bug at that spot. Vary draws
@@ -248,6 +277,30 @@ public partial class _Test : Node
         Net.I.Host(27123);
         for (int i = 0; i < 60 && !Net.IsOnline; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         bool wasOnline = Net.IsOnline;
+        // EVERY ORDERED UNRELIABLE STREAM ON A CHANNEL OF ITS OWN. Such a packet is delivered only if
+        // nothing sent after it on its channel arrived first, and they all shared channel 0: over the
+        // simulated internet a base report was thrown away because a ship report sent a millisecond
+        // later overtook it, and a guest saw the hauler's hold start seconds late. Read off every Rpc
+        // attribute in the game: each UnreliableOrdered one names a row of NetChannels, and no other
+        // RPC is on that channel; the rows are distinct and fit the channels a session opens.
+        {
+            const BindingFlags every = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+            var rpcs = typeof(Net).Assembly.GetTypes().Where(t => !t.Name.StartsWith("_"))
+                .SelectMany(t => t.GetMethods(every).Select(m => (who: $"{t.Name}.{m.Name}", a: m.GetCustomAttribute<RpcAttribute>())))
+                .Where(x => x.a != null).ToList();
+            var rows = typeof(NetChannels).GetFields(BindingFlags.Public | BindingFlags.Static).Where(f => f.IsLiteral)
+                .Select(f => (int)f.GetRawConstantValue()).ToList();
+            var streams = rpcs.Where(x => x.a.TransferMode == MultiplayerPeer.TransferModeEnum.UnreliableOrdered).ToList();
+            var offTable = streams.Where(x => x.a.TransferChannel == 0 || !rows.Contains(x.a.TransferChannel)).Select(x => x.who).ToList();
+            // ...and on the Hub, the one node at the same path in every world: a late report for the base
+            // landed on a guest already in the arena and was "Node not found: Hub/Yard"
+            var offHub = streams.Where(x => !x.who.StartsWith("Hub.")).Select(x => x.who).ToList();
+            var sharing = streams.Where(x => rpcs.Count(y => y.a.TransferChannel == x.a.TransferChannel) > 1).Select(x => $"{x.who}@{x.a.TransferChannel}").ToList();
+            int opened = (Multiplayer.MultiplayerPeer as ENetMultiplayerPeer)?.Host?.GetMaxChannels() ?? 0;
+            Check(streams.Count > 0 && offTable.Count == 0 && offHub.Count == 0 && sharing.Count == 0 && rows.Distinct().Count() == rows.Count
+                  && rows.All(r => r >= 1 && r + 1 < opened) && !rows.Contains(StreamChannel),
+                  $"every ordered unreliable stream is the Hub's, with a channel of its own from NetChannels, shared with no other RPC, inside the {opened} a session opens ({streams.Count} streams on {rows.Count} rows; off the table: {(offTable.Count == 0 ? "none" : string.Join(", ", offTable))}; off the Hub: {(offHub.Count == 0 ? "none" : string.Join(", ", offHub))}; sharing: {(sharing.Count == 0 ? "none" : string.Join(", ", sharing))})");
+        }
         Session.Sectors[99] = Hub.SectorKind.Home;      // the book is Session's now, not a private static of Hub
         // The pilot's own battleship has a Barrage Broadside III fitted (six volleys): the title
         // screen must fly the kit regardless.
@@ -761,10 +814,18 @@ public partial class _Test : Node
         // bow away and ends in a 500 u jump, so a window that spans one says nothing about the
         // autopilot. It dodges every 15 s now that it can turn at all, where the scene used to
         // stand still and never jump.
-        for (int i = 0; i < 60 * 20 && menu.AreaShotIn >= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        ship.Position = menu.Station + new Vector2(200, 150);
+        // AT REST WITH ITS BOW AWAY FROM HOME, the way every dodge leaves it: the jump goes along the
+        // keel, away from where it stood, and ends dead in the water. Left to the autopilot, a
+        // capital with its mark astern crawled round its turning circle for over 20 s, and the title
+        // ship never got back on station between two area shots; the push used to keep whatever
+        // heading the scene had, so this passed or failed on the draw. Well off home, never dead
+        // astern (a knife edge: the short way round flips sign), in any direction off station.
+        for (int i = 0; i < 60 * 20 && (menu.AreaShotIn >= 0 || ship.Warping); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var pushTo = menu.Station + Vector2.Right.Rotated(VaryAngle()) * 250f;
+        float pushOff = Vary(2.3f, 3.0f) * (Rng.Randf() < 0.5f ? -1f : 1f);
+        ship.Place(pushTo, Aim.Face(pushTo, menu.Station) + pushOff);
         double drift0 = ship.Position.DistanceTo(menu.Station);
-        bool sawBroadside = false;
+        bool sawBroadside = false, wasWarping = false; int dodges = 0;
         // THE NEAREST IT GETS over a window that spans whole cycles, rather than the distance at
         // one moment: the diorama dodges every 15 s and each dodge ends in a 500 u jump, so the
         // reading at any single instant is whatever the scene was doing just then.
@@ -773,11 +834,13 @@ public partial class _Test : Node
         while (eight.TimeLeft > 0)
         {
             sawBroadside |= ship.BroadsideVolleysLeft > 0;
+            if (ship.Warping && !wasWarping) dodges++;
+            wasWarping = ship.Warping;
             drift1 = Math.Min(drift1, ship.Position.DistanceTo(menu.Station));
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         }
         Check(drift0 > 200 && drift1 < drift0 - 120,
-              $"pushed {drift0:0} u off station it flies itself home between shots ({drift0 - drift1:0} u of it closed, nearest {drift1:0} u)");
+              $"pushed {drift0:0} u off station, at rest with its bow {Mathf.RadToDeg(Mathf.Abs(pushOff)):0} deg off home as a dodge leaves it, it comes round and flies itself home between shots ({drift0 - drift1:0} u of it closed, nearest {drift1:0} u; {dodges} dodge(s) in the window)");
         // Its own window: the broadside fires whether or not a shot is pending (the guns are outside
         // the dodge), and the station measurement above stops the moment one is called.
         var broadsideWatch = GetTree().CreateTimer(16.0);
@@ -1946,8 +2009,9 @@ public partial class _Test : Node
             bool dropped = true;
             try
             {
+                // (the report names its ship's owner: one that is not the sender, which must not move it either)
                 typeof(Hub).GetMethod("NetShipState", BindingFlags.NonPublic | BindingFlags.Instance)
-                           .Invoke(loose, new object[] { 0f, 0f, 0f, 0f, 0f, 0f, 0f, false, false, 0f, 0f, 0f, false });
+                           .Invoke(loose, new object[] { 5, 0f, 0f, 0f, 0f, 0f, 0f, 0f, false, false, 0f, 0f, 0f, false });
                 typeof(Hub).GetMethod("NetIdentity", BindingFlags.NonPublic | BindingFlags.Instance)
                            .Invoke(loose, new object[] { 5, "X", Colors.White, Colors.White, 0, new int[0], 1, new string[0], new string[0], new int[0], "x" });
                 dropped &= !Net.FromPlayer(loose, out int who) && who == 0;
@@ -3489,9 +3553,18 @@ public partial class _Test : Node
             Net.I.Join("127.0.0.1:9");
             await RealTime(() => !Net.I.Connecting, 16);
             double joinGaveUp = (Time.GetTicksMsec() - jl0) / 1000.0;
+            // ...and says so, and what an address is for: the same network or a virtual one, the host's
+            // firewall, and a room code for anywhere else -- not a router it cannot see
             Check(!Net.I.Connecting && !Net.IsOnline && Me == ship0 && !Net.I.Reconnecting && !Net.I.CanReconnect && joinGaveUp > 11.8 && joinGaveUp < 12.6
-                  && Net.I.LastStatus.Contains("Could not reach"),
-                  $"a JOIN to an address that never answers is given up on in 12 s, and not retried ({joinGaveUp:0.0} s; {Net.I.LastStatus})");
+                  && Net.I.LastStatus == "No answer from 127.0.0.1:9 in 12 s. An address works on the same network or over Radmin VPN, "
+                                       + "and the host must allow Warships through Windows Firewall; for friends elsewhere, use the host's room code. Playing offline.",
+                  $"a JOIN to an address that never answers is given up on in 12 s, not retried, and says what an address is for ({joinGaveUp:0.0} s; {Net.I.LastStatus})");
+            // A NAME IS DIALLED on its IPv4 address when it has one, else on its IPv6 one (a name with
+            // only an AAAA record read as "no such host"), and never on a link-local one
+            string Dial(params string[] ips) => Net.DialAddress(ips.Select(ip => System.Net.IPAddress.Parse(ip)));
+            string dialV6 = Dial("2001:db8::5"), dialBoth = Dial("2001:db8::5", "203.0.113.7"), dialLink = Dial("fe80::1"), dialNone = Dial();
+            Check(dialV6 == "2001:db8::5" && dialBoth == "203.0.113.7" && dialLink == "" && dialNone == "",
+                  $"a looked-up name is dialled on its IPv4 address, else its IPv6 one, never a link-local one ({dialV6}; {dialBoth}; '{dialLink}'; '{dialNone}')");
             // A LINK LOST BEFORE THE HOST LET THIS PILOT IN (Godot calls that "disconnected", not
             // "failed"): an attempt that did not happen -- not a session lost, so nothing is retried,
             // even with a host to go back to
@@ -7719,6 +7792,9 @@ public partial class _Test : Node
     async Task ArenaMp(string role)
     {
         const int Port = 27125;
+        // Where the guest parks once its own stall is over, for the host to see: 400 u from where it
+        // was put back, clear of it.
+        var stallDone = new Vector2(900, -100);
         async Task ToArena(string who, string mission)
         {
             // the home world must be BUILT first: the scene swap is deferred, and for a frame
@@ -7980,7 +8056,24 @@ public partial class _Test : Node
             var ag2 = H.Ships.FirstOrDefault(s => !s.Mine);
             Check(ag2 != null && ag2.OwnerId != agOld && ag2.Position.DistanceTo(new Vector2(900, 300)) < 50,
                   $"arena host: it came back into the arena, where it was ({ag2?.Position.DistanceTo(new Vector2(900, 300)):0} u off; its world {(ag2 == null ? "-" : Hub.PeerSector(ag2.OwnerId)?.ToString())}; at {ag2?.Position})");
-            await Wait(3.0);                                     // (the guest checks what it was paid)
+            // A STALL IS NOT A DROP. The guest checks what it was paid, its whole world freezes for 6 s
+            // (a first load, a garbage-collection pause, a laptop lid), and then it parks at stallDone.
+            // This host must keep it through the silence: ENet gave a silent peer up after 4 s.
+            int agId = ag2?.OwnerId ?? 0, agLeft = 0; float agQuiet = 0;
+            Action<int, Net.PlayerInfo, bool> agGone = (peer, _, _) => { if (peer == agId) agLeft++; };
+            Net.I.PlayerLeft += agGone;
+            var agWatch = new LateSampler { Probe = () =>
+            {
+                if (H?.Ships.FirstOrDefault(s => s.OwnerId == agId) is { } g) agQuiet = Math.Max(agQuiet, Quiet(g));
+                return false;
+            } };
+            AddChild(agWatch);
+            await RealTime(() => H?.Ships.FirstOrDefault(s => s.OwnerId == agId) is { } g && g.Position.DistanceTo(stallDone) < 60, Wan ? 40 : 30);
+            Net.I.PlayerLeft -= agGone; agWatch.QueueFree();
+            Check(agQuiet >= 5 && agLeft == 0 && Net.I.Players.ContainsKey(agId),
+                  $"arena host: the guest's world stalled and this host heard nothing from it for {agQuiet:0.0} s (at least 5), and kept it -- the same pilot, never dropped ({agLeft} leaves)");
+            // ...and then THIS host's world freezes for 6 s, for the guest to outlast in turn
+            OS.DelayMsec(6000);
             Net.SkipGoodbye = true;                              // then the HOST vanishes -- no goodbye, as in a crash
             Net.I.GoOffline();
             await Wait(2.0);
@@ -7999,6 +8092,7 @@ public partial class _Test : Node
             Character.Exp = 0; Character.Level = 2; Character.BossCleared.Clear();
             await Wait(0.8);
             int railHeard0 = Sfx.Played.GetValueOrDefault("rail");   // what this peer had heard of a railgun before it joined
+            var joinWatch = new JoinWatch(); AddChild(joinWatch);
             Net.I.Join(HostAt(Port));
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.IsOnline && Net.LocalId != 1, "arena guest: joined");
@@ -8242,8 +8336,32 @@ public partial class _Test : Node
                   $"arena guest: the kill made while it was away is paid on its return: its EXP and its 2 parts (level {Character.Level}, exp {Character.Exp}; {Character.GearHold.Values.Sum() + Character.Unclaimed.Count - agHold1} parts)");
             await RealTime(() => H.MissionWon && H.Boss != null && GodotObject.IsInstanceValid(H.Boss) && H.Boss.Hp == 0, 5);
             Check(H.MissionWon && H.Boss != null && GodotObject.IsInstanceValid(H.Boss) && H.Boss.Hp == 0, "arena guest: back in an arena already won -- the boss reads zero");
-            // THE HOST VANISHES (no goodbye): 3 tries over about 20 s, then RECONNECT
-            await RealTime(() => !Net.IsOnline, 20);
+            // A STALL IS NOT A DROP, both ways. This world freezes for 6 s (the host must keep this pilot
+            // through it) and parks at stallDone to say it is over; then the HOST's world freezes for 6 s,
+            // and this pilot must keep the host through that. ENet gave a silent peer up after 4 s.
+            await Wait(1.0);
+            OS.DelayMsec(6000);
+            // The next frame carries the whole 6 s as its step, and a remote ship ages by its step: the
+            // host's would read 6 s quiet here with the host never quiet at all. So listen only from
+            // the host's first report after that frame.
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await RealTime(() => H?.Ships.FirstOrDefault(s => s.OwnerId == 1) is { } h0 && Quiet(h0) < 0.5, 3);
+            int idThroughStall = Net.LocalId; bool keptHost = true; float hostQuiet = 0;
+            var hostWatch = new LateSampler { Probe = () =>
+            {
+                if (!Net.IsOnline) return false;
+                if (Net.LocalId != idThroughStall) keptHost = false;
+                if (H?.Ships.FirstOrDefault(s => s.OwnerId == 1) is { } h1) hostQuiet = Math.Max(hostQuiet, Quiet(h1));
+                return false;
+            } };
+            AddChild(hostWatch);
+            if (Me != null) { Me.AutopilotTo = null; Me.Velocity = Vector2.Zero; Me.Position = stallDone; }
+            // THE HOST VANISHES (no goodbye) once its stall is over: 3 tries over about 20 s, then RECONNECT
+            await RealTime(() => !Net.IsOnline, Wan ? 40 : 20);
+            hostWatch.QueueFree();
+            Check(hostQuiet >= 5 && keptHost,
+                  $"arena guest: the host's world stalled and this pilot heard nothing from it for {hostQuiet:0.0} s (at least 5), and kept it -- the same session, not dropped");
             ulong vanished = Time.GetTicksMsec();
             var tries = new List<double>(); bool wasTrying = false; PlayerShip homeShip = null;
             while (!Net.I.CanReconnect && Time.GetTicksMsec() - vanished < 25000)
@@ -8292,6 +8410,9 @@ public partial class _Test : Node
             await Wait(0.1);
             Check(offered && trying && Net.I.CanReconnect && rcB.IsVisibleInTree() && !Net.IsOnline && Math.Abs(tryFor - 5) < 0.6 && Net.I.LastStatus.Contains("RECONNECT to try again"),
                   $"arena guest: RECONNECT pressed tries once more, for 5 s, and fails back to the button ({offered}, {trying}, {tryFor:0.0} s; {Net.I.LastStatus})");
+            Check(joinWatch.Frames > 0 && joinWatch.Online == 0 && joinWatch.Hosting == 0,
+                  $"arena guest: through every frame of every join and try it is not online, and its panel does not read hosting, until the host has let it in ({joinWatch.Frames} frames joining; online on {joinWatch.Online}, 'hosting' on {joinWatch.Hosting})");
+            joinWatch.QueueFree();
         }
     }
 
@@ -8333,8 +8454,14 @@ public partial class _Test : Node
             Character.GearLevel["drv_racing_1"] = 40;
             H.GetNode<PlayerShip>("Ship_1").Position = new Vector2(-900, 900);   // out of the way
             int refusals = 0;
+            // THE HOST SENDS A GUEST NOTHING UNRELIABLE UNTIL IT HAS ANSWERED THE WELCOME: read the moment
+            // each guest is let in (this handler runs after Net's), and again once both are here
+            int heardAtLetIn = 0, letIn = 0;
+            void AtLetIn(long id) { letIn++; if (Net.Hears((int)id)) heardAtLetIn++; }
+            Multiplayer.PeerConnected += AtLetIn;
             Net.I.Status += s => { if (s.StartsWith("Refused")) refusals++; };
             Net.I.Host(27115);
+            _streaming = true;                         // ten a second to every guest let in, for the guest to count
             // A raider that exists BEFORE either guest joins: they can only learn of it from the
             // catch-up a joining guest is sent (Hub.NetMySector). Far out, and gone at 9 s.
             var early = H.SpawnRaider(new Vector2(-6000, -6000));
@@ -8357,6 +8484,17 @@ public partial class _Test : Node
             Check(refusals == 1, $"the host refused the one peer that knocked as another build ({refusals})");
             var ships = Nodes<PlayerShip>().ToList();
             Check(ships.Count == 3, $"host sees 3 ships: itself and two guests ({ships.Count})");
+            Multiplayer.PeerConnected -= AtLetIn;
+            // A guest just let in may not have the host's own "done" yet (lost on the way, resent), and
+            // Godot throws away with an engine error anything else that reaches it first. Its answer to
+            // the welcome, which travels behind that "done", is what opens the unreliable reports to it.
+            Check(letIn == 2 && heardAtLetIn == 0 && Multiplayer.GetPeers().All(Net.Hears),
+                  $"host: a guest just let in is sent nothing unreliable until it answers the welcome -- neither had at the moment it was let in, both have now ({letIn} let in, {heardAtLetIn} heard at once, {Multiplayer.GetPeers().Count(Net.Hears)} of {Multiplayer.GetPeers().Length} heard)");
+            // EVERY LINK KEEPS EVERY UNRELIABLE PACKET: ENet's throttle, at its defaults, falls with
+            // every slow round trip and throws ship, raider and boss reports away before they are sent
+            var links = Multiplayer.GetPeers().Select(id => (Multiplayer.MultiplayerPeer as ENetMultiplayerPeer)?.GetPeer(id)).ToList();
+            Check(links.Count == 2 && links.All(l => l != null && Throttle(l) == (5000, 2, 0)),
+                  $"host: its link to each guest keeps every unreliable packet -- ENet's throttle falls by 0 (interval 5000 ms, up 2, down 0; {string.Join(" / ", links.Select(l => l == null ? "none" : Throttle(l).ToString()))})");
             Check(ships.Any(s => s.Pilot == "Third"), "the second guest's identity reached the host");
             // Each guest is known by its CHARACTER: a returning pilot gets a new peer id, not a new self
             var gInfo = Net.I.Players.Values.FirstOrDefault(p => p.Name == "Guesty"); var tInfo = Net.I.Players.Values.FirstOrDefault(p => p.Name == "Third");
@@ -8457,6 +8595,14 @@ public partial class _Test : Node
             var third2 = H.Ships.FirstOrDefault(s => s.Pilot == "Third" && s.OwnerId != thirdOld);
             Check(third2 != null && H.IsReady(third2.OwnerId) && !H.PartyIds.Contains(thirdOld) && H.PartyIds.Count() == 3 && hullOnDrop < 300 && Math.Abs(hullBack - hullOnDrop) < 1 && heldD.Count == 0,
                   $"back under a new id: READY and the damaged hull move to it, the place is released ({third2?.OwnerId}, {hullBack:0.0} hull back of {hullOnDrop:0.0} held)");
+            // ...and when it leaves (it presses HOST), how long this host had heard nothing from it
+            float thirdQuiet = -1;
+            var thirdWatch = new LateSampler { Probe = () =>
+            {
+                if (H?.Ships.FirstOrDefault(s => s.Pilot == "Third" && s.OwnerId != thirdOld) is { } t3) thirdQuiet = Quiet(t3);
+                return false;
+            } };
+            AddChild(thirdWatch);
             // A HOLD THAT LAPSES: a held pilot that was not READY keeps the portal shut until its time is up
             object Ghost(int peer, ulong ms) =>
                 new Session.Held { OldPeer = peer, Name = "Ghost", Until = Time.GetTicksMsec() + ms };
@@ -8464,10 +8610,21 @@ public partial class _Test : Node
             bool shut = !H.AllReady;
             await Wait(0.6);
             Check(shut && heldD.Count == 0 && H.AllReady, "a held pilot that was not READY keeps the portal shut -- until its place lapses");
-            while (Time.GetTicksMsec() - w0 < 15000) await Wait(0.25);
+            // Fifteen seconds at least (the guest watches its bombers dock and the escort hold), and then
+            // until the third player has gone: over the simulated internet a hang-up can be lost, and
+            // then it notices the drop only by its own timeout before it comes back, finishes and leaves.
+            await RealTime(() => Time.GetTicksMsec() - w0 >= 15000 && !Net.I.Players.Values.Any(p => p.Name == "Third"), Wan ? 45 : 20);
+            thirdWatch.QueueFree();
             // the third player has LEFT, saying goodbye: that is not a drop, and no place is held for it
             Check(heldD.Count == 0 && H.PartyIds.Count() == 2 && !Net.I.Players.Values.Any(p => p.Name == "Third"),
                   $"a pilot that leaves on purpose is gone from the party: no place held ({heldD.Count} held, a party of {H.PartyIds.Count()})");
+            // ...and its goodbye got out though it left by pressing HOST, which cut a guest's goodbye
+            // off: this host heard it go inside the 2 s a goodbye is given to get out, plus a one-way
+            // trip -- under 3 s -- not after the 8 s a silent peer is given (16-20 s over the simulated
+            // internet, where resends run out later). The same bound on either link: this role is not
+            // told which one it is on.
+            Check(thirdQuiet >= 0 && thirdQuiet < 3,
+                  $"a guest that leaves by pressing HOST still says goodbye: this host heard it go {thirdQuiet:0.00} s after its last report -- inside the 2 s a goodbye is given, plus the trip, under 3 s -- not by timeout (8 s)");
             // ...and the level that guest bought MID-SESSION, once this host's portal had started to open
             // (so after the check above): it comes with the identity again, and a ship whose parts have
             // not changed is refitted for it all the same.
@@ -8482,7 +8639,8 @@ public partial class _Test : Node
             Check(Net.I.NetworkIdle && heldD.Count == 0, "back offline: no socket, no lookup, no router job left running, and no place still held");
         }
         else if (role == "guest2")
-        {   // a third player: joins, sees everyone, leaves with the session
+        {   // a third player: joins, sees everyone, leaves by hosting a world of its own
+            var joinWatch = new JoinWatch(); AddChild(joinWatch);
             await Wait(1.6);
             // FIRST, AS ANOTHER BUILD. It must be refused -- and learn why, on its own screen, which
             // the old handshake never managed: its refusal went out in the same breath as the
@@ -8490,8 +8648,9 @@ public partial class _Test : Node
             Net.PretendProtocol = Net.Protocol ^ 1;
             Net.I.Join(HostAt(27115));
             await RealTime(() => !Net.I.Connecting, 8);
-            Check(!Net.IsOnline && Net.I.LastStatus.Contains("different build"),
-                  $"a player on another build is refused, and told why ({Net.I.LastStatus})");
+            Check(!Net.IsOnline && Net.I.LastStatus == $"That host is on a different build of the game (theirs {Net.Protocol:x8}, yours {Net.Protocol ^ 1:x8}): "
+                                                        + "you both need the same release (Esc menu, bottom). Playing offline.",
+                  $"a player on another build is refused, told both builds, and where to read its own ({Net.I.LastStatus})");
             Net.PretendProtocol = null;
             await Wait(0.3);
             Net.I.Join(HostAt(27115));
@@ -8579,11 +8738,15 @@ public partial class _Test : Node
             Priv(H, "NetKill", Missions.Bounty, 1, 3, lastPaid, new[] { "fr_flak_1", "fr_flak_2" }, Vector2.Zero);   // the kind leads now
             Check(lastPaid != 0 && Character.PaidKills.Contains(lastPaid) && Character.Exp == exp3 && Character.GearHold.Values.Sum() == 2,
                   $"third player: nor after a restart -- the kills it was paid for are on its file (exp {exp3} -> {Character.Exp}, {Character.GearHold.Values.Sum()} parts)");
-            // IT LEAVES, on purpose: a goodbye, so nothing to retry -- and the host keeps no place for it
-            Net.I.GoOffline();
+            // IT LEAVES, on purpose, by pressing HOST: a goodbye, so nothing to retry -- and the host keeps
+            // no place for it (the host checks that goodbye got out: HOST used to cut a guest's off)
+            Net.I.Host(27116);
             await Wait(1.0);
-            Check(!Net.IsOnline && !Net.I.Reconnecting && !Net.I.CanReconnect && !Net.I.Connecting,
-                  $"third player: leaving on purpose is not a drop -- nothing is retried ({Net.I.LastStatus})");
+            Check(Net.IsHost && Net.IsOnline && Net.LocalId == 1 && !Net.I.Reconnecting && !Net.I.CanReconnect && !Net.I.Connecting,
+                  $"third player: pressing HOST is leaving on purpose -- hosting its own world now, nothing retried ({Net.I.LastStatus})");
+            Check(joinWatch.Frames > 0 && joinWatch.Online == 0 && joinWatch.Hosting == 0,
+                  $"third player: through every frame of its three joins (another build's, its own, and back after the drop) it is not online, and its panel does not read hosting, until the host has let it in ({joinWatch.Frames} frames joining; online on {joinWatch.Online}, 'hosting' on {joinWatch.Hosting})");
+            joinWatch.QueueFree();
         }
         else
         {
@@ -8611,12 +8774,22 @@ public partial class _Test : Node
             double held0 = Held();
             // what this peer has heard of a fighter's beam before it is anyone's guest (see below)
             int heardFighters0 = Sfx.Played.GetValueOrDefault("fighter");
+            var joinWatch = new JoinWatch(); AddChild(joinWatch);
+            // THIS END OF THE LINK, read the moment the handshake is done: the host sets its own end
+            // only once it has let this pilot in, a round trip later, so what is read here is this
+            // pilot's own setting
+            (double, double, double)? ownThrottle = null;
+            void ReadThrottle() { if ((Multiplayer.MultiplayerPeer as ENetMultiplayerPeer)?.GetPeer(1) is { } hostLink) ownThrottle = Throttle(hostLink); }
+            Multiplayer.ConnectedToServer += ReadThrottle;
             Net.I.Join(HostAt(27115));
             await Wait(1.2);
+            Multiplayer.ConnectedToServer -= ReadThrottle;
             Character.Name = "Guesty"; Character.Main = new Color(1, 0, 0); Character.Class = ShipClass.Carrier;
             Priv(H, "ApplyLocalIdentity"); Priv(H, "SendIdentity", 0);
             var mine = Nodes<PlayerShip>().FirstOrDefault(s => s.Mine);
             Check(mine != null && mine.OwnerId == Net.LocalId && Net.LocalId != 1, $"guest owns its own ship (id {Net.LocalId})");
+            Check(ownThrottle == (5000, 2, 0),
+                  $"guest: the moment the host lets it in, its own end of the link keeps every unreliable packet -- ENet's throttle falls by 0 (interval 5000 ms, up 2, down 0; {ownThrottle?.ToString() ?? "never read"})");
             Check(Nodes<PlayerShip>().Count() >= 2, $"guest sees the host ({Nodes<PlayerShip>().Count()} ships)");
             for (int i = 0; i < 60 * 3 && !H.Raiders.Any(r => r.Position.DistanceTo(new Vector2(-6000, -6000)) < 2500); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(H.Raiders.Any(r => r.Position.DistanceTo(new Vector2(-6000, -6000)) < 2500),
@@ -8713,10 +8886,20 @@ public partial class _Test : Node
             Key(global::Godot.Key.F);              // bomber strike
             await Wait(1.0);
             Key(global::Godot.Key.Q);              // point defence
-            // torpedoes live a couple of seconds; watch for one across the window
-            bool sawTorp = false;
-            for (int i = 0; i < 240; i++) { if (InFlight().Any(x => x.Cosmetic)) sawTorp = true; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            // the PD window is read while it is surely open -- before the torpedo wait below, which may
+            // run longer than the window lasts
+            await RealTime(() => mine != null && mine.PdActive, 3);
             Check(mine != null && mine.PdActive, "guest sees its PD window running (replicated)");
+            // WAITED FOR, NOT WINDOWED. The strike is the bombers' flight out to the target and then
+            // their release, and over a simulated internet the press, the launch and every report
+            // each cost a trip -- a fixed 4 s window opened 1 s after the key (timed from the input,
+            // not the effect) closed before the first torpedo on a slow draw. Up to 12 s: the
+            // longest run out on this range plus the link's delay, never a figure the check asserts.
+            bool sawTorp = false;
+            var torpWatch = new LateSampler { Probe = () => sawTorp |= InFlight().Any(x => x.Cosmetic) };
+            AddChild(torpWatch);
+            await RealTime(() => sawTorp, 12);
+            torpWatch.QueueFree();
             Check(sawTorp, "guest sees cosmetic copies of its torpedoes");
             var host = Nodes<PlayerShip>().FirstOrDefault(s => s.OwnerId == 1);
             await RealTime(() => Nodes<PlayerShip>().Count() == 3 && Nodes<PlayerShip>().Any(s => s.Pilot == "Third"), 8);
@@ -8762,7 +8945,16 @@ public partial class _Test : Node
             Check(heardFighters > 0, $"guest hears its fighters' beams as the fighter's own row, sent by index ({heardFighters} heard since it joined)");
             Check(mine != null && Math.Abs(mine.MaxHp - 230) < 1e-6 && Math.Abs(mine.Hp - 230) < 1e-6,
                   $"hull replicated from the host, which applied this pilot's own gear (three chips: 200 x 1.15 = 230; {mine?.Hp:0})");
+            int streamed0 = _streamGot; ulong streamAt = Time.GetTicksMsec();
             await Wait(12.0);                      // strike done, bombers home and docked
+            // THE HOST'S TEN A SECOND ARRIVE, over the 12 s just waited: nothing thrown away unsent. The
+            // floor, from the link: 100 ms apart on a channel of its own, the simulated internet's jitter
+            // (+/- 25 ms, +/- 40 on its worst day: 80 ms of spread at most) cannot reorder the stream, so
+            // only its loss takes packets -- 2%, 5% on its worst day: 9.8 and 9.5 a second. Under 8 is a
+            // fifth of them gone, which the link cannot do and a falling throttle does.
+            double streamRate = (_streamGot - streamed0) / ((Time.GetTicksMsec() - streamAt) / 1000.0);
+            Check(streamRate >= 8,
+                  $"guest: the host's unreliable stream, sent ten a second on a channel of its own, arrives at {streamRate:0.0} a second over 12 s -- at least 8, as the link loses at most 5% (ENet's throttle throws none away before sending)");
             Check(pinWatch.Seen, "a guest's own ship is pinned when the host pins it (a raider's web works on guests too)");
             var lostSv = H.Yard.Gatherers.FirstOrDefault(x => x.Kind == GatherKind.Salvager);
             Check(lostSv != null && lostSv.Lost && lostSv.RebuildIn > 5 && lostSv.RebuildIn < 29,
@@ -8775,8 +8967,10 @@ public partial class _Test : Node
             deckWatch.QueueFree();
             Check(numberWatch.Seen, "guest sees damage numbers where the hits the host resolves land (from the dummy's replicated figures)");
             numberWatch.QueueFree();
-            Check(H.GetNodeOrNull("MissionPortal") != null && H.Mission == Hub.MissionState.PortalOpen,
-                  "the host's mission portal opened here too (the party was ready)");
+            // TAKEN WHEN IT IS TRUE: the host closes its session as soon as the third player has
+            // gone, so a sample after the waits below could find the portal already shut with it.
+            bool portalWasOpen = H.GetNodeOrNull("MissionPortal") != null && H.Mission == Hub.MissionState.PortalOpen;
+            Check(portalWasOpen, "the host's mission portal opened here too (the party was ready)");
             // AUTO-SELL is the base owner's to buy: this guest's request changes nothing
             double hostCredits = H.Yard.Credits;
             H.Yard.BuyUpgrade("hauler_autosell"); await Wait(1.5);
@@ -8789,13 +8983,17 @@ public partial class _Test : Node
                   && Nodes<Sprite2D>().Count(s => s.Name.ToString().StartsWith("Outpost")) == 4,
                   $"a guest sees the host's hauler hold at the south-west outpost and offload -- its outposts built here too (leg {stopLeg}, {stopMax:0.0} s, shown {shownMax:0.00} -> {shownMin:0.00} of the load)");
             Check(dispatchWatch.Seen && !Met("hauler"), "the hauler hint is the base owner's: a guest watching the host's loaded hauler is not shown buttons it cannot press");
-            bool portalWasOpen = H.Mission == Hub.MissionState.PortalOpen;
-            await Wait(6.0);                       // the host closes the session ~24.5 s in
+            // the host closes the session once its 15 s are up and the third player has gone (~24.5 s in)
+            await RealTime(() => !Net.IsOnline, Wan ? 40 : 10);
             Check(!Net.IsOnline && Net.LocalId == 1 && Net.I.LastStatus.Contains("Host closed") && !Net.I.Reconnecting,
                   $"guest fell back offline when host left -- told it was closed, so nothing is retried ({Net.I.LastStatus})");
             Check(heldWatch.Seen, "while the third player was away, this guest's party list showed it as reconnecting");
+            // THE WORLD'S NEXT FRAME, not the moment the session ended: the wait above wakes in the very
+            // frame the host's hang-up is read, before this world has ticked once, and the portal follows
+            // the mission state on the world's own tick (Hub.SyncMissionPortal). Given a second, not a frame.
+            await RealTime(() => H.GetNodeOrNull("MissionPortal") == null, 1.0);
             Check(portalWasOpen && H.Mission == Hub.MissionState.Idle && H.GetNodeOrNull("MissionPortal") == null && H.PartyIds.SequenceEqual(new[] { 1 }),
-                  $"the host gone, its open portal and its party went with it: this pilot's own world has neither ({H.Mission}; party {string.Join(",", H.PartyIds)})");
+                  $"the host gone, its open portal and its party went with it: this pilot's own world has neither ({H.Mission}; party {string.Join(",", H.PartyIds)}; portal {(H.GetNodeOrNull("MissionPortal") == null ? "gone" : "still up")})");
             // Back to its OWN world, with nothing lost: everything held -- stock, the
             // ships' cargo, and credits from a sale -- is at least the 5000 it had, and
             // nowhere near the host's few hundred.
@@ -8812,6 +9010,9 @@ public partial class _Test : Node
                   "economy ships restart docked and empty in your own world");
             var ships = Nodes<PlayerShip>().ToList();
             Check(ships.Count == 1 && ships[0].Mine && ships[0].Name == "Ship_1", "guest rebuilt to its own single ship");
+            Check(joinWatch.Frames > 0 && joinWatch.Online == 0 && joinWatch.Hosting == 0,
+                  $"guest: through every frame of its join it is not online, and its panel does not read hosting, until the host has let it in ({joinWatch.Frames} frames joining; online on {joinWatch.Online}, 'hosting' on {joinWatch.Hosting})");
+            joinWatch.QueueFree();
         }
     }
 }
@@ -8824,6 +9025,23 @@ public partial class LateSampler : Node
     public bool Seen;
     public override void _Ready() => ProcessPriority = int.MaxValue;
     public override void _Process(double delta) { if (Probe?.Invoke() == true) Seen = true; }
+}
+
+// A JOIN, EVERY FRAME OF IT, at the end of each frame: while this pilot is joining it is not online,
+// and its MULTIPLAYER panel does not read "hosting". Both were true for every frame of the handshake:
+// ENet calls a link connected before the host has let the pilot in, and the pilot, still the host of
+// its own world until then, sent into a host that threw it all away.
+public partial class JoinWatch : Node
+{
+    public int Frames, Online, Hosting;
+    public override void _Ready() => ProcessPriority = int.MaxValue;
+    public override void _Process(double delta)
+    {
+        if (Net.I == null || !Net.I.Connecting) return;
+        Frames++;
+        if (Net.IsOnline) Online++;
+        if (GetTree().Root.FindChild("NetToggle", true, false) is Button b && b.Text.Contains("hosting")) Hosting++;
+    }
 }
 
 // A third host-spawned replicated kind, registered by the check that proves a third kind is a ROW

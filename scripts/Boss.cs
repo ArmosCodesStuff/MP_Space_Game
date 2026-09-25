@@ -302,8 +302,7 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         if (_send <= 0 && Net.IsOnline)
         {
             _send = Locked ? 1.0 / 30 : 0.1;
-            Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetState), Position, Rotation, Hp, Locked,
-                             NextSuperIn, SuperGap, HullMult);
+            Hub?.SendBoss(Position, Rotation, Hp, Locked, NextSuperIn, SuperGap, HullMult);
         }
     }
 
@@ -629,10 +628,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
     protected void Sound(string name, Vector2 at)
     {
         Sfx.Special(name, at);
-        if (Net.IsOnline) Hub?.RpcToSector(Hub.SectorKind.Arena, this, nameof(NetSound), name, at);
+        if (Net.IsOnline) Hub?.SendBossSound(name, at);
     }
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetSound(string name, Vector2 at) => Sfx.Special(name, at);
 
     // A PILOT ARRIVING MID-FIGHT -- a rejoin, a slow load -- missed every warning already up (and the
     // Drake's rock, if one is thrown): each is sent once, as it starts, to the peers in the arena
@@ -651,8 +648,8 @@ public partial class Boss : Node2D, IQuarry, ITagged, IStatused
         if (Rock is { Done: false } r) RpcId(peer, nameof(NetRock), r.From, r.To, r.Hold - r.Elapsed, r.Flight, r.Radius, r.Variant);
     }
 
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetState(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap, double hullMult)
+    // the host's report of this boss, as Hub.NetBoss hands it on (it can outlive the arena)
+    public void TakeState(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap, double hullMult)
     {
         if (!_net.Has) _hullWatch = default;       // the host's first figure is where this peer starts counting
         // the host's scale too: a guest built its boss for the party it saw, and one that rejoined

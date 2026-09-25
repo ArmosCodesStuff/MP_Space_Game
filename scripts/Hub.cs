@@ -380,6 +380,7 @@ public partial class Hub : Node2D
             Net.I.PlayerJoined   += OnPlayerJoined;
             Net.I.PlayerLeft     += OnPlayerLeft;
             Net.I.SessionChanged += OnSessionChanged;
+            Net.I.Admitted       += OnAdmitted;
             ReportSector();                                      // this world is loaded: tell the host where we are
         }
         Hints.Meet("flight");
@@ -422,6 +423,7 @@ public partial class Hub : Node2D
             Net.I.PlayerJoined   -= OnPlayerJoined;
             Net.I.PlayerLeft     -= OnPlayerLeft;
             Net.I.SessionChanged -= OnSessionChanged;
+            Net.I.Admitted       -= OnAdmitted;
         }
         Combat.Clear();
         // A static pointing at a freed node is worse than a null one: it still reads non-null, so
@@ -501,29 +503,70 @@ public partial class Hub : Node2D
     // peer, and not to the ship's node, which is not: a pilot's first updates can overtake Godot's
     // (reliable) word that it joined, and reached another guest with no ship for it yet -- "Node
     // not found" in that guest's log (seen over a lossy link). The hub hands each to its ship, or
-    // drops it. The owner's report goes to the SENDER'S ship only: nobody moves another's.
+    // drops it. The owner's report goes to ITS OWN ship only: nobody moves another's.
+    // A GUEST'S REPORT GOES TO THE HOST, which passes it on (Net.ToHeard): broadcast, it was passed on
+    // by Godot to every guest at once -- a guest just let in included, before it could take it.
     public PlayerShip ShipOf(int peer) => _ships.TryGetValue(peer, out var s) && IsInstanceValid(s) ? s : null;
     public void SendShipState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
-                              float podX, float podY, float podRot, bool warping) =>
-        Rpc(nameof(NetShipState), px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
-    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void NetShipState(float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
-                              float podX, float podY, float podRot, bool warping) =>
-        ShipOf(Net.SenderOf(this))?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
+                              float podX, float podY, float podRot, bool warping)
+    {
+        var report = new Variant[] { Net.LocalId, px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping };
+        if (Net.IsHost) Net.ToHeard(0, this, nameof(NetShipState), report);
+        else Net.AskHost(this, nameof(NetShipState), report);
+    }
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = NetChannels.Ships)]
+    private void NetShipState(int owner, float px, float py, float vx, float vy, float rot, float ax, float ay, bool trigger, bool staggered,
+                              float podX, float podY, float podRot, bool warping)
+    {
+        // on the host, a pilot's own report of its own ship; on a guest, only what the host passes on
+        if (Net.IsHost ? !Net.FromPlayer(this, out int who) || who != owner : Net.SenderOf(this) != 1) return;
+        ShipOf(owner)?.ApplyState(px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
+        Net.ToHeard(owner, this, nameof(NetShipState), owner, px, py, vx, vy, rot, ax, ay, trigger, staggered, podX, podY, podRot, warping);
+    }
     public void SendHostState(int owner, double hp, double maxHp, bool alive, double stasis, int statusBits, double combat,
                               float[] slotLeft, float[] slotCool, float[] slotOwn, int[] slotN,
                               int wingTarget, int strikeTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
-        Rpc(nameof(NetHostState), owner, hp, maxHp, alive, stasis, statusBits, combat, slotLeft, slotCool, slotOwn, slotN,
-            wingTarget, strikeTarget, wingPos, wingRot, wingState, wingRearm);
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+        Net.ToHeard(0, this, nameof(NetHostState), owner, hp, maxHp, alive, stasis, statusBits, combat, slotLeft, slotCool, slotOwn, slotN,
+                    wingTarget, strikeTarget, wingPos, wingRot, wingState, wingRearm);
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = NetChannels.HostShips)]
     private void NetHostState(int owner, double hp, double maxHp, bool alive, double stasis, int statusBits, double combat,
                               float[] slotLeft, float[] slotCool, float[] slotOwn, int[] slotN,
                               int wingTarget, int strikeTarget, Vector2[] wingPos, float[] wingRot, int[] wingState, float[] wingRearm) =>
         ShipOf(owner)?.ApplyHostState(hp, maxHp, alive, stasis, statusBits, combat, slotLeft, slotCool, slotOwn, slotN,
                                       wingTarget, strikeTarget, wingPos, wingRot, wingState, wingRearm);
-    public void SendShield(int owner, float side) => Rpc(nameof(NetShield), owner, side);
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    public void SendShield(int owner, float side) => Net.ToHeard(0, this, nameof(NetShield), owner, side);
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = NetChannels.Shields)]
     private void NetShield(int owner, float side) => ShipOf(owner)?.ApplyShield(side);
+
+    // A WORLD'S OWN NODES REPORT BY WAY OF THE HUB TOO. The base exists only at home and the boss only
+    // in the arena, and an unreliable report can land after its world has gone: the base's last report
+    // before the party left for the arena reached a guest already there -- "Node not found: Hub/Yard"
+    // -- once each stream had a channel of its own and no newer report on a shared one threw the late
+    // one away. The hub is at the same path in every world, so it takes each and hands it on, or drops
+    // it. Reliable reports need none of this: they queue behind the word that moves the world.
+    public void SendBase(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb, float[] gh, float[] gw, int[] ga,
+                         Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh, float hw, int hf, float hstop) =>
+        RpcHome(this, nameof(NetBase), gp, gr, gs, gc, gb, gh, gw, ga, hp, hr, hs, ht, hc, sale, hh, hw, hf, hstop);
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = NetChannels.Base)]
+    private void NetBase(Vector2[] gp, float[] gr, int[] gs, float[] gc, Vector2[] gb, float[] gh, float[] gw, int[] ga,
+                         Vector2 hp, float hr, int hs, float ht, float hc, float sale, float hh, float hw, int hf, float hstop)
+    {
+        if (IsInstanceValid(Yard)) Yard.TakeState(gp, gr, gs, gc, gb, gh, gw, ga, hp, hr, hs, ht, hc, sale, hh, hw, hf, hstop);
+    }
+    public void SendBoss(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap, double hullMult) =>
+        RpcToSector(SectorKind.Arena, this, nameof(NetBoss), p, rot, hp, locked, nextSuper, superGap, hullMult);
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = NetChannels.Boss)]
+    private void NetBoss(Vector2 p, float rot, double hp, bool locked, double nextSuper, double superGap, double hullMult)
+    {
+        if (IsInstanceValid(Boss)) Boss.TakeState(p, rot, hp, locked, nextSuper, superGap, hullMult);
+    }
+    // a special move's sound, for the guests in the arena (Boss.Sound)
+    public void SendBossSound(string name, Vector2 at) => RpcToSector(SectorKind.Arena, this, nameof(NetBossSound), name, at);
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = NetChannels.BossSounds)]
+    private void NetBossSound(string name, Vector2 at)
+    {
+        if (InArena) Sfx.Special(name, at);
+    }
 
     public static void EndSession() => Session.End();
     // Send only to the peers that are IN a given sector. A peer still loading that world has no
@@ -589,7 +632,6 @@ public partial class Hub : Node2D
         if (_guestBefore || !Net.IsHost) Set(Spawns.Raider)?.DropAll(this, burst: false);
         bool wasGuest = _guestBefore;
         _guestBefore = !Net.IsHost;
-        ReportSector();
         // The session over (or now another's): who is held, who is READY and -- for a guest that was
         // one -- the mission all belonged to it. Kept, a held pilot kept a solo world's portal shut,
         // and a guest found the host's portal still open in its own world. (The host's LEVEL stays
@@ -600,21 +642,14 @@ public partial class Hub : Node2D
         if (InArena && !Net.IsOnline) { GoTo(SectorKind.Home); return; }
         Yard?.OnSessionChanged(!Net.IsHost);    // parks or restores your own yard (home only)
         RebuildShips();
-        // a guest that just connected introduces itself; the host and existing
-        // guests introduce themselves to it from OnPlayerJoined
-        if (Net.IsOnline && !Net.IsHost)
-        {
-            SendIdentity();
-            // ...and says it all twice more. Over the internet its first words can reach the host
-            // before the host has finished letting it in -- a lost handshake packet is resent AFTER
-            // the words that followed it -- and the host throws away what arrives too early: then it
-            // never knew this guest's world, and never sent it anything for it. Both are safe to repeat.
-            foreach (double later in new[] { 1.0, 3.0 })
-                GetTree().CreateTimer(later).Timeout += () =>
-                {
-                    if (IsInstanceValid(this) && Net.IsOnline && !Net.IsHost) { ReportSector(); SendIdentity(); }
-                };
-        }
+    }
+
+    // A GUEST THE HOST HAS LET IN introduces itself -- where it is, and who (Net.Admitted). The host
+    // and the guests already here introduce themselves to it from OnPlayerJoined.
+    private void OnAdmitted()
+    {
+        ReportSector();
+        SendIdentity();
     }
 
     // A REBUILD IS NOT A ROSTER CHANGE: every ship goes and comes straight back. Reporting each
@@ -769,9 +804,6 @@ public partial class Hub : Node2D
     private void SendIdentity(int toPeer = 0)
     {
         if (!Net.IsOnline) return;
-        // a guest mid-handshake still reports LocalId 1; peers would rightly reject
-        // that as impersonating the host, so wait for the real id (OnSessionChanged)
-        if (!Net.IsHost && Net.LocalId == 1) return;
         // THE LEVELS GO WITH THE GEAR, as two lists in step (one dictionary's keys and values, which
         // enumerate in the same order): every peer lifts this pilot's parts by this pilot's levels.
         var args = new Variant[] { Net.LocalId, Character.Name, Character.Main, Character.Accent, (int)Character.Class, Character.Bought, Character.Level,
@@ -1018,16 +1050,12 @@ public partial class Hub : Node2D
         }
     }
 
-    // THE COSMETIC CHANNEL. Every reliable RPC shares one ordered ENet channel by default, so on
-    // the internet one lost packet holds up everything queued behind it until it is resent --
-    // and a firing battleship sends a shell every quarter second. Shells, torpedoes and the
-    // missiles shot down (which must stay in order with their torpedoes) go on their own channel,
-    // so a lost one no longer delays a telegraph, a raider's arrival or the economy's report.
-    private const int Cosmetic = 1;
+    // Shells, torpedoes and the missiles shot down go on a reliable channel of their own
+    // (NetChannels.Cosmetic), so a lost one never holds up a telegraph or the economy's report.
 
     // host: a missile was shot down; every guest bursts its copy
     public void MissileDown(int id) => ToWorld(nameof(NetMissileDown), id);
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = NetChannels.Cosmetic)]
     private void NetMissileDown(int id)
     {
         foreach (var t in GetChildren().OfType<Shot>()) if (t.NetId == id) t.Intercept();
@@ -1297,7 +1325,7 @@ public partial class Hub : Node2D
                 part.Select(r => r.TetherTo ?? new Vector2(float.NaN, float.NaN)).ToArray(),
                 part.Select(r => r.NetFlags).ToArray());
     }
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = NetChannels.Hulls)]
     private void NetHulls(int kind, int[] ids, float[] hp)
     {
         if (Set(kind) is not { Kind.TakeHull: not null } set) return;
@@ -1305,7 +1333,7 @@ public partial class Hub : Node2D
         for (int i = 0; i < n; i++)
             if (set.Find(ids[i]) is { } node) set.Kind.TakeHull(node, hp[i]);
     }
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = NetChannels.Raiders)]
     private void NetRaiders(int[] ids, Vector2[] pos, float[] rot, float[] hp, Vector2[] tether, int[] flags)
     {
         // Shortest array wins. NetHostState already guards its wing arrays this way; this one
@@ -1719,7 +1747,7 @@ public partial class Hub : Node2D
     // ONE LAUNCH ON THE WIRE. There were three of these -- a shell's, a slug's and a torpedo's --
     // with the same four fields and their own spellings of the rest. A guest builds the same row
     // (Shots.Of) and flies a cosmetic copy: it draws and bursts, and damages nothing.
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = Cosmetic)]
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = NetChannels.Cosmetic)]
     private void NetShot(int kind, Vector2 from, Vector2 dir, float speed, float range,
                          float radius, int target, float turn, int id, float size, int variant) =>
         AddChild(new Shot { Kind = kind, Position = from, Dir = dir, Speed = speed, Range = range, Cosmetic = true,
@@ -1749,7 +1777,7 @@ public partial class Hub : Node2D
     // A FLASH BY ITS ROW. Its colour and its note are the row's (Beam.All), so the wire carries the
     // row's index and nothing else about it; Beam.Of reads an index this build has no row for as
     // point defence rather than throwing on a guest.
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = NetChannels.Flashes)]
     private void NetFlash(Vector2 a, Vector2 b, int beam) => AddFlash(a, b, beam);
     public const double FlashLife = 0.10;                            // a beam's flash, seconds
     private void AddFlash(Vector2 a, Vector2 b, int beam)
@@ -1758,7 +1786,7 @@ public partial class Hub : Node2D
         _flashes.Add((a, b, row.Tint, FlashLife)); Sfx.Beam(a, b, row);
     }
 
-    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = NetChannels.Dummies)]
     private void NetDummy(int number, double last, double avg, double total)
     {
         // BY NUMBER, not by position. The dummies are numbered 1, 3, 4, 5 (2's spot holds the two

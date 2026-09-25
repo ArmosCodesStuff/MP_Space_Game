@@ -34,6 +34,10 @@ public partial class MainMenu : Node2D
     private const double DodgeSpare = 1.0;
     private double DodgeAt => PlayerShip.WarpWarmup + Mathf.Pi / System.Math.Max(0.1, _cap.Stats["turn_rate"]) + DodgeSpare;
     private const double GunRange = 620;
+    // Home further off the bow than this and the pilot turns the hull itself before handing it to
+    // the autopilot: past it, Autopilot.Capital's rudder is hard over anyway and its throttle falls
+    // to a crawl, and a capital turns in proportion to its speed.
+    private const float ComeRound = 0.35f;
     // The diorama gets a camera, for the same reason the hub has one: the ships are drawn at the
     // size they really are, and at 1:1 a battleship is a smudge on a 2560-wide screen.
     //
@@ -264,7 +268,18 @@ public partial class MainMenu : Node2D
         bool dodging = _aoeLeft > 0 && _aoeLeft <= DodgeAt;
         if (!dodging && !_cap.Warping)
         {
-            if (_cap.Position.DistanceTo(_centre) > 40f) _cap.AutopilotTo = _centre;
+            if (_cap.Position.DistanceTo(_centre) > 40f)
+            {
+                // HOME IS USUALLY ASTERN: a dodge lands the ship at rest with its bow pointing away
+                // from where it was, which is its station. Left to the autopilot, a capital with its
+                // mark astern crawls round its turning circle at a tenth of its thrust -- over 20 s
+                // to come home from 250 u, longer than the 15 s between area shots -- so after its
+                // first dodge the title ship never got back on station. It comes round at its own
+                // rudder limit first, exactly as it does to dodge, and the autopilot flies it in.
+                float home = Aim.Face(_cap.Position, _centre);
+                if (Mathf.Abs(Mathf.AngleDifference(_cap.Rotation, home)) > ComeRound) { _cap.AutopilotTo = null; TurnTowards(home, delta); }
+                else _cap.AutopilotTo = _centre;
+            }
             else
             {
                 _cap.AutopilotTo = null;

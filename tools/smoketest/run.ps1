@@ -185,10 +185,6 @@ try {
                  -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $W "wan$port.out") -RedirectStandardError (Join-Path $W "wan$port.err")
     }
     $gx = @('wan')
-    # Godot's own note that it dropped a packet which overtook the handshake's last (lost, resent)
-    # one. Expected on a lossy path, and answered in the game: a joining guest repeats its
-    # introduction (Hub.OnSessionChanged), so what was dropped arrives again.
-    $dropRe += '|SYS_COMMAND_AUTH'
     Start-Sleep -Milliseconds 300
   }
 
