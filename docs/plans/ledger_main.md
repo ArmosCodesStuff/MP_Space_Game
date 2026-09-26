@@ -10,9 +10,12 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 - thrust / one Opus writer (background 22:37; owner: idle plume half-disc or off, the point only under thrust; tiny cosmetic side thrusters on
   turns/strafe): wt_thrust from version-l, checks + 3 frames, proves quick,solo,screens. lands: one Opus gate, merge before the bar.
 
-- retro-tokens / one Fable agent (22:47; owner: less tokens, compile + review enough?, docs?, why so much): commits docs/plans/fable_retro_tokens.md. lands: 4 lines, apply the top changes.
 
-## Landed (verdict first; delete the row once its action is done): none
+## Landed (verdict first; delete the row once its action is done)
+- 23:00 retro 36af923 (fable_retro_tokens.md): 97% of input = context re-reads; 74 agents past 100 turns = 76% of 4,913M (coordinator 1,510M).
+  Applied 23:05: 100-call cap (CLAUDE.md), one engine proof per round + Opus check rewrites + merge via tools/merge_lane.ps1 (script, tester.md),
+  prompts never sliced. Owner's two: auto-compact ~150k (-600M/day), connectors off for this session (-450M/day). Docs import: no.
+  action: stop + resume with the new script when round 3's merges land (before round 4's chains); delete this row then.
 - 21:40 knife-edges group merged 5e1d86d. Owed to round 3 (kind check): the ramp check's tolerance went 1e-3 -> 3e-3 with the off-boundary
   sampling; restore 1e-3 and prove at 3 seeds (the sampling alone should hold; a widened tolerance is a loosening).
 
