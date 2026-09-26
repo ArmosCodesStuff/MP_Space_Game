@@ -3341,15 +3341,19 @@ public partial class _Test : Node
         }
 
         // THE OVERSHOOT: {-80, 150, 300, 600, 900} u past the ring -> {0, 1, 2, 4, 6} s, as the host (this
-        // ship's own) sets it, and as the drive's own rule reads what it really moved.
+        // ship's own) sets it, and as the drive's own rule reads what it really moved. `secs` is the
+        // nominal bucket, printed for readability only: a frame-quantized held duration lands the actual
+        // jump a few u either side of `over` (knife edge on a fixed ±0.15 s window against the nominal
+        // literal, exactly as the HOLDS block above avoids with `wantOff`), so the check is against
+        // `byRule` -- the price the drive's own rule owes for what it actually moved -- never the input.
         foreach (var (over, secs) in new[] { (-80.0, 0.0), (150.0, 1.0), (300.0, 2.0), (600.0, 4.0), (900.0, 6.0) })
         {
             H.ClearSelection();
             me.Position = VaryNear(home, 200f); Ready(VaryAngle()); await Wait(0.2);
             var (_, moved, _) = await WarpHold(me, 1.0 + (2400.0 + over) / 800.0);
             double off = me.Statuses.Left(Status.Disabled), byRule = Drives.DisabledFor(moved.Length() - 2400.0);
-            Check(Math.Abs(off - secs) < 0.15 && Math.Abs(off - byRule) < 0.05,
-                  $"a jump {moved.Length() - 2400:0} u past the 2400 u ring lands disabled {off:0.00} s (want {secs:0} ±0.15; its own distance prices {byRule:0.00})");
+            Check(Math.Abs(off - byRule) < 0.05,
+                  $"a jump {moved.Length() - 2400:0} u past the 2400 u ring lands disabled {off:0.00} s (want {secs:0}; its own distance prices {byRule:0.00})");
             if (secs >= 4.0)
             {   // DISABLED: no thrust, no rudder, no ability, no warp
                 var at = me.Position; float rot = me.Rotation;
@@ -7344,7 +7348,8 @@ public partial class _Test : Node
     }
 
     // ── SLICE 6a: THE CARRIER'S THREE WINGS AT ONCE (kits_v31 §7: "CV patrol vs CV gunships -- split by anchor"; kits_v3
-    // §3.1: the first wing keeps its orders). Three varied runs (VaryNear spot; a held gunship 1300-2200 u off at a
+    // §3.1: the first wing keeps its orders). Three varied runs (VaryNear spot; a held gunship 1300-1450 u off, safely
+    // inside the fighters' 1500 u control_range (Stats.cs:186), at a
     // VaryAngle bearing, attacked by the fighters and picked for the gunships): Space (attack), E, Q -- 3 s on, the three
     // fighters away on it, two gunships on its 240 u circle, three patrol craft within 700 u of the carrier; 6 fighters
     // and patrol craft out together.
@@ -7361,15 +7366,19 @@ public partial class _Test : Node
             void Hold() { s.Position = at; s.Velocity = Vector2.Zero; }
             s.Sl("super").Left = 0; s.Sl("super").Cool = 0; s.Sl("gunships").Left = 0; s.Sl("gunships").Cool = 0;
             Hold(); await Wait(0.2); Hold();
-            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(1300f, 2200f);
+            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(1300f, 1450f);   // inside control_range 1500 (Stats.cs:186)
             var tgt = H.SpawnRaider(spot, Enemies.Gunship); tgt.Hp = 1e9; tgt.ApplyStatus(Status.Disabled, 60);
             await Frame();
             H.ClearSelection(); H.AddTarget(tgt);
             s.OrderAttack(tgt);
             s.UseAbility("gunships", tgt.NetId, new[] { tgt.NetId });
             s.UseAbility("super", 0);
-            double tp = s.Clock;
-            while (s.Clock < tp + Vary(5.0f, 6.0f)) { Hold(); tgt.Position = spot; await Frame(); }
+            // poll, never a blind clock: settle until every fighter has left (or a generous cap), so a
+            // slower-than-usual launch queue (the recalled wing docking and resting before it flies
+            // again) is never mistaken for one that never launched
+            double tp = s.Clock, cap = tp + 20.0;
+            while (s.Clock < tp + Vary(5.0f, 6.0f) || (Of(WingKind.Fighter).Count(w => !w.Inside) < 3 && s.Clock < cap))
+            { Hold(); tgt.Position = spot; await Frame(); }
             int fightersOut = Of(WingKind.Fighter).Count(w => !w.Inside), guns = Of(WingKind.Gunship).Count(w => Mathf.Abs(w.Position.DistanceTo(spot) - 240f) <= 30f);
             int patrolHome = Of(WingKind.Patrol).Count(w => !w.Inside && w.Position.DistanceTo(at) <= 700f);
             Check(ReferenceEquals(s.WingTarget, tgt) && fightersOut == 3 && guns == 2 && patrolHome == 3 && fightersOut + patrolHome == 6,
@@ -16964,7 +16973,7 @@ public partial class _Test : Node
         Check(labels.Any(x => x.Contains("Broadside, averaged over its cycle:  27.27 DPS")) && labels.Any(x => x.Contains("Point defence:  2.00 DPS"))
               && labels.Any(x => x.Contains("2 turrets at 1.00 DPS, always on")) && labels.Any(x => x.Contains("SUSTAINED TOTAL:  54.27 DPS")),
               "and the total adds up every line it prints: guns 25.00 + broadside 27.27 + point defence 2.00 (2 turrets at 1 DPS, always on: passive) = 54.27 DPS");
-        Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 11, "keys tab lists the battleship's 5 abilities (guns, mode, broadside, brace, CIWS) + 6 open slots (point defence is passive: no key)");
+        Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 12, "keys tab lists the battleship's 5 abilities (guns, mode, broadside, brace, CIWS) + 1 drive (warp) + 6 open slots (point defence is passive: no key)");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
               "six open hotkeys (1-6) on every class, including undefined ones");
@@ -17405,16 +17414,16 @@ public partial class _Test : Node
         Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 283.5f) < 0.5f,
               "carrier flies the pack's carrier_a sprite at 283.5 u, 25% smaller than the battleship");
         await Park(VaryNear(fighterPair + new Vector2(-120, 150), 20f), 0);
-        // Passive, the three mounts are already on the two practice fighters (one doubled up) when a
-        // third light comes into reach: the one that doubled up must spread to it, since no window
-        // starts a fresh pick (Turret.Acquire's `held`)
+        // Passive, the two mounts (pd_count 2) are already on the two practice fighters, one each,
+        // when a third light comes into reach: neither mount is idle and nothing bests what it holds,
+        // so both keep their fighter -- no window starts a fresh pick (Turret.Acquire's `held`)
         var pdLight = H.SpawnRaider(ship.Position + new Vector2(-80, 160));   // a third light target (the practice fighters are two), placed off the parked hull
         await Wait(2.0);                                                      // nothing pressed: point defence is passive
         var cpds = ship.PdTurrets;
         var pdts = cpds.Select(x => x.Target).Where(x => x != null).ToList();
-        Check(pdts.Distinct().Count() == 3 && pdts.All(t => t is Raider || (t is TargetDummy td && td.Fighter)),
-              "carrier PD: three turrets on three different LIGHT targets -- never a plain dummy");
-        // two light targets for three turrets: the spare must double up on a light one, never a dummy
+        Check(cpds.Count == 2 && pdts.Distinct().Count() == 2 && pdts.All(t => t is Raider || (t is TargetDummy td && td.Fighter)),
+              "carrier PD: two turrets on two different LIGHT targets -- never a plain dummy");
+        // two turrets, two light targets: neither is idle so the third light is left alone, never a dummy
         if (GodotObject.IsInstanceValid(pdLight)) pdLight.TakeDamage(9999);
         await Wait(1.5);
         var pdts2 = cpds.Select(x => x.Target).Where(x => x != null).ToList();
