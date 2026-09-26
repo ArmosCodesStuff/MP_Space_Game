@@ -17361,16 +17361,16 @@ public partial class _Test : Node
         Check(spr.Texture.ResourcePath.EndsWith("carrier_player.png") && Math.Abs(spr.Texture.GetHeight() * spr.Scale.Y - 283.5f) < 0.5f,
               "carrier flies the pack's carrier_a sprite at 283.5 u, 25% smaller than the battleship");
         await Park(VaryNear(fighterPair + new Vector2(-120, 150), 20f), 0);
-        // Passive, the three mounts are already on the two practice fighters (one doubled up) when a
-        // third light comes into reach: the one that doubled up must spread to it, since no window
-        // starts a fresh pick (Turret.Acquire's `held`)
+        // Passive, the two mounts (pd_count 2) are already on the two practice fighters, one each,
+        // when a third light comes into reach: neither mount is idle and nothing bests what it holds,
+        // so both keep their fighter -- no window starts a fresh pick (Turret.Acquire's `held`)
         var pdLight = H.SpawnRaider(ship.Position + new Vector2(-80, 160));   // a third light target (the practice fighters are two), placed off the parked hull
         await Wait(2.0);                                                      // nothing pressed: point defence is passive
         var cpds = ship.PdTurrets;
         var pdts = cpds.Select(x => x.Target).Where(x => x != null).ToList();
-        Check(pdts.Distinct().Count() == 3 && pdts.All(t => t is Raider || (t is TargetDummy td && td.Fighter)),
-              "carrier PD: three turrets on three different LIGHT targets -- never a plain dummy");
-        // two light targets for three turrets: the spare must double up on a light one, never a dummy
+        Check(cpds.Count == 2 && pdts.Distinct().Count() == 2 && pdts.All(t => t is Raider || (t is TargetDummy td && td.Fighter)),
+              "carrier PD: two turrets on two different LIGHT targets -- never a plain dummy");
+        // two turrets, two light targets: neither is idle so the third light is left alone, never a dummy
         if (GodotObject.IsInstanceValid(pdLight)) pdLight.TakeDamage(9999);
         await Wait(1.5);
         var pdts2 = cpds.Select(x => x.Target).Where(x => x != null).ToList();
