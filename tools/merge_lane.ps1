@@ -6,19 +6,27 @@
 # 15 min), git merge --no-ff --no-commit, the rows appended to docs/plans/ledger_test.md and the lane ledger removed in the same
 # commit. Prints ONE JSON line {merged, head, note}; a conflict aborts and names it (the agent resolves in its own temporary worktree
 # and calls again). No push.
-param([string]$Main, [string]$Branch, [string]$Name, [string]$Rows = '', [string]$LaneLedger = '')
+param([string]$Main, [string]$Branch, [string]$Name, [string]$Rows = '', [string]$LaneLedger = '', [string]$Tree = '')
 $ErrorActionPreference = 'Continue'
 function Done($m, $h, $n) { [pscustomobject]@{ merged = $m; head = $h; note = $n } | ConvertTo-Json -Compress; exit 0 }
 function Git($dir, [string[]]$a) { $o = & git -C $dir @a 2>&1; return (($o | ForEach-Object { "$_" }) -join "`n") }
 function Clip($s) { if ($s.Length -gt 250) { $s.Substring(0, 250) } else { $s } }
 if (-not $Main -or -not $Branch -or -not $Name) { Done $false '' 'usage: -Main -Branch -Name [-Rows] [-LaneLedger]' }
 
-# 1. the branch carries version-l
+# 1. the branch carries version-l. A branch checked out in a lane tree cannot be added as a second worktree (git refuses), so step 1
+# runs IN the lane tree when -Tree names it (the lane's agent has returned by then: the workflow holds the pool slot until the
+# merge is done); without -Tree a temporary worktree is used (a branch checked out nowhere).
 & git -C $Main merge-base --is-ancestor version-l $Branch 2>$null
 if ($LASTEXITCODE -ne 0) {
-  $tmp = Join-Path (Split-Path $Main -Parent) ("WarShips_wt_merge_" + [guid]::NewGuid().ToString('N').Substring(0, 8))
-  $w = Git $Main @('worktree', 'add', '-q', $tmp, $Branch)
-  if ($LASTEXITCODE -ne 0) { Done $false '' ("worktree add: " + (Clip $w)) }
+  $tmp = if ($Tree) { $Tree } else { Join-Path (Split-Path $Main -Parent) ("WarShips_wt_merge_" + [guid]::NewGuid().ToString('N').Substring(0, 8)) }
+  if ($Tree) {
+    $cur = Git $Tree @('rev-parse', '--abbrev-ref', 'HEAD')
+    if ($cur.Trim() -ne $Branch) { Done $false '' "the lane tree $Tree has $cur checked out, not $Branch" }
+    if (Git $Tree @('status', '--short')) { Done $false '' "the lane tree $Tree is dirty" }
+  } else {
+    $w = Git $Main @('worktree', 'add', '-q', $tmp, $Branch)
+    if ($LASTEXITCODE -ne 0) { Done $false '' ("worktree add: " + (Clip $w)) }
+  }
   try {
     $m = Git $tmp @('merge', '--no-edit', 'version-l')
     if ($LASTEXITCODE -ne 0) { Git $tmp @('merge', '--abort') | Out-Null; Done $false '' ("conflict merging version-l into ${Branch}: " + (Clip $m)) }
@@ -29,7 +37,7 @@ if ($LASTEXITCODE -ne 0) {
     Pop-Location
     if ("$q" -notmatch 'ALL CHECKS PASSED') { Done $false '' ("verify -Quick after merging version-l into the branch: " + (Clip "$q")) }
   } finally {
-    Git $Main @('worktree', 'remove', '--force', $tmp) | Out-Null
+    if (-not $Tree) { Git $Main @('worktree', 'remove', '--force', $tmp) | Out-Null }
   }
 }
 
