@@ -7,9 +7,9 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   NEW session: pass args.agentType "fixer" then; 23:52's relaunch failed on it, 0 tokens): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
   -> release. lands: 3 lines to the owner + frames; a stop -> ledger_test.md + journal, fix, relaunch per Next 1. ONE Monitor (journal + watchdog every 15 min).
 
-- thrust / one Opus writer (background 22:37; owner: idle plume half-disc or off, the point only under thrust; tiny cosmetic side thrusters on
-  turns/strafe; 23:15 + turrets draw at their host's layer, never above an overlapping boss: a z check from 3 hosts + frame turrets_under_boss):
-  wt_thrust from version-l, checks + 4 frames, proves quick,solo,screens. lands: one Opus gate, merge before the bar.
+- thrust / writer done 23:55 (wt/thrust 651039e, 5 commits: idle half-disc plume, point under thrust on every peer, ClassArt.SideJets, turrets at
+  the hull's layer; 25 checks PASS; six checks unrun; known: webbed hull at its cap shows idle, Fx shimmer over a boss). One Opus gate running
+  (23:58). lands: pass -> tools\merge_lane.ps1 into version-l before round 4's chains (its six checks run there); fail -> the defects back to one writer.
 
 
 ## Landed (verdict first; delete the row once its action is done): none (retro 36af923 applied and live since 23:50)
