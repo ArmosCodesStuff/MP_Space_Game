@@ -1,0 +1,108 @@
+{
+ "a3": [
+  {
+   "id": "a3-screens-wraith-nre",
+   "title": "Screens sweep dies after 78d_wraith_venom: NRE at Shots.cs.txt:525 (H or H.Yard null), ~57 frames lost",
+   "kind": "code",
+   "rung": "screens",
+   "checks": "LaneA6dWraithFrames -> hull block (45_hull_and_rebuild, 46_damaged_miner and every later frame)",
+   "evidence": "tp4ar3_4/2_screens.fails.txt:2; stack in warships_slot3 WarshipsShots godot.log: _Shots._Ready() line 525 NRE; frames 53 (round 1 stopped at 47 via ObjectDisposed, now past it); SWEEP INCOMPLETE",
+   "expect": "",
+   "after": "",
+   "owner": "kits6d wraith frames 78b-78d (ledger_kits6d.md)",
+   "files": "tools/screens/Shots.cs.txt:1351-1397,521-527",
+   "unblocks": 57
+  },
+  {
+   "id": "a3-rip-chunk-literal",
+   "title": "Rip chunk checks pass stale sizes 57.6/35.2/89.6; code gives 0.16 x LengthOf = 115.2/48.0/77.3",
+   "kind": "check",
+   "rung": "solo@314566543",
+   "checks": "FieldsRipChecks (Lancer, pylon, base), LaneA6aGrapnelRipChecks (silver_lancer, pylon, base runs 0-2)",
+   "evidence": "tp4ar3_0/2_solo.fails.txt:2012 seed 314566543: rip on the Lancer 57.6 u (0.16 of its 720 u), chunk 115.2 u; all 4 seeds; literal 57.6",
+   "expect": "115.2 Lancer / 48.0 pylon / 77.3 base; kits_v3.md:164 Size = 0.16 x length (bosses x2, Sprites J3d bcb6c2a)",
+   "after": "",
+   "owner": "kits6a J11 grapnel rip literal (ledger_kits6a.md:535)",
+   "files": "tools/smoketest/SmokeTest.cs.txt:21140,21141,21874,21875,22137",
+   "unblocks": 50
+  },
+  {
+   "id": "a3-wraith-barrel-settle",
+   "title": "Wraith scattergun checks fire after a fixed 1.0 s settle; 90 deg/s barrel is still up to 69 deg off",
+   "kind": "check",
+   "rung": "solo@314566543",
+   "checks": "LaneA6dScatterChecks (one volley at, at range, point blank, strafe), LaneA6dBackstabChecks (backstab, practice dummy), veil volley checks",
+   "evidence": "tp4ar3_0/2_solo.fails.txt:1755 seed 314566543: fanned 46.1..66.1 (want -10..+10, 3.33 apart); a run near 0 passes the fan; all 4 seeds",
+   "expect": "-10 .. +10, 3.33 apart about the aim; cards/wraith.md:7 cursor-aimed, Stats.cs:152 main_turn 90 deg/s",
+   "after": "",
+   "owner": "kits6d Wraith (ledger_kits6d.md)",
+   "files": "tools/smoketest/SmokeTest.cs.txt:12708-12815",
+   "unblocks": 39
+  },
+  {
+   "id": "a3-tender-lance-silent",
+   "title": "Tender's mending lance lands no tick under a held trigger: slot N 0, Own 0, line LANCE not BURNING",
+   "kind": "code",
+   "rung": "solo@314566543",
+   "checks": "LaneA6bLanceTriggerChecks runs 0-2, Solo overdrive 'the lance TICKS', ability sweep TENDER LANCE, LaneA6bFieldsHost/Guest lance",
+   "evidence": "tp4ar3_0/2_solo.fails.txt:1173 seed 314566543: first tick -1.00 s, 0 ticks 99.000 s apart; trigger runs at all 4 seeds, TICKS passes at 527657250 only; literal BURNING",
+   "expect": "",
+   "after": "",
+   "owner": "kits6b-J7 mending lance (ledger_kits6b.md)",
+   "files": "scripts/PlayerShip.cs:1819-1896 (FireControl, FireOnce, LanceTick)",
+   "unblocks": 23
+  },
+  {
+   "id": "a3-suppress-locked",
+   "title": "A refused press's LOCKED note outlives a later successful press of the same ability at level 3",
+   "kind": "code",
+   "rung": "solo@314566543",
+   "checks": "WallChecksLive check 4: Destroyer Suppressing fire, HeavyWarden Taunt, LightEcho Rewind at level 3 acts",
+   "evidence": "tp4ar3_0/2_solo.fails.txt:641 seed 314566543: acts (LOCKED \u00c2\u00b7 L3; L0.00 C0.00 -> L5.68 C19.68): the ability acted, FailNote still set; all 4 seeds",
+   "expect": "FailNote null after the level-3 press acts; level_walls.md",
+   "after": "",
+   "owner": "walls lane (ledger_walls.md); FailShow PlayerShip.cs:1539",
+   "files": "scripts/PlayerShip.cs:1539, scripts/AbilityBar.cs",
+   "unblocks": 12
+  },
+  {
+   "id": "a3-mortar-bearing",
+   "title": "Mortar blast not placed on the cursor's bearing at the clamped distance (placed False) at every cursor distance",
+   "kind": "code",
+   "rung": "solo@314566543",
+   "checks": "LaneA6bMortarChecks runs 0-2",
+   "evidence": "tp4ar3_0/2_solo.fails.txt:1136 seed 314566543: cursor 119 u lands 150 u out on its bearing (False); runs at 603/1362 u too; all 4 seeds; flight 1.38 s ok",
+   "expect": "",
+   "after": "",
+   "owner": "kits6b Bastion mortar (ledger_kits6b.md)",
+   "files": "scripts/PlayerShip.cs:1860-1864,1901-1907 (LobPoint, Lob), scripts/Missiles.cs",
+   "unblocks": 12
+  },
+  {
+   "id": "a3-broadside-arcs",
+   "title": "Broadside lands 343.75 not 375: MainBears arcs hold two barrels off the side-on line",
+   "kind": "code",
+   "rung": "solo@314566543",
+   "checks": "Solo broadside 'every shell lands: 6 volleys x 4 shells', 'the battleship: guns 25 DPS and a 375-damage broadside'",
+   "evidence": "tp4ar3_0/2_solo.fails.txt:371 seed 314566543: every shell lands ... = 375 (343.750); :378 52.27 DPS; all 4 seeds; rewrite to 343.75 refused round a2",
+   "expect": "375; cards/battleship.md broadside side-on",
+   "after": "",
+   "owner": "kits6a battleship arcs (ledger_kits6a.md)",
+   "files": "scripts/Ships.cs:206 MainBears, scripts/Turrets.cs",
+   "unblocks": 8
+  },
+  {
+   "id": "a3-regen-once",
+   "title": "Two same-frame hits through PlayerShip.Incoming do not net exactly 5 then 10",
+   "kind": "code",
+   "rung": "solo@314566543",
+   "checks": "Solo damage rules: 'the same source lands only once inside 0.35 s', 'a different source lands at once'",
+   "evidence": "tp4ar3_0/2_solo.fails.txt:671 seed 314566543: no Wait between hits, so regen cannot explain it; 'after 0.52 s lands again' passes; all 4 seeds; literal 5",
+   "expect": "",
+   "after": "",
+   "owner": "damage door PlayerShip.Incoming/Guarded (ledger_items.md Ablative)",
+   "files": "scripts/PlayerShip.cs:1590-1654",
+   "unblocks": 8
+  }
+ ]
+}
