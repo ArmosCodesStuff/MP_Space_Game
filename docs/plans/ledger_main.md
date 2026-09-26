@@ -7,7 +7,10 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   -> release. lands: 3 lines to the owner + frames (framesForOwner, netOwed); a stop -> ledger_test.md + journal, fix, relaunch per Next 1.
   ONE Monitor (journal results/merges + agents.ps1 -Minutes 40 every 15 min; owner 19:40: wake-ups are the watchers' cost) re-armed at expiry.
 
-## Landed (verdict first; delete the row once its action is done): none (code-read 17b94df: do not rewrite; round>=2 triage reads it)
+## Landed (verdict first; delete the row once its action is done)
+- 20:27 keys group (a2-keys-rows, carrier-pd-count, wings-range, ring-timing) done, 4/4 proved, NOT merged by the run: the script's string
+  match of asserted vs my prose expects failed ("two turrets"). Script: the merge agent judges now. action: one Sonnet merge agent
+  (background 20:30) merges wt_fix2 into version-l; the same for any later a2 check group the run strands; add their ids to done.
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task wxmo7btan (round 1: two merges; round 2: 17 pre-authored fixes in 5 groups, no chains, no triage; round 3 measures). A stop ->
