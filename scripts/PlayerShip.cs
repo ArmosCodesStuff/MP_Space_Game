@@ -340,7 +340,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             Prey     = Targeting.PointDefence,        // what its PD takes: a main gun never picks
             Weapon   = pd ? Dealt.Pd : null,          // what the door credits its PD's blows as
             Kind     = pd ? Shots.Shell : Stats.Def.Shot,   // the round its mains fire (ClassDef.Shot: the freighter's spotter, the Warden's flak)
-            Damage   = pd ? Stats["pd_damage"]   : Stats["main_damage"],
+            Damage   = DamageOf(pd ? "pd_damage" : "main_damage"),   // lifted by every running row's DamageOn (the CIWS x3)
             Interval = Cadence(pd ? "pd_interval" : "main_interval"),
             Range    = (float)(pd ? Stats["pd_range"] : Stats["main_range"]),
             Turn     = (float)(pd ? Stats["pd_turn"]  : Stats["main_turn"]),
