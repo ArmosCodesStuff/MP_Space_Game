@@ -428,6 +428,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // a chamber is fitted seated (a reload that was running ended with the refit), and the owner's view with it
         foreach (var def in list) if (def.Reload is { } rl) ActiveReload.Seat(this, rl);
         ReloadView = default; _charge = -1; _strokeDown = false;
+        // ...and the new class's main gun is fitted loaded: the old gun's reload went with it, so the tender's lance
+        // lights on the first frame of Space after a battleship's 2 s reload, not up to 2 s later
+        _gunCd = 0;
 
         var art = MyArt;
         var tex = Assets.Load<Texture2D>(art.Texture);
@@ -605,6 +608,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // BEHIND A LEVEL WALL (Unlocks): the slot says the level that opens it, and nothing is asked --
         // before a local press too, which the host would never see. The host holds the same wall.
         if (Unlocks.LockedAt(Class, Peak, def) is int at) { Fail(id, Unlocks.Locked(at)); return; }
+        // A PRESS PAST THE WALL is a new press: an earlier refusal's note no longer says why (a refusal below sets its own)
+        _fails.Remove(id);
         // A LOCAL ability is the owner's own intent (the fire mode): it rides in the state report
         // rather than being asked for.
         if (def.Local) { def.Press?.Invoke(this, null); return; }
