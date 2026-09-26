@@ -16141,14 +16141,14 @@ public partial class _Test : Node
         Check(Count<BasePanel>() == 0, "B does nothing while the ship menu owns the screen");
         // THE CARD SAYS WHAT THE SHIP WILL HAVE: the same sheet the ship fights with, this pilot's
         // parts in it, rather than a hull hand-written into each class's blurb. A stock battleship
-        // carries no chips, so its card reads the class's 300.
+        // carries no chips, so its card reads the class's 500.
         {
             var cards = Nodes<Button>(Nodes<CharacterCreator>().First()).Where(b2 => b2.Text.Contains(" hull")).ToList();
             double bsHull = new ShipStats(ShipClass.Battleship,
                                           Equipment.Bonuses(ShipClass.Battleship, Character.LoadoutFor(ShipClass.Battleship), Character.Peak, Character.GearLevel),
                                           Equipment.Adds(ShipClass.Battleship, Character.LoadoutFor(ShipClass.Battleship), Character.Peak, Character.GearLevel))["hull"];
             var bsCard = cards.FirstOrDefault(b2 => b2.Text.StartsWith("BATTLESHIP"));
-            Check(cards.Count == 3 && bsCard != null && Math.Abs(bsHull - 300) < 1e-9
+            Check(cards.Count == 3 && bsCard != null && Math.Abs(bsHull - 500) < 1e-9
                   && bsCard.Text.Contains($"{bsHull:0} hull") && !Classes.All.Any(c2 => c2.Blurb.Contains(" hull.")),
                   $"a class card prints the hull the ship will actually have -- the sheet's, with the starting kit in it ({bsHull:0} on the battleship's card, and no class blurb writes one any more)");
         }
