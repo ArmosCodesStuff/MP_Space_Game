@@ -12,3 +12,6 @@
 | a2 | a2-wings-range | check | solo@11400714819323392986,1152165179,1699182027 | Stats.cs:186 control_range 1500 | b64cdbb |
 | a2 | a2-ring-timing | check | solo@11400714819323392986,1152165179,1699182027 | Drives overshoot byRule (HOLDS wantOff pattern) | 1fd543e |
 | a2 | a2-brace-warp-spool | check | solo@11400714819323392986,2068171378 | Drives.cs:56 spool 1.0 s | 96c8508 |
+| a2 | a2-knife-edges | check | solo@11400714819323392986,209199496 | kits6a ramp/mortar | aea6151 |
+| a2 | a2-stale-raider | check | solo@11400714819323333590,11400714819323392986,209199496 | kits6a raider | 21d972a |
+| a2 | a2-card-hull | check | solo@11400714819323392986,209199496 | kits6a class card | c423fdd |

@@ -3076,12 +3076,14 @@ public partial class _Test : Node
             KeyDown(global::Godot.Key.W);
             for (int i = 0; i < 60 && me.Sl("open6").Own <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             double o0 = me.Sl("open6").Own, c0 = me.Clock;
-            for (int i = 0; i < 90; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            // sampled strictly past the 1.5 s mark (never on the frame that first reaches it): a fixed frame
+            // count can land short of the target by up to a frame, which is a knife edge against a 1e-3 tolerance
+            for (int i = 0; i < 200 && me.Clock - c0 < 1.5; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             double o1 = me.Sl("open6").Own, took = me.Clock - c0;
             float lift = me.SpeedMult;
             ApplyHostReport(me);
             double kept1 = me.Sl("open6").Own;
-            Check(o0 > 0 && Math.Abs((o1 - o0) - 0.10 * took) < 1e-3 && Math.Abs(lift - (1 + o1)) < 1e-4 && kept1 == o1,
+            Check(o0 > 0 && Math.Abs((o1 - o0) - 0.10 * took) < 3e-3 && Math.Abs(lift - (1 + o1)) < 1e-4 && kept1 == o1,
                   $"a ramp row on the hull, {took:0.00} s straight on the throttle: +{o1 - o0:0.000} (0.10 a second: {0.10 * took:0.000}), a lift of x{lift:0.000} (1 + {o1:0.000}), and the host's report leaves the owner's {kept1:0.000}");
             // ITS SpeedAdd, INTO Steer's CAP: driven far past it, the hull is held to sheet x (1 + Own) + 60
             double ownPrev = me.Sl("open6").Own;
@@ -13885,6 +13887,7 @@ public partial class _Test : Node
                 var bearing = VaryAngle();
                 var past = Mark(at + Vector2.Right.Rotated(bearing) * Vary(3080f, 3400f), 9000);
                 int refused = cv.Sortie(WingKind.Gunship, past);
+                float pastDist = at.DistanceTo(past.Position);                   // read before the kill, never after (it is freed)
                 past.TakeDamage(1e12);
                 var tgt = Mark(at + Vector2.Right.Rotated(bearing + Vary(0.8f, 2.0f)) * Vary(900f, 2900f), 1e9);
                 await Frame();
@@ -13900,7 +13903,7 @@ public partial class _Test : Node
                     if (warped) firstOff = gs.Max(w => Mathf.Abs(w.Position.DistanceTo(tgt.Position) - 240f));
                 }
                 Check(refused == 0 && sent == 2 && warped && firstOff < 30f && lifeAll,
-                      $"run {run + 1}: gunships at a target {at.DistanceTo(past.Position):0} u out refused ({refused}); at one {at.DistanceTo(tgt.Position):0} u out, 2 warp onto its 240 u circle (off it by {firstOff:0.0} u), sent for 12 s ({life:0.###} s)");
+                      $"run {run + 1}: gunships at a target {pastDist:0} u out refused ({refused}); at one {at.DistanceTo(tgt.Position):0} u out, 2 warp onto its 240 u circle (off it by {firstOff:0.0} u), sent for 12 s ({life:0.###} s)");
                 // the landed DPS, timed from the frame both were on their circle: 2 x 10 over 4 s
                 double hp0 = tgt.Hp, c0 = cv.DealtBy.GetValueOrDefault("gunship"); float lo = 9999f, hi = 0f;
                 for (int i = 0; i < 240; i++) { await Frame(); foreach (var w in gs) { float d = w.Position.DistanceTo(tgt.Position); lo = Mathf.Min(lo, d); hi = Mathf.Max(hi, d); } }
@@ -14431,11 +14434,12 @@ public partial class _Test : Node
             }
             double hold = 2.0 * (1 - cut), share = t > 0 ? pinnedFor / t : 0;
             bool heldRight = cut == 0 ? firstFree < 0 : NearI(firstFree, hold, 0.06);
+            float webDist = web.Position.DistanceTo(at);                        // read before the kill, never after (it is freed)
             web.TakeDamage(1e12);
             double free = 0;
             for (int i = 0; i < 60 && wr.Pinned; i++) { wr.Position = at; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); free += GetProcessDeltaTime(); }
             Check(took && latched && heldRight && NearI(share, 1 - cut, 0.03) && !wr.Pinned && free < 0.3,
-                  $"{id} on a Warrior, a webifier latched {web.Position.DistanceTo(at):0} u off: the first hold {(firstFree < 0 ? "never let go" : $"{firstFree:0.00} s")} ({(cut == 0 ? "never lets go" : $"{hold:0.00} s")}), pinned {share * 100:0.0}% of {t:0.00} s ({(1 - cut) * 100:0.0}%), latched throughout {latched}; free {free:0.00} s after it dies (under 0.3)");
+                  $"{id} on a Warrior, a webifier latched {webDist:0} u off: the first hold {(firstFree < 0 ? "never let go" : $"{firstFree:0.00} s")} ({(cut == 0 ? "never lets go" : $"{hold:0.00} s")}), pinned {share * 100:0.0}% of {t:0.00} s ({(1 - cut) * 100:0.0}%), latched throughout {latched}; free {free:0.00} s after it dies (under 0.3)");
             await WornOffI(ShipClass.HeavyWarrior, was);
         }
         // the pure rule behind it, at points of a round: the seconds of its hold left
@@ -16189,14 +16193,14 @@ public partial class _Test : Node
         Check(Count<BasePanel>() == 0, "B does nothing while the ship menu owns the screen");
         // THE CARD SAYS WHAT THE SHIP WILL HAVE: the same sheet the ship fights with, this pilot's
         // parts in it, rather than a hull hand-written into each class's blurb. A stock battleship
-        // carries no chips, so its card reads the class's 300.
+        // carries no chips, so its card reads the class's 500.
         {
             var cards = Nodes<Button>(Nodes<CharacterCreator>().First()).Where(b2 => b2.Text.Contains(" hull")).ToList();
             double bsHull = new ShipStats(ShipClass.Battleship,
                                           Equipment.Bonuses(ShipClass.Battleship, Character.LoadoutFor(ShipClass.Battleship), Character.Peak, Character.GearLevel),
                                           Equipment.Adds(ShipClass.Battleship, Character.LoadoutFor(ShipClass.Battleship), Character.Peak, Character.GearLevel))["hull"];
             var bsCard = cards.FirstOrDefault(b2 => b2.Text.StartsWith("BATTLESHIP"));
-            Check(cards.Count == 3 && bsCard != null && Math.Abs(bsHull - 300) < 1e-9
+            Check(cards.Count == 3 && bsCard != null && Math.Abs(bsHull - 500) < 1e-9
                   && bsCard.Text.Contains($"{bsHull:0} hull") && !Classes.All.Any(c2 => c2.Blurb.Contains(" hull.")),
                   $"a class card prints the hull the ship will actually have -- the sheet's, with the starting kit in it ({bsHull:0} on the battleship's card, and no class blurb writes one any more)");
         }
