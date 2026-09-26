@@ -107,8 +107,13 @@ lower one is blind to it; always come back down to fix and re-prove.
 Fable 5.1 coordinates only. Opus 5.5 builds, gates, triages (ONE agent). Sonnet 5 / Haiku 4.5 run a recipe
 (a merge, a chain, exact text, a push) under the watchdog `tools\agents.ps1 -Loop`. Table: `coordinator.md`.
 Grain (owner, 2026-09-25): one agent per kind of work, never one per problem. Triage returns root causes, not
-symptoms; a round's wrong checks go to ONE Sonnet rewrite, the code tasks of one lane to ONE Opus fixer (at
+symptoms; a round's wrong checks go to ONE Opus rewrite, the code tasks of one lane to ONE Opus fixer (at
 most 4 tasks each); the text edits, ledger rows, merges or pushes of a batch go to ONE lower-model agent.
+Cap (owner, 2026-09-25, `docs/plans/fable_retro_tokens.md`): cost grows with the square of an agent's turns
+(74 agents past 100 turns were 76% of a 4,900M day). At 100 tool calls an agent commits what is applied,
+writes its POST and returns `stopped_context`; a fresh agent continues from the ledger. A merge is one call of
+`tools\merge_lane.ps1` after the judgment. A fix runs the engine only when its check is blind without it
+(`tester.md`: a thrown lane or cascade, env, a six-only red); the round's chains prove the rest.
 
 ## Commands
 

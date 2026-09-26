@@ -519,6 +519,7 @@ public partial class _Shots : Node
         await LaneA6dEchoFrames();
         await LaneA6dEmpFrames();
         await LaneA6dWraithFrames();
+        if (Hub.InArena || H?.Yard == null) throw new System.InvalidOperationException("45: the sweep left home before the hull frames");
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -1274,7 +1275,9 @@ public partial class _Shots : Node
         Character.Class = ShipClass.LightDart; P(H, "ApplyLocalIdentity"); await W(0.4);
         var ds = H.GetNode<PlayerShip>("Ship_1");
         bool demo = ds.Demo; ds.Demo = true;
-        var at = new Vector2(-900, 1100); const float rot = 0.4f;
+        // nose down-left, AWAY from the mission portal the sweep left open at 37 (Hub.MissionPortalPos, up-right of
+        // here): a sprint of ~1000 u toward it went through, and every frame after this one was taken in the arena
+        var at = new Vector2(-900, 1100); const float rot = Mathf.Pi + 0.4f;
         ds.Position = at; ds.Rotation = rot; ds.Velocity = Vector2.Zero; ds.Sl("rod").Cool = 0;
         cam.Zoom = new Vector2(1.0f, 1.0f);
         ds.UseAbility("rod", 0);
@@ -1282,11 +1285,9 @@ public partial class _Shots : Node
         await Snap("76c_dart_sprint_rod");
         ds.Demo = demo; ds.Velocity = Vector2.Zero;
         await W(5.0);
+        if (Hub.InArena || H?.Yard == null) throw new System.InvalidOperationException("76c: the rod's sprint left home mid-sweep (the mission portal is open)");
         Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
-        // the sprint carries the dart far enough that the class swap can free THIS camera and hand the
-        // viewport a fresh one (unlike the shorter holds above): fetch it again rather than zoom a stale ref.
-        cam = GetViewport().GetCamera2D();
-        if (GodotObject.IsInstanceValid(cam)) cam.Zoom = z0;
+        cam.Zoom = z0;
     }
 
     // SLICE 6d: the Echo firing while it slides sideways, each round's pale echo leaving where its round left 0.6 s

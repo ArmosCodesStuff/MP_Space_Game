@@ -103,6 +103,14 @@ shared by two seeds, 16 not): two seeds do not prove a rewritten check.
   starts `rungs.ps1` with Start-Process returns at once (PID only); every wait is a separate call under 10 minutes.
   Two round-1 `six` chains died this way on 2026-09-25 with no verdict and no fails file.
 - Prompts point at this file and carry at most 1,500 characters; the rules above are not re-pasted.
+- One engine proof per round (owner, 2026-09-25; `fable_retro_tokens.md` section 3: 12 of 15 merged fixes needed no per-fix
+  run, ~27 engine minutes and ~11M tokens each): a fix runs the engine only when its check is blind without it: a thrown
+  lane or exception cascade, an env fix, a six-only authority red, a task unblocking 30+ lines. Every other fix proves by
+  typecheck + `verify -Quick` + a read of its own diff against the card; the next round's chains replay its seed and a
+  red seen again is a regression task. Check rewrites are Opus too (Sonnet check groups cost 1.8x the Opus code groups).
+- A merge is judgment then ONE call: the agent reads the branch's commit messages (a Checks: line naming the task's
+  checks) and, for a rewritten check, its diff against `expect`; then `tools\merge_lane.ps1` does both steps and the
+  ledger_test.md rows in one commit (a conflict comes back as a note; resolve in a temporary worktree, never the lane's).
 - Until the bar every step is red on other lanes and `rungs.ps1` stops at the first red, so a fix's chain is never green:
   a fix is proved when every check its task names is PASS in the rung step's `.fails.txt` at its seed and at one fresh
   seed of the base rung, with the step's FAIL count not above the round's; it returns done with the other reds in `open`
