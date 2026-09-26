@@ -22,3 +22,10 @@
 
 ## Log
 PRE J1: plume half-disc + side jets + checks; files Plume.cs PlayerShip.cs EscapePod.cs Fx.cs Sprites.cs CharacterCreator.cs Ships.cs SmokeTest.cs.txt Shots.cs.txt README.md; HEAD f7a8803; hashes 7647e97cf597 f1e3d305e240 c9ef879728e4 a07a6a56b138 23bea5a91633 6a8a2c7bc862 9ed943af3920 f7c8115cc077 8531d65236db ba4f5862d65c
+
+## POST J1 (222a94f + frames fix; typecheck 0, quick green; thrust_p solo 21/21 thrust PASS, 121 fails all pre-existing; thrust_s2 screens: 3 frames made, red on the baseline NRE (53 frames on c1e8ad4))
+- Checks: ThrustChecks (solo, 21 PASS seed 1783695343), ThrustHostFlight + ThrustGuestChecks (arena pair; six owed to the test phase), Shots ThrustFrames (thruster_idle, thruster_burn, thruster_turn_left: the pair 6 visible).
+- 3 solo reds not in the c1e8ad4 union (volley of three, buster run 0, grapnel warped run 1) are seed reds seen in other lanes' runs; nothing of this lane's.
+- CHANGES entry: the stern plume is a half-disc glow at idle and the point only while the hull pushes ahead (read off its motion on every peer); tiny side jets at bow and stern light the pair that turns or slides the hull. Known broken: a webbed hull at its pinned cap shows the idle half-disc under forced thrust.
+- DESIGN: engines read off replicated motion (push = dv/dt + damping x v), never input; jets placed off the art (SideJets, checked against the texture).
+- next: J3 (coordinator, 23:15): turrets draw at their host's layer.

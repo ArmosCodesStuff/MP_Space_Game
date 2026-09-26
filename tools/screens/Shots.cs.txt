@@ -1519,7 +1519,8 @@ public partial class _Shots : Node
 
     // ── LANE THRUST · THE ENGINES (owner, 2026-09-25 22:35) ── a Warrior close up: at rest (the plume's idle
     // half-disc, no side jet lit), on the throttle (the point), and turning to port under way (the bow's
-    // starboard and the stern's port jet lit)
+    // starboard and the stern's port jet lit). Clear water first and before each frame: the arena's gank
+    // webifiers pin a hull (forced thrust at a fifth of its top, no rudder), which is neither frame.
     async Task ThrustFrames()
     {
         void Hold(global::Godot.Key k, bool down) => Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = down });
@@ -1527,15 +1528,20 @@ public partial class _Shots : Node
         H.ClearSelection();
         Character.Class = ShipClass.HeavyWarrior; P(H, "ApplyLocalIdentity"); await W(0.4);
         var s = H.GetNode<PlayerShip>("Ship_1");
+        void Calm()
+        {
+            foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+            s.Statuses.Clear(Status.Pinned); s.Statuses.Clear(Status.Disabled); s.Hp = s.MaxHp;
+        }
         var at = new Vector2(-900, 1100);
         zp.SetValue(H, 2.4f);
-        s.Place(at, 0.4f); await W(1.2);
-        s.Place(at, 0.4f); await W(0.2);
+        Calm(); s.Place(at, 0.4f); await W(1.2);
+        Calm(); s.Place(at, 0.4f); await W(0.2);
         await Snap("thruster_idle");
-        Hold(global::Godot.Key.W, true); await W(0.8);
+        Calm(); Hold(global::Godot.Key.W, true); await W(0.8);
         await Snap("thruster_burn");
         Hold(global::Godot.Key.W, false); await W(0.6);
-        Hold(global::Godot.Key.A, true); await W(0.4);
+        Calm(); Hold(global::Godot.Key.A, true); await W(0.4);
         await Snap("thruster_turn_left");
         Hold(global::Godot.Key.A, false);
         s.Place(at, 0f);
