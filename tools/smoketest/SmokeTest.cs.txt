@@ -5068,7 +5068,9 @@ public partial class _Test : Node
             var oSpot = land + oDir * (110f + oExt + Vary(60f, 120f));
             float gRot = gunship.Rotation;
             void Hold() { bn.Position = home; bn.Velocity = Vector2.Zero; bn.Rotation = rot; gunship.Position = gSpot; gunship.Rotation = gRot; outside.Position = oSpot; }
-            Hold();
+            // the camera follows the hull it just jumped here at 6/s: the cursor names a window point, so it reads
+            // the aimed world point only once the view is settled on the hull
+            for (int i = 0; i < 90; i++) { Hold(); AimWorld(cursor); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             int pending0 = H.BlastsPending;
             blows.Clear();
             double credit0 = bn.DealtBy.GetValueOrDefault(Dealt.Mortar), hull0 = bn.Hp;
@@ -5586,9 +5588,12 @@ public partial class _Test : Node
     // lands when the beam first sweeps within its radius, that angle / 90 deg/s after the move (up to a 0.1 s
     // tick and a frame later); then, held 1.5 s more, the ticks land every 0.1 s (the mean gap within 0.01), 4 each, and the
     // slot's line reads BURNING. Let go, the slot's time runs out within 0.3 s and nothing more lands.
+    // The pilot's own ship on its own keys and cursor (AimWorld every frame): a Demo ship reads neither, its
+    // driver owns the trigger and the aim, so Space on one held nothing. The move is timed from the frame the
+    // aim first reads the light, never from the mouse event.
     async Task LaneA6bLanceTriggerChecks(Vector2 yonder)
     {
-        var td = Me; bool demo = td.Demo; td.Demo = true; td.AutopilotTo = null;
+        var td = Me; td.AutopilotTo = null;
         var key = Abilities.KeyFor(ShipClass.FreightTender, "lance");
         var ticks = new List<double>();
         IHittable on = null;
@@ -5603,17 +5608,17 @@ public partial class _Test : Node
             Hold();
             var (_, bore0) = td.MainBore;
             float empty = bore0.Angle() + Vary(-0.3f, 0.3f);
-            td.AimPoint = home + Vector2.Right.Rotated(empty) * 400f;
+            var water = home + Vector2.Right.Rotated(empty) * 400f;
             KeyDown(key);
-            for (int i = 0; i < 150; i++) { Hold(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            for (int i = 0; i < 150; i++) { Hold(); AimWorld(water); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             var (muzzle, bore) = td.MainBore;
             float turn = Vary(Mathf.DegToRad(60f), Mathf.DegToRad(120f)) * (run % 2 == 0 ? 1 : -1);
             float dist = Vary(300f, 500f);
             var lAt = muzzle + bore.Rotated(turn) * dist;
             var light = H.SpawnRaider(lAt); light.Hp = 1e9; light.ApplyStatus(Status.Disabled, 30);
             on = light; ticks.Clear();
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            light.Position = lAt; Hold();
+            AimWorld(water); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            light.Position = lAt; Hold(); AimWorld(water);
             // WHEN THE BEAM FIRST TOUCHES IT: the barrel swung from where it points toward the light about its
             // pivot at 90 deg/s, the beam out of the muzzle 650 u along it, the first angle it passes within the
             // light's radius
@@ -5627,11 +5632,14 @@ public partial class _Test : Node
                 var way = Vector2.Right.Rotated(a0 + sweep * k / 720f); var mz = pivot + way * barrel;
                 if (Combat.DistToSegment(lAt, mz, mz + way * 650f) <= light.HitRadius) want = angle * k / 720f / Mathf.DegToRad(90f);
             }
+            // the clock of the frame before the one whose aim first reads the light (the barrel turns in that frame)
             double moved = td.Clock;
-            td.AimPoint = lAt;
-            for (int i = 0; i < 60 * 4 && ticks.Count == 0; i++) { Hold(); light.Position = lAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            for (int i = 0; i < 10 && td.AimPoint.DistanceTo(lAt) > 2f; i++)
+            { moved = td.Clock; Hold(); AimWorld(lAt); light.Position = lAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            bool aimed = td.AimPoint.DistanceTo(lAt) <= 2f;
+            for (int i = 0; i < 60 * 4 && ticks.Count == 0; i++) { Hold(); AimWorld(lAt); light.Position = lAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             double first = ticks.Count > 0 ? ticks[0] - moved : -1;
-            for (int i = 0; i < 90; i++) { Hold(); light.Position = lAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            for (int i = 0; i < 90; i++) { Hold(); AimWorld(lAt); light.Position = lAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             string line = Ab.Lance.State(td, null).Line;
             var held = ticks.ToList();
             KeyUp(key);
@@ -5640,13 +5648,50 @@ public partial class _Test : Node
             int after = ticks.Count - held.Count;
             await Wait(0.3);
             int later = ticks.Count - held.Count;
-            Check(first >= 0 && want >= 0 && first - want > -0.03 && first - want < 0.14 && held.Count >= 12 && Math.Abs(gap - 0.1) < 0.01 && line == "BURNING"
+            Check(aimed && first >= 0 && want >= 0 && first - want > -0.03 && first - want < 0.14 && held.Count >= 12 && Math.Abs(gap - 0.1) < 0.01 && line == "BURNING"
                   && later == after && after <= 1 && td.Sl("lance").Left <= 0,
                   $"lance trigger run {run}: the cursor moved {Mathf.RadToDeg(angle):0} deg round, the first tick on the light {dist:0} u off lands {first:0.00} s later (want {want:0.00} at 90 deg/s, then a tick of 0.1 at most), then {held.Count} ticks {gap:0.000} s apart (0.1), BURNING ({line}); let go, nothing more ({after}, {later}) and the beam is down");
             light.TakeDamage(1e12);
         }
         Dealt.Landed -= Heard;
-        td.Demo = demo; td.Position = yonder; td.Velocity = Vector2.Zero;
+        td.Position = yonder; td.Velocity = Vector2.Zero;
+        await LaneA6bLanceRefitChecks(yonder);
+    }
+
+    // ── 6b · THE LANCE AFTER A REFIT (a3-tender-lance-silent) ─────────────────────────────────────────
+    // Three runs, one slow gun each (the battleship's 2 s, the freighter's 1.25 s, the bastion's 2.35 s): Space
+    // held on it until the trigger reads, so its gun has just fired and is reloading, let go, then straight to
+    // the tender (SetClass, 0.1 s). The new class's gun is fitted loaded: on the first frame the tender's
+    // trigger reads, the lance has ticked (its slot up, 0.2 s). The old gun's reload carried over, it lit
+    // nothing for up to 2 s.
+    async Task LaneA6bLanceRefitChecks(Vector2 yonder)
+    {
+        var slow = new[] { ShipClass.Battleship, ShipClass.FreightHauler, ShipClass.FreightBastion };
+        for (int run = 0; run < 3; run++)
+        {
+            await SetClass(slow[run]);
+            var s = Me; s.Position = VaryNear(yonder, 200f); s.Velocity = Vector2.Zero; s.AutopilotTo = null;
+            var gun = Abilities.KeyFor(s.Class, Abilities.TriggerOf(s.Class).Id);
+            KeyDown(gun);
+            for (int i = 0; i < 10 && !s.Trigger; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool fired = s.Trigger;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            KeyUp(gun);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            string from = Classes.Of(slow[run]).Name;
+            double reload = s.Stats["main_interval"];
+            await SetClass(ShipClass.FreightTender);
+            var td = Me; td.Position = VaryNear(yonder, 200f); td.Velocity = Vector2.Zero;
+            var key = Abilities.KeyFor(ShipClass.FreightTender, "lance");
+            KeyDown(key);
+            int frames = 0;
+            for (; frames < 10 && !td.Trigger; frames++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool trig = td.Trigger; double left = td.Sl("lance").Left;
+            KeyUp(key);
+            await Wait(0.4);
+            Check(fired && trig && left > 0 && td.Class == ShipClass.FreightTender,
+                  $"lance refit run {run}: from the {from}'s gun ({reload:0.00} s reload, just fired: {fired}) to the tender, the first frame Space reads ({trig}, {frames} frames) the lance is up ({left:0.00} s, want above 0)");
+        }
     }
 
     // ── 6b · THE TENDER'S FIELDS: second pilots beside it (kits6b-J8) ─────────────────────────────────
@@ -5917,15 +5962,14 @@ public partial class _Test : Node
         foreach (var id in new[] { "overdrive", "repair", "resupply" }) { te.Sl(id).Cool = 0; te.Sl(id).Left = 0; }
         // fr-R6b-4 THE LANCE ON THE WIRE: a held gunship 300-420 u off the tender, on the side away from the guest;
         // Space held with the cursor on it (the barrel at 90 deg/s) for 2.5 s: the tender's lance slot BURNS, its
-        // length the muzzle's distance to the gunship within the gunship's radius (the guest reads the same slot)
-        bool teDemo = te.Demo; te.Demo = true;
+        // length the muzzle's distance to the gunship within the gunship's radius (the guest reads the same slot).
+        // The pilot's own keys and cursor (AimWorld every frame): a Demo ship reads neither, and held nothing.
         var tePos = te.Position;
         var lanceAt = tePos + Vector2.Right.Rotated((tePos - g.Position).Angle() + Vary(-1.0f, 1.0f)) * Vary(300f, 420f);
         var lanceGun = H.SpawnRaider(lanceAt, Enemies.Gunship); lanceGun.Hp = 1e9; lanceGun.ApplyStatus(Status.Disabled, 30);
-        te.AimPoint = lanceAt;
         KeyDown(global::Godot.Key.Space);
         for (double t0 = te.Clock; te.Clock - t0 < 2.5;)
-        { te.Position = tePos; te.Velocity = Vector2.Zero; lanceGun.Position = lanceAt; te.AimPoint = lanceAt; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        { te.Position = tePos; te.Velocity = Vector2.Zero; lanceGun.Position = lanceAt; AimWorld(lanceAt); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         var (lanceMuzzle, _) = te.MainBore;
         float lanceGap = lanceMuzzle.DistanceTo(lanceAt);
         Check(te.Sl("lance").N == PlayerShip.LanceBurn && Math.Abs(te.Sl("lance").Own - lanceGap) < lanceGun.HitRadius + 1f,
@@ -5941,7 +5985,7 @@ public partial class _Test : Node
         Check(Math.Abs(coolBefore - coolAfter - 8) < 1e-6 && Math.Abs(rate - 1.5f) < 1e-6 && gain >= 0.02 - 1e-3 && te.MendedBy.GetValueOrDefault("repair") > 0,
               $"arena host: the tender {apart:0} u from the guest's destroyer -- its {cut} cooldown {coolBefore:0.0} -> {coolAfter:0.0} s (8 off), its rate x{rate:0.##} (1.5), its hull +{gain * 100:0.00}% a second (2%)");
         foreach (var id in new[] { "overdrive", "repair" }) te.Sl(id).Left = 0;
-        KeyUp(global::Godot.Key.Space); te.Demo = teDemo;
+        KeyUp(global::Godot.Key.Space);
         lanceGun.TakeDamage(1e12);
     }
 
@@ -19212,7 +19256,12 @@ public partial class _Test : Node
             // alone passed while the gun fired one shell a second whatever was pressed.
             var shellKey = Abilities.KeyFor(ShipClass.FreightTender, "lance");
             var odMark = H.SpawnRaider(td.Position + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 450f)); odMark.Hp = 1e9; odMark.ApplyStatus(Status.Disabled, 30);
-            td.AimPoint = odMark.Position; await Wait(2.2);                  // the barrel round onto it: 180 deg at most, at 90 deg/s
+            // the barrel round onto it: 180 deg at most, at 90 deg/s -- on the pilot's own cursor, put on the mark every frame
+            // (an AimPoint set by hand is the mouse's again on the next frame, and the lance burned wherever the mouse lay)
+            var odPos = td.Position;
+            void OnMark() { td.Position = odPos; td.Velocity = Vector2.Zero; AimWorld(odMark.Position); }
+            double odC0 = td.Clock;
+            while (td.Clock - odC0 < 2.2) { OnMark(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             async Task<(double gap, int n)> GunCadence(double seconds)
             {
                 var gunAt = new List<double>();
@@ -19220,7 +19269,7 @@ public partial class _Test : Node
                 Dealt.Landed += Tick;
                 double gunC0 = td.Clock;
                 KeyDown(shellKey);
-                while (td.Clock - gunC0 < seconds) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                while (td.Clock - gunC0 < seconds) { OnMark(); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
                 KeyUp(shellKey);
                 Dealt.Landed -= Tick;
                 return (gunAt.Count > 1 ? (gunAt[^1] - gunAt[0]) / (gunAt.Count - 1) : 99, gunAt.Count);
