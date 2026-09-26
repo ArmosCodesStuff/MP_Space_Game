@@ -10,8 +10,8 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 ## Landed (verdict first; delete the row once its action is done)
 - 21:30 brace-warp-spool merged 3023148. a2-broadside-arcs REFUSED by the merge gate (loosened 375 to 343.75; the card says 375 side-on): a real
   bug, kind code for round-3 triage, with a2-suppress-locked (never dispatched), a2-regen-once (not done), the mortar 1.4 s half (throw accuracy).
-- 21:30 knife-edges group done (knife-edges ramp, stale-raider x2 lanes, card-hull proved at 3 seeds; fails 187/182/178 vs 206), stranded by
-  the string match: one Sonnet merge agent (21:33) merges wt/fixa2ga2knifeedgesa2staleraidera2cardhul from wt_fix3.
+- 21:40 knife-edges group merged 5e1d86d. Owed to round 3 (kind check): the ramp check's tolerance went 1e-3 -> 3e-3 with the off-boundary
+  sampling; restore 1e-3 and prove at 3 seeds (the sampling alone should hold; a widened tolerance is a loosening).
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task wxmo7btan (round 2: NaN+CIWS group still out; then round 3 chains + triage). A stop -> relaunch with args {attempt: 4,
