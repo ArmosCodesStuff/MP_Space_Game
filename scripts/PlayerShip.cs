@@ -405,6 +405,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // and then A again hands back A's bar as it would be now. What was running (Left, Own) ends.
         double frac = MaxHp > 0 ? Hp / MaxHp : 1;
         foreach (var (id, at) in _slotAt) _slotsAway[id] = (_slots[at], _clock);
+        _dashLeft = 0; _dashRow = null;            // a dash's carry is running too: it ends with its row
         Stats = BuildSheet();
         MaxHp = Stats["hull"];
         Hp = Alive ? Math.Max(1, frac * MaxHp) : MaxHp;
@@ -2125,20 +2126,23 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     // THE OWNER'S CARRY: from the first frame it sees a dash row's Left (the host's press, here at once
     // on the host, a packet later on a guest), the hull goes the row's Reach along its nose over the
     // row's whole Time, whatever the lifts, the helm or its speed -- exactly Reach, the last frame's step
-    // cut to what is left. A fresh press is told from a stale packet by its cooldown jumping back up.
+    // cut to what is left. A fresh press is told from a stale packet by its cooldown jumping back up over
+    // what it read the frame before (a packet's drift is well under a second; a cooldown cut to 0 and pressed
+    // again inside a second is a fresh press all the same).
     private AbilityDef _dashRow;
-    private double _dashLeft, _dashCool0 = double.NegativeInfinity, _dashAt;
+    private double _dashLeft;
+    private readonly Dictionary<string, double> _dashCoolWas = new();
     private bool DashCarry(float dt)
     {
         if (Disabled) { _dashLeft = 0; return false; }
-        if (_dashLeft <= 0)
-            foreach (var def in Abilities.For(Class))
-            {
-                if (def.Dash == null || Sl(def.Id).Left <= 0) continue;
-                if (Sl(def.Id).Cool <= _dashCool0 - (_clock - _dashAt) + 1.0) continue;    // the dash already flown
-                _dashRow = def; _dashLeft = Stats[def.Dash.Time]; _dashCool0 = Sl(def.Id).Cool; _dashAt = _clock;
-                break;
-            }
+        foreach (var def in Abilities.For(Class))
+        {
+            if (def.Dash == null) continue;
+            double cool = Sl(def.Id).Cool, was = _dashCoolWas.GetValueOrDefault(def.Id);
+            _dashCoolWas[def.Id] = cool;
+            if (_dashLeft > 0 || Sl(def.Id).Left <= 0 || cool <= was + 1.0) continue;     // running, idle, or the dash already flown
+            _dashRow = def; _dashLeft = Stats[def.Dash.Time];
+        }
         if (_dashLeft <= 0 || _dashRow?.Dash is not { } d) return false;
         double step = Math.Min(dt, _dashLeft);
         _dashLeft -= step;
