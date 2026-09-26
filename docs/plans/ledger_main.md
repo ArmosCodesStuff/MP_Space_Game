@@ -14,11 +14,9 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   the string match: one Sonnet merge agent (21:33) merges wt/fixa2ga2knifeedgesa2staleraidera2cardhul from wt_fix3.
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. Wait for task wxmo7btan (round 1: two merges; round 2: 17 pre-authored fixes in 5 groups, no chains, no triage; round 3 measures). A stop ->
-   relaunch with args {attempt: 4, review: [], done: [a1-items-tables, a1-arena-stall, a1-rip-dummy4, a1-shots-stale-cam, a1-warp-2frames,
-   a1-heavy-target, a2-keys-rows, a2-carrier-pd-count, a2-wings-range, a2-ring-timing, a2-bombers-armed, a2-supercarrier-spacing, a2-pd-release,
-   a2-anchor-warp-end, a2-brace-warp-spool, a2-broadside-arcs + every task merged since per ledger_test.md], preTasks: {a2: round2_tasks.json}} (no premerged: a merged lane
-   re-merged costs a Haiku refusal + a Sonnet run); the cache replays only an unchanged PREFIX of calls.
+1. Wait for task wxmo7btan (round 2: NaN+CIWS group still out; then round 3 chains + triage). A stop -> relaunch with args {attempt: 4,
+   review: [], done: [every a1/a2 task id in ledger_test.md + a1-shots-stale-cam, a1-warp-2frames, a1-heavy-target, a2-broadside-arcs],
+   preTasks: {a2: round2_tasks.json}} (no premerged: a re-merge costs a Haiku refusal + a Sonnet run); the cache replays an unchanged PREFIX only.
 2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
 
 ## Notes (merge risks, promised follow-ups; nothing done, nothing historical). Owner questions open: none (today's rulings: README, Agents)
