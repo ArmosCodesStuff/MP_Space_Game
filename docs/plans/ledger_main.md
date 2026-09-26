@@ -20,7 +20,7 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task w84ws46yg: round 3 = 7 groups over 4 slots, merges; round 4 chains + triage (a3 deferred: stale tables, melee arc, blade, flak, rewind);
-   sweep, extras, bar, release. A stop -> relaunch args {attempt: 4, review: [], done: [every a1/a2 id + a3 ids merged], preTasks: {a2: [a stub id in done], a3: round3_tasks.json}}.
-   After the release (owner 17:20, README next 8-9): two-machine test row; scenarios lane; PlayerShip/Hub split; fable_report lists.
+   sweep, extras, bar, release (then README next 8-9: two-machine test, scenarios lane, PlayerShip/Hub split). A stop -> relaunch args
+   {attempt: 4, review: [], done: [every a1/a2 id + a3 ids merged], preTasks: {a2: [a stub id in done], a3: round3_tasks.json}}.
 
 ## Notes (merge risks, promised follow-ups; nothing done, nothing historical). Owner questions open: none (today's rulings: README, Agents)
