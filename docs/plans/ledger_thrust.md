@@ -12,12 +12,14 @@
 ## Jobs
 - J1 PRE/POST: plume + EngineWatch + SideJets rows + callers + solo/guest checks + frames + README ruling (files below)
 - J2: prove (typecheck, quick, rungs thrust_p quick,solo,screens)
+- J3 PRE/POST (coordinator 23:15): turrets at their host's layer
 
 ### Pointers for the next agent
 - scripts/Plume.cs (Outline, Draw, Lit, DrawJets, EngineWatch); scripts/Ships.cs ClassArt.SideJets + 12 rows
 - scripts/PlayerShip.cs: _engines (fields near _yawRate), _Process Tick/Watch, RemoteFollow Tick, ApplyState Watch, _Draw
 - SmokeTest.cs.txt: ThrustChecks (solo, after LaneA6dStepChecks), ThrustHostFlight/ThrustGuestWatch/ThrustGuestChecks (ArenaMp)
-- Shots.cs.txt: ThrustFrames after LaneA6dWraithFrames
+- Shots.cs.txt: ThrustFrames, TurretsUnderBossFrame after LaneA6dWraithFrames
+- J3: scripts/Turrets.cs Setup (ZIndex 0 relative); Hub.cs FlashLayer comment; SmokeTest TurretLayerChecks + EffectiveZ, carrier flash check rewritten
 - id ranges: none (no wire, no enum). COORDINATOR NOTE: none.
 
 ## Log
@@ -30,3 +32,9 @@ PRE J1: plume half-disc + side jets + checks; files Plume.cs PlayerShip.cs Escap
 - DESIGN: engines read off replicated motion (push = dv/dt + damping x v), never input; jets placed off the art (SideJets, checked against the texture).
 - next: J3 (coordinator, 23:15): turrets draw at their host's layer.
 PRE J3 (coordinator 23:15, turrets at their host's layer): Turret.Setup ZIndex 5 -> host's (0, relative); solo TurretLayerChecks; Shots turrets_under_boss; files Turrets.cs SmokeTest.cs.txt Shots.cs.txt; HEAD cb32fdc; hashes 2804789e6fdc 01147b76db0a e6419591d855
+
+## POST J3 (94c0165; quick green; thrust_p2 solo: 3 TurretLayerChecks + rewritten flash check + 21 thrust PASS, 125 fails pre-existing/seed; thrust_s5 screens 57 frames = baseline 53 + 4, same baseline NRE)
+- Checks: TurretLayerChecks (battleship 6, carrier 2, hauler 1 turrets at host z; fails on the old +5); the carrier's flash check rewritten (flash 8 above hull 4 and turret 4); Shots turrets_under_boss (the boss covers the battleship and its guns).
+- seed 700424418 reds not in the baselines: gunships run 2 (a 3rd craft on one circle), one reverb blast run: combat code this lane never touches.
+- CHANGES entry: a turret draws at its hull's layer: a boss (or any hull) over a ship covers its guns too. Known broken: a hull's Fx shimmer (FxNode, z 7 absolute) still draws over an overlapping boss (frame turrets_under_boss).
+- next: merge; six owes ThrustHostFlight/ThrustGuestChecks.
