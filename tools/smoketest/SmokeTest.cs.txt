@@ -7337,7 +7337,8 @@ public partial class _Test : Node
     }
 
     // ── SLICE 6a: THE CARRIER'S THREE WINGS AT ONCE (kits_v31 §7: "CV patrol vs CV gunships -- split by anchor"; kits_v3
-    // §3.1: the first wing keeps its orders). Three varied runs (VaryNear spot; a held gunship 1300-2200 u off at a
+    // §3.1: the first wing keeps its orders). Three varied runs (VaryNear spot; a held gunship 1300-1450 u off, safely
+    // inside the fighters' 1500 u control_range (Stats.cs:186), at a
     // VaryAngle bearing, attacked by the fighters and picked for the gunships): Space (attack), E, Q -- 3 s on, the three
     // fighters away on it, two gunships on its 240 u circle, three patrol craft within 700 u of the carrier; 6 fighters
     // and patrol craft out together.
@@ -7354,15 +7355,19 @@ public partial class _Test : Node
             void Hold() { s.Position = at; s.Velocity = Vector2.Zero; }
             s.Sl("super").Left = 0; s.Sl("super").Cool = 0; s.Sl("gunships").Left = 0; s.Sl("gunships").Cool = 0;
             Hold(); await Wait(0.2); Hold();
-            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(1300f, 2200f);
+            var spot = at + Vector2.Right.Rotated(VaryAngle()) * Vary(1300f, 1450f);   // inside control_range 1500 (Stats.cs:186)
             var tgt = H.SpawnRaider(spot, Enemies.Gunship); tgt.Hp = 1e9; tgt.ApplyStatus(Status.Disabled, 60);
             await Frame();
             H.ClearSelection(); H.AddTarget(tgt);
             s.OrderAttack(tgt);
             s.UseAbility("gunships", tgt.NetId, new[] { tgt.NetId });
             s.UseAbility("super", 0);
-            double tp = s.Clock;
-            while (s.Clock < tp + Vary(5.0f, 6.0f)) { Hold(); tgt.Position = spot; await Frame(); }
+            // poll, never a blind clock: settle until every fighter has left (or a generous cap), so a
+            // slower-than-usual launch queue (the recalled wing docking and resting before it flies
+            // again) is never mistaken for one that never launched
+            double tp = s.Clock, cap = tp + 20.0;
+            while (s.Clock < tp + Vary(5.0f, 6.0f) || (Of(WingKind.Fighter).Count(w => !w.Inside) < 3 && s.Clock < cap))
+            { Hold(); tgt.Position = spot; await Frame(); }
             int fightersOut = Of(WingKind.Fighter).Count(w => !w.Inside), guns = Of(WingKind.Gunship).Count(w => Mathf.Abs(w.Position.DistanceTo(spot) - 240f) <= 30f);
             int patrolHome = Of(WingKind.Patrol).Count(w => !w.Inside && w.Position.DistanceTo(at) <= 700f);
             Check(ReferenceEquals(s.WingTarget, tgt) && fightersOut == 3 && guns == 2 && patrolHome == 3 && fightersOut + patrolHome == 6,
