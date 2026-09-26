@@ -3,7 +3,8 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
 - test-phase / task wmpcg056a (wf_8c62491c-3b2, attempt 4 on the retro script, 23:55; preTasks a1 + a2 stubs keep rounds 1-2 call-free since the cache no longer replays: done = a1 + a2 + 5 merged a3 ids, premerged a3-regen-once (fix0
-  branch), preTasks a3; the check pair re-runs on Opus without engine runs, then round 4 chains. The `fixer` agent type registers only in a
+  branch: EMPTY, its fixer never committed, so the merge was a no-op and round 4 re-tasks a3-regen-once), preTasks a3; the check pair re-runs on
+  Opus without engine runs, then round 4 chains. The `fixer` agent type registers only in a
   NEW session: pass args.agentType "fixer" then; 23:52's relaunch failed on it, 0 tokens): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
   -> release. lands: 3 lines to the owner + frames; a stop -> ledger_test.md + journal, fix, relaunch per Next 1. ONE Monitor (journal + watchdog every 15 min).
 
