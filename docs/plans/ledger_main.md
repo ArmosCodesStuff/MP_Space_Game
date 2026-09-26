@@ -8,9 +8,9 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   NEW session: pass args.agentType "fixer" then; 23:52's relaunch failed on it, 0 tokens): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
   -> release. lands: 3 lines to the owner + frames; a stop -> ledger_test.md + journal, fix, relaunch per Next 1. ONE Monitor (journal + watchdog every 15 min).
 
-- thrust / writer done 23:55 (wt/thrust 651039e, 5 commits: idle half-disc plume, point under thrust on every peer, ClassArt.SideJets, turrets at
-  the hull's layer; 25 checks PASS; six checks unrun; known: webbed hull at its cap shows idle, Fx shimmer over a boss). One Opus gate running
-  (23:58). lands: pass -> tools\merge_lane.ps1 into version-l before round 4's chains (its six checks run there); fail -> the defects back to one writer.
+- thrust MERGED f3af92d 00:20 (gate c496ed7 pass; merge_lane.ps1's first real run after two script bugs). Follow-up rows (after the release):
+  webbed hull at its cap shows the idle disc under forced thrust (Burn || Pinned && !Disabled); Fx shimmer z 7 over a boss; hulls share z 4
+  (tree order decides). Round 4's six runs ThrustHostFlight (a web on the host = red). Owner question below.
 
 
 ## Landed (verdict first; delete the row once its action is done): none (retro 36af923 applied and live since 23:50)
@@ -22,4 +22,4 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
    sweep, extras, bar, release (then README next 8-9: two-machine test, scenarios lane, PlayerShip/Hub split). A stop -> relaunch args
    {attempt: 4, review: [], done: [every a1/a2 id + a3 ids merged], preTasks: {a2: [a stub id in done], a3: round3_tasks.json}}.
 
-## Notes (merge risks, promised follow-ups; nothing done, nothing historical). Owner questions open: none (today's rulings: README, Agents)
+## Notes (merge risks, promised follow-ups; nothing done, nothing historical). Owner question: the side jets fire on the side OPPOSITE a slide (physics-true; default stands)
