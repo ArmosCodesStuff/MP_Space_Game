@@ -10,6 +10,9 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 - thrust / one Opus writer (background 22:37; owner: idle plume half-disc or off, the point only under thrust; tiny cosmetic side thrusters on
   turns/strafe): wt_thrust from version-l, checks + 3 frames, proves quick,solo,screens. lands: one Opus gate, merge before the bar.
 
+- retro-tokens / one Fable agent (background 22:47; owner: "what can be improved to use less tokens; is compile + review enough sometimes; do you
+  need the docs imported; why so much"): writes + commits docs/plans/fable_retro_tokens.md (numbers, ranked changes). lands: 4 lines + apply the top changes.
+
 ## Landed (verdict first; delete the row once its action is done)
 - Round-3 code tasks: a2-broadside-arcs (rewrite REFUSED: loosened 375 to 343.75, the card says 375 side-on), suppress-locked, regen-once, the mortar throw accuracy.
 - 21:40 knife-edges group merged 5e1d86d. Owed to round 3 (kind check): the ramp check's tolerance went 1e-3 -> 3e-3 with the off-boundary
