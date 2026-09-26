@@ -16923,7 +16923,7 @@ public partial class _Test : Node
         Check(labels.Any(x => x.Contains("Broadside, averaged over its cycle:  27.27 DPS")) && labels.Any(x => x.Contains("Point defence:  2.00 DPS"))
               && labels.Any(x => x.Contains("2 turrets at 1.00 DPS, always on")) && labels.Any(x => x.Contains("SUSTAINED TOTAL:  54.27 DPS")),
               "and the total adds up every line it prints: guns 25.00 + broadside 27.27 + point defence 2.00 (2 turrets at 1 DPS, always on: passive) = 54.27 DPS");
-        Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 11, "keys tab lists the battleship's 5 abilities (guns, mode, broadside, brace, CIWS) + 6 open slots (point defence is passive: no key)");
+        Check(Nodes<HBoxContainer>(win).Count(r => r.Name.ToString().StartsWith("Key_")) == 12, "keys tab lists the battleship's 5 abilities (guns, mode, broadside, brace, CIWS) + 1 drive (warp) + 6 open slots (point defence is passive: no key)");
         Check(Enumerable.Range(1, 6).All(i => Abilities.KeyFor(ShipClass.Battleship, $"open{i}") == global::Godot.Key.Key0 + i)
               && Abilities.For(ShipClass.Carrier).Count(a => a.Open) == 6 && Abilities.For((ShipClass)99).Length == 6,
               "six open hotkeys (1-6) on every class, including undefined ones");
