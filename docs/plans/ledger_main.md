@@ -2,8 +2,9 @@
 Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
-- test-phase / task w9c3wcb8e (wf_8c62491c-3b2, attempt 4 resumed 23:50 on the retro script: done = a1 + a2 + 5 merged a3 ids, premerged
-  a3-regen-once (fix0 branch), preTasks a3; the rip-chunk/wraith check pair re-runs on Opus without engine runs, then round 4 chains): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
+- test-phase / task wmpcg056a (wf_8c62491c-3b2, attempt 4 on the retro script, 23:55; preTasks a1 + a2 stubs keep rounds 1-2 call-free since the cache no longer replays: done = a1 + a2 + 5 merged a3 ids, premerged a3-regen-once (fix0
+  branch), preTasks a3; the check pair re-runs on Opus without engine runs, then round 4 chains. The `fixer` agent type registers only in a
+  NEW session: pass args.agentType "fixer" then; 23:52's relaunch failed on it, 0 tokens): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
   -> release. lands: 3 lines to the owner + frames; a stop -> ledger_test.md + journal, fix, relaunch per Next 1. ONE Monitor (journal + watchdog every 15 min).
 
 - thrust / one Opus writer (background 22:37; owner: idle plume half-disc or off, the point only under thrust; tiny cosmetic side thrusters on
