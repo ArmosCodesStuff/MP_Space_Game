@@ -145,7 +145,9 @@ public partial class Turret : Node2D
     public void Setup(ITurretHost host, Vector2 offset, bool pd)
     {
         Host = host; Offset = offset; PointDefense = pd;
-        ZIndex = 5;
+        // AT ITS HOST'S LAYER: a child of the hull it sits on, at that hull's own z, drawn after it -- so
+        // whatever covers the hull (a boss over a player's ship) covers its guns too (owner, 2026-09-25)
+        ZIndex = 0; ZAsRelative = true;
         var spec = S;
         // stored barrels-UP; the turret's barrel direction is +X, so turn it a quarter
         _sprite = new Sprite2D { Texture = Assets.Load<Texture2D>(spec.Texture), Rotation = Mathf.Pi / 2f,

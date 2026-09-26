@@ -11,6 +11,9 @@ public partial class EscapePod : Node2D
     public Color Engine = Colors.White; // the owner's accent: it is a player craft with an engine
     public Vector2 Velocity;
     private Vector2 _net; private bool _hasNet;
+    // ITS ENGINE BURNS (Plume's point) while its pilot holds a key; elsewhere, while its reports move it.
+    // Otherwise the plume is the idle half-disc.
+    public bool Burning { get; private set; }
 
     public override void _Ready()
     {
@@ -18,7 +21,12 @@ public partial class EscapePod : Node2D
         ZIndex = 5;
     }
 
-    public void SetNet(Vector2 p, float rot) { _net = p; _hasNet = true; Rotation = rot; }
+    public void SetNet(Vector2 p, float rot)
+    {
+        Burning = _hasNet && p.DistanceSquaredTo(_net) > 0.25f;
+        _net = p; _hasNet = true; Rotation = rot;
+        QueueRedraw();
+    }
 
     public override void _Process(double delta)
     {
@@ -37,6 +45,7 @@ public partial class EscapePod : Node2D
             if (Input.IsKeyPressed(Key.D)) dir.X += 1;
         }
         var want = dir == Vector2.Zero ? Vector2.Zero : dir.Normalized() * Speed;
+        Burning = dir != Vector2.Zero;
         Velocity = Velocity.MoveToward(want, Accel * dt);
         Position += Velocity * dt;
         QueueRedraw();
@@ -45,5 +54,5 @@ public partial class EscapePod : Node2D
     }
 
     public override void _Draw() =>
-        Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, Engine, Velocity.Length() / Speed, Velocity.Length() > 2f);
+        Plume.Draw(this, new Vector2(0, Length * 0.5f), Vector2.Down, Length, Engine, Velocity.Length() / Speed, Burning);
 }

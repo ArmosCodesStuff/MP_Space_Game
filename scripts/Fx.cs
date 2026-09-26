@@ -644,11 +644,8 @@ public static class Fields
                     break;
                 }
                 case FieldLook.Plume:
-                {
-                    var art = s.MyArt;
-                    Plume.Draw(s, new Vector2(0, art.Length * 0.5f - art.EngineInset), Vector2.Down, f.Radius, c, 1f, true);
+                    Plume.Draw(s, s.Nozzle, Vector2.Down, f.Radius, c, 1f, true);    // the boost burns: always the point
                     break;
-                }
                 case FieldLook.Lance:
                 {   // out of the main barrel as it points on this peer, as far as the host said it reached,
                     // in the colour of what it is on (the slot's N): a friend mended, a foe burned, or nothing

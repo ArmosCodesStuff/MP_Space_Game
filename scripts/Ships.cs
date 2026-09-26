@@ -70,6 +70,11 @@ public class ClassArt
     // runway's bow end, RunwayBow ahead of the centre, and land on its centre (world units).
     public float BayX, BayY, BaySpacing, RunwayBow;
     public float EngineInset;          // the engine's plume this far in from the stern (world units)
+    // THE SIDE JETS (cosmetic: no force). Bow port, bow starboard, stern port, stern starboard (Plume.BowPort..),
+    // x to starboard and y aft of centre, world units: each on the hull's outermost opaque pixel (alpha8 > 128)
+    // of the texture row 12% of the length in from the bow or the stern, measured off the art. They fire
+    // outboard, lit by the turn and the slide the hull is making (EngineWatch, Plume.Lit).
+    public Vector2[] SideJets = Array.Empty<Vector2>();
 }
 
 // One row of the stat sheet, declared by the class that needs it (ClassDef.Rows).
@@ -201,6 +206,7 @@ public static class Classes
                 // rows, both sides -- Q3's default), the barrels of all 6 painted twins patched
                 // clean (Q4); PD on the aft domes; the turret scale k measured off the art's own housing
                 Texture = "res://battleship_hull.png", Length = 378f, HalfWidth = 43.875f,
+                SideJets = new Vector2[] { new(-39.99f, -143.41f), new(39.99f, -143.41f), new(-76.16f, 143.41f), new(76.16f, 143.41f) },
                 Mains = new Vector2[] { new(-23.99f, -74.28f), new(23.99f, -74.28f), new(-23.99f, -36.27f), new(23.99f, -36.27f) },
                 Pds   = new Vector2[] { new(-58.99f, 71.73f), new(58.99f, 71.73f) },
                 MainBears = new Vector2[] { new(0f, 150f), new(0f, 150f), new(30f, 180f), new(30f, 180f) },
@@ -231,6 +237,7 @@ public static class Classes
                 // stern (D8); the deck (Bay*/RunwayBow/EngineInset) is the bays abreast amidships,
                 // the runway run from the bow and the engines inset at the stern
                 Texture = "res://carrier_player.png", Length = 283.5f, HalfWidth = 40.02f,
+                SideJets = new Vector2[] { new(-28.73f, -107.91f), new(28.31f, -107.91f), new(-35.97f, 107.91f), new(36.82f, 107.91f) },
                 BayX = 25.01f, BayY = 8.34f, BaySpacing = 46.69f, RunwayBow = 110.06f, EngineInset = 8f,
                 Pds = new Vector2[] { new(-30.01f, -0.21f), new(30.01f, -0.21f) },
                 TurretTexScale = 1.9178f / 5.5f, PdBarrel = 10.51f },
@@ -286,6 +293,7 @@ public static class Classes
                 // destroyer_dd22 (the pack, J5): both mains on the keel gun cluster near the bow,
                 // PD re-seated on the flank domes
                 Texture = "res://destroyer_hull.png", Length = 212.625f, HalfWidth = 27.8f,
+                SideJets = new Vector2[] { new(-22.27f, -80.84f), new(22.67f, -80.84f), new(-29.89f, 80.84f), new(30.29f, 80.84f) },
                 Mains = new Vector2[] { new(0.20f, -14.20f), new(0.20f, 17.81f) },
                 Pds   = new Vector2[] { new(-30.81f, 5.82f), new(30.81f, 5.82f) },
                 TurretTexScale = 1.3085f / 5.5f, MainBarrel = 16.03f, PdBarrel = 7.2f },
@@ -337,6 +345,7 @@ public static class Classes
             },
             Art = new ClassArt {
                 Texture = "res://freight_hauler_hull.png", Length = 230f, HalfWidth = 59.74f,
+                SideJets = new Vector2[] { new(-13.88f, -87.42f), new(13.52f, -87.42f), new(-38.03f, 87.42f), new(38.39f, 87.42f) },
                 Mains = new Vector2[] { new(0.0f, -50.6f) },
                 Pds   = new Vector2[] { new(-32.9f, 64.4f), new(32.9f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
@@ -375,6 +384,7 @@ public static class Classes
             },
             Art = new ClassArt {
                 Texture = "res://freight_tender_hull.png", Length = 230f, HalfWidth = 57.48f,
+                SideJets = new Vector2[] { new(-9.46f, -87.32f), new(9.11f, -87.32f), new(-56.61f, 87.32f), new(56.96f, 87.32f) },
                 Mains = new Vector2[] { new(0.0f, -50.6f) },
                 Pds   = new Vector2[] { new(-31.6f, 64.4f), new(31.6f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
@@ -419,6 +429,7 @@ public static class Classes
                 // frigate_c (the pack, J5): the main sits aft, on the ring turret the art draws at
                 // the stern, with the PD pair either side of it
                 Texture = "res://freight_bastion_hull.png", Length = 230f, HalfWidth = 49.34f,
+                SideJets = new Vector2[] { new(-52.47f, -87.46f), new(50.87f, -87.46f), new(-36.79f, 87.46f), new(33.98f, 87.46f) },
                 Mains = new Vector2[] { new(0.0f, 53.48f) },
                 Pds   = new Vector2[] { new(-27.1f, 64.4f), new(27.1f, 64.4f) },
                 TurretTexScale = 2.20f / 5.5f, MainBarrel = 27.0f, PdBarrel = 12.1f },
@@ -472,6 +483,7 @@ public static class Classes
             },
             Art = new ClassArt {
                 Texture = "res://heavy_sniper_hull.png", Length = 120f, HalfWidth = 30.03f,
+                SideJets = new Vector2[] { new(-5.98f, -45.59f), new(5.74f, -45.59f), new(-31.76f, 45.59f), new(32.46f, 45.59f) },
                 Mains = new Vector2[] { new(0.0f, -24.0f) },
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
             Abilities = new[] { Ab.Railgun, Ab.Anchor, Ab.Tether, Ab.Flares } },
@@ -518,6 +530,7 @@ public static class Classes
             },
             Art = new ClassArt {
                 Texture = "res://heavy_warrior_hull.png", Length = 120f, HalfWidth = 31.54f,
+                SideJets = new Vector2[] { new(-14.88f, -45.61f), new(15.37f, -45.61f), new(-19.8f, 45.61f), new(19.55f, 45.61f) },
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
             // the weapon row, then the three it learns in this order (the walls read it: kits_v31 §3.6)
             Abilities = new[] { Ab.Blade, Ab.Lunge, Ab.Whirlwind, Ab.PrismStance } },
@@ -566,6 +579,7 @@ public static class Classes
             },
             Art = new ClassArt {
                 Texture = "res://heavy_warden_hull.png", Length = 120f, HalfWidth = 28.68f,
+                SideJets = new Vector2[] { new(-10.3f, -45.64f), new(10.3f, -45.64f), new(-29.11f, 45.64f), new(28.6f, 45.64f) },
                 Mains = new Vector2[] { new(0.0f, -24.0f) },
                 Pds   = new Vector2[] { new(0.0f, 31.2f) },
                 TurretTexScale = 1.18f / 5.5f, MainBarrel = 14.5f, PdBarrel = 6.5f },
@@ -625,6 +639,7 @@ public static class Classes
             },
             Art = new ClassArt {
                 Texture = "res://light_dart_hull.png", Length = 70f, HalfWidth = 16.78f,
+                SideJets = new Vector2[] { new(-2.97f, -26.58f), new(2.12f, -26.58f), new(-13.38f, 26.58f), new(13.26f, 26.58f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
             Abilities = new[] { Ab.Pepperbox, Ab.Rod, Ab.Ramjet, Ab.Slingshot } },
         new() { Id = ShipClass.LightEcho, Name = "ECHO", Ready = true, Fit = Fit.Guns,
@@ -673,6 +688,7 @@ public static class Classes
                 // fighter_f (the pack, J5): one main on the centreline stands for the paired
                 // barrels the art draws on both wings (the flavour, "fires twice")
                 Texture = "res://light_echo_hull.png", Length = 70f, HalfWidth = 14.68f,
+                SideJets = new Vector2[] { new(-7.82f, -26.67f), new(8.16f, -26.67f), new(-12.87f, 26.67f), new(12.54f, 26.67f) },
                 Mains = new Vector2[] { new(0.0f, -23.39f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Reverb, Ab.Rewind, Ab.Emp } },
@@ -722,6 +738,7 @@ public static class Classes
             },
             Art = new ClassArt {
                 Texture = "res://light_wraith_hull.png", Length = 70f, HalfWidth = 14.97f,
+                SideJets = new Vector2[] { new(-8.92f, -26.58f), new(8.75f, -26.58f), new(-16.75f, 26.58f), new(17.08f, 26.58f) },
                 Mains = new Vector2[] { new(0.0f, -10.5f) },
                 TurretTexScale = 0.65f / 5.5f, MainBarrel = 8.0f, PdBarrel = 3.6f },
             Abilities = new[] { Ab.Guns, Ab.FireMode, Ab.Veil, Ab.Venom, Ab.Step } },
