@@ -22,5 +22,4 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
    After the release (owner 17:20, README next 8-9): two-machine test row; scenarios lane; PlayerShip/Hub split; fable_report lists.
 
 ## Notes (merge risks, promised follow-ups; nothing done, nothing historical). Owner questions open: none (today's rulings: README, Agents)
-- Retrospective: a fix prompt with evidence is ~2,000 chars; six ~8 min (arena roles 480 s); ledger_test.md row 011d7fe names only a1-rip-dummy4
-  (the fold adds a1-shots-stale-cam, a1-warp-2frames, a1-heavy-target). Cards' OPEN lines: BB fire-mode key, Tender numbers, DD longlance, grapnel_rip sound.
+- Retro: fix prompt ~2,000 chars; six ~8 min; ledger_test row 011d7fe names only a1-rip-dummy4 (fold adds shots-stale-cam, warp-2frames, heavy-target).
