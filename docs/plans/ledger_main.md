@@ -8,9 +8,8 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   ONE Monitor (journal results/merges + agents.ps1 -Minutes 40 every 15 min; owner 19:40: wake-ups are the watchers' cost) re-armed at expiry.
 
 ## Landed (verdict first; delete the row once its action is done)
-- 21:30 brace-warp-spool merged 3023148 (typecheck + quick after). a2-broadside-arcs REFUSED by the merge gate: the rewrite loosened 375
-  to 343.75 while the card says 375 side-on and LaneA6aBroadsideChecks fires 24/24 abeam -> a real bug (90-degree knife edge or a stale
-  turret rotation at shell spawn), kind code for round-3 triage with a2-suppress-locked (never dispatched). The loosening stays unmerged.
+- 21:30 brace-warp-spool merged 3023148 (typecheck + quick green). a2-broadside-arcs REFUSED by the merge gate (loosened 375 to 343.75; the card
+  says 375 side-on, LaneA6aBroadsideChecks fires 24/24 abeam): a real bug, kind code for round-3 triage with a2-suppress-locked (never dispatched).
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task wxmo7btan (round 1: two merges; round 2: 17 pre-authored fixes in 5 groups, no chains, no triage; round 3 measures). A stop ->
