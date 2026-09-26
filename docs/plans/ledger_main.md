@@ -14,9 +14,10 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   sampling; restore 1e-3 and prove at 3 seeds (the sampling alone should hold; a widened tolerance is a loosening).
 
 ## Next (1 is the exact next call, copy-pasteable)
-1. Wait for task wxmo7btan (round 2: NaN+CIWS group still out; then round 3 chains + triage). A stop -> relaunch with args {attempt: 4,
-   review: [], done: [every a1/a2 task id in ledger_test.md + a1-shots-stale-cam, a1-warp-2frames, a1-heavy-target, a2-broadside-arcs],
-   preTasks: {a2: round2_tasks.json}} (no premerged: a re-merge costs a Haiku refusal + a Sonnet run); the cache replays an unchanged PREFIX only.
+1. 21:48 NaN+CIWS merge: Sonnet refused (Checks: lines omit the guest "host stream 0.4/s" literal = a downstream six symptom in the task's
+   checks, not the fix's check); Opus attempt running. If it refuses too: TaskStop wxmo7btan at once (round 3 chains would run without the
+   fix), one Sonnet merge agent merges wt/fixa2ga2nancascadea2ciwsdamage from wt_fix0 (the guest literal is not owed), then relaunch with
+   args {attempt: 4, review: [], done: [EVERY a1 and a2 task id, 8 + 17], preTasks: {a2: round2_tasks.json}} (round 3 runs live at once).
 2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
 
 ## Notes (merge risks, promised follow-ups; nothing done, nothing historical). Owner questions open: none (today's rulings: README, Agents)
