@@ -1,4 +1,4 @@
-# Coordinator state -- last event 21:45: round 2's last group (NaN cascade: 4974 exc -> 2, fails 135-143 vs 206 in its tree alone; CIWS) merging; 15 rows in ledger_test.md; round 3 chains next.
+# Coordinator state -- last event 22:07: round 3 solo at slot 1 = FAIL 127 / LANE 0 / exc 0 / PASS 2223 (round 1: 206 / 3 / 994); 17 rows in ledger_test.md; other chains + triage running.
 # Baseline reds: solo 41 fails + 1 throw at slot 0, 206 + 3 thrown lanes at slot 1, six ~240 + 3 lanes, screens 5 exc / LINT 2.
 Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
