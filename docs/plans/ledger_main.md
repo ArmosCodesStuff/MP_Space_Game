@@ -8,7 +8,8 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   -> release. lands: 3 lines to the owner + frames; a stop -> ledger_test.md + journal, fix, relaunch per Next 1. ONE Monitor (journal + watchdog every 15 min).
 
 - thrust / one Opus writer (background 22:37; owner: idle plume half-disc or off, the point only under thrust; tiny cosmetic side thrusters on
-  turns/strafe): wt_thrust from version-l, checks + 3 frames, proves quick,solo,screens. lands: one Opus gate, merge before the bar.
+  turns/strafe; 23:15 + turrets draw at their host's layer, never above an overlapping boss: a z check from 3 hosts + frame turrets_under_boss):
+  wt_thrust from version-l, checks + 4 frames, proves quick,solo,screens. lands: one Opus gate, merge before the bar.
 
 
 ## Landed (verdict first; delete the row once its action is done)
