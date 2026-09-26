@@ -29,3 +29,4 @@ PRE J1: plume half-disc + side jets + checks; files Plume.cs PlayerShip.cs Escap
 - CHANGES entry: the stern plume is a half-disc glow at idle and the point only while the hull pushes ahead (read off its motion on every peer); tiny side jets at bow and stern light the pair that turns or slides the hull. Known broken: a webbed hull at its pinned cap shows the idle half-disc under forced thrust.
 - DESIGN: engines read off replicated motion (push = dv/dt + damping x v), never input; jets placed off the art (SideJets, checked against the texture).
 - next: J3 (coordinator, 23:15): turrets draw at their host's layer.
+PRE J3 (coordinator 23:15, turrets at their host's layer): Turret.Setup ZIndex 5 -> host's (0, relative); solo TurretLayerChecks; Shots turrets_under_boss; files Turrets.cs SmokeTest.cs.txt Shots.cs.txt; HEAD cb32fdc; hashes 2804789e6fdc 01147b76db0a e6419591d855

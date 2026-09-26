@@ -520,6 +520,7 @@ public partial class _Shots : Node
         await LaneA6dEmpFrames();
         await LaneA6dWraithFrames();
         await ThrustFrames();                  // lane thrust: the plume at idle, burning, and the side jets on a turn
+        await TurretsUnderBossFrame();         // lane thrust: a boss hull over the player covers its turrets too
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -1547,5 +1548,28 @@ public partial class _Shots : Node
         s.Place(at, 0f);
         Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
         zp.SetValue(H, z0);
+    }
+
+    // ── LANE THRUST · TURRETS AT THEIR HOST'S LAYER (owner, 2026-09-25 23:15) ── a player battleship held under
+    // the boss's hull: the boss covers the ship AND its turrets (no pod or gun drawn through it). The boss is
+    // drawn after the ship, as the arena builds it (ships, then the boss); put so if a rebuild reordered them.
+    async Task TurretsUnderBossFrame()
+    {
+        var b = H.Boss;
+        if (!IsInstanceValid(b)) { GD.Print("shot skipped turrets_under_boss: no boss in this world"); return; }
+        H.ClearSelection();
+        Character.Class = ShipClass.Battleship; P(H, "ApplyLocalIdentity"); await W(0.4);
+        var s = H.GetNode<PlayerShip>("Ship_1");
+        if (s.GetParent() == b.GetParent() && s.GetIndex() > b.GetIndex()) H.MoveChild(b, s.GetIndex());
+        for (double t = 0; t < 0.8; t += GetProcessDeltaTime())
+        {
+            foreach (var r in H.Raiders.ToList()) H.RaiderDown(r);
+            s.Statuses.Clear(Status.Pinned); s.Hp = s.MaxHp;
+            s.Place(b.Position, b.Rotation);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        await Snap("turrets_under_boss");
+        s.Place(new Vector2(-900, 1100), 0f); s.Hp = s.MaxHp;
+        await W(0.4);
     }
 }

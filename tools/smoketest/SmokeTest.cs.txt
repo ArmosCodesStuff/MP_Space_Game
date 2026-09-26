@@ -17500,8 +17500,10 @@ public partial class _Test : Node
         Check(ship.Stats["torpedo_speed"] == 300 && ship.Stats["launch_range"] == 1900 && ship.Stats["torpedo_interval"] == 0.5,
               "torpedoes: 300 u/s, launched from 1900 u, one every 0.5 s");
         var fx0 = H.GetChildren().OfType<FlashLayer>().FirstOrDefault();
-        Check(fx0 != null && !fx0.ZAsRelative && fx0.ZIndex > ship.ZIndex && fx0.ZIndex < ship.ZIndex + Nodes<Turret>(ship).First().ZIndex,
-              "hit flashes draw above the hulls and below the turrets");
+        // (a turret is at its hull's own layer since the owner's 23:15 ruling: what covers the hull covers its guns)
+        var flashGun = Nodes<Turret>(ship).First();
+        Check(fx0 != null && !fx0.ZAsRelative && fx0.ZIndex > ship.ZIndex && EffectiveZ(flashGun) == EffectiveZ(ship) && fx0.ZIndex > EffectiveZ(flashGun),
+              $"hit flashes draw above the hulls and their turrets, which sit at their hull's layer (flash z {fx0?.ZIndex}, hull {EffectiveZ(ship)}, turret {EffectiveZ(flashGun)})");
         // strafing runs: 3 shots, straight through by 1.2x the target's diameter, then round again
         var fx = Nodes<Wing>().First(w => w.Carrier == ship && w.Kind == WingKind.Fighter);
         int passes = 0; bool three = true, through = true; string lastPhase = fx.FighterPhase; float worst = 999f;
@@ -19665,6 +19667,7 @@ public partial class _Test : Node
             LaneA6dStepRowChecks();
             await Lane("LaneA6dStepChecks", () => LaneA6dStepChecks(yonder));
             await Lane("ThrustChecks", () => ThrustChecks(yonder));                                      // lane thrust: the plume at idle, the side jets
+            await Lane("TurretLayerChecks", () => TurretLayerChecks());                                  // lane thrust: turrets at their host's layer
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -25520,6 +25523,37 @@ public partial class _Test : Node
         Check(seen.Idle, "arena guest (thrust): ...then, coasting (its reported speed falling, still under way), its plume here is the idle half-disc");
         Check(seen.Port, "arena guest (thrust): ...then, its reported heading swinging to port, the bow's starboard and the stern's port jet are lit here (6)");
         Check(seen.Stbd, "arena guest (thrust): ...then, swinging back to starboard, the bow's port and the stern's starboard jet (9)");
+    }
+
+    // ── LANE THRUST · TURRETS AT THEIR HOST'S LAYER (owner, 2026-09-25 23:15) ──────────────────────────────
+    // A turret drew 5 layers above its hull, so a boss over a player's ship covered the hull and not its guns.
+    // Every turret is a child of its host (ITurretHost.AsNode) at the host's own effective z (ZIndex 0,
+    // relative): whatever covers the hull covers its turrets. From 3 hosts: a player battleship (mains and
+    // point defence), a player carrier (point defence) and the base's hauler (its point defence).
+    static int EffectiveZ(CanvasItem c)
+    {
+        int z = 0;
+        for (Node n = c; n is CanvasItem ci; n = n.GetParent()) { z += ci.ZIndex; if (!ci.ZAsRelative) break; }
+        return z;
+    }
+    async Task TurretLayerChecks()
+    {
+        async Task<(string name, Node2D host)> Host(int i)
+        {
+            if (i == 2) return ("the base's hauler", H.Yard?.Hauler);
+            await SetClass(i == 0 ? ShipClass.Battleship : ShipClass.Carrier); await Wait(0.2);
+            return (i == 0 ? "a player battleship" : "a player carrier", Me);
+        }
+        for (int i = 0; i < 3; i++)
+        {
+            var (name, host) = await Host(i);
+            var guns = host?.GetChildren().OfType<Turret>().ToList() ?? new List<Turret>();
+            var pick = guns.Count > 0 ? guns[Rng.RandiRange(0, guns.Count - 1)] : null;   // one named in the line, every one asserted
+            int hz = host == null ? -99 : EffectiveZ(host);
+            bool all = guns.Count > 0 && guns.All(t => t.ZIndex == 0 && t.ZAsRelative && EffectiveZ(t) == hz && t.GetChildren().OfType<CanvasItem>().All(c => EffectiveZ(c) == hz));
+            Check(all,
+                  $"turrets at their host's layer: {name} (z {hz}) and its {guns.Count} turret(s), each ZIndex 0 relative at the hull's own z, its sprite too -- one of them at z {(pick == null ? -99 : EffectiveZ(pick))} (was the hull's + 5)");
+        }
     }
 }
 

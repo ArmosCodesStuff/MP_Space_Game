@@ -302,8 +302,8 @@ public partial class Hub : Node2D
         Loot.ClaimAll();
         Music.CombatZone = InArena;
         if (!InArena) BuildWorld();                  // the arena's boss comes after Combat.Clear, below
-        // Hit flashes get their own layer ABOVE the hulls (ships sit at z 4) and below the
-        // turret sprites, so a shot is seen leaving a turret on top of the ship -- drawn at
+        // Hit flashes get their own layer ABOVE the hulls and the turrets on them (a ship and its
+        // guns sit at z 4), so a shot is seen leaving a turret on top of the ship -- drawn at
         // the world's own level they started underneath it.
         AddChild(new FlashLayer { Hub = this, ZIndex = 8, ZAsRelative = false });
         AddChild(new Popups { Name = "Popups" });
