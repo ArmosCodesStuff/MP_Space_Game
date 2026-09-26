@@ -7176,8 +7176,10 @@ public partial class _Test : Node
     // Three varied runs (VaryNear spot, VaryAngle heading; a held webifier 250-450 u off and another 850-1100 u off at
     // other VaryAngle bearings): Q -- three patrol craft leave 0.83 +- 0.05 s apart; the near one is taken by the patrol
     // (a craft's Target, its hull falling), the far one never; the slot up 20.0 s and cooling 50.0 (20 + 30) at the press;
-    // Q again refused RUNNING. Run 0 is held to the end: 20.4 s on no patrol craft is out, the cooldown reads 29.4-30.0
-    // and Q is refused COOLING. The bar reads SUPER while it runs.
+    // Q again refused RUNNING. Run 0 is held to the end: at 20.4 s the cooldown reads 29.4-30.0 and Q is refused COOLING,
+    // and the patrol flies home and docks (kits_v3 §3.1 "At 20 s they fly home and dock"): all 3 still out at 19.7 s, every
+    // one docked by 26 s. Between runs the patrol is sent home and waited in, so a run counts only its own craft. The bar reads
+    // SUPER while it runs.
     async Task LaneA6aSuperChecks(Vector2 yonder)
     {
         var cv = new ShipStats(ShipClass.Carrier);
@@ -7224,15 +7226,20 @@ public partial class _Test : Node
                       + $"up {left:0.0} s (20), cooling {cool:0.0} (50 = 20 + 30); Q again {again} (RUNNING); the bar '{line}'");
                 if (run == 0)
                 {
+                    while (s.Clock < tp + 19.7) { Hold(); await Frame(); }
+                    bool leftLate = Ps().Count == 3;
                     while (s.Clock < tp + 20.4) { Hold(); await Frame(); }
                     Key(q); await Frame();
-                    string cooling = s.FailNote("super"); double coolEnd = s.Sl("super").Cool; int outEnd = Ps().Count(w => !w.Inside);
-                    Check(outEnd == 0 && coolEnd >= 29.4 && coolEnd <= 30.0 && cooling == "COOLING" && s.Sl("super").Left <= 0,
-                          $"Supercarrier at 20.4 s: {outEnd} patrol craft out (0), cooling {coolEnd:0.0} s (30 from the end), Q {cooling} (COOLING)");
+                    string cooling = s.FailNote("super"); double coolEnd = s.Sl("super").Cool;
+                    while (Ps().Count > 0 && s.Clock < tp + 30.0) { Hold(); await Frame(); }
+                    double docked = s.Clock - tp;
+                    Check(leftLate && Ps().Count == 0 && docked <= 26.0 && coolEnd >= 29.4 && coolEnd <= 30.0 && cooling == "COOLING" && s.Sl("super").Left <= 0,
+                          $"Supercarrier at 20.4 s: cooling {coolEnd:0.0} s (30 from the end), Q {cooling} (COOLING); the patrol flies home and docks: 3 still out at 19.7 s ({leftLate}), the last docked at {docked:0.0} s (by 26)");
                 }
                 near.TakeDamage(1e12); far.TakeDamage(1e12);
                 foreach (var w in Ps()) w.SendOut(null, s.Clock);
                 s.Sl("super").Left = 0; s.Sl("super").Cool = 0;
+                for (double home = s.Clock; Ps().Count > 0 && s.Clock < home + 10.0;) { Hold(); await Frame(); }
                 await Wait(0.5);
             }
         }
@@ -10961,6 +10968,38 @@ public partial class _Test : Node
         }
     }
 
+    // ── A CAMERA THAT IS NOT A NUMBER (round a2, a2-pd-release): Hub.MoveCamera cuts it back to the ship. Left lost,
+    // the cursor read NaN, every main gun threw in Turret.Swing, and the battleship's point defence (mounted after its
+    // mains) never ticked: a light 60-90% of its reach out was never taken. Three varied runs (VaryNear spot, VaryAngle
+    // heading and bearing; the camera put at NaN, +Inf, -Inf): two frames on the camera is within 1 u of the ship, the
+    // aim is a number, and a PD mount takes a held light 0.60-0.90 of pd_range out within 8 frames.
+    async Task CameraNanChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.Battleship);
+        var bb = Me; var cam = (Camera2D)typeof(Hub).GetField("_cam", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(H);
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int run = 0; run < 3; run++)
+        {
+            bb.Position = VaryNear(yonder, 300f); bb.Velocity = Vector2.Zero; bb.Rotation = VaryAngle();
+            await Frame();
+            var bad = run == 0 ? new Vector2(float.NaN, bb.Position.Y) : run == 1 ? new Vector2(bb.Position.X, float.PositiveInfinity)
+                               : new Vector2(float.NegativeInfinity, float.NaN);
+            cam.Position = bad;
+            await Frame(); await Frame();
+            float camOff = cam.Position.DistanceTo(bb.ViewPosition);
+            bool aimOk = bb.AimAt.IsFinite();
+            var mount = bb.PdTurrets.First();
+            var lightAt = mount.GlobalPosition + Vector2.Right.Rotated(VaryAngle()) * (float)(bb.Stats["pd_range"] * Vary(0.60f, 0.90f));
+            var light = H.SpawnRaider(lightAt, Enemies.Webifier); light.Hp = 1e9; light.ApplyStatus(Status.Disabled, 30);
+            for (int f = 0; f < 8 && !ReferenceEquals(mount.Target, light); f++) { light.Position = lightAt; await Frame(); }
+            bool taken = ReferenceEquals(mount.Target, light);
+            Check(camOff < 1f && aimOk && taken,
+                  $"a camera put at {bad} cuts back to the ship: {camOff:0.0} u off it (1) two frames on, the aim a number ({aimOk}), and the battleship's point defence takes a light {mount.GlobalPosition.DistanceTo(lightAt):0} u out ({taken})");
+            light.TakeDamage(1e12);
+            await Frame();
+        }
+    }
+
     // ── F8 AN ANCHOR THAT WARPS casts the move off with none (kits_v31 §3.4) ─────────────────────────────
     // The destroyer on TargetDummy1, marked; the dummy relocated 1500-3000 u (over Drives.SnapAt, 600) in
     // the bite, mid-pull and mid-swing (on A or D): the move ends THAT frame, AnchorWarped (not Drive: the
@@ -10985,13 +11024,15 @@ public partial class _Test : Node
             HelmMoves.Confirm(dd, dummy, n, n.Time + 1);
             var key = Vary(0f, 1f) < 0.5f ? global::Godot.Key.A : global::Godot.Key.D;
             if (k == 0) { int f = (int)Vary(1f, 3.99f); for (int i = 0; i < f; i++) await Frame(); }
-            else if (k == 1) await Wait(Vary(0.2f, 0.3f));
+            else if (k == 1) { await Wait(Vary(0.2f, 0.3f)); await Frame(); }
             else
             {
                 for (int i = 0; i < 60 * 3 && dd.Helm.On && dd.Helm.Pulling; i++) await Frame();
                 KeyDown(key);
-                await Wait(Vary(0.3f, 0.8f));
+                await Wait(Vary(0.3f, 0.8f)); await Frame();
             }
+            // (a timer resumes AFTER the frame's ships have flown, a frame BEFORE: the Frame after each Wait puts the
+            // jump's one Frame below round exactly one flight of the hull, as the bite's frames already do)
             bool inPhase = dd.Helm.On && (k == 0 ? dd.Helm.T < n.Bite : k == 1 ? dd.Helm.Pulling && dd.Helm.T > n.Bite : !dd.Helm.Pulling);
             var shipAt = dd.Position; double t0 = dd.Helm.T;
             float jump = Vary(1500f, 3000f);
@@ -17341,7 +17382,10 @@ public partial class _Test : Node
             typeof(PlayerShip).GetProperty("StrikeTarget").SetValue(ship, d3);
             typeof(PlayerShip).GetField("_strikesOut", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(ship, 2);
             int armed0 = ship.BombersReady;
-            Character.Bonuses["bomber_count"] = 1.5; ship.SetClass(ship.Class); ship = Me;   // 2 x 2.5 = 5
+            // IN SERVICE: the ship's own refit (Restat, what a part or a purchase runs), never SetClass --
+            // a class change builds the whole wing fresh, and a fresh wing is armed
+            Character.Bonuses["bomber_count"] = 1.5;                                          // 2 x 2.5 = 5
+            typeof(PlayerShip).GetMethod("Restat", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(ship, null); ship = Me;
             int armedAfter = ship.BombersReady;
             bool strikeOff = ship.StrikeTarget == null;
             await CheckBays(5);
@@ -19499,6 +19543,7 @@ public partial class _Test : Node
             LaneA4TetherChecks(yonder);
             await Lane("LaneA4HelmLiveChecks", () => LaneA4HelmLiveChecks(yonder));
             await Lane("LaneA4AnchorWarpChecks", () => LaneA4AnchorWarpChecks());
+            await Lane("CameraNanChecks", () => CameraNanChecks(yonder));
             await Lane("LaneA4WreckChecks", () => LaneA4WreckChecks());
             await Lane("LaneA4WardChecks", () => LaneA4WardChecks());
             await Lane("LaneA4MendChecks", () => LaneA4MendChecks());
