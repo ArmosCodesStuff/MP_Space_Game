@@ -8,8 +8,7 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   ONE Monitor (journal results/merges + agents.ps1 -Minutes 40 every 15 min; owner 19:40: wake-ups are the watchers' cost) re-armed at expiry.
 
 ## Landed (verdict first; delete the row once its action is done)
-- 21:30 brace-warp-spool merged 3023148. a2-broadside-arcs REFUSED by the merge gate (loosened 375 to 343.75; the card says 375 side-on): a real
-  bug, kind code for round-3 triage, with a2-suppress-locked (never dispatched), a2-regen-once (not done), the mortar 1.4 s half (throw accuracy).
+- Round-3 code tasks: a2-broadside-arcs (rewrite REFUSED: loosened 375 to 343.75, the card says 375 side-on), suppress-locked, regen-once, the mortar throw accuracy.
 - 21:40 knife-edges group merged 5e1d86d. Owed to round 3 (kind check): the ramp check's tolerance went 1e-3 -> 3e-3 with the off-boundary
   sampling; restore 1e-3 and prove at 3 seeds (the sampling alone should hold; a widened tolerance is a loosening).
 
