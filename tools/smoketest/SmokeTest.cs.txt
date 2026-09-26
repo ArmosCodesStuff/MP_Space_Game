@@ -2872,7 +2872,7 @@ public partial class _Test : Node
                 sn.Position = at; sn.Velocity = Vector2.Zero; sn.Rotation = VaryAngle();
                 var dir = Vector2.Up.Rotated(sn.Rotation);               // the railgun fires along the hull's heading
                 var tgt = H.SpawnRaider(at + dir * Vary(200f, 400f), Enemies.Gunship);
-                tgt.Hp = 1e9;
+                tgt.Hp = 1e9; tgt.ApplyStatus(Status.Disabled, 30);      // held on the line: a gunship closes to its station astern
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 double hp0 = tgt.Hp, dealt0 = sn.DealtBy.GetValueOrDefault("rail");
                 await RailFire(sn);                                      // a full charge on Space, let go
@@ -8206,6 +8206,9 @@ public partial class _Test : Node
     // 4 DISABLED INSIDE THE DASH (review hv-R6c-6): three more runs (VaryNear spot, VaryAngle heading), Disabled
     // 0.08-0.15 s into the dash: the row's Left reads 0 and the hardening is off within a frame, the hull stays within
     // 15 u of where it stopped, a gunship 40-90 u down the line took its 40 before and one 330-400 u down it takes 0.
+    // 5 A REFIT INSIDE THE DASH (a2-nan-cascade): three runs (VaryNear spot, VaryAngle heading, 0.05-0.15 s in; the
+    // Warden, the battleship, the Echo): a refit ends what was running, the carry too -- the hull moves under 1 u in the
+    // 0.4 s after and its position stays a number (the carry read the new sheet's 0 / 0 and threw every frame after).
     async Task LaneA6cLungeChecks(Vector2 yonder)
     {
         await SetClass(ShipClass.HeavyWarrior);
@@ -8218,7 +8221,7 @@ public partial class _Test : Node
         {
             var at = VaryNear(yonder, 300f); float rot = VaryAngle();
             var nose = Vector2.Up.Rotated(rot);
-            w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Sl("boost").Cool = 0; w.Statuses.Clear(Status.Hardened);
+            w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Sl("boost").Cool = 0; w.Statuses.Clear(Status.Hardened); w.Hp = w.MaxHp;   // each run's blows on a whole hull
             w.Position = at; w.Velocity = run == 1 ? nose * 190f : Vector2.Zero; w.Rotation = rot;
             if (run == 2)
             {
@@ -8282,7 +8285,7 @@ public partial class _Test : Node
         for (int run = 0; run < 3; run++)
         {
             var at = VaryNear(yonder, 300f); float rot = VaryAngle();
-            w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Statuses.Clear(Status.Hardened);
+            w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Statuses.Clear(Status.Hardened); w.Hp = w.MaxHp;   // each run's blows on a whole hull
             w.Position = at; w.Velocity = Vector2.Zero; w.Rotation = rot;
             var sideKey = Vary(0f, 1f) < 0.5f ? global::Godot.Key.D : global::Godot.Key.A;
             KeyDown(global::Godot.Key.Shift); KeyDown(sideKey);
@@ -8306,7 +8309,7 @@ public partial class _Test : Node
         for (int run = 0; run < 3; run++)
         {
             var at = VaryNear(yonder, 300f); float rot = VaryAngle();
-            w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Statuses.Clear(Status.Hardened);
+            w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Statuses.Clear(Status.Hardened); w.Hp = w.MaxHp;   // each run's blows on a whole hull
             w.Position = at; w.Velocity = Vector2.Zero; w.Rotation = rot;
             var web = H.SpawnRaider(at + Vector2.Right.Rotated(VaryAngle()) * Vary(250f, 400f), Enemies.Webifier);
             web.Hp = 1e9; web.Quarry = w;
@@ -8340,7 +8343,7 @@ public partial class _Test : Node
         for (int run = 0; run < 3; run++)
         {
             var at = VaryNear(yonder, 300f); float rot = VaryAngle();
-            w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Statuses.Clear(Status.Hardened);
+            w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Statuses.Clear(Status.Hardened); w.Hp = w.MaxHp;   // each run's blows on a whole hull
             w.Position = at; w.Velocity = Vector2.Zero; w.Rotation = rot;
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             at = w.Position; rot = w.Rotation;                                            // re-taken after the wait
@@ -8371,7 +8374,32 @@ public partial class _Test : Node
             for (int i = 0; i < 90 && w.Disabled; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             w.Velocity = Vector2.Zero; w.Sl("lunge").Cool = 0;
         }
-        w.Position = yonder; w.Velocity = Vector2.Zero;
+
+        // 5 -- A REFIT INSIDE THE DASH: what was running ends, the carry with it (its row is not on the new sheet)
+        var refits = new[] { ShipClass.HeavyWarden, ShipClass.Battleship, ShipClass.LightEcho };
+        for (int run = 0; run < 3; run++)
+        {
+            await SetClass(ShipClass.HeavyWarrior);
+            w = Me; w.Sl("lunge").Left = 0; w.Sl("lunge").Cool = 0; w.Hp = w.MaxHp;
+            var at = VaryNear(yonder, 300f); float rot = VaryAngle();
+            w.Position = at; w.Velocity = Vector2.Zero; w.Rotation = rot;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            w.UseAbility("lunge", 0);
+            for (int i = 0; i < 30 && w.Sl("lunge").Left <= 0; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double tp = w.Clock, cut = Vary(0.05f, 0.15f);                                // timed from the first frame the dash runs
+            while (w.Clock - tp < cut && w.Sl("lunge").Left > 0) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            bool running = w.Sl("lunge").Left > 0;
+            Character.Class = refits[run]; H.PilotChanged();
+            w.Velocity = Vector2.Zero;
+            var stopAt = w.Position;
+            double t0 = w.Clock;
+            while (w.Clock - t0 < 0.4) { w.Velocity = Vector2.Zero; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            float drift = w.Position.DistanceTo(stopAt);
+            Check(running && w.Class == refits[run] && float.IsFinite(w.Position.X) && float.IsFinite(w.Position.Y) && drift < 1f,
+                  $"the lunge {cut:0.00} s in, refitted to {refits[run]}: a refit ends what was running, the carry too -- the hull moves {drift:0.0} u in 0.4 s after (under 1, a number: {w.Position})");
+        }
+        await SetClass(ShipClass.HeavyWarrior);
+        w = Me; w.Position = yonder; w.Velocity = Vector2.Zero;
     }
 
     // ── SLICE 6c: THE WARRIOR'S WHIRLWIND (kits_v2 card: 2 s, 210 u all round, 40 DPS, clears and blocks
@@ -11160,6 +11188,8 @@ public partial class _Test : Node
             dt.Position = VaryNear(yonder, 300f); dt.Rotation = rot; dt.Velocity = slide;
             var want = nose * 520f + slide;
             dt.AimPoint = dt.Position + want.Normalized() * 700f;
+            await Frame();                                                        // placed, then the one-frame trigger (as the reach runs do)
+            dt.Velocity = slide;
             var shot = await LaneA6dOneDart(dt);
             var v = shot == null ? Vector2.Zero : shot.Dir * shot.Speed;
             Check(shot != null && Math.Abs(v.Length() - want.Length()) <= want.Length() * 0.01f && Mathf.Abs(Mathf.AngleDifference(v.Angle(), want.Angle())) < 0.03f,

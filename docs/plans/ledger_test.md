@@ -15,3 +15,5 @@
 | a2 | a2-knife-edges | check | solo@11400714819323392986,209199496 | kits6a ramp/mortar | aea6151 |
 | a2 | a2-stale-raider | check | solo@11400714819323333590,11400714819323392986,209199496 | kits6a raider | 21d972a |
 | a2 | a2-card-hull | check | solo@11400714819323392986,209199496 | kits6a class card | c423fdd |
+| a2 | a2-nan-cascade | code | solo@11400714819323333590,11400714819323392986,2080866651 | frame kits6a heavies/lights | effbfee |
+| a2 | a2-ciws-damage | code | solo@11400714819323333590,11400714819323392986,2080866651 | frame kits6a CIWS | dc7d665 |

@@ -199,7 +199,8 @@ public partial class Turret : Node2D
         // CARRIES its remainder rather than resetting: resetting rounds every shot up
         // to a whole frame, which quietly cost 3% of PD's stated DPS at 60 fps.
         bool canFire = Target != null && Mathf.Abs(diff) <= Mathf.DegToRad(8f);
-        _cd -= delta;
+        // a rate lift reaches the reload already running (the CIWS's x8): it never waits past one interval of the rate now
+        _cd = System.Math.Min(_cd, S.Interval) - delta;
         if (!canFire) { if (_cd < 0) _cd = 0; }
         else for (int n = 0; _cd <= 0 && n < 8; n++)
         {   // the target held for the shot: a shot that kills it ends the run here, and the next
