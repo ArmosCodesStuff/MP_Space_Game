@@ -21,6 +21,5 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 
 ## Notes (merge risks, promised follow-ups; nothing done, nothing historical). Owner questions open: none (today's rulings: README, Agents)
 - Cards' OPEN lines for triage: BB fire-mode key (spec R, built G); Tender numbers have no spec file; DD `longlance`; no grapnel_rip sound.
-- Retrospective: a fix prompt with its evidence is ~2,000 chars (P cut fixOne's tail at 1,500 too); six is ~8 min now (arena roles 480 s).
-  ledger_test.md: the 011d7fe merge row names only a1-rip-dummy4; the release fold adds rows for a1-shots-stale-cam, a1-warp-2frames, a1-heavy-target.
-- Unverified work: origin/backup/unverified; version-l/main move only on a green bar. Lane defaults for the release notes: each lane ledger.
+- Retrospective: a fix prompt with evidence is ~2,000 chars (P cut fixOne's tail at 1,500); six ~8 min (arena roles 480 s); ledger_test.md row
+  011d7fe names only a1-rip-dummy4: the release fold adds a1-shots-stale-cam, a1-warp-2frames, a1-heavy-target.
