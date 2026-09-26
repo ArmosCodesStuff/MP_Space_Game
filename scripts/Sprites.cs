@@ -51,11 +51,12 @@ public class HullArt
     public Nozzle[] Nozzles = Array.Empty<Nozzle>();
 
     // A flame out of every bell. `at` is the hull's centre and `k` the drawn size of one world
-    // unit, in the caller's frame; `reach` stretches the flame (a boost), `throttle` and `active`
-    // are Plume's.
-    public void DrawPlumes(CanvasItem ci, Vector2 at, float k, Color col, float throttle, bool active, float reach = 1f)
+    // unit, in the caller's frame; `reach` stretches the flame (a boost), `throttle` and `burn`
+    // are Plume's (a craft flown by its row, not a helm, burns while it is under way: at rest, each
+    // bell is Plume's idle half-disc).
+    public void DrawPlumes(CanvasItem ci, Vector2 at, float k, Color col, float throttle, bool burn, float reach = 1f)
     {
         foreach (var n in Nozzles)
-            Plume.Draw(ci, at + new Vector2(n.X, n.Y) * k, Vector2.Down, n.Bell * k * reach / Plume.Width, col, throttle, active);
+            Plume.Draw(ci, at + new Vector2(n.X, n.Y) * k, Vector2.Down, n.Bell * k * reach / Plume.Width, col, throttle, burn);
     }
 }

@@ -128,6 +128,7 @@ Sprites
 - The BOSSES are RED AND BLACK (2026-09-25): the owner's swatch, mean RGB 172, 7, 2 = tint
   (0.67, 0.03, 0.01), over the grey art so the shadows go black; value lifted only as far as a frame
   needs to read against space.
+- ENGINES (2026-09-25 22:35): with no forward thrust the stern plume is a half-disc glow at the nozzle ("a half sphere instead of a triangle point"), the point only while accelerating; tiny cosmetic side thrusters (no physics) at bow and stern, port and starboard, on the art's edge (ClassArt.SideJets), lit on the pair that makes the current turn and the slide.
 
 Agents (owner, 2026-09-25)
 - BUILD EVERYTHING, THEN TEST (2026-09-25): no engine run until every planned lane is built and merged; per job the compiler

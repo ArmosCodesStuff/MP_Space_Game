@@ -99,7 +99,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     // ── the owner's intent, replicated at 20 Hz ──────────────────────────────
     public Vector2 AimPoint;               // where the main guns point
-    private bool Thrusting;                 // the owner is on the throttle (plume flicker)
     private bool _trigger;
     // GUNS KEY HELD (battleship, destroyer) -- and A WRECK DOES NOT FIRE. Three drivers write it:
     // the local flight, the display ship's demo, and the WIRE. A guest's 20 Hz report is built
@@ -365,6 +364,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
 
     public Vector2 Velocity;
     private float _yawRate;            // current turn rate, rad/s
+    private EngineWatch _engines;      // the plume's point and the lit side jets, read off the motion
     private Sprite2D _sprite;
 
     // What remote peers steer toward between updates.
@@ -1711,6 +1711,9 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         UpdatePod();
         if (Mine) { Drives.TickOwner(this, _drive, DriveHeld || (!Demo && !Hub.ControlsLocked && Input.IsKeyPressed(Key.V)), delta); LocalFlight(dt); }
         else      RemoteFollow(dt);
+        // THE ENGINES, read off the motion (EngineWatch): the owner's hull every frame, another's at each report (ApplyState)
+        _engines.Tick(dt);
+        if (Mine) _engines.Watch(Velocity, Rotation, Stats);
 
         TickAbilities(delta);
         // THE TRAIL (a sheet naming rewind_every: the Echo's Rewind): a mark of where it was and its hull, every so often
@@ -2184,7 +2187,6 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         if (Pinned) { throttle = 1f; rudder = 0f; strafe = 0f; AutopilotTo = null; }   // forced thrust, no rudder, no slide
         else if (forcing != null) { throttle = 1f; AutopilotTo = null; }                 // a sprint: forced thrust, the rudder free
         _throttle = throttle;
-        Thrusting = throttle != 0f;
         // A HELM MOVE (F8) flies the hull by its own law while it lasts; a dash carries the hull instead
         // of the helm; otherwise the helm steers
         if (HelmMoves.Fly(this, _helm, throttle, rudder, dt)) _yawRate = 0f;
@@ -2374,6 +2376,7 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
             else _drive.From = null;
             _netVel = Drives.Clamp(_drive, _netVel, ReportTop, StrafeNow);
         }
+        _engines.Watch(_netVel, _netRot, Stats);    // its engines, off the motion it reports (every peer alike)
     }
 
     // The host's side of the conversation: hull, ability state, and the wing.
@@ -2470,16 +2473,25 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
     public void Signal(Vector2 world) => _signals.Add((ToLocal(world), SignalTime));
     public int SignalsLit => _signals.Count;
 
+    // ── the engines: what this peer reads them doing off the hull's motion (EngineWatch) ──
+    public EngineWatch Engines => _engines;
+    // the stern nozzle, and the plume's outer outline as it is drawn now (a point burning, a half-disc idle)
+    public Vector2 Nozzle => new(0, MyArt.Length * 0.5f - MyArt.EngineInset);
+    public Vector2[] PlumeOutline => Plume.Outline(Nozzle, Vector2.Down, MyArt.Length, PlumeThrottle, _engines.Burn);
+    private float PlumeThrottle => 0.25f + 0.75f * Mathf.Abs(SpeedAhead) / (float)Stats["max_speed"];
+
     public override void _Draw()
     {
         // EVERY FIELD ITS SLOTS HAVE UP (the bubble, ...): one row each in Fields.All (Fx.cs)
         Fields.Draw(this);
         // the drive: a warp's charge glow and landing flash on every peer, and the pilot's range (Drives.Draw)
         Drives.Draw(this, _drive);
-        // engine plumes at the stern, in the accent colour
+        // the engine at the stern and the side jets on the hull's edge, in the accent colour
         if (Alive)
-            Plume.Draw(this, new Vector2(0, MyArt.Length * 0.5f - MyArt.EngineInset), Vector2.Down, MyArt.Length, Accent,
-                       0.25f + 0.75f * Mathf.Abs(SpeedAhead) / (float)Stats["max_speed"], Thrusting || Mathf.Abs(SpeedAhead) > 2f);
+        {
+            Plume.Draw(this, Nozzle, Vector2.Down, MyArt.Length, Accent, PlumeThrottle, _engines.Burn);
+            Plume.DrawJets(this, MyArt.SideJets, _engines.Lit, MyArt.Length, Accent);
+        }
         Melee.Draw(this);                           // a blade or a spin swinging, on every peer
         ActiveReload.Draw(this);                    // an enhanced round's glint at the muzzle, on every peer
         foreach (var (p, t) in _signals)

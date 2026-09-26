@@ -19664,6 +19664,7 @@ public partial class _Test : Node
             await Lane("LaneA6dVenomChecks", () => LaneA6dVenomChecks(yonder));
             LaneA6dStepRowChecks();
             await Lane("LaneA6dStepChecks", () => LaneA6dStepChecks(yonder));
+            await Lane("ThrustChecks", () => ThrustChecks(yonder));                                      // lane thrust: the plume at idle, the side jets
             await SetClass(ShipClass.HeavyWarrior);
             var wr = Me; wr.Position = yonder; wr.Velocity = Vector2.Zero; await Wait(0.2);
             // A SPEED LIFT LIFTS THE PUSH AS WELL AS THE TOP SPEED (PlayerShip.Steer). The water holds a
@@ -23568,7 +23569,9 @@ public partial class _Test : Node
             var empWatch = LaneA6dEmpHostWatch(empSeen);                    // slice 6d: ...then pulses its EMP beside two held craft
             var stepSeen = new LaneA6dStepSeen();
             var stepWatch = LaneA6dStepHostWatch(stepSeen);                 // slice 6d: ...then flies a Wraith and shadow-steps onto a held gunship
+            var thrustFlight = ThrustHostFlight();                                                        // lane thrust: its own hull flown beside lane B, for the guest to watch
             await Lane("LaneBHostDrives", () => LaneBHostDrives());                                        // lane B: the drives across peers (its guest half: LaneBGuestDrives)
+            await Lane("ThrustHostFlight", () => thrustFlight);
             await Lane("LaneA6cLungeHostChecks", () => LaneA6cLungeHostChecks(lungeWatch, lungeSeen));
             await Lane("LaneA6cPrismHostChecks", () => LaneA6cPrismHostChecks(prismWatch, prismSeen));
             await Lane("LaneA6cReloadHostChecks", () => LaneA6cReloadHostChecks(reloadWatch, reloadSeen));
@@ -23891,7 +23894,9 @@ public partial class _Test : Node
             Net.I.Join(HostAt(Port));
             for (int i = 0; i < 60 * 10 && !(Net.IsOnline && Net.LocalId != 1); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Net.IsOnline && Net.LocalId != 1 && Net.I.JoinedBy == "address", $"arena guest: joined, by the typed address ({Net.I.JoinedBy})");
+            var thrustSeen = new ThrustSeen(); var thrustWatch = ThrustGuestWatch(thrustSeen);           // lane thrust: the host's hull watched from here (its host half: ThrustHostFlight)
             await Lane("LaneBGuestDrives", () => LaneBGuestDrives());                                       // lane B: the drives across peers (its host half: LaneBHostDrives)
+            await Lane("ThrustGuestChecks", () => ThrustGuestChecks(thrustSeen, thrustWatch));
             await Lane("LaneA6cLungeGuestChecks", () => LaneA6cLungeGuestChecks());                                // slice 6c: a guest's lunge (its host half: LaneA6cLungeHostChecks)
             await Lane("LaneA6cPrismGuestChecks", () => LaneA6cPrismGuestChecks());                                // slice 6c: a guest's prism stance (its host half: LaneA6cPrismHostChecks)
             await Lane("LaneA6cReloadGuestChecks", () => LaneA6cReloadGuestChecks());                               // slice 6c: a guest's active reload (its host half: LaneA6cReloadHostChecks)
@@ -25342,6 +25347,179 @@ public partial class _Test : Node
                   $"guest: through every frame of its join it is not online, and its panel does not read hosting, until the host has let it in ({joinWatch.Frames} frames joining; online on {joinWatch.Online}, 'hosting' on {joinWatch.Hosting})");
             joinWatch.QueueFree();
         }
+    }
+
+    // ── LANE THRUST · THE ENGINES (owner, 2026-09-25 22:35; README "ENGINES") ─────────────────────────────
+    // With no push ahead the stern plume is a half-disc glow on the nozzle (Plume.Outline: 9 points, as far
+    // aft as it is wide) and the point only while the hull accelerates; four tiny side jets on the art's edge
+    // (ClassArt.SideJets) light the pair that makes the turn and the slide (Plume.Lit, a bit per jet: bow port 1,
+    // bow starboard 2, stern port 4, stern starboard 8). The pure rules on literals, the table against the art,
+    // the pod, then flown from 3 varied spots and headings on a light, a heavy and a capital.
+    static bool IdleCap(Vector2[] o, Vector2 nozzle, float r) =>
+        o.Length == 9 && o.All(p => Mathf.Abs(p.DistanceTo(nozzle) - r) < 1e-3f && p.Y >= nozzle.Y - 1e-3f)
+        && Mathf.Abs(o.Max(p => p.Y) - nozzle.Y - r) < 1e-3f;
+    async Task ThrustChecks(Vector2 yonder)
+    {
+        GetViewport().GuiReleaseFocus();                                    // the helm's keys are polled: no text box may hold them
+        Check(Plume.Lit(-1, 0) == 6 && Plume.Lit(1, 0) == 9 && Plume.Lit(0, 1) == 5 && Plume.Lit(0, -1) == 10 && Plume.Lit(0, 0) == 0 && Plume.Lit(1, 1) == 13,
+              $"the side jets that fire: a port turn the bow's starboard and the stern's port jet (6), a starboard turn the other pair (9), a slide to starboard both port jets (5), to port both starboard jets (10), none at rest, a starboard turn sliding to starboard 13 ({Plume.Lit(-1, 0)}, {Plume.Lit(1, 0)}, {Plume.Lit(0, 1)}, {Plume.Lit(0, -1)}, {Plume.Lit(0, 0)}, {Plume.Lit(1, 1)})");
+        // a 100 u hull: its outer layer is 5.25 u each side of the nozzle (1.5 x 0.07 x 100 / 2); burning at full
+        // throttle it reaches 20 u aft (1.25 x 0.16 x 100)
+        var cap = Plume.Outline(Vector2.Zero, Vector2.Down, 100f, 1f, false);
+        var point = Plume.Outline(Vector2.Zero, Vector2.Down, 100f, 1f, true);
+        Check(IdleCap(cap, Vector2.Zero, 5.25f) && point.Length == 3 && Mathf.Abs(point[1].Y - 20f) < 1e-4f && Mathf.Abs(Mathf.Abs(point[0].X) - 5.25f) < 1e-4f,
+              $"the plume idle is a half-disc on the nozzle, 9 points 5.25 u out and none ahead of it, reaching aft only as far as it is wide ({cap.Length} points, {cap.Max(p => p.Y):0.00} u aft); burning it is the point, 3 points reaching 20 u aft ({point.Length} points, {point[1].Y:0.00} u)");
+        // THE TABLE AGAINST THE ART: each jet on the last opaque pixel (alpha8 > 128) of its texture row, nothing
+        // opaque outboard of it, 0.38 of the length ahead of and aft of centre (12% in from bow and stern)
+        var off = new List<string>();
+        foreach (var cd in Classes.All)
+        {
+            var art = cd.Art; var im = Assets.Load<Texture2D>(art.Texture).GetImage();
+            int w = im.GetWidth(), h = im.GetHeight(); float k = art.Length / h;
+            bool ok = art.SideJets.Length == 4;
+            for (int i = 0; ok && i < 4; i++)
+            {
+                var j = art.SideJets[i]; bool port = i % 2 == 0, bow = i < 2;
+                int col = Mathf.RoundToInt(j.X / k + w / 2f - 0.5f), row = Mathf.RoundToInt(j.Y / k + h / 2f - 0.5f);
+                ok = (port ? j.X < 0 : j.X > 0) && Mathf.Abs(j.Y - (bow ? -0.38f : 0.38f) * art.Length) < k
+                     && col >= 0 && col < w && row >= 0 && row < h && im.GetPixel(col, row).A8 > 128;
+                for (int x = col + (port ? -1 : 1); ok && x >= 0 && x < w; x += port ? -1 : 1) ok = im.GetPixel(x, row).A8 <= 128;
+            }
+            if (!ok) off.Add(cd.Name);
+        }
+        Check(off.Count == 0,
+              $"every hull's 4 side jets sit on its art's outer edge (the row's last opaque pixel, nothing outboard), 0.38 of its length ahead of and aft of centre, the port pair to port ({(off.Count == 0 ? "all " + Classes.All.Length : "off: " + string.Join(", ", off))})");
+        // THE POD: its pilot's key lights the point; elsewhere, its reports moving it do
+        {
+            var at = VaryNear(yonder, 300f);
+            var mine = new EscapePod { Local = true, Position = at }; AddChild(mine);
+            var theirs = new EscapePod { Local = false, Position = at }; AddChild(theirs);
+            await Wait(0.1);
+            bool restIdle = !mine.Burning;
+            KeyDown(global::Godot.Key.W); await Wait(0.2);
+            bool keyed = mine.Burning;
+            KeyUp(global::Godot.Key.W); await Wait(0.1);
+            bool released = !mine.Burning;
+            var step = Vector2.Right.Rotated(VaryAngle()) * 4.75f;           // 95 u/s over one 0.05 s report
+            theirs.SetNet(at, 0f); theirs.SetNet(at + step, 0f);
+            bool moved = theirs.Burning;
+            theirs.SetNet(at + step, 0f);
+            bool still = !theirs.Burning;
+            mine.QueueFree(); theirs.QueueFree();
+            Check(restIdle && keyed && released && moved && still,
+                  $"thrust: an escape pod burns while its pilot holds a key and idles once released ({restIdle}, {keyed}, {released}); another's pod burns while its reports move it 4.75 u and idles when one does not ({moved}, {still})");
+        }
+        // FLOWN
+        var hulls = new[] { ShipClass.LightDart, ShipClass.HeavyWarrior, ShipClass.Destroyer };
+        for (int run = 0; run < 3; run++)
+        {
+            await SetClass(hulls[run]);
+            var s = Me; s.AutopilotTo = null;
+            var at = VaryNear(yonder, 300f); float heading = VaryAngle();
+            s.Place(at, heading); await Wait(0.3); s.Place(at, heading);
+            string who = $"{hulls[run]} at {Mathf.RadToDeg(heading):0} deg";
+            float wide = Mathf.Max(1.2f, s.MyArt.Length * Plume.Width * 0.5f) * 1.5f;
+            // accelerating from rest: the point
+            KeyDown(global::Godot.Key.W); await Wait(1.0);
+            bool burn = s.Engines.Burn; var drawn = s.PlumeOutline; float reach = drawn[1].Y - s.Nozzle.Y, gathered = s.SpeedAhead;
+            KeyUp(global::Godot.Key.W);
+            Check(burn && drawn.Length == 3 && reach > wide && gathered > 5f,
+                  $"thrust: a {who} 1 s on the throttle from rest ({gathered:0} u/s) burns: its plume is the point, {drawn.Length} points reaching {reach:0.0} u aft, past its {wide:0.0} u half-width (burning {burn})");
+            // coasting 0.5 s at throttle 0, still under way: the half-disc
+            await Wait(0.5);
+            bool coastBurn = s.Engines.Burn; var coast = s.PlumeOutline; float coasting = s.SpeedAhead;
+            Check(!coastBurn && IdleCap(coast, s.Nozzle, wide) && coasting > 5f,
+                  $"thrust: the {who} coasting 0.5 s at throttle 0 ({coasting:0} u/s, still under way) idles: its plume is the half-disc on the nozzle, 9 points {wide:0.0} u out, never the point ({coast.Length} points, burning {coastBurn})");
+            // a port turn under way (A): the bow's starboard and the stern's port jet
+            KeyDown(global::Godot.Key.A); await Wait(0.5);
+            int port = s.Engines.Lit, portYaw = s.Engines.Yaw;
+            KeyUp(global::Godot.Key.A);
+            Check(port == 6 && portYaw == -1,
+                  $"thrust: the {who} turning to port under way lights the bow's starboard and the stern's port jet ({port}, want 6; turn {portYaw})");
+            // a starboard turn from rest (D, the pivot): the other pair
+            s.Place(s.Position, s.Rotation); await Wait(0.2);
+            KeyDown(global::Godot.Key.D); await Wait(0.5);
+            int stbd = s.Engines.Lit, stbdYaw = s.Engines.Yaw;
+            KeyUp(global::Godot.Key.D);
+            Check(stbd == 9 && stbdYaw == 1,
+                  $"thrust: the {who} pivoting to starboard from rest lights the bow's port and the stern's starboard jet ({stbd}, want 9; turn {stbdYaw})");
+            // Shift + A: a slide to port on a hull with one (both starboard jets, 10); a hull with none turns to port on it (6)
+            s.Place(s.Position, s.Rotation); await Wait(0.3);
+            bool slides = s.Stats["strafe_speed"] > 0;
+            KeyDown(global::Godot.Key.Shift); KeyDown(global::Godot.Key.A); await Wait(0.5);
+            int slid = s.Engines.Lit; float across = s.SpeedAcross;
+            KeyUp(global::Godot.Key.A); KeyUp(global::Godot.Key.Shift);
+            Check(slid == (slides ? 10 : 6),
+                  $"thrust: the {who} on Shift + A ({(slides ? $"sliding to port, {across:0} u/s" : "no slide: the rudder")}) lights {(slides ? "both starboard jets (10)" : "the port turn's pair (6)")} ({slid})");
+            s.Place(at, heading);
+        }
+    }
+
+    // ── LANE THRUST · A REMOTE HULL'S ENGINES (the arena pair: the wire, checked in the guest role) ────────
+    // No input crosses the wire: every peer reads a hull's engines off the motion it reports (EngineWatch in
+    // ApplyState). HOST HALF: beside LaneBHostDrives (whose guest half flies only its own ship) this host flies
+    // its own hull a fixed script -- 1.5 s on the throttle from rest, 1.5 s coasting, 1.5 s of port rudder,
+    // 1.5 s of starboard -- and puts it back where it was.
+    async Task ThrustHostFlight()
+    {
+        await Wait(1.0);
+        GetViewport().GuiReleaseFocus();
+        var s = Me; s.AutopilotTo = null;
+        var keep = s.Position; float keepRot = s.Rotation;
+        s.Place(keep, keepRot);
+        KeyDown(global::Godot.Key.W); await Wait(1.5);
+        float gathered = s.SpeedAhead;
+        KeyUp(global::Godot.Key.W); await Wait(1.5);
+        float r0 = s.Rotation;
+        KeyDown(global::Godot.Key.A); await Wait(1.5); KeyUp(global::Godot.Key.A);
+        float r1 = s.Rotation;
+        KeyDown(global::Godot.Key.D); await Wait(1.5); KeyUp(global::Godot.Key.D);
+        float r2 = s.Rotation;
+        await Wait(0.5);
+        s.Place(keep, keepRot);
+        Check(gathered > 5f && Mathf.AngleDifference(r0, r1) < -0.05f && Mathf.AngleDifference(r1, r2) > 0.05f,
+              $"arena host (thrust): flew its own hull for the guest to watch -- {gathered:0} u/s gathered in 1.5 s, {Mathf.RadToDeg(Mathf.AngleDifference(r0, r1)):0} deg to port, {Mathf.RadToDeg(Mathf.AngleDifference(r1, r2)):0} deg back to starboard -- and put it back");
+    }
+
+    // GUEST HALF: the host's hull as it is seen HERE, every frame from the join through LaneBGuestDrives, in the
+    // order the host flies it: the point while the speed ahead it reports climbs; the half-disc once it coasts
+    // (its reported speed falling, still under way); the port pair (6) while its reported heading swings to
+    // port; the starboard pair (9) while it swings back.
+    sealed class ThrustSeen { public bool Burn, Idle, Port, Stbd, Has; public float LastAhead, LastRot; public int Climb, Turn; }
+    LateSampler ThrustGuestWatch(ThrustSeen seen)
+    {
+        var nf = BindingFlags.NonPublic | BindingFlags.Instance;
+        var fVel = typeof(PlayerShip).GetField("_netVel", nf); var fRot = typeof(PlayerShip).GetField("_netRot", nf);
+        var w = new LateSampler { Probe = () =>
+        {
+            if (H?.Ships.FirstOrDefault(x => !x.Mine && x.OwnerId == 1) is not { } h) return false;
+            float rot = (float)fRot.GetValue(h), ahead = ((Vector2)fVel.GetValue(h)).Dot(Vector2.Up.Rotated(rot));
+            if (seen.Has)
+            {   // what the host's last report did, by its own figures: its speed ahead up or down, its heading to port or starboard
+                if (Mathf.Abs(ahead - seen.LastAhead) > 1e-3f) seen.Climb = Math.Sign(ahead - seen.LastAhead);
+                float turned = Mathf.AngleDifference(seen.LastRot, rot);
+                if (Mathf.Abs(turned) > 1e-4f) seen.Turn = Math.Sign(turned);
+            }
+            seen.LastAhead = ahead; seen.LastRot = rot; seen.Has = true;
+            var e = h.Engines;
+            if (!seen.Burn) seen.Burn = e.Burn && seen.Climb > 0 && h.PlumeOutline.Length == 3;
+            else if (!seen.Idle) seen.Idle = !e.Burn && seen.Climb < 0 && ahead > 5f
+                                             && IdleCap(h.PlumeOutline, h.Nozzle, Mathf.Max(1.2f, h.MyArt.Length * Plume.Width * 0.5f) * 1.5f);
+            else if (!seen.Port) seen.Port = e.Lit == 6 && seen.Turn < 0;
+            else if (!seen.Stbd) seen.Stbd = e.Lit == 9 && seen.Turn > 0;
+            return false;
+        } };
+        AddChild(w);
+        return w;
+    }
+    async Task ThrustGuestChecks(ThrustSeen seen, LateSampler watch)
+    {
+        await RealTime(() => seen.Stbd, Wan ? 20 : 12);
+        watch.QueueFree();
+        Check(seen.Burn, "arena guest (thrust): the host's hull, seen here, burns its point while the speed ahead it reports climbs (read on this peer off its reports)");
+        Check(seen.Idle, "arena guest (thrust): ...then, coasting (its reported speed falling, still under way), its plume here is the idle half-disc");
+        Check(seen.Port, "arena guest (thrust): ...then, its reported heading swinging to port, the bow's starboard and the stern's port jet are lit here (6)");
+        Check(seen.Stbd, "arena guest (thrust): ...then, swinging back to starboard, the bow's port and the stern's starboard jet (9)");
     }
 }
 
