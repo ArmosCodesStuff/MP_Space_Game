@@ -8,8 +8,8 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   ONE Monitor (journal results/merges + agents.ps1 -Minutes 40 every 15 min; owner 19:40: wake-ups are the watchers' cost) re-armed at expiry.
 
 ## Landed (verdict first; delete the row once its action is done)
-- 21:17 brace/broadside group done (2 of 3; a2-suppress-locked's list line was cut at the group cap, now 2100+480n), stranded by the string
-  match again: one Sonnet merge agent (21:20) merges wt/fixa2ga2bracewarpspoola2broadsidearcsa2s; suppress-locked goes to round-3 triage.
+- 21:17 brace/broadside group done (2 of 3; suppress-locked's line cut at the group cap, now 2100+480n; string match stranded it again):
+  one Sonnet merge agent (21:20) merges wt/fixa2ga2bracewarpspoola2broadsidearcsa2s; suppress-locked goes to round-3 triage.
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task wxmo7btan (round 1: two merges; round 2: 17 pre-authored fixes in 5 groups, no chains, no triage; round 3 measures). A stop ->
