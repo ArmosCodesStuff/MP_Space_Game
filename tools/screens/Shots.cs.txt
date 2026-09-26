@@ -520,7 +520,6 @@ public partial class _Shots : Node
         await LaneA6dEmpFrames();
         await LaneA6dWraithFrames();
         await ThrustFrames();                  // lane thrust: the plume at idle, burning, and the side jets on a turn
-        await TurretsUnderBossFrame();         // lane thrust: a boss hull over the player covers its turrets too
         // hull: a damaged miner's bar; a lost salvager in the base menu, waiting to be rebuilt
         {
             var yd = H.Yard; var hs = H.GetNode<PlayerShip>("Ship_1");
@@ -1029,6 +1028,7 @@ public partial class _Shots : Node
             await W(0.9); await Snap("39_arena_shockwave_telegraph");
             await FieldsBossFrame(H.Boss, ash);
             H.SetZoom(z0);
+            await TurretsUnderBossFrame();     // lane thrust: a boss hull over the player covers its turrets too (here: home has no boss)
             // the kill: this pilot's crates on a ring where the boss died, the RETURN button and the
             // ready tally on the boss bar, the crates on the radar; one taken so the count reads 1 of 2
             if (GodotObject.IsInstanceValid(H.Boss))
