@@ -17125,7 +17125,10 @@ public partial class _Test : Node
                   && Enumerable.Range(1, 5).All(k => Math.Abs(volleys[k].t - volleys[k - 1].t - 0.25) < 0.035),
                   $"six volleys of all four guns: the first at the end of the 0.5 s wind-up, then 0.25 s apart ({volleys.Count} volleys)");
             Check(speedAtFire > 10, $"the ship steers throughout: under way through the wind-up ({speedAtFire:0} u/s ahead at the first volley)");
-            await Wait(0.6);
+            // read once every broadside shell is down: the dummy is 600 u abeam, so the far pair's last volley
+            // flies ~555 u (0.85 s); a shell gone past its 1000 u range (1.54 s) is gone too, so a miss still reads short
+            for (int i = 0; i < 150 && Shells().Any(seen.Contains); i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Check(Math.Abs(d1.Total - 375) < 0.01, $"every shell lands: 6 volleys x 4 shells x 12.5 x 1.25 = 375 ({d1.Total:0.000})");
             Check(cdAtLast > 11.9 && cdAtLast <= 12 && AbilityBar.StateOf(ship, "broadside", H.Selected).Busy > 0.8f,
                   $"the 12 s cooldown starts with the last volley, and the slot shows it ({cdAtLast:0.00} s)");
@@ -17164,7 +17167,7 @@ public partial class _Test : Node
             var bsS = new ShipStats(ShipClass.Battleship); var caS = new ShipStats(ShipClass.Carrier);
             double bsTotal = bsS.MainDps + bsS.BroadsideDps;
             Check(Math.Abs(bsS.MainDps - 25) < 1e-9 && Math.Abs(bsS.BroadsideDamage - 375) < 1e-9 && Math.Abs(bsS.BroadsideCycle - 13.75) < 1e-9
-                  && Math.Abs(bsTotal - 52.27) < 0.001,
+                  && Math.Abs(bsTotal - (25 + 375 / 13.75)) < 1e-9 && Math.Round(bsTotal, 2) == 52.27,
                   $"the battleship: guns 25 DPS and a 375-damage broadside every 13.75 s -- 52.27 DPS in all, no missile ({bsTotal:0.000})");
             Check(Math.Abs(caS["control_range"] - 1500) < 1e-6 && Math.Abs(bsS["main_range"] - 1000) < 1e-6,
                   "the carrier's fighters reach 1500 u, 1.5x the battleship's 1000 u guns");
