@@ -41,3 +41,8 @@ Kind code, not a hold: the PD never TOOK the light (got False). The camera sat a
 (every test false for NaN): mouse NaN -> Turret.Swing threw on each main gun, so PD mounted after them never ticked
 (the carrier, no mains, passed). MoveCamera now cuts a non-finite camera to the ship. New CameraNanChecks (3 runs).
 solo@11400714819323392986 (tag ..._c): all 7 PD reach PASS; exceptions 4974 -> 39. Source of the first NaN not found.
+
+## PROOF (0348dad)
+
+typecheck 0 errors; quick green (x2). ..._p solo@11400714819323392986 FAIL 174 (round baseline at 79def73: 186), ..._p2
+solo SEED 1186579770 FAIL 177: all 19 named checks PASS at both. Seen: FAIL LANE WingsGunshipChecks, ItemsDoorChecks.
