@@ -8,8 +8,10 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   ONE Monitor (journal results/merges + agents.ps1 -Minutes 40 every 15 min; owner 19:40: wake-ups are the watchers' cost) re-armed at expiry.
 
 ## Landed (verdict first; delete the row once its action is done)
-- 21:30 brace-warp-spool merged 3023148 (typecheck + quick green). a2-broadside-arcs REFUSED by the merge gate (loosened 375 to 343.75; the card
-  says 375 side-on, LaneA6aBroadsideChecks fires 24/24 abeam): a real bug, kind code for round-3 triage with a2-suppress-locked (never dispatched).
+- 21:30 brace-warp-spool merged 3023148. a2-broadside-arcs REFUSED by the merge gate (loosened 375 to 343.75; the card says 375 side-on): a real
+  bug, kind code for round-3 triage, with a2-suppress-locked (never dispatched), a2-regen-once (not done), the mortar 1.4 s half (throw accuracy).
+- 21:30 knife-edges group done (knife-edges ramp, stale-raider x2 lanes, card-hull proved at 3 seeds; fails 187/182/178 vs 206), stranded by
+  the string match: one Sonnet merge agent (21:33) merges wt/fixa2ga2knifeedgesa2staleraidera2cardhul from wt_fix3.
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task wxmo7btan (round 1: two merges; round 2: 17 pre-authored fixes in 5 groups, no chains, no triage; round 3 measures). A stop ->
