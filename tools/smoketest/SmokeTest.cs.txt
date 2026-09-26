@@ -6826,10 +6826,12 @@ public partial class _Test : Node
             await Frame();
             if (run == 0) { s.UseAbility("brace", 0); await Frame(); }
             s.DriveHeld = true; s.PressDrive();
-            await Wait(Vary(0.05f, 0.6f));
+            double held1 = Vary(0.05f, 0.6f);
+            await Wait(held1);
             if (run > 0) { s.UseAbility("brace", 0); await Frame(); }
             bool braced = s.Statuses.Has(Status.Hardened), charging = s.Charging;
-            await Wait(Vary(0.3f, 0.6f));
+            // past the 1.0 s spool (Drives.cs:56) with margin, never on the boundary: below it ChargeReach reads -1.
+            await Wait(Math.Max(Drives.Spool - held1 + 0.15, 0) + Vary(0.15f, 0.4f));
             float reach = s.ChargeReach; var from = s.Position;
             s.DriveHeld = false;
             float moved = 0;
