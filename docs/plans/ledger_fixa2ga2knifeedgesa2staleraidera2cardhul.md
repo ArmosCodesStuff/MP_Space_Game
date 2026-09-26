@@ -19,3 +19,34 @@ Tasks: a2-knife-edges (2 checks), a2-stale-raider, a2-card-hull. One commit per 
   Evidence tp4ar1_0/2_solo.fails.txt 'a class card prints ... (500' asserts 300, seed
   11400714819323392986. expect: 500 (Ships.cs:176). Traces to kits6a class card. Files
   tools/smoketest/SmokeTest.cs.txt.
+
+## POST a2-knife-edges
+
+LaneARampWiringChecks now waits until the clock has strictly passed 1.5 s (not a fixed 90-frame
+count that can land short), so its accumulated lift always sits past the 0.150 mark; tolerance
+3e-3 to cover the one-frame overshoot. `asserted`: 0.150 (LaneARampWiringChecks). The mortar's
+"1.38 s (1.4)" quoted in this task's evidence was already inside LaneA6bMortarChecks' 0.05 s
+tolerance in the unmodified check -- nothing there was a frame-boundary literal to fix. Its
+"placed" sub-condition (a separate throw-accuracy gap, tens of units at the 400-900 u unclamped
+band) is a pre-existing red a tolerance change cannot honestly absorb without loosening what the
+check proves; left untouched, kind code, out of this task's scope. Proved: `typecheck.ps1` 0
+errors; `verify.ps1 -Quick` OK; PASS at seed 11400714819323392986 and fresh seed 209199496.
+Checks: LaneARampWiringChecks.
+
+## POST a2-stale-raider
+
+WingsGunshipChecks and ItemsDoorChecks's web-breaker loop each killed a raider with
+TakeDamage(1e12), then several frames later built the Check message off that same freed
+raider's `.Position` -- ObjectDisposedException at Node2D.GetPosition, failing the whole lane
+(`FAIL LANE ... threw`). Both now capture the distance once, right after spawning and before
+the kill, and the message reads that captured value. `asserted`: the raider re-taken (captured)
+before the kill, never read live after. Proved: `typecheck.ps1` 0 errors; `verify.ps1 -Quick`
+OK; PASS at seed 11400714819323333590 (its own evidence seed), seed 11400714819323392986 and
+fresh seed 209199496. Checks: WingsGunshipChecks, ItemsDoorChecks.
+
+## POST a2-card-hull
+
+The class card check now asserts hull 500 (Ships.cs:176), not the stale pre-buff 300; the
+comment above it updated to match. `asserted`: 500. Proved: `typecheck.ps1` 0 errors;
+`verify.ps1 -Quick` OK; PASS at seed 11400714819323392986 and fresh seed 209199496. Checks: a
+class card prints the hull the ship will actually have.
