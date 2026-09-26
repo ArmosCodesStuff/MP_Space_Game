@@ -7,13 +7,15 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   -> release. lands: 3 lines to the owner + frames (framesForOwner, netOwed); a stop -> ledger_test.md + journal, fix, relaunch per Next 1.
   ONE Monitor (journal results/merges + agents.ps1 -Minutes 40 every 15 min; owner 19:40: wake-ups are the watchers' cost) re-armed at expiry.
 
-## Landed (verdict first; delete the row once its action is done): none (keys group merged 140e1b5 by a Sonnet agent at 20:40)
+## Landed (verdict first; delete the row once its action is done)
+- 21:17 brace/broadside group done (2 of 3; a2-suppress-locked's list line was cut at the group cap, now 2100+480n), stranded by the string
+  match again: one Sonnet merge agent (21:20) merges wt/fixa2ga2bracewarpspoola2broadsidearcsa2s; suppress-locked goes to round-3 triage.
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task wxmo7btan (round 1: two merges; round 2: 17 pre-authored fixes in 5 groups, no chains, no triage; round 3 measures). A stop ->
    relaunch with args {attempt: 4, review: [], done: [a1-items-tables, a1-arena-stall, a1-rip-dummy4, a1-shots-stale-cam, a1-warp-2frames,
    a1-heavy-target, a2-keys-rows, a2-carrier-pd-count, a2-wings-range, a2-ring-timing, a2-bombers-armed, a2-supercarrier-spacing, a2-pd-release,
-   a2-anchor-warp-end + every task merged since per ledger_test.md], preTasks: {a2: docs/plans/round2_tasks.json}} (no premerged: a merged lane
+   a2-anchor-warp-end, a2-brace-warp-spool, a2-broadside-arcs + every task merged since per ledger_test.md], preTasks: {a2: round2_tasks.json}} (no premerged: a merged lane
    re-merged costs a Haiku refusal + a Sonnet run); the cache replays only an unchanged PREFIX of calls.
 2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
 
