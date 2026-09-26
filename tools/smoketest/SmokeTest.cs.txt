@@ -3341,15 +3341,19 @@ public partial class _Test : Node
         }
 
         // THE OVERSHOOT: {-80, 150, 300, 600, 900} u past the ring -> {0, 1, 2, 4, 6} s, as the host (this
-        // ship's own) sets it, and as the drive's own rule reads what it really moved.
+        // ship's own) sets it, and as the drive's own rule reads what it really moved. `secs` is the
+        // nominal bucket, printed for readability only: a frame-quantized held duration lands the actual
+        // jump a few u either side of `over` (knife edge on a fixed ±0.15 s window against the nominal
+        // literal, exactly as the HOLDS block above avoids with `wantOff`), so the check is against
+        // `byRule` -- the price the drive's own rule owes for what it actually moved -- never the input.
         foreach (var (over, secs) in new[] { (-80.0, 0.0), (150.0, 1.0), (300.0, 2.0), (600.0, 4.0), (900.0, 6.0) })
         {
             H.ClearSelection();
             me.Position = VaryNear(home, 200f); Ready(VaryAngle()); await Wait(0.2);
             var (_, moved, _) = await WarpHold(me, 1.0 + (2400.0 + over) / 800.0);
             double off = me.Statuses.Left(Status.Disabled), byRule = Drives.DisabledFor(moved.Length() - 2400.0);
-            Check(Math.Abs(off - secs) < 0.15 && Math.Abs(off - byRule) < 0.05,
-                  $"a jump {moved.Length() - 2400:0} u past the 2400 u ring lands disabled {off:0.00} s (want {secs:0} ±0.15; its own distance prices {byRule:0.00})");
+            Check(Math.Abs(off - byRule) < 0.05,
+                  $"a jump {moved.Length() - 2400:0} u past the 2400 u ring lands disabled {off:0.00} s (want {secs:0}; its own distance prices {byRule:0.00})");
             if (secs >= 4.0)
             {   // DISABLED: no thrust, no rudder, no ability, no warp
                 var at = me.Position; float rot = me.Rotation;
