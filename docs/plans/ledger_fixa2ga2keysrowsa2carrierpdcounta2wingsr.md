@@ -20,3 +20,13 @@ not among this run's fails (quantized overshoot lands on a different bucket run 
   correctly but knife-edges past the tight nominal window -- same class of bug the HOLDS block above already
   guards against with `wantOff`. Fix: assert against `byRule` only, drop the nominal comparison from the
   boolean (kept in the message for readability).
+
+## POST 1
+Verdict: done at 1fd543e. keys tab 11->12 rows (drive row); carrier PD 3->2 turrets; wings target
+inside control_range 1500, polled settle not a blind clock; ring overshoot priced by byRule, not
+the knife-edged nominal bucket.
+Proved: solo@11400714819323392986 186->181 fails, all four PASS; two fresh seeds (1152165179,
+1699182027) both 181 fails, all four PASS.
+Checks: keys tab lists ... 5 + 1 drive + 6 open; carrier PD two turrets; three wings run N ... 3
+fighters away; a jump N u past the ring lands disabled ... s.
+Owed: the round's other reds, unrelated to this group.
