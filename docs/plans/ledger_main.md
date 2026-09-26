@@ -18,9 +18,7 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
    re-merged costs a Haiku refusal + a Sonnet run); the cache replays only an unchanged PREFIX of calls.
 2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
 
-## Owner questions (one line each, with its default): none open (today's rulings: README, Agents).
-
-## Notes (merge risks, promised follow-ups; nothing done, nothing historical)
+## Notes (merge risks, promised follow-ups; nothing done, nothing historical). Owner questions open: none (today's rulings: README, Agents)
 - Cards' OPEN lines for triage: BB fire-mode key (spec R, built G); Tender numbers have no spec file; DD `longlance`; no grapnel_rip sound.
 - Retrospective: a fix prompt with its evidence is ~2,000 chars (P cut fixOne's tail at 1,500 too); six is ~8 min now (arena roles 480 s).
 - Unverified work: origin/backup/unverified; version-l/main move only on a green bar. Lane defaults for the release notes: each lane ledger.
