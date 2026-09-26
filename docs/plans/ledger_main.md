@@ -1,9 +1,9 @@
-# Coordinator state -- last event 23:00: round 3 (570 fails, 0 lanes/exc; 147 signatures, 98 gone since round 1) fixing: screens + suppress merged, 3 live, 2 queued.
+# Coordinator state -- last event 23:50: round 3 merged 5 of 8 (screens, suppress, mortar, tender lance, broadside); regen-once merging; the check pair re-runs; then round 4.
 Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-injects it after a compact and cross-checks each `task <id>`.
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
-- test-phase / task w84ws46yg (wf_8c62491c-3b2, attempt 4 resumed 22:27: done = all a1 + a2 ids, preTasks a3 = round3_tasks.json (8 tasks from
-  triage a3; 22:21's run stranded its 2-task check group on the old prompt cap and had the old merge gate), round 3 fixes run live): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
+- test-phase / task w9c3wcb8e (wf_8c62491c-3b2, attempt 4 resumed 23:50 on the retro script: done = a1 + a2 + 5 merged a3 ids, premerged
+  a3-regen-once (fix0 branch), preTasks a3; the rip-chunk/wraith check pair re-runs on Opus without engine runs, then round 4 chains): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
   -> release. lands: 3 lines to the owner + frames; a stop -> ledger_test.md + journal, fix, relaunch per Next 1. ONE Monitor (journal + watchdog every 15 min).
 
 - thrust / one Opus writer (background 22:37; owner: idle plume half-disc or off, the point only under thrust; tiny cosmetic side thrusters on
@@ -11,9 +11,7 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
   wt_thrust from version-l, checks + 4 frames, proves quick,solo,screens. lands: one Opus gate, merge before the bar.
 
 
-## Landed (verdict first; delete the row once its action is done)
-- 23:00 retro 36af923 applied (cap 100 calls, one proof per round, Opus rewrites, merge_lane.ps1, fixer type, 2 per agent, fails_diff.py,
-  connectors off; owner: /compact past 150k). action: stop + resume with the new script when round 3's merges land, before round 4's chains.
+## Landed (verdict first; delete the row once its action is done): none (retro 36af923 applied and live since 23:50)
 - 21:40 knife-edges group merged 5e1d86d. Owed to round 3 (kind check): the ramp check's tolerance went 1e-3 -> 3e-3 with the off-boundary
   sampling; restore 1e-3 and prove at 3 seeds (the sampling alone should hold; a widened tolerance is a loosening).
 
