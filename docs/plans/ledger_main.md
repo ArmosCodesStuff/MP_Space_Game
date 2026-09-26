@@ -4,7 +4,8 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 
 ## Running (one row per workflow; the form `task <id> (<run id>)` is what tools/lanes.ps1 parses)
 - test-phase / task wxmo7btan (wf_8c62491c-3b2, attempt 4 resumed 19:17: premerged arena-stall + the 4-task check group 86be177 in wt_fix0, done 5, preTasks a2 = round2_tasks.json): rounds (5 chains, triage, pooled fixes) -> seed sweep -> extras -> bar
-  -> release. lands: 3 lines to the owner + frames (framesForOwner, netOwed); a stop -> ledger_test.md + journal, fix, relaunch per Next 1. Watchdog Monitor re-armed at expiry.
+  -> release. lands: 3 lines to the owner + frames (framesForOwner, netOwed); a stop -> ledger_test.md + journal, fix, relaunch per Next 1.
+  ONE Monitor (journal results/merges + agents.ps1 -Minutes 40 every 15 min; owner 19:40: wake-ups are the watchers' cost) re-armed at expiry.
 
 ## Landed (verdict first; delete the row once its action is done): none (code-read 17b94df: do not rewrite; round>=2 triage reads it)
 
