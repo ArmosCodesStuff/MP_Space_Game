@@ -21,3 +21,4 @@
 | a3 | a3-suppress-locked | code | quick,solo@314566543,2010100316 | walls lane (ledger_walls.md); FailShow PlayerShip.cs:1539 | 1f05823 |
 | a3 | a3-mortar-bearing | code | quick,solo@314566543,1193120264 | kits6b Bastion mortar (ledger_kits6b.md) | 15350c2 |
 | a3 | a3-tender-lance-silent | code | quick,solo@314566543,197420354,six | kits6b-J7 mending lance (ledger_kits6b.md) | 44da017 |
+| a3 | a3-broadside-arcs | code | quick,solo@314566543,2043465805 | kits6a battleship arcs (ledger_kits6a.md) | 031b294 |
