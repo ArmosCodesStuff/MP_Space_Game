@@ -34,3 +34,10 @@ Kind check: `0.000 s on` proved no hull flew between the jump and the read (a ti
 ships fly, a Frame before). `LaneA4AnchorWarpChecks` takes one Frame after each Wait, so the jump's Frame holds one
 flight; the literal (AnchorWarped that frame, < 0.05 s, moved < 40 u) unchanged. HelmMoves untouched.
 solo@11400714819323392986 (tag ..._d): bite/pull/swing PASS. Checks: LaneA4AnchorWarpChecks.
+
+## POST a2-pd-release
+
+Kind code, not a hold: the PD never TOOK the light (got False). The camera sat at NaN and Hub.MoveCamera never left it
+(every test false for NaN): mouse NaN -> Turret.Swing threw on each main gun, so PD mounted after them never ticked
+(the carrier, no mains, passed). MoveCamera now cuts a non-finite camera to the ship. New CameraNanChecks (3 runs).
+solo@11400714819323392986 (tag ..._c): all 7 PD reach PASS; exceptions 4974 -> 39. Source of the first NaN not found.

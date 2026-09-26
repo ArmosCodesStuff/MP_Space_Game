@@ -1543,6 +1543,10 @@ public partial class Hub : Node2D
     {
         _cam.Zoom = _cam.Zoom.Lerp(new Vector2(ZoomLevel, ZoomLevel), Mathf.Clamp(10f * dt, 0f, 1f));
         var anchor = me.ViewPosition;                                  // the pod, while in stasis
+        // A CAMERA THAT IS NOT A NUMBER cuts back to the ship: every test below is false for it, so it
+        // stayed lost for good, and with it the cursor -- every main gun swung on a NaN and threw, and
+        // took the point defence mounted after it down with it
+        if (!_cam.Position.IsFinite() && anchor.IsFinite()) _cam.Position = anchor;
         if (!FreeCamera)
         {
             anchor = BossFramed(anchor);

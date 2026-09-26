@@ -10968,6 +10968,38 @@ public partial class _Test : Node
         }
     }
 
+    // ── A CAMERA THAT IS NOT A NUMBER (round a2, a2-pd-release): Hub.MoveCamera cuts it back to the ship. Left lost,
+    // the cursor read NaN, every main gun threw in Turret.Swing, and the battleship's point defence (mounted after its
+    // mains) never ticked: a light 60-90% of its reach out was never taken. Three varied runs (VaryNear spot, VaryAngle
+    // heading and bearing; the camera put at NaN, +Inf, -Inf): two frames on the camera is within 1 u of the ship, the
+    // aim is a number, and a PD mount takes a held light 0.60-0.90 of pd_range out within 8 frames.
+    async Task CameraNanChecks(Vector2 yonder)
+    {
+        await SetClass(ShipClass.Battleship);
+        var bb = Me; var cam = (Camera2D)typeof(Hub).GetField("_cam", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(H);
+        async Task Frame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        for (int run = 0; run < 3; run++)
+        {
+            bb.Position = VaryNear(yonder, 300f); bb.Velocity = Vector2.Zero; bb.Rotation = VaryAngle();
+            await Frame();
+            var bad = run == 0 ? new Vector2(float.NaN, bb.Position.Y) : run == 1 ? new Vector2(bb.Position.X, float.PositiveInfinity)
+                               : new Vector2(float.NegativeInfinity, float.NaN);
+            cam.Position = bad;
+            await Frame(); await Frame();
+            float camOff = cam.Position.DistanceTo(bb.ViewPosition);
+            bool aimOk = bb.AimAt.IsFinite();
+            var mount = bb.PdTurrets.First();
+            var lightAt = mount.GlobalPosition + Vector2.Right.Rotated(VaryAngle()) * (float)(bb.Stats["pd_range"] * Vary(0.60f, 0.90f));
+            var light = H.SpawnRaider(lightAt, Enemies.Webifier); light.Hp = 1e9; light.ApplyStatus(Status.Disabled, 30);
+            for (int f = 0; f < 8 && !ReferenceEquals(mount.Target, light); f++) { light.Position = lightAt; await Frame(); }
+            bool taken = ReferenceEquals(mount.Target, light);
+            Check(camOff < 1f && aimOk && taken,
+                  $"a camera put at {bad} cuts back to the ship: {camOff:0.0} u off it (1) two frames on, the aim a number ({aimOk}), and the battleship's point defence takes a light {mount.GlobalPosition.DistanceTo(lightAt):0} u out ({taken})");
+            light.TakeDamage(1e12);
+            await Frame();
+        }
+    }
+
     // ── F8 AN ANCHOR THAT WARPS casts the move off with none (kits_v31 §3.4) ─────────────────────────────
     // The destroyer on TargetDummy1, marked; the dummy relocated 1500-3000 u (over Drives.SnapAt, 600) in
     // the bite, mid-pull and mid-swing (on A or D): the move ends THAT frame, AnchorWarped (not Drive: the
@@ -19511,6 +19543,7 @@ public partial class _Test : Node
             LaneA4TetherChecks(yonder);
             await Lane("LaneA4HelmLiveChecks", () => LaneA4HelmLiveChecks(yonder));
             await Lane("LaneA4AnchorWarpChecks", () => LaneA4AnchorWarpChecks());
+            await Lane("CameraNanChecks", () => CameraNanChecks(yonder));
             await Lane("LaneA4WreckChecks", () => LaneA4WreckChecks());
             await Lane("LaneA4WardChecks", () => LaneA4WardChecks());
             await Lane("LaneA4MendChecks", () => LaneA4MendChecks());
