@@ -13,8 +13,8 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 
 ## Landed (verdict first; delete the row once its action is done)
 - 23:00 retro 36af923 (fable_retro_tokens.md): 97% of input = context re-reads; 74 agents past 100 turns = 76% of 4,913M (coordinator 1,510M).
-  Applied 23:05: 100-call cap (CLAUDE.md), one engine proof per round + Opus check rewrites + merge via tools/merge_lane.ps1 (script, tester.md),
-  prompts never sliced. Owner's two: auto-compact ~150k (-600M/day), connectors off for this session (-450M/day). Docs import: no.
+  Applied 23:05-23:30: 100-call cap, one engine proof per round, Opus check rewrites, merge_lane.ps1, prompts never sliced, the `fixer` agent
+  type (file + shell tools), 2 fixes per agent, fails_diff.py for triage; connectors Claude Docs + visualize off. Owner: /compact past 150k.
   action: stop + resume with the new script when round 3's merges land (before round 4's chains); delete this row then.
 - 21:40 knife-edges group merged 5e1d86d. Owed to round 3 (kind check): the ramp check's tolerance went 1e-3 -> 3e-3 with the off-boundary
   sampling; restore 1e-3 and prove at 3 seeds (the sampling alone should hold; a widened tolerance is a loosening).
