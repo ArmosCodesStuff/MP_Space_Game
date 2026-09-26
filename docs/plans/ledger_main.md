@@ -10,18 +10,16 @@ Under 25 lines; Edit tool only; commit FIRST after every event; the hook re-inje
 - thrust / one Opus writer (background 22:37; owner: idle plume half-disc or off, the point only under thrust; tiny cosmetic side thrusters on
   turns/strafe): wt_thrust from version-l, checks + 3 frames, proves quick,solo,screens. lands: one Opus gate, merge before the bar.
 
-- retro-tokens / one Fable agent (background 22:47; owner: "what can be improved to use less tokens; is compile + review enough sometimes; do you
-  need the docs imported; why so much"): writes + commits docs/plans/fable_retro_tokens.md (numbers, ranked changes). lands: 4 lines + apply the top changes.
+- retro-tokens / one Fable agent (22:47; owner: less tokens, compile + review enough?, docs?, why so much): commits docs/plans/fable_retro_tokens.md. lands: 4 lines, apply the top changes.
 
-## Landed (verdict first; delete the row once its action is done)
-- Round-3 code tasks: a2-broadside-arcs (rewrite REFUSED: loosened 375 to 343.75, the card says 375 side-on), suppress-locked, regen-once, the mortar throw accuracy.
+## Landed (verdict first; delete the row once its action is done): none
 - 21:40 knife-edges group merged 5e1d86d. Owed to round 3 (kind check): the ramp check's tolerance went 1e-3 -> 3e-3 with the off-boundary
   sampling; restore 1e-3 and prove at 3 seeds (the sampling alone should hold; a widened tolerance is a loosening).
 
 ## Next (1 is the exact next call, copy-pasteable)
 1. Wait for task w84ws46yg: round 3 = 7 groups over 4 slots, merges; round 4 chains + triage (a3 deferred: stale tables, melee arc, blade, flak, rewind);
    sweep, extras, bar, release. A stop -> relaunch args {attempt: 4, review: [], done: [every a1/a2 id + a3 ids merged], preTasks: {a2: [a stub id in done], a3: round3_tasks.json}}.
-2. After the release, in order (owner 17:20, README next 8-9): two-machine test row; scenarios lane (row-by-row conversion); PlayerShip/Hub split; fable_report lists.
+   After the release (owner 17:20, README next 8-9): two-machine test row; scenarios lane; PlayerShip/Hub split; fable_report lists.
 
 ## Notes (merge risks, promised follow-ups; nothing done, nothing historical). Owner questions open: none (today's rulings: README, Agents)
 - Retrospective: a fix prompt with evidence is ~2,000 chars; six ~8 min (arena roles 480 s); ledger_test.md row 011d7fe names only a1-rip-dummy4
