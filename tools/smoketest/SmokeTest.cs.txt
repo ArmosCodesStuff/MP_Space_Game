@@ -5068,7 +5068,9 @@ public partial class _Test : Node
             var oSpot = land + oDir * (110f + oExt + Vary(60f, 120f));
             float gRot = gunship.Rotation;
             void Hold() { bn.Position = home; bn.Velocity = Vector2.Zero; bn.Rotation = rot; gunship.Position = gSpot; gunship.Rotation = gRot; outside.Position = oSpot; }
-            Hold();
+            // the camera follows the hull it just jumped here at 6/s: the cursor names a window point, so it reads
+            // the aimed world point only once the view is settled on the hull
+            for (int i = 0; i < 90; i++) { Hold(); AimWorld(cursor); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
             int pending0 = H.BlastsPending;
             blows.Clear();
             double credit0 = bn.DealtBy.GetValueOrDefault(Dealt.Mortar), hull0 = bn.Hp;

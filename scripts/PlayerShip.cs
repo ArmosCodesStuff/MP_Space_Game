@@ -608,6 +608,8 @@ public partial class PlayerShip : Node2D, IHittable, IRaidTarget, ITagged, ITurr
         // BEHIND A LEVEL WALL (Unlocks): the slot says the level that opens it, and nothing is asked --
         // before a local press too, which the host would never see. The host holds the same wall.
         if (Unlocks.LockedAt(Class, Peak, def) is int at) { Fail(id, Unlocks.Locked(at)); return; }
+        // A PRESS PAST THE WALL is a new press: an earlier refusal's note no longer says why (a refusal below sets its own)
+        _fails.Remove(id);
         // A LOCAL ability is the owner's own intent (the fire mode): it rides in the state report
         // rather than being asked for.
         if (def.Local) { def.Press?.Invoke(this, null); return; }
