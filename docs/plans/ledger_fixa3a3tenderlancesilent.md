@@ -13,5 +13,5 @@ Writer: one agent in `WarShips_wt_fix2`, branch `wt/fixa3a3tenderlancesilent`, c
 - Code: FitClass zeroes `_gunCd` (a refit fits the new gun loaded); the sweep's 3-frame press saw cd 0.117 from the freighter.
 - Checks rewritten, not loosened: LaneA6bLanceTriggerChecks / LaneA6bFieldsHost held Space on a Demo ship (trigger never read);
   overdrive TICKS set AimPoint by hand (mouse overwrote it). Now AimWorld per frame. New LaneA6bLanceRefitChecks runs 0-2.
-- Proved: solo@314566543 (116 fails, round 117) and solo@197420354 (115): every named check PASS; typecheck + verify -Quick green.
+- Proved: solo@314566543 (116, round 117), solo@197420354 (115), six (157, round 160): every named check PASS; quick green.
 - CHANGES entry: switching class fits the new class's main gun loaded (the tender's lance no longer waits out a battleship reload).
